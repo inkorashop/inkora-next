@@ -9,9 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
+    "fuse.js": "^7.3.0",
+    "next": "14.2.35",
     "react": "^18",
-    "react-dom": "^18",
-    "next": "14.2.35"
+    "react-dom": "^18"
   },
   "devDependencies": {
     "eslint": "^8",
