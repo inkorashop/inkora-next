@@ -527,7 +527,7 @@ export default function Home() {
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmación a tu email.</p>
                 <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
-                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}\nTotal: $${confirmedOrder.total.toLocaleString()}`
+                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showPrices ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
                 )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm}>
                   💬 Confirmar por WhatsApp
                 </a>
