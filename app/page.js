@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+import AuthModal from '@/components/AuthModal';
 
 const supabase = createBrowserSupabaseClient();
-import AuthModal from '@/components/AuthModal';
 
 
 const SearchIconWhite = () => (
@@ -53,6 +53,7 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [priceTiers, setPriceTiers] = useState([]);
 
   const width = useWindowWidth();
@@ -69,6 +70,7 @@ export default function Home() {
       const u = session?.user ?? null;
       setUser(u);
       if (u) loadProfile(u.id);
+      setAuthLoading(false);
     });
 
     // onAuthStateChange captura SIGNED_IN tras el redirect de Google OAuth
@@ -281,7 +283,7 @@ export default function Home() {
             <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
           </div>
           <div style={s.headerActions}>
-            {user ? (
+            {authLoading ? null : user ? (
               <button style={s.btnUserHeader} onClick={() => supabase.auth.signOut()}>
                 {profile?.name || user.email?.split('@')[0]} · Salir
               </button>
@@ -377,6 +379,7 @@ export default function Home() {
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
+                      {(() => { console.log('[CARD RENDER]', { showPrices, showPrice: activeProduct?.show_price, user: !!user, price: getUnitPrice(activeProductId) }); return null; })()}
                       {showPrices && activeProduct?.show_price !== false && (
                         <div style={s.cardUnitPrice}>
                           {(() => { const p = getUnitPrice(activeProductId); console.log('[CARD] cardUnitPrice render:', p); return `$${p.toLocaleString()}/u`; })()}
