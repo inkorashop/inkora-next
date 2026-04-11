@@ -1,95 +1,611 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import Fuse from 'fuse.js';
+import { supabase } from '@/lib/supabase';
+
+const PRECIO_UNIDAD = 500;
+
+const SearchIconWhite = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="6.5" cy="6.5" r="4.5" stroke="white" strokeWidth="1.5"/>
+    <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function generateCode() {
+  const year = new Date().getFullYear();
+  const num = String(Math.floor(Math.random() * 9000) + 1000);
+  return `INK-${year}-${num}`;
+}
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 768);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+}
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>app/page.js</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [products, setProducts] = useState([]);
+  const [activeProductId, setActiveProductId] = useState(null);
+  const [designsByProduct, setDesignsByProduct] = useState({});
+  const [gridOpacity, setGridOpacity] = useState(1);
+  const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
+  const [cart, setCart] = useState({});
+  const [filter, setFilter] = useState('todos');
+  const [notes, setNotes] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [orderCode] = useState(generateCode());
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [success, setSuccess] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
+  const [loading, setLoading] = useState(false);
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+  const width = useWindowWidth();
+  const isMobile = width < 768;
+
+  const activeProduct = products.find(p => p.id === activeProductId) || null;
+  const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
+
+  useEffect(() => {
+    loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function switchProduct(id) {
+    if (id === activeProductId) return;
+    setGridTransition('opacity 0.15s ease');
+    setGridOpacity(0);
+    setTimeout(() => {
+      setActiveProductId(id);
+      setFilter('todos');
+      setSearchQuery('');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setGridTransition('opacity 0.2s ease');
+        setGridOpacity(1);
+      }));
+    }, 160);
+  }
+
+  useEffect(() => {
+    let lastY = document.body.scrollTop;
+    const handler = () => {
+      const currentY = document.body.scrollTop;
+      if (currentY < 10) { setHeaderVisible(true); }
+      else if (currentY > lastY) { setHeaderVisible(false); }
+      else if (currentY < lastY) { setHeaderVisible(true); }
+      lastY = currentY;
+    };
+    document.body.addEventListener('scroll', handler, { passive: true });
+    return () => document.body.removeEventListener('scroll', handler);
+  }, []);
+
+  async function loadProducts() {
+    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
+    if (data && data.length > 0) {
+      setProducts(data);
+      setActiveProductId(data[0].id);
+      loadAllDesigns(data);
+    }
+  }
+
+  async function loadAllDesigns(productList) {
+    const results = await Promise.all(
+      productList.map(p =>
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('created_at')
+      )
+    );
+    const map = {};
+    productList.forEach((p, i) => {
+      if (results[i].data) map[p.id] = results[i].data;
+    });
+    setDesignsByProduct(map);
+  }
+
+  const fuse = useMemo(() => new Fuse(designs, {
+    keys: ['name'],
+    threshold: 0.6,
+    distance: 100,
+    ignoreLocation: true,
+    minMatchCharLength: 1,
+  }), [designs]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return designs;
+    return fuse.search(searchQuery.trim()).map(r => r.item);
+  }, [searchQuery, fuse, designs]);
+
+  const categories = ['todos', ...new Set(designs.map(d => d.category))];
+  const filtered = searchQuery.trim()
+    ? (filter === 'todos' ? searchResults : searchResults.filter(d => d.category === filter))
+    : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
+  const cartItems = Object.values(cart);
+  const total = cartItems.reduce((s, i) => s + i.qty * PRECIO_UNIDAD, 0);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  const gridCols = isMobile
+    ? `repeat(${activeProduct?.columns_mobile ?? 2}, 1fr)`
+    : `repeat(${activeProduct?.columns_desktop ?? 5}, 1fr)`;
+  const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
+
+  function addToCart(design) {
+    setCart(prev => ({ ...prev, [design.id]: { ...design, qty: 1 } }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  async function submitOrder() {
+    if (!form.name || !form.phone || !form.email) {
+      alert('Por favor completá todos los campos.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await supabase.from('orders').insert({
+        order_code: orderCode,
+        customer_name: form.name,
+        customer_phone: form.phone,
+        customer_email: form.email,
+        items: cartItems,
+        total,
+        notes,
+        status: 'pending'
+      });
+
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderCode, form, cartItems, total, notes })
+      });
+
+      setConfirmedOrder({ items: cartItems, total, form });
+      setSuccess(true);
+      setCart({});
+      setNotes('');
+    } catch (e) {
+      alert('Hubo un error. Intentá de nuevo.');
+    }
+    setLoading(false);
+  }
+
+  const s = styles;
+
+  return (
+    <div style={s.app}>
+      <header style={{...s.header, transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease'}}>
+        <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
+          <div style={s.logoWrap}>
+            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
+          </div>
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      </header>
+
+      {isMobile && (
+        <div style={{...s.mobileSearchBar, transform: headerVisible ? 'translateY(0)' : 'translateY(-64px)', transition: 'transform 0.3s ease'}}>
+          <span style={s.searchIcon}><SearchIconWhite /></span>
+          <input
+            className="mobile-search-input"
+            style={s.mobileSearchInput}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar diseño..."
           />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+          {searchQuery && (
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.7)'}} onClick={() => setSearchQuery('')}>✕</button>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        ...s.layout,
+        alignItems: 'start',
+        flex: 1,
+        minHeight: 'calc(100vh - 64px)',
+        gridTemplateColumns: '1fr',
+        padding: isMobile ? 16 : 24,
+        paddingRight: isMobile ? 16 : 388,
+        paddingTop: isMobile ? (headerVisible ? 116 : 52) : 24,
+        paddingBottom: isMobile ? 88 : 24,
+        transition: isMobile ? 'padding-top 0.3s ease' : undefined,
+      }}>
+        <div style={s.catalogArea}>
+          <div style={s.catalogHeader}>
+            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catálogo</h1>
+            <p style={s.subtitle}>Seleccioná los diseños y armá tu pedido</p>
+          </div>
+
+          {/* Product tabs */}
+          {products.length > 1 && (
+            <div style={s.productTabs}>
+              {products.map(p => (
+                <button
+                  key={p.id}
+                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
+                  onClick={() => switchProduct(p.id)}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Category filters */}
+          <div style={s.filters}>
+            {categories.map(cat => (
+              <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
+                onClick={() => setFilter(cat)}>
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)'}}>
+          {designs.length === 0 ? (
+            <div style={s.emptyState}>
+              <p>No hay diseños todavía.</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={s.emptyState}>
+              <p>Sin resultados para &quot;<strong>{searchQuery}</strong>&quot;.</p>
+            </div>
+          ) : (
+            <div style={{...s.grid, gridTemplateColumns: gridCols}}>
+              {filtered.map(d => {
+                const inCart = cart[d.id];
+                return (
+                  <div key={d.id} style={s.card}>
+                    <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
+                      {d.image_url
+                        ? <img src={d.image_url} alt={d.name} style={s.img} />
+                        : <span style={{fontSize:36}}>🎨</span>}
+                      <span style={s.catTag}>{d.category}</span>
+                    </div>
+                    <div style={s.cardBody}>
+                      <div style={s.cardName}>{d.name}</div>
+                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
+                        <span style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', fontWeight: 700}}>
+                          {inCart ? inCart.qty : 0}
+                        </span>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
+                          if (inCart) changeQty(d.id, 1);
+                          else addToCart(d);
+                        }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </div>
+        </div>
+
+        {!isMobile && <>
+          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, transition: 'top 0.3s ease'}}>
+            <span style={s.searchIcon}><SearchIconWhite /></span>
+            <input
+              className="desktop-search-input"
+              style={s.searchInput}
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar diseño..."
+            />
+            {searchQuery && (
+              <button style={s.searchClear} onClick={() => setSearchQuery('')}>✕</button>
+            )}
+          </div>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease'}}>
+            <div style={s.sidebarHeader}>
+              <span style={s.sidebarTitle}>Tu Pedido</span>
+              <span style={s.badge}>{totalItems} ítems</span>
+            </div>
+            <div style={s.sidebarBody}>
+              {cartItems.length === 0 ? (
+                <div style={s.cartEmpty}>
+                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
+                </div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} style={s.cartItem}>
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      <span style={s.cartPrice}>${(item.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={s.sidebarFooter}>
+              <div style={s.totalRow}>
+                <span>Total</span>
+                <span style={s.totalAmount}>${total.toLocaleString()}</span>
+              </div>
+              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Notas adicionales..." rows={2} />
+              <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                disabled={cartItems.length === 0} onClick={() => setModalOpen(true)}>
+                Confirmar pedido →
+              </button>
+            </div>
+          </div>
+        </>}
+      </div>
+
+      {isMobile && (
+        <>
+          {cartPanelOpen && (
+            <div style={s.cartPanelBackdrop} onClick={() => setCartPanelOpen(false)} />
+          )}
+
+          <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
+            <div style={s.cartPanelHeader}>
+              <span style={s.cartPanelTitle}>Tu Pedido</span>
+              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>✕</button>
+            </div>
+            <div style={s.cartPanelBody}>
+              {cartItems.length === 0 ? (
+                <div style={s.cartEmpty}>
+                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
+                </div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} style={s.cartItem}>
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      <span style={s.cartPrice}>${(item.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={s.cartPanelFooter}>
+              <div style={s.totalRow}>
+                <span>Total</span>
+                <span style={s.totalAmount}>${total.toLocaleString()}</span>
+              </div>
+              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Notas adicionales..." rows={2} />
+              <button
+                style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                disabled={cartItems.length === 0}
+                onClick={() => { setCartPanelOpen(false); setModalOpen(true); }}
+              >
+                Confirmar pedido →
+              </button>
+            </div>
+          </div>
+
+          <div style={s.mobileBar}>
+            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
+              <span style={s.mobileBadge}>{totalItems}</span>
+              <span style={s.mobileTotal}>${total.toLocaleString()}</span>
+              <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
+            </button>
+            <button
+              style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
+              disabled={cartItems.length === 0}
+              onClick={() => setModalOpen(true)}
+            >
+              Confirmar →
+            </button>
+          </div>
+        </>
+      )}
+
+      {modalOpen && (
+        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) setModalOpen(false); }}>
+          <div style={s.modal}>
+            {!success ? (
+              <>
+                <div style={s.modalHeader}>
+                  <span>Confirmar Pedido</span>
+                  <button style={s.closeBtn} onClick={() => setModalOpen(false)}>✕</button>
+                </div>
+                <div style={s.modalBody}>
+                  <div style={s.codeBanner}>
+                    <small style={s.codeLabel}>Código de pedido</small>
+                    <strong style={s.codeValue}>{orderCode}</strong>
+                  </div>
+                  <div style={s.notice}>
+                    ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
+                  </div>
+                  <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Nombre *</label>
+                      <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
+                    </div>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Teléfono *</label>
+                      <input style={s.input} value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="3764000000" />
+                    </div>
+                  </div>
+                  <div style={s.formGroup}>
+                    <label style={s.label}>Email *</label>
+                    <input style={s.input} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="tu@email.com" />
+                  </div>
+                  <div style={s.orderSummary}>
+                    {cartItems.map(i => (
+                      <div key={i.id} style={s.summaryItem}>
+                        <span>{i.name} × {i.qty}</span>
+                        <span>${(i.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
+                      <span>Total</span>
+                      <span>${total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div style={s.modalActions}>
+                    <button style={s.btnSecondary} onClick={() => setModalOpen(false)}>Cancelar</button>
+                    <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
+                      {loading ? 'Enviando...' : 'Enviar pedido'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={s.successScreen}>
+                <div style={s.successIcon}>✓</div>
+                <h3 style={s.successTitle}>¡Pedido enviado!</h3>
+                <p>Código de tu pedido:</p>
+                <div style={s.successCode}>{orderCode}</div>
+                <p>Te enviamos la confirmación a tu email.</p>
+                <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
+                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}\nTotal: $${confirmedOrder.total.toLocaleString()}`
+                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm}>
+                  💬 Confirmar por WhatsApp
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <a
+        href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent('Hola! Vengo desde la página. ')}`}
+        target="_blank"
+        rel="noreferrer"
+        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 24}}
+        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+        </svg>
+      </a>
+
+      <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
+        <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
       </footer>
     </div>
   );
 }
+
+const styles = {
+  app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
+  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', willChange: 'transform' },
+  headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
+  headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
+  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.95)', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', padding: '10px 16px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8 },
+  btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
+  btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  mobileSearchBar: { position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90, background: 'rgba(27,47,94,0.95)', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, willChange: 'transform' },
+  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
+  layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
+  catalogArea: { minHeight: '70vh', flex: 1 },
+  catalogHeader: { marginBottom: 16 },
+  h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
+  subtitle: { color: '#5a6380', fontSize: 14 },
+  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
+  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 12 },
+  searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
+  searchInput: { border: 0, outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
+  searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
+  filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
+  filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  grid: { display: 'grid', gap: 14 },
+  card: { background: 'white', borderRadius: 12, overflow: 'hidden', border: '1.5px solid #dde1ef' },
+  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  img: { width: '100%', height: '100%', objectFit: 'cover' },
+  catTag: { position: 'absolute', top: 8, left: 8, background: '#1B2F5E', color: 'white', fontSize: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', padding: '3px 8px', borderRadius: 4 },
+  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
+  cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
+  qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
+  qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
+  qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
+  emptyState: { textAlign: 'center', padding: 40, color: '#9aa3bc' },
+  sidebar: { background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', overflow: 'hidden' },
+  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
+  badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
+  sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
+  sidebarBody: { padding: '16px 20px', maxHeight: 400, overflowY: 'auto' },
+  cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
+  cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
+  cartItemInfo: { flex: 1, minWidth: 0 },
+  cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
+  cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
+  cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
+  cartPrice: { fontSize: 12, color: '#5a6380' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 14 },
+  sidebarFooter: { padding: '16px 20px', borderTop: '1.5px solid #eef0f6' },
+  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontWeight: 700, color: '#1B2F5E', fontSize: 16 },
+  totalAmount: { fontSize: 20, fontWeight: 700 },
+  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
+  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
+  modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
+  modalBody: { padding: 24 },
+  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
+  codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
+  codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
+  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#7a5800' },
+  formRow: { display: 'grid', gap: 12 },
+  formGroup: { marginBottom: 14 },
+  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' },
+  orderSummary: { background: '#f7f8fc', borderRadius: 10, padding: 12, marginBottom: 16, maxHeight: 160, overflowY: 'auto' },
+  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderBottom: '1px solid #eef0f6' },
+  modalActions: { display: 'flex', gap: 10 },
+  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
+  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 10, padding: 12, fontSize: 16, fontWeight: 700, color: 'white', cursor: 'pointer' },
+  successScreen: { textAlign: 'center', padding: '32px 24px' },
+  successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
+  successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
+  btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
+  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none', willChange: 'transform' },
+  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, fontSize: 12, marginTop: 40 },
+  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)', transform: 'translateZ(0)', willChange: 'transform' },
+  mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
+  mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
+  mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
+  mobileBarChevron: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
+  mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
+  cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },
+  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)', willChange: 'transform' },
+  cartPanelHeader: { background: '#1B2F5E', borderRadius: '16px 16px 0 0', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  cartPanelTitle: { color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: 0.5 },
+  cartPanelClose: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
+  cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
+};
