@@ -25,12 +25,12 @@ export async function POST(request) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RESEND_KEY}`,
+        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         from: 'INKORA <onboarding@resend.dev>',
-        to: [process.env.NEXT_PUBLIC_EMAIL],
+        to: [process.env.EMAIL],
         subject: `Nuevo pedido ${orderCode} — ${form.name}`,
         html,
       }),
