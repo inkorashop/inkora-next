@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
+import AuthModal from '@/components/AuthModal';
 
 const PRECIO_UNIDAD = 500;
 
@@ -48,6 +49,9 @@ export default function Home() {
   const [cartPanelOpen, setCartPanelOpen] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -57,8 +61,22 @@ export default function Home() {
 
   useEffect(() => {
     loadProducts();
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) { setUser(u); loadProfile(u.id); }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else setProfile(null);
+    });
+    return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
+    setProfile(data);
+  }
 
   function switchProduct(id) {
     if (id === activeProductId) return;
@@ -128,8 +146,10 @@ export default function Home() {
   const filtered = searchQuery.trim()
     ? (filter === 'todos' ? searchResults : searchResults.filter(d => d.category === filter))
     : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
+  const pricePerUnit = profile?.localities?.price_per_unit ?? PRECIO_UNIDAD;
+  const showPrices = !!(user && profile?.locality_id);
   const cartItems = Object.values(cart);
-  const total = cartItems.reduce((s, i) => s + i.qty * PRECIO_UNIDAD, 0);
+  const total = cartItems.reduce((s, i) => s + i.qty * pricePerUnit, 0);
   const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
 
   const gridCols = isMobile
@@ -197,6 +217,17 @@ export default function Home() {
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
           <div style={s.logoWrap}>
             <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
+          </div>
+          <div style={s.headerActions}>
+            {user ? (
+              <button style={s.btnUserHeader} onClick={() => supabase.auth.signOut()}>
+                {profile?.name || user.email?.split('@')[0]} · Salir
+              </button>
+            ) : (
+              <button style={s.btnLoginHeader} onClick={() => setAuthModalOpen(true)}>
+                Ingresar
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -336,7 +367,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      <span style={s.cartPrice}>${(item.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                      {showPrices && <span style={s.cartPrice}>${(item.qty * pricePerUnit).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -344,9 +375,12 @@ export default function Home() {
               )}
             </div>
             <div style={s.sidebarFooter}>
+              {!showPrices && cartItems.length > 0 && (
+                <div style={s.priceHint}>Ingresá para ver precios</div>
+              )}
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>${total.toLocaleString()}</span>
+                <span style={s.totalAmount}>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -383,7 +417,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      <span style={s.cartPrice}>${(item.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                      {showPrices && <span style={s.cartPrice}>${(item.qty * pricePerUnit).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -391,9 +425,12 @@ export default function Home() {
               )}
             </div>
             <div style={s.cartPanelFooter}>
+              {!showPrices && cartItems.length > 0 && (
+                <div style={s.priceHint}>Ingresá para ver precios</div>
+              )}
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>${total.toLocaleString()}</span>
+                <span style={s.totalAmount}>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -410,7 +447,7 @@ export default function Home() {
           <div style={s.mobileBar}>
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>${total.toLocaleString()}</span>
+              <span style={s.mobileTotal}>{showPrices ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
               <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
             </button>
             <button
@@ -459,12 +496,12 @@ export default function Home() {
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
                         <span>{i.name} × {i.qty}</span>
-                        <span>${(i.qty * PRECIO_UNIDAD).toLocaleString()}</span>
+                        {showPrices && <span>${(i.qty * pricePerUnit).toLocaleString()}</span>}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
                       <span>Total</span>
-                      <span>${total.toLocaleString()}</span>
+                      <span>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
                     </div>
                   </div>
                   <div style={s.modalActions}>
@@ -510,6 +547,13 @@ export default function Home() {
       <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
         <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
       </footer>
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -520,6 +564,9 @@ const styles = {
   headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
   headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
+  btnLoginHeader: { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  btnUserHeader: { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
+  priceHint: { fontSize: 12, color: '#9aa3bc', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' },
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.95)', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', padding: '10px 16px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8 },
   btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
   btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },

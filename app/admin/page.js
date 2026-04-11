@@ -38,7 +38,16 @@ export default function Admin() {
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
 
-  useEffect(() => { if (auth) { loadProducts(); loadDesigns(); } }, [auth]);
+  // Localities
+  const [localities, setLocalities] = useState([]);
+  const [newLocality, setNewLocality] = useState({ name: '', price_per_unit: 500 });
+  const [savingLocality, setSavingLocality] = useState(false);
+
+  // Users
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  useEffect(() => { if (auth) { loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); } }, [auth]);
   useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
 
   async function loadProducts() {
@@ -163,6 +172,40 @@ export default function Admin() {
     loadDesigns();
   }
 
+  async function loadLocalities() {
+    const { data } = await supabase.from('localities').select('*').order('created_at');
+    if (data) setLocalities(data);
+  }
+
+  async function loadUsers() {
+    setLoadingUsers(true);
+    const { data } = await supabase.rpc('admin_get_profiles');
+    if (data) setUsers(data);
+    setLoadingUsers(false);
+  }
+
+  async function addLocality() {
+    if (!newLocality.name.trim()) return;
+    setSavingLocality(true);
+    await supabase.from('localities').insert({ ...newLocality, active: true });
+    setNewLocality({ name: '', price_per_unit: 500 });
+    setSavingLocality(false);
+    loadLocalities();
+  }
+
+  async function toggleLocality(id, active) {
+    await supabase.from('localities').update({ active: !active }).eq('id', id);
+    loadLocalities();
+  }
+
+  async function updateUserLocality(userId, localityId) {
+    await supabase.rpc('admin_update_user_locality', {
+      p_user_id: userId,
+      p_locality_id: localityId || null,
+    });
+    loadUsers();
+  }
+
   const hasDupInBatch = (index, name) =>
     name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
 
@@ -201,6 +244,12 @@ export default function Admin() {
           </button>
           <button style={{...s.tab, ...(activeTab === 'designs' ? s.tabActive : {})}} onClick={() => setActiveTab('designs')}>
             Diseños {orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
+          </button>
+          <button style={{...s.tab, ...(activeTab === 'localities' ? s.tabActive : {})}} onClick={() => setActiveTab('localities')}>
+            Localidades
+          </button>
+          <button style={{...s.tab, ...(activeTab === 'users' ? s.tabActive : {})}} onClick={() => setActiveTab('users')}>
+            Usuarios {users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
           </button>
         </div>
       </div>
@@ -405,6 +454,82 @@ export default function Admin() {
           </>
         )}
 
+        {/* ══ TAB: LOCALIDADES ══ */}
+        {activeTab === 'localities' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Nueva localidad</h2>
+              <div style={s.formRow2}>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Nombre *</label>
+                  <input style={s.input} value={newLocality.name}
+                    onChange={e => setNewLocality(l => ({...l, name: e.target.value}))}
+                    placeholder="ej: Posadas" />
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Precio por unidad ($)</label>
+                  <input style={s.input} type="number" min="0" value={newLocality.price_per_unit}
+                    onChange={e => setNewLocality(l => ({...l, price_per_unit: parseInt(e.target.value) || 0}))} />
+                </div>
+              </div>
+              <button style={{...s.btnPrimary, opacity: newLocality.name && !savingLocality ? 1 : 0.5}}
+                disabled={!newLocality.name || savingLocality} onClick={addLocality}>
+                {savingLocality ? 'Guardando...' : 'Crear localidad'}
+              </button>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Localidades ({localities.length})</h2>
+              {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavía.</p>}
+              {localities.map(l => (
+                <div key={l.id} style={s.productRow}>
+                  <div>
+                    <div style={s.productName}>{l.name}</div>
+                    <div style={s.productMeta}>${l.price_per_unit.toLocaleString()} por unidad</div>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{...s.localityStatus, background: l.active ? '#dcfce7' : '#fee2e2', color: l.active ? '#16a34a' : '#dc2626'}}>
+                      {l.active ? 'Activa' : 'Inactiva'}
+                    </span>
+                    <button style={s.editBtn} onClick={() => toggleLocality(l.id, l.active)}>
+                      {l.active ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ══ TAB: USUARIOS ══ */}
+        {activeTab === 'users' && (
+          <div style={s.card}>
+            <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
+            {loadingUsers && <p style={s.emptyMsg}>Cargando...</p>}
+            {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
+            {users.map(u => (
+              <div key={u.id} style={s.userRow}>
+                <div style={s.userInfo}>
+                  <div style={s.productName}>{u.name || '—'}</div>
+                  <div style={s.productMeta}>{u.email}</div>
+                </div>
+                <div style={s.userLocality}>
+                  <select
+                    style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}}
+                    value={u.locality_id || ''}
+                    onChange={e => updateUserLocality(u.id, e.target.value)}
+                  >
+                    <option value="">Sin localidad</option>
+                    {localities.filter(l => l.active).map(l => (
+                      <option key={l.id} value={l.id}>{l.name} (${l.price_per_unit})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
       <footer style={s.footer}>INKORA® Admin</footer>
     </div>
@@ -458,4 +583,9 @@ const styles = {
   orphanTag: { background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 600, marginRight: 4 },
   deleteBtn: { background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12 },
   footer: { textAlign: 'center', padding: '16px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
+  userBadge: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 },
+  localityStatus: { borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600 },
+  userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #eef0f6', gap: 12 },
+  userInfo: { flex: 1, minWidth: 0 },
+  userLocality: { flexShrink: 0 },
 };
