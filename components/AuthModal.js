@@ -3,6 +3,31 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+function translateError(msg) {
+  if (!msg) return 'Ocurrió un error. Intentá de nuevo.';
+  const m = msg.toLowerCase();
+  if (m.includes('email not confirmed'))            return 'Por favor confirmá tu email antes de ingresar.';
+  if (m.includes('invalid login credentials') ||
+      m.includes('invalid email or password') ||
+      m.includes('email and password') ||
+      m.includes('wrong password'))                 return 'Email o contraseña incorrectos.';
+  if (m.includes('user already registered') ||
+      m.includes('already been registered') ||
+      m.includes('already registered'))             return 'Ya existe una cuenta con ese email.';
+  if (m.includes('password should be at least') ||
+      m.includes('password must be at least') ||
+      m.includes('at least 6'))                     return 'La contraseña debe tener al menos 6 caracteres.';
+  if (m.includes('unable to validate email') ||
+      m.includes('invalid email'))                  return 'El email ingresado no es válido.';
+  if (m.includes('email rate limit') ||
+      m.includes('too many requests') ||
+      m.includes('rate limit'))                     return 'Demasiados intentos. Esperá unos minutos.';
+  if (m.includes('network') ||
+      m.includes('fetch'))                          return 'Error de conexión. Verificá tu internet.';
+  if (m.includes('signup') && m.includes('disabled')) return 'El registro está deshabilitado temporalmente.';
+  return msg;
+}
+
 export default function AuthModal({ onClose, onSuccess }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -29,7 +54,7 @@ export default function AuthModal({ onClose, onSuccess }) {
         onSuccess(data.user);
       }
     } catch (e) {
-      setError(e.message);
+      setError(translateError(e.message));
     }
     setLoading(false);
   }
@@ -40,7 +65,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       provider: 'google',
       options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
     });
-    if (e) setError(e.message);
+    if (e) setError(translateError(e.message));
   }
 
   const s = styles;
