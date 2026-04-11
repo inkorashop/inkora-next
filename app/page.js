@@ -172,35 +172,42 @@ export default function Home() {
     acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
     return acc;
   }, {});
-  if (cartItems.length > 0) console.log('[PRICING] cartByProduct:', cartByProduct, '| priceTiers:', priceTiers);
+  // Cantidad mínima requerida por el tier más bajo del producto (null si no hay tiers)
+  function getProductMinQty(productId) {
+    const tiers = priceTiers.filter(t => t.product_id === productId);
+    if (tiers.length === 0) return null;
+    return Math.min(...tiers.map(t => Number(t.min_quantity)));
+  }
 
-  // Precio unitario efectivo según tiers del usuario — fallback a price_per_unit del producto
+  // Precio unitario efectivo según tiers — null si qty < mínimo del tier más bajo
   function getUnitPrice(productId) {
     const totalQty = cartByProduct[productId] || 0;
     const productTiers = priceTiers
       .filter(t => t.product_id === productId)
       .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
 
-    let price;
-    if (totalQty === 0 && productTiers.length > 0) {
-      // Sin items en carrito: mostrar precio del tier de menor cantidad
-      price = Number(productTiers[0].price_per_unit);
-    } else {
+    if (productTiers.length > 0) {
+      const minRequired = Number(productTiers[0].min_quantity);
+      if (totalQty < minRequired) return null;
       const applicable = productTiers
         .filter(t => Number(t.min_quantity) <= totalQty)
         .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
-      price = applicable.length > 0
-        ? Number(applicable[0].price_per_unit)
-        : Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
+      if (applicable.length > 0) return Number(applicable[0].price_per_unit);
     }
-    console.log(`[PRICING] getUnitPrice(${productId}) qty=${totalQty} → $${price} (tiers: ${productTiers.length})`);
-    return price;
+
+    return Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
   }
 
   const total = cartItems
     .filter(i => i.showPrice !== false)
-    .reduce((s, i) => s + i.qty * getUnitPrice(i.product_id), 0);
-  const showTotal = showPrices && cartItems.some(i => i.showPrice !== false);
+    .reduce((s, i) => {
+      const price = getUnitPrice(i.product_id);
+      return s + (price !== null ? i.qty * price : 0);
+    }, 0);
+  const showTotal = showPrices && cartItems.some(i => {
+    const price = getUnitPrice(i.product_id);
+    return i.showPrice !== false && price !== null && price > 0;
+  });
   const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
 
   const gridCols = isMobile
@@ -375,11 +382,17 @@ export default function Home() {
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
-                      {showPrices && activeProduct?.show_price !== false && (
-                        <div style={s.cardUnitPrice}>
-                          {(() => { const p = getUnitPrice(activeProductId); console.log('[CARD] cardUnitPrice render:', p); return `$${p.toLocaleString()}/u`; })()}
-                        </div>
-                      )}
+                      {showPrices && activeProduct?.show_price !== false && (() => {
+                        const price = getUnitPrice(activeProductId);
+                        const minQty = getProductMinQty(activeProductId);
+                        if (price === null && minQty !== null) {
+                          return <div style={s.cardMinQty}>Mín. {minQty} u.</div>;
+                        }
+                        if (price !== null && price > 0) {
+                          return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
+                        }
+                        return null;
+                      })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
                         <input
@@ -448,7 +461,13 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * getUnitPrice(item.product_id)).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        const minQty = getProductMinQty(item.product_id);
+                        if (price === null && minQty !== null) return <span style={s.cartMinQty}>Mín. {minQty} u.</span>;
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -498,7 +517,13 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * getUnitPrice(item.product_id)).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        const minQty = getProductMinQty(item.product_id);
+                        if (price === null && minQty !== null) return <span style={s.cartMinQty}>Mín. {minQty} u.</span>;
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -577,7 +602,13 @@ export default function Home() {
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
                         <span>{i.name} × {i.qty}</span>
-                        {showPrices && i.showPrice !== false && <span>${(i.qty * getUnitPrice(i.product_id)).toLocaleString()}</span>}
+                        {showPrices && i.showPrice !== false && (() => {
+                          const price = getUnitPrice(i.product_id);
+                          const minQty = getProductMinQty(i.product_id);
+                          if (price === null && minQty !== null) return <span style={{color:'#9aa3bc',fontSize:12}}>Mín. {minQty} u.</span>;
+                          if (price !== null && price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
+                          return null;
+                        })()}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
@@ -676,6 +707,8 @@ const styles = {
   cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
   cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
+  cardMinQty: { fontSize: 11, color: '#9aa3bc', fontWeight: 500 },
+  cartMinQty: { fontSize: 11, color: '#9aa3bc', fontStyle: 'italic' },
   qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
   qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
   qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
