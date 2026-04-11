@@ -18,6 +18,24 @@ function slugify(str) {
   return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
+function EyeOpen() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B2F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+function EyeOff() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9aa3bc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
 export default function Admin() {
   const [auth, setAuth] = useState(false);
   const [password, setPassword] = useState('');
@@ -332,8 +350,8 @@ export default function Admin() {
                       </div>
                       <div style={{display:'flex', alignItems:'center', gap:8}}>
                         <button style={s.editBtn} onClick={() => startEdit(p)}>Editar</button>
-                        <button style={s.editBtn} onClick={() => toggleProduct(p.id, p.active)}>
-                          {p.active ? 'No mostrar' : 'Mostrar'}
+                        <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)} title={p.active ? 'Ocultar' : 'Mostrar'}>
+                          {p.active ? <EyeOpen /> : <EyeOff />}
                         </button>
                       </div>
                     </div>
@@ -480,8 +498,8 @@ export default function Admin() {
                       </div>
                     </div>
                   </div>
-                  <button style={s.editBtn} onClick={() => toggleDesign(d.id, d.active)}>
-                    {d.active ? 'No mostrar' : 'Mostrar'}
+                  <button style={s.iconBtn} onClick={() => toggleDesign(d.id, d.active)} title={d.active ? 'Ocultar' : 'Mostrar'}>
+                    {d.active ? <EyeOpen /> : <EyeOff />}
                   </button>
                 </div>
               ))}
@@ -609,6 +627,7 @@ const styles = {
   btnSecondarySmall: { background: 'white', color: '#5a6380', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '10px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   btnWarning: { background: '#fff8e1', color: '#7a5800', border: '1.5px solid #f6c200', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   editBtn: { background: '#e8eef9', color: '#2D6BE4', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
+  iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', borderRadius: 6 },
   designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #eef0f6' },
   designInfo: { display: 'flex', alignItems: 'center', gap: 12 },
   designThumb: { width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #dde1ef' },
