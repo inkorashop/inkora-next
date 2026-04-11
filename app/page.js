@@ -177,13 +177,23 @@ export default function Home() {
   // Precio unitario efectivo según tiers del usuario — fallback a price_per_unit del producto
   function getUnitPrice(productId) {
     const totalQty = cartByProduct[productId] || 0;
-    const applicable = priceTiers
-      .filter(t => t.product_id === productId && t.min_quantity <= totalQty)
-      .sort((a, b) => b.min_quantity - a.min_quantity);
-    const price = applicable.length > 0
-      ? Number(applicable[0].price_per_unit)
-      : Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
-    if (cartItems.length > 0) console.log(`[PRICING] getUnitPrice(${productId}) qty=${totalQty} → $${price} (tiers aplicables: ${applicable.length})`);
+    const productTiers = priceTiers
+      .filter(t => t.product_id === productId)
+      .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
+
+    let price;
+    if (totalQty === 0 && productTiers.length > 0) {
+      // Sin items en carrito: mostrar precio del tier de menor cantidad
+      price = Number(productTiers[0].price_per_unit);
+    } else {
+      const applicable = productTiers
+        .filter(t => Number(t.min_quantity) <= totalQty)
+        .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
+      price = applicable.length > 0
+        ? Number(applicable[0].price_per_unit)
+        : Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
+    }
+    console.log(`[PRICING] getUnitPrice(${productId}) qty=${totalQty} → $${price} (tiers: ${productTiers.length})`);
     return price;
   }
 
@@ -366,7 +376,9 @@ export default function Home() {
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
                       {showPrices && activeProduct?.show_price !== false && (
-                        <div style={s.cardUnitPrice}>${getUnitPrice(activeProductId).toLocaleString()}/u</div>
+                        <div style={s.cardUnitPrice}>
+                          {(() => { const p = getUnitPrice(activeProductId); console.log('[CARD] cardUnitPrice render:', p); return `$${p.toLocaleString()}/u`; })()}
+                        </div>
                       )}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
