@@ -152,7 +152,7 @@ export default function Home() {
   const filtered = searchQuery.trim()
     ? (filter === 'todos' ? searchResults : searchResults.filter(d => d.category === filter))
     : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
-  const showPrices = !!(user && profile?.locality_id);
+  const showPrices = !!user;
   const cartItems = Object.values(cart);
   const total = cartItems
     .filter(i => i.showPrice !== false)
@@ -393,7 +393,7 @@ export default function Home() {
             </div>
             <div style={s.sidebarFooter}>
               {cartItems.length > 0 && !showTotal && (
-                <div style={s.priceHint}>{!showPrices ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
+                <div style={s.priceHint}>{!user ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
               )}
               <div style={s.totalRow}>
                 <span>Total</span>
@@ -443,7 +443,7 @@ export default function Home() {
             </div>
             <div style={s.cartPanelFooter}>
               {cartItems.length > 0 && !showTotal && (
-                <div style={s.priceHint}>{!showPrices ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
+                <div style={s.priceHint}>{!user ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
               )}
               <div style={s.totalRow}>
                 <span>Total</span>
