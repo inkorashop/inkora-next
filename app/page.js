@@ -378,10 +378,12 @@ export default function Home() {
                       {d.image_url
                         ? <img src={d.image_url} alt={d.name} style={s.img} />
                         : <span style={{fontSize:36}}>🎨</span>}
-                      <span style={s.catTag}>{d.category}</span>
                     </div>
                     <div style={s.cardBody}>
-                      <div style={s.cardName}>{d.name}</div>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:4}}>
+                        <div style={s.cardName}>{d.name}</div>
+                        <span style={s.catTag}>{d.category}</span>
+                      </div>
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
                         const minQty = getProductMinQty(activeProductId);
@@ -703,7 +705,7 @@ const styles = {
   card: { background: 'white', borderRadius: 12, overflow: 'hidden', border: '1.5px solid #dde1ef' },
   cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
   img: { width: '100%', height: '100%', objectFit: 'cover' },
-  catTag: { position: 'absolute', top: 8, left: 8, background: '#1B2F5E', color: 'white', fontSize: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', padding: '3px 8px', borderRadius: 4 },
+  catTag: { background: '#eef0f6', color: '#5a6380', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0 },
   cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
   cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
