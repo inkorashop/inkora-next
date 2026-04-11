@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
-import { supabase } from '@/lib/supabase';
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+const supabase = createBrowserSupabaseClient();
 import AuthModal from '@/components/AuthModal';
 
 
