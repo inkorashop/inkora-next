@@ -61,14 +61,21 @@ export default function Home() {
 
   useEffect(() => {
     loadProducts();
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
-      if (u) { setUser(u); loadProfile(u.id); }
+
+    // getSession lee desde storage local — funciona correctamente post-OAuth redirect
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+
+    // onAuthStateChange captura SIGNED_IN tras el redirect de Google OAuth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) loadProfile(u.id); else setProfile(null);
     });
+
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
