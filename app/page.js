@@ -83,11 +83,15 @@ export default function Home() {
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
     setProfile(data);
+    console.log('[PRICING] profile:', data);
+    console.log('[PRICING] locality_id:', data?.locality_id);
     if (data?.locality_id) {
-      const { data: tiers } = await supabase
+      const { data: tiers, error: tiersError } = await supabase
         .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
+      console.log('[PRICING] tiers loaded:', tiers, 'error:', tiersError);
       setPriceTiers(tiers || []);
     } else {
+      console.log('[PRICING] no locality_id — skipping tiers load');
       setPriceTiers([]);
     }
   }
@@ -168,6 +172,7 @@ export default function Home() {
     acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
     return acc;
   }, {});
+  if (cartItems.length > 0) console.log('[PRICING] cartByProduct:', cartByProduct, '| priceTiers:', priceTiers);
 
   // Precio unitario efectivo según tiers del usuario — fallback a price_per_unit del producto
   function getUnitPrice(productId) {
@@ -175,9 +180,11 @@ export default function Home() {
     const applicable = priceTiers
       .filter(t => t.product_id === productId && t.min_quantity <= totalQty)
       .sort((a, b) => b.min_quantity - a.min_quantity);
-    if (applicable.length > 0) return Number(applicable[0].price_per_unit);
-    const product = products.find(p => p.id === productId);
-    return Number(product?.price_per_unit ?? 0);
+    const price = applicable.length > 0
+      ? Number(applicable[0].price_per_unit)
+      : Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
+    if (cartItems.length > 0) console.log(`[PRICING] getUnitPrice(${productId}) qty=${totalQty} → $${price} (tiers aplicables: ${applicable.length})`);
+    return price;
   }
 
   const total = cartItems
