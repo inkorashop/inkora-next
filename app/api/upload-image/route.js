@@ -11,17 +11,17 @@ export async function POST(request) {
     const { fileBase64, fileName, mimeType } = await request.json();
 
     const buffer = Buffer.from(fileBase64, 'base64');
-    const uniqueName = `${Date.now()}-${fileName}`;
+    const uniqueName = `thumbnails/${Date.now()}-${fileName}`;
 
     const { error } = await supabase.storage
-      .from('designs')
+      .from('assets')
       .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const { data } = supabase.storage.from('designs').getPublicUrl(uniqueName);
+    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
 
     return NextResponse.json({ url: data.publicUrl });
   } catch (err) {
