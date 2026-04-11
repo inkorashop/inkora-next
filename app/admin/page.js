@@ -547,7 +547,7 @@ const styles = {
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
   tabBarInner: { maxWidth: 800, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 0 },
   tab: { background: 'none', border: 'none', borderBottom: '3px solid transparent', padding: '16px 24px', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
-  tabActive: { color: '#1B2F5E', borderBottomColor: '#1B2F5E' },
+  tabActive: { color: '#1B2F5E', borderBottom: '3px solid #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 },
   content: { maxWidth: 800, margin: '32px auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 24 },
   card: { background: 'white', borderRadius: 14, padding: 28, border: '1.5px solid #dde1ef' },
