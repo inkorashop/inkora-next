@@ -285,17 +285,17 @@ export default function Admin() {
                       </div>
                       <div style={s.formRow3}>
                         <div style={s.formGroup}>
-                          <label style={s.label}>Cols desktop</label>
+                          <label style={s.label}>Columnas PC</label>
                           <input style={s.input} type="number" min="1" max="10" value={editForm.columns_desktop}
                             onChange={e => setEditForm(f => ({...f, columns_desktop: parseInt(e.target.value) || 1}))} />
                         </div>
                         <div style={s.formGroup}>
-                          <label style={s.label}>Cols móvil</label>
+                          <label style={s.label}>Columnas celular</label>
                           <input style={s.input} type="number" min="1" max="4" value={editForm.columns_mobile}
                             onChange={e => setEditForm(f => ({...f, columns_mobile: parseInt(e.target.value) || 1}))} />
                         </div>
                         <div style={s.formGroup}>
-                          <label style={s.label}>Máx (kb)</label>
+                          <label style={s.label}>Tamaño máx (KB)</label>
                           <input style={s.input} type="number" min="50" value={editForm.max_file_size_kb}
                             onChange={e => setEditForm(f => ({...f, max_file_size_kb: parseInt(e.target.value) || 250}))} />
                         </div>
@@ -341,12 +341,12 @@ export default function Admin() {
               </div>
               <div style={s.formRow4}>
                 <div style={s.formGroup}>
-                  <label style={s.label}>Cols desktop</label>
+                  <label style={s.label}>Columnas PC</label>
                   <input style={s.input} type="number" min="1" max="10" value={newProduct.columns_desktop}
                     onChange={e => setNewProduct(p => ({...p, columns_desktop: parseInt(e.target.value) || 1}))} />
                 </div>
                 <div style={s.formGroup}>
-                  <label style={s.label}>Cols móvil</label>
+                  <label style={s.label}>Columnas celular</label>
                   <input style={s.input} type="number" min="1" max="4" value={newProduct.columns_mobile}
                     onChange={e => setNewProduct(p => ({...p, columns_mobile: parseInt(e.target.value) || 1}))} />
                 </div>
@@ -356,7 +356,7 @@ export default function Admin() {
                     onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))} placeholder="2/3" />
                 </div>
                 <div style={s.formGroup}>
-                  <label style={s.label}>Máx (kb)</label>
+                  <label style={s.label}>Tamaño máx (KB)</label>
                   <input style={s.input} type="number" min="50" value={newProduct.max_file_size_kb}
                     onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value) || 250}))} />
                 </div>
@@ -546,8 +546,8 @@ const styles = {
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' },
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
   tabBarInner: { maxWidth: 800, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 0 },
-  tab: { background: 'none', border: 'none', borderBottom: '3px solid transparent', padding: '16px 24px', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
-  tabActive: { color: '#1B2F5E', borderBottom: '3px solid #1B2F5E' },
+  tab: { background: 'none', border: 'none', padding: '16px 24px', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
+  tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 },
   content: { maxWidth: 800, margin: '32px auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 24 },
   card: { background: 'white', borderRadius: 14, padding: 28, border: '1.5px solid #dde1ef' },
