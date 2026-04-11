@@ -5,7 +5,6 @@ import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
 
-const PRECIO_UNIDAD = 500;
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -153,10 +152,12 @@ export default function Home() {
   const filtered = searchQuery.trim()
     ? (filter === 'todos' ? searchResults : searchResults.filter(d => d.category === filter))
     : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
-  const pricePerUnit = profile?.localities?.price_per_unit ?? PRECIO_UNIDAD;
   const showPrices = !!(user && profile?.locality_id);
   const cartItems = Object.values(cart);
-  const total = cartItems.reduce((s, i) => s + i.qty * pricePerUnit, 0);
+  const total = cartItems
+    .filter(i => i.showPrice !== false)
+    .reduce((s, i) => s + i.qty * (i.pricePerUnit ?? 0), 0);
+  const showTotal = showPrices && cartItems.some(i => i.showPrice !== false);
   const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
 
   const gridCols = isMobile
@@ -165,7 +166,16 @@ export default function Home() {
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design) {
-    setCart(prev => ({ ...prev, [design.id]: { ...design, qty: 1 } }));
+    const product = products.find(p => p.id === design.product_id);
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+      },
+    }));
   }
 
   function changeQty(id, delta) {
@@ -374,7 +384,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && <span style={s.cartPrice}>${(item.qty * pricePerUnit).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * (item.pricePerUnit ?? 0)).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -382,12 +392,12 @@ export default function Home() {
               )}
             </div>
             <div style={s.sidebarFooter}>
-              {!showPrices && cartItems.length > 0 && (
-                <div style={s.priceHint}>Ingresá para ver precios</div>
+              {cartItems.length > 0 && !showTotal && (
+                <div style={s.priceHint}>{!showPrices ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
               )}
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
+                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -424,7 +434,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && <span style={s.cartPrice}>${(item.qty * pricePerUnit).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * (item.pricePerUnit ?? 0)).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -432,12 +442,12 @@ export default function Home() {
               )}
             </div>
             <div style={s.cartPanelFooter}>
-              {!showPrices && cartItems.length > 0 && (
-                <div style={s.priceHint}>Ingresá para ver precios</div>
+              {cartItems.length > 0 && !showTotal && (
+                <div style={s.priceHint}>{!showPrices ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
               )}
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
+                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -454,7 +464,7 @@ export default function Home() {
           <div style={s.mobileBar}>
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showPrices ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
+              <span style={s.mobileTotal}>{showTotal ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
               <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
             </button>
             <button
@@ -503,12 +513,12 @@ export default function Home() {
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
                         <span>{i.name} × {i.qty}</span>
-                        {showPrices && <span>${(i.qty * pricePerUnit).toLocaleString()}</span>}
+                        {showPrices && i.showPrice !== false && <span>${(i.qty * (i.pricePerUnit ?? 0)).toLocaleString()}</span>}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
                       <span>Total</span>
-                      <span>{showPrices ? `$${total.toLocaleString()}` : '—'}</span>
+                      <span>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
                     </div>
                   </div>
                   <div style={s.modalActions}>
@@ -527,7 +537,7 @@ export default function Home() {
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmación a tu email.</p>
                 <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
-                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showPrices ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
+                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showTotal ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
                 )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm}>
                   💬 Confirmar por WhatsApp
                 </a>

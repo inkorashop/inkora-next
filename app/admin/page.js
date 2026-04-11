@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const CATEGORIES = ['deportes', 'animales', 'vehiculos', 'otros'];
-const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250 };
+const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
 
 function fileToBase64(file) {
   return new Promise(resolve => {
@@ -81,6 +81,8 @@ export default function Admin() {
       columns_mobile: product.columns_mobile,
       aspect_ratio: product.aspect_ratio,
       max_file_size_kb: product.max_file_size_kb,
+      price_per_unit: product.price_per_unit ?? 0,
+      show_price: product.show_price !== false,
     });
   }
 
@@ -300,6 +302,21 @@ export default function Admin() {
                             onChange={e => setEditForm(f => ({...f, max_file_size_kb: parseInt(e.target.value) || 250}))} />
                         </div>
                       </div>
+                      <div style={s.formRow2}>
+                        <div style={s.formGroup}>
+                          <label style={s.label}>Precio por unidad ($)</label>
+                          <input style={s.input} type="number" min="0" value={editForm.price_per_unit}
+                            onChange={e => setEditForm(f => ({...f, price_per_unit: parseInt(e.target.value) || 0}))} />
+                        </div>
+                        <div style={s.formGroup}>
+                          <label style={s.label}>Mostrar precios</label>
+                          <select style={s.input} value={editForm.show_price ? 'true' : 'false'}
+                            onChange={e => setEditForm(f => ({...f, show_price: e.target.value === 'true'}))}>
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                          </select>
+                        </div>
+                      </div>
                       <div style={{display:'flex', gap:8}}>
                         <button style={s.btnPrimary} onClick={() => saveEdit(p.id)}>Guardar</button>
                         <button style={s.btnSecondarySmall} onClick={() => setEditingProductId(null)}>Cancelar</button>
@@ -359,6 +376,21 @@ export default function Admin() {
                   <label style={s.label}>Tamaño máx (KB)</label>
                   <input style={s.input} type="number" min="50" value={newProduct.max_file_size_kb}
                     onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value) || 250}))} />
+                </div>
+              </div>
+              <div style={s.formRow2}>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Precio por unidad ($)</label>
+                  <input style={s.input} type="number" min="0" value={newProduct.price_per_unit}
+                    onChange={e => setNewProduct(p => ({...p, price_per_unit: parseInt(e.target.value) || 0}))} />
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Mostrar precios</label>
+                  <select style={s.input} value={newProduct.show_price ? 'true' : 'false'}
+                    onChange={e => setNewProduct(p => ({...p, show_price: e.target.value === 'true'}))}>
+                    <option value="true">Sí</option>
+                    <option value="false">No</option>
+                  </select>
                 </div>
               </div>
               <button style={{...s.btnPrimary, opacity: newProduct.name && newProduct.slug && !savingProduct ? 1 : 0.5}}
