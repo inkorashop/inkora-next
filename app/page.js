@@ -76,16 +76,17 @@ export default function Home() {
   }
 
   useEffect(() => {
-    let lastY = document.body.scrollTop;
+    const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
+    let lastY = getScrollY();
     const handler = () => {
-      const currentY = document.body.scrollTop;
+      const currentY = getScrollY();
       if (currentY < 10) { setHeaderVisible(true); }
       else if (currentY > lastY) { setHeaderVisible(false); }
       else if (currentY < lastY) { setHeaderVisible(true); }
       lastY = currentY;
     };
-    document.body.addEventListener('scroll', handler, { passive: true });
-    return () => document.body.removeEventListener('scroll', handler);
+    document.addEventListener('scroll', handler, { passive: true });
+    return () => document.removeEventListener('scroll', handler);
   }, []);
 
   async function loadProducts() {
