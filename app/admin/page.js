@@ -65,7 +65,12 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  useEffect(() => { if (auth) { loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); } }, [auth]);
+  // Price tiers
+  const [priceTiers, setPriceTiers] = useState([]);
+  const [tierProductId, setTierProductId] = useState('');
+  const [newTiers, setNewTiers] = useState({});
+
+  useEffect(() => { if (auth) { loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); } }, [auth]);
   useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
 
   async function loadProducts() {
@@ -108,6 +113,29 @@ export default function Admin() {
     await supabase.from('products').update(editForm).eq('id', id);
     setEditingProductId(null);
     loadProducts();
+  }
+
+  async function loadPriceTiers() {
+    const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
+    if (data) setPriceTiers(data);
+  }
+
+  async function addTier(localityId) {
+    const t = newTiers[localityId] || { min_quantity: 1, price_per_unit: 0 };
+    if (!tierProductId || !t.min_quantity || !t.price_per_unit) return;
+    await supabase.from('price_tiers').insert({
+      product_id: tierProductId,
+      locality_id: localityId,
+      min_quantity: Number(t.min_quantity),
+      price_per_unit: Number(t.price_per_unit),
+    });
+    setNewTiers(prev => ({ ...prev, [localityId]: { min_quantity: 1, price_per_unit: 0 } }));
+    loadPriceTiers();
+  }
+
+  async function deleteTier(id) {
+    await supabase.from('price_tiers').delete().eq('id', id);
+    loadPriceTiers();
   }
 
   async function toggleProduct(id, active) {
@@ -417,6 +445,51 @@ export default function Admin() {
                 {savingProduct ? 'Guardando...' : 'Crear producto'}
               </button>
             </div>
+
+            {/* ── PRECIOS ESCALONADOS ── */}
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Precios escalonados por localidad</h2>
+              <div style={s.formGroup}>
+                <label style={s.label}>Producto</label>
+                <select style={s.input} value={tierProductId} onChange={e => setTierProductId(e.target.value)}>
+                  <option value="">— Seleccioná un producto —</option>
+                  {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              {tierProductId && localities.filter(l => l.active).map(locality => {
+                const tiers = priceTiers
+                  .filter(t => t.product_id === tierProductId && t.locality_id === locality.id)
+                  .sort((a, b) => a.min_quantity - b.min_quantity);
+                const nt = newTiers[locality.id] || { min_quantity: 1, price_per_unit: 0 };
+                return (
+                  <div key={locality.id} style={s.tierSection}>
+                    <div style={s.tierLocalityName}>{locality.name}</div>
+                    {tiers.length === 0 && <p style={s.emptyMsg}>Sin tiers — se usará precio base del producto.</p>}
+                    {tiers.map(t => (
+                      <div key={t.id} style={s.tierRow}>
+                        <span style={s.tierQty}>≥ {t.min_quantity} u</span>
+                        <span style={s.tierPrice}>${Number(t.price_per_unit).toLocaleString()}/u</span>
+                        <button style={s.deleteBtn} onClick={() => deleteTier(t.id)}>✕</button>
+                      </div>
+                    ))}
+                    <div style={s.tierAddRow}>
+                      <input style={{...s.input, width: 110}} type="number" min="1" placeholder="Cant. mín."
+                        value={nt.min_quantity}
+                        onChange={e => setNewTiers(prev => ({...prev, [locality.id]: {...nt, min_quantity: parseInt(e.target.value) || 1}}))} />
+                      <input style={{...s.input, width: 130}} type="number" min="0" placeholder="Precio/u"
+                        value={nt.price_per_unit}
+                        onChange={e => setNewTiers(prev => ({...prev, [locality.id]: {...nt, price_per_unit: parseInt(e.target.value) || 0}}))} />
+                      <button style={s.editBtn} onClick={() => addTier(locality.id)}>+ Agregar</button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {tierProductId && localities.filter(l => l.active).length === 0 && (
+                <p style={s.emptyMsg}>No hay localidades activas. Creá una primero en la pestaña Localidades.</p>
+              )}
+            </div>
           </>
         )}
 
@@ -628,6 +701,12 @@ const styles = {
   btnWarning: { background: '#fff8e1', color: '#7a5800', border: '1.5px solid #f6c200', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   editBtn: { background: '#e8eef9', color: '#2D6BE4', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
   iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', borderRadius: 6 },
+  tierSection: { borderTop: '1px solid #eef0f6', paddingTop: 16, marginTop: 16 },
+  tierLocalityName: { fontSize: 14, fontWeight: 700, color: '#1B2F5E', marginBottom: 10 },
+  tierRow: { display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0', borderBottom: '1px solid #f0f2f8' },
+  tierQty: { fontSize: 13, color: '#5a6380', minWidth: 80 },
+  tierPrice: { fontSize: 14, fontWeight: 600, color: '#2d3352', flex: 1 },
+  tierAddRow: { display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' },
   designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #eef0f6' },
   designInfo: { display: 'flex', alignItems: 'center', gap: 12 },
   designThumb: { width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #dde1ef' },

@@ -51,6 +51,7 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [priceTiers, setPriceTiers] = useState([]);
 
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -72,7 +73,7 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id); else setProfile(null);
+      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
     });
 
     return () => subscription.unsubscribe();
@@ -82,6 +83,13 @@ export default function Home() {
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
     setProfile(data);
+    if (data?.locality_id) {
+      const { data: tiers } = await supabase
+        .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
+      setPriceTiers(tiers || []);
+    } else {
+      setPriceTiers([]);
+    }
   }
 
   function switchProduct(id) {
@@ -154,9 +162,27 @@ export default function Home() {
     : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
   const showPrices = !!user;
   const cartItems = Object.values(cart);
+
+  // Cantidad total por producto en el carrito (para calcular tier correcto)
+  const cartByProduct = cartItems.reduce((acc, item) => {
+    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
+    return acc;
+  }, {});
+
+  // Precio unitario efectivo según tiers del usuario — fallback a price_per_unit del producto
+  function getUnitPrice(productId) {
+    const totalQty = cartByProduct[productId] || 0;
+    const applicable = priceTiers
+      .filter(t => t.product_id === productId && t.min_quantity <= totalQty)
+      .sort((a, b) => b.min_quantity - a.min_quantity);
+    if (applicable.length > 0) return Number(applicable[0].price_per_unit);
+    const product = products.find(p => p.id === productId);
+    return Number(product?.price_per_unit ?? 0);
+  }
+
   const total = cartItems
     .filter(i => i.showPrice !== false)
-    .reduce((s, i) => s + i.qty * (i.pricePerUnit ?? 0), 0);
+    .reduce((s, i) => s + i.qty * getUnitPrice(i.product_id), 0);
   const showTotal = showPrices && cartItems.some(i => i.showPrice !== false);
   const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
 
@@ -332,6 +358,9 @@ export default function Home() {
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
+                      {showPrices && activeProduct?.show_price !== false && (
+                        <div style={s.cardUnitPrice}>${getUnitPrice(activeProductId).toLocaleString()}/u</div>
+                      )}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
                         <span style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', fontWeight: 700}}>
@@ -384,7 +413,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * (item.pricePerUnit ?? 0)).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * getUnitPrice(item.product_id)).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -434,7 +463,7 @@ export default function Home() {
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * (item.pricePerUnit ?? 0)).toLocaleString()}</span>}
+                      {showPrices && item.showPrice !== false && <span style={s.cartPrice}>${(item.qty * getUnitPrice(item.product_id)).toLocaleString()}</span>}
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
                   </div>
@@ -513,7 +542,7 @@ export default function Home() {
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
                         <span>{i.name} × {i.qty}</span>
-                        {showPrices && i.showPrice !== false && <span>${(i.qty * (i.pricePerUnit ?? 0)).toLocaleString()}</span>}
+                        {showPrices && i.showPrice !== false && <span>${(i.qty * getUnitPrice(i.product_id)).toLocaleString()}</span>}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
@@ -611,6 +640,7 @@ const styles = {
   catTag: { position: 'absolute', top: 8, left: 8, background: '#1B2F5E', color: 'white', fontSize: 10, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', padding: '3px 8px', borderRadius: 4 },
   cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
+  cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
   qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
   qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
   qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
