@@ -363,9 +363,25 @@ export default function Home() {
                       )}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
-                        <span style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', fontWeight: 700}}>
-                          {inCart ? inCart.qty : 0}
-                        </span>
+                        <input
+                          type="number"
+                          style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
+                          value={inCart ? inCart.qty : 0}
+                          onChange={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                            else if (!inCart) addToCart(d);
+                            else setCart(prev => ({ ...prev, [d.id]: { ...prev[d.id], qty: val } }));
+                          }}
+                          onBlur={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') e.target.blur();
+                          }}
+                          min="0"
+                        />
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
                           if (inCart) changeQty(d.id, 1);
                           else addToCart(d);
