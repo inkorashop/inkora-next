@@ -331,12 +331,9 @@ export default function Admin() {
                         </div>
                       </div>
                       <div style={{display:'flex', alignItems:'center', gap:8}}>
-                        <span style={{...s.localityStatus, background: p.active ? '#dcfce7' : '#fee2e2', color: p.active ? '#16a34a' : '#dc2626'}}>
-                          {p.active ? 'Activo' : 'Inactivo'}
-                        </span>
                         <button style={s.editBtn} onClick={() => startEdit(p)}>Editar</button>
                         <button style={s.editBtn} onClick={() => toggleProduct(p.id, p.active)}>
-                          {p.active ? 'Desactivar' : 'Activar'}
+                          {p.active ? 'No mostrar' : 'Mostrar'}
                         </button>
                       </div>
                     </div>
@@ -483,14 +480,9 @@ export default function Admin() {
                       </div>
                     </div>
                   </div>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <span style={{...s.localityStatus, background: d.active ? '#dcfce7' : '#fee2e2', color: d.active ? '#16a34a' : '#dc2626'}}>
-                      {d.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                    <button style={s.editBtn} onClick={() => toggleDesign(d.id, d.active)}>
-                      {d.active ? 'Desactivar' : 'Activar'}
-                    </button>
-                  </div>
+                  <button style={s.editBtn} onClick={() => toggleDesign(d.id, d.active)}>
+                    {d.active ? 'No mostrar' : 'Mostrar'}
+                  </button>
                 </div>
               ))}
             </div>
