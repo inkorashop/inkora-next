@@ -51,16 +51,16 @@ export default function Admin() {
   useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
 
   async function loadProducts() {
-    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
+    const { data } = await supabase.from('products').select('*').order('created_at');
     if (data) setProducts(data);
   }
 
   async function loadDesigns() {
     const { data } = await supabase
-      .from('designs').select('*, products(name)').eq('active', true).order('created_at');
+      .from('designs').select('*, products(name)').order('created_at');
     if (data) {
       setDesigns(data);
-      setOrphanCount(data.filter(d => !d.product_id).length);
+      setOrphanCount(data.filter(d => !d.product_id && d.active).length);
     }
   }
 
@@ -92,14 +92,13 @@ export default function Admin() {
     loadProducts();
   }
 
-  async function deleteProduct(id) {
-    if (!window.confirm('¿Eliminar este producto? Los diseños asociados quedarán sin producto asignado.')) return;
-    await supabase.from('products').update({ active: false }).eq('id', id);
+  async function toggleProduct(id, active) {
+    await supabase.from('products').update({ active: !active }).eq('id', id);
     loadProducts();
   }
 
-  async function deleteDesign(id) {
-    await supabase.from('designs').update({ active: false }).eq('id', id);
+  async function toggleDesign(id, active) {
+    await supabase.from('designs').update({ active: !active }).eq('id', id);
     loadDesigns();
   }
 
@@ -324,16 +323,21 @@ export default function Admin() {
                     </div>
                   ) : (
                     /* ── PRODUCT ROW ── */
-                    <div style={s.productRow}>
+                    <div style={{...s.productRow, opacity: p.active ? 1 : 0.55}}>
                       <div>
                         <div style={s.productName}>{p.name} <span style={s.productSlug}>/{p.slug}</span></div>
                         <div style={s.productMeta}>
                           {p.columns_desktop} cols desktop · {p.columns_mobile} cols móvil · {p.aspect_ratio} · máx {p.max_file_size_kb}kb
                         </div>
                       </div>
-                      <div style={{display:'flex', gap:8}}>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <span style={{...s.localityStatus, background: p.active ? '#dcfce7' : '#fee2e2', color: p.active ? '#16a34a' : '#dc2626'}}>
+                          {p.active ? 'Activo' : 'Inactivo'}
+                        </span>
                         <button style={s.editBtn} onClick={() => startEdit(p)}>Editar</button>
-                        <button style={s.deleteBtn} onClick={() => deleteProduct(p.id)}>Eliminar</button>
+                        <button style={s.editBtn} onClick={() => toggleProduct(p.id, p.active)}>
+                          {p.active ? 'Desactivar' : 'Activar'}
+                        </button>
                       </div>
                     </div>
                   )}
@@ -466,7 +470,7 @@ export default function Admin() {
                 )}
               </div>
               {designs.map(d => (
-                <div key={d.id} style={s.designRow}>
+                <div key={d.id} style={{...s.designRow, opacity: d.active ? 1 : 0.45}}>
                   <div style={s.designInfo}>
                     {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
                     <div>
@@ -479,7 +483,14 @@ export default function Admin() {
                       </div>
                     </div>
                   </div>
-                  <button style={s.deleteBtn} onClick={() => deleteDesign(d.id)}>Eliminar</button>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{...s.localityStatus, background: d.active ? '#dcfce7' : '#fee2e2', color: d.active ? '#16a34a' : '#dc2626'}}>
+                      {d.active ? 'Activo' : 'Inactivo'}
+                    </span>
+                    <button style={s.editBtn} onClick={() => toggleDesign(d.id, d.active)}>
+                      {d.active ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
