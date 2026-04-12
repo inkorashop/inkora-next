@@ -107,6 +107,11 @@ export default function Admin() {
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
 
+  // Orders
+  const [orders, setOrders] = useState([]);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderDetail, setOrderDetail] = useState(null);
+
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
   const [newTiers, setNewTiers] = useState({});
@@ -127,7 +132,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins();
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders();
     }
   }, [screen]);
 
@@ -382,6 +387,39 @@ export default function Admin() {
     });
   }
 
+  // ── Orders ──
+  async function loadOrders() {
+    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (data) setOrders(data);
+  }
+
+  async function updateOrderStatus(id, status) {
+    await supabase.from('orders').update({ status }).eq('id', id);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+  }
+
+  const ORDER_STATUSES = [
+    { value: 'pending',       label: 'Pendiente',      color: '#b45309', bg: '#fef3c7' },
+    { value: 'confirmed',     label: 'Confirmado',     color: '#1d4ed8', bg: '#dbeafe' },
+    { value: 'in_production', label: 'En producción',  color: '#6d28d9', bg: '#ede9fe' },
+    { value: 'ready',         label: 'Listo',          color: '#15803d', bg: '#dcfce7' },
+    { value: 'cancelled',     label: 'Cancelado',      color: '#b91c1c', bg: '#fee2e2' },
+  ];
+
+  function getStatusCfg(value) {
+    return ORDER_STATUSES.find(s => s.value === value) || ORDER_STATUSES[0];
+  }
+
+  function summarizeItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return '—';
+    return items.slice(0, 3).map(i => `${i.name} ×${i.qty}`).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '');
+  }
+
+  const filteredOrders = orders.filter(o => {
+    const q = orderSearch.toLowerCase();
+    return !q || (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_email || '').toLowerCase().includes(q);
+  });
+
   // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
@@ -458,10 +496,11 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['localities','Localidades'],['users','Usuarios'],['admins','Admins']].map(([id, label]) => (
+          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins']].map(([id, label]) => (
             <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
               {label}
               {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
+              {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
               {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
               {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
             </button>
@@ -719,6 +758,67 @@ export default function Admin() {
           </>
         )}
 
+        {/* ══ PEDIDOS ══ */}
+        {activeTab === 'orders' && (
+          <div style={s.card}>
+            <h2 style={s.sectionTitle}>Pedidos ({filteredOrders.length})</h2>
+            <div style={{marginBottom: 12}}>
+              <input
+                style={{...s.input, maxWidth: 320}}
+                placeholder="Buscar por código, nombre o email..."
+                value={orderSearch}
+                onChange={e => setOrderSearch(e.target.value)}
+              />
+            </div>
+            {filteredOrders.length === 0 && <p style={s.emptyMsg}>No hay pedidos.</p>}
+            {filteredOrders.length > 0 && (
+              <div style={{overflowX: 'auto'}}>
+                <table style={s.tbl}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Código</th>
+                      <th style={s.th}>Fecha</th>
+                      <th style={s.th}>Cliente</th>
+                      <th style={s.th}>Email</th>
+                      <th style={s.th}>Items</th>
+                      <th style={s.th}>Total</th>
+                      <th style={s.th}>Estado</th>
+                      <th style={s.th}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map(o => {
+                      const sc = getStatusCfg(o.status);
+                      return (
+                        <tr key={o.id}>
+                          <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
+                          <td style={s.td}>
+                            <select
+                              value={o.status || 'pending'}
+                              onChange={e => updateOrderStatus(o.id, e.target.value)}
+                              style={{border:`1.5px solid ${sc.color}`, background:sc.bg, color:sc.color, borderRadius:6, padding:'3px 7px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                            >
+                              {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+                            </select>
+                          </td>
+                          <td style={s.td}>
+                            <button style={s.editBtn} onClick={() => setOrderDetail(o)}>Ver</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ══ LOCALIDADES ══ */}
         {activeTab === 'localities' && (
           <>
@@ -803,6 +903,52 @@ export default function Admin() {
       </div>
 
       <footer style={s.footer}>INKORA® Admin</footer>
+
+      {/* MODAL DETALLE PEDIDO */}
+      {orderDetail && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setOrderDetail(null)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:520, maxHeight:'80vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Pedido {orderDetail.order_code}</div>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>✕</button>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 16px', fontSize:13}}>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Cliente</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_name || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div></div>
+              {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
+            </div>
+            <div>
+              <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
+              <table style={{width:'100%', borderCollapse:'collapse'}}>
+                <thead>
+                  <tr>
+                    <th style={{...s.th, padding:'4px 8px'}}>Diseño</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Cant.</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>P/u</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => (
+                    <tr key={i}>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:16, borderTop:'1.5px solid #eef0f6', paddingTop:12}}>
+              <span style={{fontSize:13, color:'#5a6380'}}>Total</span>
+              <span style={{fontSize:18, fontWeight:800, color:'#1B2F5E'}}>{orderDetail.total ? `$${Number(orderDetail.total).toLocaleString('es-AR')}` : '—'}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (

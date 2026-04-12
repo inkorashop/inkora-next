@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm run:*)",
-      "Bash(vercel:*)"
+      "Bash(vercel:*)",
+      "Bash(npx vercel:*)"
     ]
   }
 }
