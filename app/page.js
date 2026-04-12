@@ -361,7 +361,7 @@ export default function Home() {
       </header>
 
       {isMobile && (
-        <div style={{...s.mobileSearchBar, transform: headerVisible ? 'translateY(0)' : 'translateY(-64px)', transition: 'transform 0.3s ease'}}>
+        <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
           <span style={s.searchIcon}><SearchIconWhite /></span>
           <input
             style={s.mobileSearchInput}
@@ -385,7 +385,7 @@ export default function Home() {
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
         paddingRight: isMobile ? 16 : 388,
-        paddingTop: isMobile ? (headerVisible ? 116 : 52) : 24,
+        paddingTop: isMobile ? (headerVisible ? 72 : 16) : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
       }}>
@@ -753,7 +753,7 @@ const styles = {
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.95)', borderRadius: 10, padding: '10px 16px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8 },
   btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
   btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  mobileSearchBar: { position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90, background: 'rgba(27,47,94,0.95)', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8 },
+  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.95)', borderRadius: 10, padding: '6px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', gap: 6 },
   mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
   layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
   catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
