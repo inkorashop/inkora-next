@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 const CATEGORIES = ['deportes', 'animales', 'vehiculos', 'otros'];
 const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
+const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
   return new Promise(resolve => {
@@ -36,19 +37,31 @@ function EyeOff() {
   );
 }
 
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" style={{flexShrink:0}}>
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+  );
+}
+
 export default function Admin() {
-  const [auth, setAuth] = useState(false);
-  const [password, setPassword] = useState('');
+  // ── Auth ──────────────────────────────────────────────
+  const [screen, setScreen] = useState('login'); // 'login' | 'checking' | 'denied' | 'panel'
+  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
 
-  // Products
+  // ── Products ──────────────────────────────────────────
   const [products, setProducts] = useState([]);
   const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT);
   const [savingProduct, setSavingProduct] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  // Designs
+  // ── Designs ───────────────────────────────────────────
   const [designs, setDesigns] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -56,35 +69,79 @@ export default function Admin() {
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
 
-  // Localities
+  // ── Localities ────────────────────────────────────────
   const [localities, setLocalities] = useState([]);
   const [newLocality, setNewLocality] = useState({ name: '', price_per_unit: 500 });
   const [savingLocality, setSavingLocality] = useState(false);
 
-  // Users
+  // ── Users ─────────────────────────────────────────────
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Price tiers
+  // ── Price tiers ───────────────────────────────────────
   const [priceTiers, setPriceTiers] = useState([]);
   const [tierProductId, setTierProductId] = useState('');
   const [newTiers, setNewTiers] = useState({});
 
-  useEffect(() => { if (auth) { loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); } }, [auth]);
+  // ── Admins ────────────────────────────────────────────
+  const [admins, setAdmins] = useState([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
+
+  // ── Auth listener ─────────────────────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') return; // ignorar completamente
+      if (event === 'SIGNED_IN' && session?.user?.email) {
+        checkAdmin(session.user.email);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'panel') {
+      loadProducts();
+      loadDesigns();
+      loadLocalities();
+      loadUsers();
+      loadPriceTiers();
+      loadAdmins();
+    }
+  }, [screen]);
+
   useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
 
+  // ── Auth functions ────────────────────────────────────
+  async function checkAdmin(email) {
+    setScreen('checking');
+    const { data } = await supabase.from('admins').select('email').eq('email', email).single();
+    if (data) {
+      setCurrentUser(email);
+      setScreen('panel');
+    } else {
+      setScreen('denied');
+    }
+  }
+
+  async function signInWithGoogle() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'https://inkora-next.vercel.app/admin' },
+    });
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setScreen('login');
+    setCurrentUser(null);
+  }
+
+  // ── Products ──────────────────────────────────────────
   async function loadProducts() {
     const { data } = await supabase.from('products').select('*').order('created_at');
     if (data) setProducts(data);
-  }
-
-  async function loadDesigns() {
-    const { data } = await supabase
-      .from('designs').select('*, products(name)').order('created_at');
-    if (data) {
-      setDesigns(data);
-      setOrphanCount(data.filter(d => !d.product_id && d.active).length);
-    }
   }
 
   async function addProduct() {
@@ -115,32 +172,18 @@ export default function Admin() {
     loadProducts();
   }
 
-  async function loadPriceTiers() {
-    const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
-    if (data) setPriceTiers(data);
-  }
-
-  async function addTier(localityId) {
-    const t = newTiers[localityId] || { min_quantity: 1, price_per_unit: 0 };
-    if (!tierProductId || !t.min_quantity || !t.price_per_unit) return;
-    await supabase.from('price_tiers').insert({
-      product_id: tierProductId,
-      locality_id: localityId,
-      min_quantity: Number(t.min_quantity),
-      price_per_unit: Number(t.price_per_unit),
-    });
-    setNewTiers(prev => ({ ...prev, [localityId]: { min_quantity: 1, price_per_unit: 0 } }));
-    loadPriceTiers();
-  }
-
-  async function deleteTier(id) {
-    await supabase.from('price_tiers').delete().eq('id', id);
-    loadPriceTiers();
-  }
-
   async function toggleProduct(id, active) {
     await supabase.from('products').update({ active: !active }).eq('id', id);
     loadProducts();
+  }
+
+  // ── Designs ───────────────────────────────────────────
+  async function loadDesigns() {
+    const { data } = await supabase.from('designs').select('*, products(name)').order('created_at');
+    if (data) {
+      setDesigns(data);
+      setOrphanCount(data.filter(d => !d.product_id && d.active).length);
+    }
   }
 
   async function toggleDesign(id, active) {
@@ -219,16 +262,10 @@ export default function Admin() {
     loadDesigns();
   }
 
+  // ── Localities ────────────────────────────────────────
   async function loadLocalities() {
     const { data } = await supabase.from('localities').select('*').order('created_at');
     if (data) setLocalities(data);
-  }
-
-  async function loadUsers() {
-    setLoadingUsers(true);
-    const { data } = await supabase.rpc('admin_get_profiles');
-    if (data) setUsers(data);
-    setLoadingUsers(false);
   }
 
   async function addLocality() {
@@ -245,6 +282,14 @@ export default function Admin() {
     loadLocalities();
   }
 
+  // ── Users ─────────────────────────────────────────────
+  async function loadUsers() {
+    setLoadingUsers(true);
+    const { data } = await supabase.rpc('admin_get_profiles');
+    if (data) setUsers(data);
+    setLoadingUsers(false);
+  }
+
   async function updateUserLocality(userId, localityId) {
     await supabase.rpc('admin_update_user_locality', {
       p_user_id: userId,
@@ -253,6 +298,53 @@ export default function Admin() {
     loadUsers();
   }
 
+  // ── Price tiers ───────────────────────────────────────
+  async function loadPriceTiers() {
+    const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
+    if (data) setPriceTiers(data);
+  }
+
+  async function addTier(localityId) {
+    const t = newTiers[localityId] || { min_quantity: 1, price_per_unit: 0 };
+    if (!tierProductId || !t.min_quantity || !t.price_per_unit) return;
+    await supabase.from('price_tiers').insert({
+      product_id: tierProductId,
+      locality_id: localityId,
+      min_quantity: Number(t.min_quantity),
+      price_per_unit: Number(t.price_per_unit),
+    });
+    setNewTiers(prev => ({ ...prev, [localityId]: { min_quantity: 1, price_per_unit: 0 } }));
+    loadPriceTiers();
+  }
+
+  async function deleteTier(id) {
+    await supabase.from('price_tiers').delete().eq('id', id);
+    loadPriceTiers();
+  }
+
+  // ── Admins ────────────────────────────────────────────
+  async function loadAdmins() {
+    const { data } = await supabase.from('admins').select('email').order('email');
+    if (data) setAdmins(data);
+  }
+
+  async function addAdmin() {
+    const email = newAdminEmail.trim().toLowerCase();
+    if (!email) return;
+    setAddingAdmin(true);
+    await supabase.from('admins').insert({ email });
+    setNewAdminEmail('');
+    setAddingAdmin(false);
+    loadAdmins();
+  }
+
+  async function deleteAdmin(email) {
+    await supabase.from('admins').delete().eq('email', email);
+    setDeleteConfirmEmail(null);
+    loadAdmins();
+  }
+
+  // ── Helpers ───────────────────────────────────────────
   const hasDupInBatch = (index, name) =>
     name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
 
@@ -262,25 +354,58 @@ export default function Admin() {
 
   const s = styles;
 
-  if (!auth) return (
+  // ════════════════════════════════════════════════════════
+  //  PANTALLAS DE AUTH
+  // ════════════════════════════════════════════════════════
+
+  if (screen === 'login') return (
     <div style={s.loginWrap}>
       <div style={s.loginBox}>
-        <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height:50, marginBottom:24}} />
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
         <h2 style={s.loginTitle}>Panel de Administración</h2>
-        <input style={s.input} type="password" placeholder="Contraseña" value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => { if(e.key === 'Enter' && password === 'inkora2026') setAuth(true); }} />
-        <button style={s.btnPrimary} onClick={() => { if (password === 'inkora2026') setAuth(true); else alert('Contraseña incorrecta'); }}>Ingresar</button>
+        <button style={s.btnGoogle} onClick={signInWithGoogle}>
+          <GoogleIcon />
+          Ingresar con Google
+        </button>
       </div>
     </div>
   );
 
+  if (screen === 'checking') return (
+    <div style={s.loginWrap}>
+      <div style={s.loginBox}>
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
+        <p style={{color: '#5a6380', fontSize: 14, margin: 0}}>Verificando acceso...</p>
+      </div>
+    </div>
+  );
+
+  if (screen === 'denied') return (
+    <div style={s.loginWrap}>
+      <div style={s.loginBox}>
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
+        <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>
+          Acceso denegado
+        </div>
+        <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>
+          Tu cuenta no tiene permisos de administrador.
+        </p>
+        <button style={s.btnPrimary} onClick={handleSignOut}>Cerrar sesión</button>
+      </div>
+    </div>
+  );
+
+  // ════════════════════════════════════════════════════════
+  //  PANEL ADMIN
+  // ════════════════════════════════════════════════════════
+
   return (
     <div style={s.wrap}>
       <header style={s.header}>
-        <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height:36, filter:'brightness(0) invert(1)'}} />
+        <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
-        <button style={s.btnLogout} onClick={() => { setAuth(false); setPassword(''); }}>Cerrar sesión</button>
+        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
+        <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
       {/* ── TABS ── */}
@@ -297,6 +422,9 @@ export default function Admin() {
           </button>
           <button style={{...s.tab, ...(activeTab === 'users' ? s.tabActive : {})}} onClick={() => setActiveTab('users')}>
             Usuarios {users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
+          </button>
+          <button style={{...s.tab, ...(activeTab === 'admins' ? s.tabActive : {})}} onClick={() => setActiveTab('admins')}>
+            Admins {admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
           </button>
         </div>
       </div>
@@ -316,7 +444,6 @@ export default function Admin() {
               {products.map(p => (
                 <div key={p.id}>
                   {editingProductId === p.id ? (
-                    /* ── EDIT FORM ── */
                     <div style={s.editRow}>
                       <div style={s.formRow2}>
                         <div style={s.formGroup}>
@@ -362,13 +489,12 @@ export default function Admin() {
                           </select>
                         </div>
                       </div>
-                      <div style={{display:'flex', gap:8}}>
+                      <div style={{display: 'flex', gap: 8}}>
                         <button style={s.btnPrimary} onClick={() => saveEdit(p.id)}>Guardar</button>
                         <button style={s.btnSecondarySmall} onClick={() => setEditingProductId(null)}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
-                    /* ── PRODUCT ROW ── */
                     <div style={{...s.productRow, opacity: p.active ? 1 : 0.55}}>
                       <div>
                         <div style={s.productName}>{p.name} <span style={s.productSlug}>/{p.slug}</span></div>
@@ -376,7 +502,7 @@ export default function Admin() {
                           {p.columns_desktop} cols desktop · {p.columns_mobile} cols móvil · {p.aspect_ratio} · máx {p.max_file_size_kb}kb
                         </div>
                       </div>
-                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                         <button style={s.editBtn} onClick={() => startEdit(p)}>Editar</button>
                         <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)} title={p.active ? 'Ocultar' : 'Mostrar'}>
                           {p.active ? <EyeOpen /> : <EyeOff />}
@@ -549,7 +675,7 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
                 <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
                 {orphanCount > 0 && (
                   <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>
@@ -613,7 +739,7 @@ export default function Admin() {
                     <div style={s.productName}>{l.name}</div>
                     <div style={s.productMeta}>${l.price_per_unit.toLocaleString()} por unidad</div>
                   </div>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                     <span style={{...s.localityStatus, background: l.active ? '#dcfce7' : '#fee2e2', color: l.active ? '#16a34a' : '#dc2626'}}>
                       {l.active ? 'Activa' : 'Inactiva'}
                     </span>
@@ -656,7 +782,76 @@ export default function Admin() {
           </div>
         )}
 
+        {/* ══ TAB: ADMINS ══ */}
+        {activeTab === 'admins' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Agregar administrador</h2>
+              <div style={{display: 'flex', gap: 10, alignItems: 'flex-end'}}>
+                <div style={{...s.formGroup, flex: 1, marginBottom: 0}}>
+                  <label style={s.label}>Email</label>
+                  <input
+                    style={s.input}
+                    type="email"
+                    value={newAdminEmail}
+                    onChange={e => setNewAdminEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addAdmin(); }}
+                    placeholder="usuario@email.com"
+                  />
+                </div>
+                <button
+                  style={{...s.btnPrimary, opacity: newAdminEmail.trim() && !addingAdmin ? 1 : 0.5, whiteSpace: 'nowrap'}}
+                  disabled={!newAdminEmail.trim() || addingAdmin}
+                  onClick={addAdmin}
+                >
+                  {addingAdmin ? 'Guardando...' : '+ Agregar'}
+                </button>
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Administradores ({admins.length})</h2>
+              {admins.length === 0 && <p style={s.emptyMsg}>No hay administradores.</p>}
+              {admins.map(a => (
+                <div key={a.email} style={s.adminRow}>
+                  <span style={s.adminEmail}>{a.email}</span>
+                  {a.email === currentUser && (
+                    <span style={s.adminSelfBadge}>vos</span>
+                  )}
+                  <button
+                    style={{...s.deleteBtn, marginLeft: 'auto'}}
+                    onClick={() => setDeleteConfirmEmail(a.email)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
       </div>
+
+      {/* ══ MODAL CONFIRMACIÓN ELIMINAR ADMIN ══ */}
+      {deleteConfirmEmail && (
+        <div style={s.modalOverlay} onClick={() => setDeleteConfirmEmail(null)}>
+          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+            <p style={{fontSize: 15, color: '#2d3352', margin: '0 0 8px', fontWeight: 600}}>
+              ¿Eliminar acceso de administrador?
+            </p>
+            <p style={{fontSize: 13, color: '#5a6380', margin: '0 0 20px'}}>
+              <strong>{deleteConfirmEmail}</strong> ya no podrá ingresar al panel.
+            </p>
+            <div style={{display: 'flex', gap: 8, justifyContent: 'flex-end'}}>
+              <button style={s.btnSecondarySmall} onClick={() => setDeleteConfirmEmail(null)}>Cancelar</button>
+              <button style={{...s.btnPrimary, background: '#dc2626'}} onClick={() => deleteAdmin(deleteConfirmEmail)}>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer style={s.footer}>INKORA® Admin</footer>
     </div>
   );
@@ -666,13 +861,14 @@ const styles = {
   loginWrap: { minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   loginBox: { background: 'white', borderRadius: 16, padding: 40, width: 360, boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
   loginTitle: { fontSize: 20, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  btnGoogle: { display: 'flex', alignItems: 'center', gap: 10, background: 'white', color: '#2d3352', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
   wrap: { minHeight: '100vh', background: '#f7f8fc', fontFamily: "'Barlow', sans-serif" },
   header: { background: '#1B2F5E', padding: '0 32px', height: 64, display: 'flex', alignItems: 'center', gap: 16 },
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 13, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' },
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
   tabBarInner: { maxWidth: 800, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 0 },
-  tab: { background: 'none', border: 'none', padding: '16px 24px', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
+  tab: { background: 'none', border: 'none', padding: '16px 20px', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 },
   content: { maxWidth: 800, margin: '32px auto', padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 24 },
@@ -721,4 +917,9 @@ const styles = {
   userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #eef0f6', gap: 12 },
   userInfo: { flex: 1, minWidth: 0 },
   userLocality: { flexShrink: 0 },
+  adminRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderBottom: '1px solid #eef0f6' },
+  adminEmail: { fontSize: 14, color: '#2d3352', fontWeight: 500, flex: 1 },
+  adminSelfBadge: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 10, padding: '1px 8px', fontSize: 11, fontWeight: 700 },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modalBox: { background: 'white', borderRadius: 14, padding: 28, width: 380, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' },
 };
