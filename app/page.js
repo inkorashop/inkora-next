@@ -333,6 +333,7 @@ export default function Home() {
         .card-pulse { animation: card-pulse 350ms ease-out; }
         input::placeholder { color: rgba(255,255,255,0.6); }
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
+        .qty-input::placeholder { color: #9aa3bc; }
       `}</style>
       <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
@@ -470,7 +471,7 @@ export default function Home() {
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
                         <input
                           type="number"
-                          className={qtyAnim[d.id] === 'pop' ? 'qty-pop' : qtyAnim[d.id] === 'shrink' ? 'qty-shrink' : ''}
+                          className={`qty-input${qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : ''}`}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
                           value={inCart ? inCart.qty : ''}
                           placeholder="0"
