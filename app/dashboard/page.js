@@ -159,7 +159,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                 </div>
                 <div>
                   <label style={lbl}>Teléfono</label>
-                  <input style={inp} value={phone} onChange={e => setPhone(e.target.value)} placeholder="3764000000" />
+                  <input style={inp} type="tel" inputMode="numeric" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))} placeholder="3764000000" />
                 </div>
               </div>
 

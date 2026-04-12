@@ -472,7 +472,8 @@ export default function Home() {
                           type="number"
                           className={qtyAnim[d.id] === 'pop' ? 'qty-pop' : qtyAnim[d.id] === 'shrink' ? 'qty-shrink' : ''}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
-                          value={inCart ? inCart.qty : 0}
+                          value={inCart ? inCart.qty : ''}
+                          placeholder="0"
                           onChange={e => {
                             const val = parseInt(e.target.value);
                             if (isNaN(val) || val <= 0) removeFromCart(d.id);
@@ -665,7 +666,7 @@ export default function Home() {
                     </div>
                     <div style={s.formGroup}>
                       <label style={s.label}>Teléfono *</label>
-                      <input style={s.input} value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="3764000000" />
+                      <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
                     </div>
                   </div>
                   <div style={s.formGroup}>
