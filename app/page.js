@@ -365,14 +365,15 @@ export default function Home() {
         <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
           <span style={s.searchIcon}><SearchIconWhite /></span>
           <input
-            style={s.mobileSearchInput}
+            className="desktop-search-input"
+            style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Buscar diseño..."
           />
           {searchQuery && (
-            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.7)'}} onClick={() => setSearchQuery('')}>✕</button>
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
           )}
         </div>
       )}
@@ -755,7 +756,7 @@ const styles = {
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
   btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
   btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.95)', borderRadius: 10, padding: '6px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', gap: 6 },
+  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
   mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
   layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
   catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },

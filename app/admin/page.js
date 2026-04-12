@@ -451,8 +451,15 @@ export default function Admin() {
   const s = styles;
 
   // ── PANTALLAS AUTH ──
+  const sessionBar = currentUser ? (
+    <div style={{position:'fixed', top:0, left:0, right:0, zIndex:999, background:'rgba(17,32,64,0.92)', backdropFilter:'blur(6px)', padding:'6px 20px', fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'right'}}>
+      {currentUser}
+    </div>
+  ) : null;
+
   if (screen === 'login') return (
     <div style={s.loginWrap}>
+      {sessionBar}
       <div style={s.loginBox}>
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
         <h2 style={s.loginTitle}>Panel de Administración</h2>
@@ -466,6 +473,7 @@ export default function Admin() {
 
   if (screen === 'checking') return (
     <div style={s.loginWrap}>
+      {sessionBar}
       <div style={s.loginBox}>
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
         <p style={{color: '#5a6380', fontSize: 14, margin: 0}}>Verificando acceso...</p>
@@ -475,6 +483,7 @@ export default function Admin() {
 
   if (screen === 'denied') return (
     <div style={s.loginWrap}>
+      {sessionBar}
       <div style={s.loginBox}>
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
         <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>Acceso denegado</div>
