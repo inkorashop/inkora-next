@@ -333,7 +333,7 @@ export default function Home() {
         .card-pulse { animation: card-pulse 350ms ease-out; }
         input::placeholder { color: rgba(255,255,255,0.6); }
       `}</style>
-      <header style={{...s.header, transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease'}}>
+      <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
           <div style={s.logoWrap}>
             <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
@@ -385,7 +385,7 @@ export default function Home() {
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
         paddingRight: isMobile ? 16 : 388,
-        paddingTop: isMobile ? (headerVisible ? 72 : 16) : 24,
+        paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
       }}>
