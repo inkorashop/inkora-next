@@ -661,16 +661,29 @@ export default function Admin() {
                                   })}
                                   {isAdding && (
                                     <tr style={{borderTop:'1px solid #f0f2f8', background:'#f7f8fc'}}>
-                                      <td style={{...s.td, padding:'3px 8px'}}><input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="1" placeholder="≥qty" value={nt.min_quantity} onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))} /></td>
+                                      <td style={{...s.td, padding:'3px 8px'}}>
+                                        <input
+                                          style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                          type="number" min="1" placeholder="Cantidad"
+                                          value={nt.min_quantity}
+                                          onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
+                                          onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, locality.id, key); }}
+                                        />
+                                      </td>
                                       <td style={{...s.td, padding:'3px 8px'}}>
                                         <div style={{display:'flex', alignItems:'center', gap:2}}>
                                           <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
-                                          <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="0" placeholder="$/u" value={nt.price_per_unit} onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))} />
+                                          <input
+                                            style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                            type="number" min="0" placeholder="Precio"
+                                            value={nt.price_per_unit}
+                                            onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
+                                            onBlur={() => addTierMatrix(product.id, locality.id, key)}
+                                            onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, locality.id, key); }}
+                                          />
                                         </div>
                                       </td>
-                                      <td style={{...s.td, padding:'3px 4px', textAlign:'center'}}>
-                                        <button style={{...s.editBtn, padding:'1px 5px', fontSize:12}} onClick={() => addTierMatrix(product.id, locality.id, key)}>✓</button>
-                                      </td>
+                                      <td style={{...s.td, padding:'3px 4px', textAlign:'center'}} />
                                     </tr>
                                   )}
                                 </tbody>
