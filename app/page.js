@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
@@ -48,6 +48,12 @@ export default function Home() {
   const [cartPanelOpen, setCartPanelOpen] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [stickySearchVisible, setStickySearchVisible] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const inlineSearchRef = useRef(null);
+  const [qtyAnim, setQtyAnim] = useState({});
+  const [cardPulse, setCardPulse] = useState({});
+  const [cardHover, setCardHover] = useState({});
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -60,6 +66,7 @@ export default function Home() {
   const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
 
   useEffect(() => {
+    document.body.style.paddingBottom = '1px';
     loadProducts();
 
     // getSession lee desde storage local — funciona correctamente post-OAuth redirect
@@ -124,6 +131,18 @@ export default function Home() {
     document.addEventListener('scroll', handler, { passive: true });
     return () => document.removeEventListener('scroll', handler);
   }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const el = inlineSearchRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setStickySearchVisible(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isMobile]);
 
   async function loadProducts() {
     const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
@@ -226,6 +245,8 @@ export default function Home() {
         showPrice: product?.show_price !== false,
       },
     }));
+    triggerQtyAnim(design.id, 'pop');
+    triggerCardPulse(design.id);
   }
 
   function changeQty(id, delta) {
@@ -236,10 +257,33 @@ export default function Home() {
       if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
       return { ...prev, [id]: { ...item, qty: newQty } };
     });
+    triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
+    triggerCardPulse(id);
+  }
+
+  function openModal() {
+    if (user) {
+      setForm({
+        name: profile?.name || '',
+        email: user.email || '',
+        phone: profile?.phone || '',
+      });
+    }
+    setModalOpen(true);
   }
 
   function removeFromCart(id) {
     setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function triggerQtyAnim(id, type) {
+    setQtyAnim(prev => ({ ...prev, [id]: type }));
+    setTimeout(() => setQtyAnim(prev => { const n = { ...prev }; delete n[id]; return n; }), 200);
+  }
+
+  function triggerCardPulse(id) {
+    setCardPulse(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => setCardPulse(prev => { const n = { ...prev }; delete n[id]; return n; }), 350);
   }
 
   async function submitOrder() {
@@ -280,6 +324,15 @@ export default function Home() {
 
   return (
     <div style={s.app}>
+      <style>{`
+        @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
+        @keyframes card-pulse { 0% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } 35% { border-color: #2D6BE4; box-shadow: 0 0 0 3px rgba(45,107,228,0.25), 0 2px 8px rgba(27,47,94,0.08); } 100% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } }
+        .qty-pop { animation: qty-pop 200ms ease-out; }
+        .qty-shrink { animation: qty-shrink 200ms ease-out; }
+        .card-pulse { animation: card-pulse 350ms ease-out; }
+        input::placeholder { color: rgba(255,255,255,0.6); }
+      `}</style>
       <header style={{...s.header, transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease'}}>
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
           <div style={s.logoWrap}>
@@ -287,9 +340,17 @@ export default function Home() {
           </div>
           <div style={s.headerActions}>
             {user ? (
-              <button style={s.btnUserHeader} onClick={() => supabase.auth.signOut()}>
-                {profile?.name || user.email?.split('@')[0]} · Salir
-              </button>
+              <div style={{position:'relative'}}>
+                <button style={s.btnUserHeader} onClick={() => setUserMenuOpen(v => !v)}>
+                  {profile?.name || user.email?.split('@')[0]} ▾
+                </button>
+                {userMenuOpen && (
+                  <div style={{position:'absolute', top:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, boxShadow:'0 4px 16px rgba(27,47,94,0.12)', minWidth:160, zIndex:200, overflow:'hidden'}} onClick={() => setUserMenuOpen(false)}>
+                    <a href="/dashboard" style={{display:'block', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#1B2F5E', textDecoration:'none', borderBottom:'1px solid #eef0f6'}}>Mi cuenta</a>
+                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button style={s.btnLoginHeader} onClick={() => setAuthModalOpen(true)}>
                 Ingresar
@@ -303,7 +364,6 @@ export default function Home() {
         <div style={{...s.mobileSearchBar, transform: headerVisible ? 'translateY(0)' : 'translateY(-64px)', transition: 'transform 0.3s ease'}}>
           <span style={s.searchIcon}><SearchIconWhite /></span>
           <input
-            className="mobile-search-input"
             style={s.mobileSearchInput}
             type="text"
             value={searchQuery}
@@ -320,6 +380,7 @@ export default function Home() {
         ...s.layout,
         alignItems: 'start',
         flex: 1,
+        width: '100%',
         minHeight: 'calc(100vh - 64px)',
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
@@ -372,24 +433,32 @@ export default function Home() {
             <div style={{...s.grid, gridTemplateColumns: gridCols}}>
               {filtered.map(d => {
                 const inCart = cart[d.id];
+                const isHovered = cardHover[d.id];
+                const isPulsing = cardPulse[d.id];
                 return (
-                  <div key={d.id} style={s.card}>
+                  <div
+                    key={d.id}
+                    className={isPulsing ? 'card-pulse' : ''}
+                    style={{
+                      ...s.card,
+                      transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                      boxShadow: isHovered
+                        ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
+                        : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    }}
+                    onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
+                    onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
+                  >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.image_url
                         ? <img src={d.image_url} alt={d.name} style={s.img} />
                         : <span style={{fontSize:36}}>🎨</span>}
                     </div>
                     <div style={s.cardBody}>
-                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:4}}>
-                        <div style={s.cardName}>{d.name}</div>
-                        <span style={s.catTag}>{d.category}</span>
-                      </div>
+                      <div style={s.cardName}>{d.name}</div>
+                      <span style={s.catTag}>{d.category}</span>
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
-                        const minQty = getProductMinQty(activeProductId);
-                        if (price === null && minQty !== null) {
-                          return <div style={s.cardMinQty}>Mín. {minQty} u.</div>;
-                        }
                         if (price !== null && price > 0) {
                           return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
                         }
@@ -399,6 +468,7 @@ export default function Home() {
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
                         <input
                           type="number"
+                          className={qtyAnim[d.id] === 'pop' ? 'qty-pop' : qtyAnim[d.id] === 'shrink' ? 'qty-shrink' : ''}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
                           value={inCart ? inCart.qty : 0}
                           onChange={e => {
@@ -434,7 +504,6 @@ export default function Home() {
           <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, transition: 'top 0.3s ease'}}>
             <span style={s.searchIcon}><SearchIconWhite /></span>
             <input
-              className="desktop-search-input"
               style={s.searchInput}
               type="text"
               value={searchQuery}
@@ -466,7 +535,7 @@ export default function Home() {
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
                         const minQty = getProductMinQty(item.product_id);
-                        if (price === null && minQty !== null) return <span style={s.cartMinQty}>Mín. {minQty} u.</span>;
+                        if (price === null) return null;
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
@@ -477,9 +546,6 @@ export default function Home() {
               )}
             </div>
             <div style={s.sidebarFooter}>
-              {cartItems.length > 0 && !showTotal && (
-                <div style={s.priceHint}>{!user ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
-              )}
               <div style={s.totalRow}>
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
@@ -487,7 +553,7 @@ export default function Home() {
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
               <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
-                disabled={cartItems.length === 0} onClick={() => setModalOpen(true)}>
+                disabled={cartItems.length === 0} onClick={openModal}>
                 Confirmar pedido →
               </button>
             </div>
@@ -522,7 +588,7 @@ export default function Home() {
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
                         const minQty = getProductMinQty(item.product_id);
-                        if (price === null && minQty !== null) return <span style={s.cartMinQty}>Mín. {minQty} u.</span>;
+                        if (price === null) return null;
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
@@ -533,9 +599,6 @@ export default function Home() {
               )}
             </div>
             <div style={s.cartPanelFooter}>
-              {cartItems.length > 0 && !showTotal && (
-                <div style={s.priceHint}>{!user ? 'Ingresá para ver precios' : 'Precios no disponibles'}</div>
-              )}
               <div style={s.totalRow}>
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
@@ -545,7 +608,7 @@ export default function Home() {
               <button
                 style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
                 disabled={cartItems.length === 0}
-                onClick={() => { setCartPanelOpen(false); setModalOpen(true); }}
+                onClick={() => { setCartPanelOpen(false); openModal(); }}
               >
                 Confirmar pedido →
               </button>
@@ -561,7 +624,7 @@ export default function Home() {
             <button
               style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
               disabled={cartItems.length === 0}
-              onClick={() => setModalOpen(true)}
+              onClick={openModal}
             >
               Confirmar →
             </button>
@@ -583,9 +646,15 @@ export default function Home() {
                     <small style={s.codeLabel}>Código de pedido</small>
                     <strong style={s.codeValue}>{orderCode}</strong>
                   </div>
-                  <div style={s.notice}>
-                    ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
-                  </div>
+                  {user ? (
+                    <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
+                      ✓ Pedido como cliente registrado.
+                    </div>
+                  ) : (
+                    <div style={s.notice}>
+                      ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
+                    </div>
+                  )}
                   <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
                     <div style={s.formGroup}>
                       <label style={s.label}>Nombre *</label>
@@ -607,7 +676,7 @@ export default function Home() {
                         {showPrices && i.showPrice !== false && (() => {
                           const price = getUnitPrice(i.product_id);
                           const minQty = getProductMinQty(i.product_id);
-                          if (price === null && minQty !== null) return <span style={{color:'#9aa3bc',fontSize:12}}>Mín. {minQty} u.</span>;
+                          if (price === null) return null;
                           if (price !== null && price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
                           return null;
                         })()}
@@ -674,17 +743,17 @@ export default function Home() {
 
 const styles = {
   app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
-  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', willChange: 'transform' },
+  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)' },
   headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
   headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
   btnLoginHeader: { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   btnUserHeader: { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
   priceHint: { fontSize: 12, color: '#9aa3bc', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' },
-  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.95)', borderRadius: 10, border: '1.5px solid rgba(255,255,255,0.15)', padding: '10px 16px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8 },
+  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.95)', borderRadius: 10, padding: '10px 16px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8 },
   btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
   btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  mobileSearchBar: { position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90, background: 'rgba(27,47,94,0.95)', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, willChange: 'transform' },
+  mobileSearchBar: { position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90, background: 'rgba(27,47,94,0.95)', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8 },
   mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
   layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
   catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
@@ -702,10 +771,10 @@ const styles = {
   filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
-  card: { background: 'white', borderRadius: 12, overflow: 'hidden', border: '1.5px solid #dde1ef' },
+  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
   cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
   img: { width: '100%', height: '100%', objectFit: 'cover' },
-  catTag: { background: '#eef0f6', color: '#5a6380', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0 },
+  catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
   cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
   cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
@@ -757,9 +826,9 @@ const styles = {
   successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
   successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
   btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
-  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none', willChange: 'transform' },
-  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, fontSize: 12, marginTop: 40 },
-  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)', transform: 'translateZ(0)', willChange: 'transform' },
+  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none' },
+  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, paddingBottom: 64, fontSize: 12, marginTop: 40 },
+  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)' },
   mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
   mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
   mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
@@ -767,7 +836,7 @@ const styles = {
   mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
   mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
   cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },
-  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)', willChange: 'transform' },
+  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)' },
   cartPanelHeader: { background: '#1B2F5E', borderRadius: '16px 16px 0 0', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
   cartPanelTitle: { color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: 0.5 },
   cartPanelClose: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
