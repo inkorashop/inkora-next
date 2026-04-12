@@ -334,6 +334,7 @@ export default function Home() {
         input::placeholder { color: rgba(255,255,255,0.6); }
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
         .qty-input::placeholder { color: #9aa3bc; }
+        .qty-input:focus::placeholder { color: transparent; }
       `}</style>
       <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
