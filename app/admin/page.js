@@ -713,10 +713,13 @@ export default function Admin() {
               <h2 style={s.sectionTitle}>Agregar diseños</h2>
               <div style={s.formGroup}>
                 <label style={s.label}>Producto *</label>
-                <select style={s.input} value={selectedProductId} onChange={e => { setSelectedProductId(e.target.value); setPendingFiles([]); }}>
-                  <option value="">— Seleccioná un producto —</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+                  {products.map(p => (
+                    <button key={p.id} onClick={() => { setSelectedProductId(p.id); if (p.id !== selectedProductId) setPendingFiles([]); }} style={{border:'none', borderRadius:7, padding:'6px 14px', fontSize:13, fontWeight:600, cursor:'pointer', background: selectedProductId === p.id ? '#1B2F5E' : '#eef0f6', color: selectedProductId === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
               </div>
               {selectedProductId && (
                 <div style={s.formGroup}>
@@ -739,13 +742,9 @@ export default function Admin() {
                             {entry.sizeError && <div style={s.errorMsg}>⚠ La imagen supera {maxSizeKb}kb</div>}
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                           </div>
-                          <div style={{display:'flex', flexWrap:'wrap', gap:4, flexShrink:0}}>
-                            {CATEGORIES.map(c => (
-                              <button key={c} onClick={() => updateEntry(i, 'category', c)} style={{border:'none', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', background: entry.category === c ? '#1B2F5E' : '#eef0f6', color: entry.category === c ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
-                                {c.charAt(0).toUpperCase() + c.slice(1)}
-                              </button>
-                            ))}
-                          </div>
+                          <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
+                            {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                          </select>
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
