@@ -16,5 +16,7 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/admin`);
+  const next = searchParams.get('next');
+  const redirectTo = next === '/admin' ? `${origin}/admin` : `${origin}/`;
+  return NextResponse.redirect(redirectTo);
 }
