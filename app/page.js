@@ -475,6 +475,14 @@ export default function Home() {
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
                           value={inCart ? inCart.qty : ''}
                           placeholder="0"
+                          onFocus={e => {
+                            if (!inCart || Number(inCart.qty) === 0) {
+                              if (inCart) removeFromCart(d.id);
+                              e.target.value = '';
+                            } else {
+                              e.target.select();
+                            }
+                          }}
                           onChange={e => {
                             const val = parseInt(e.target.value);
                             if (isNaN(val) || val <= 0) removeFromCart(d.id);
