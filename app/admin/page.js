@@ -91,6 +91,7 @@ export default function Admin() {
   const [uploading, setUploading] = useState(false);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
+  const [designFilterProduct, setDesignFilterProduct] = useState('all');
 
   // Localities
   const [localities, setLocalities] = useState([]);
@@ -757,11 +758,18 @@ export default function Admin() {
               )}
             </div>
             <div style={s.card}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 20}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12}}>
                 <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
                 {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
               </div>
-              {designs.map(d => (
+              <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
+                {[{id:'all', name:'Todos'}, ...products].map(p => (
+                  <button key={p.id} onClick={() => setDesignFilterProduct(p.id)} style={{border:'none', borderRadius:7, padding:'5px 13px', fontSize:12, fontWeight:600, cursor:'pointer', background: designFilterProduct === p.id ? '#1B2F5E' : '#eef0f6', color: designFilterProduct === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              {designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct).map(d => (
                 <div key={d.id} style={{...s.designRow, opacity: d.active ? 1 : 0.45}}>
                   <div style={s.designInfo}>
                     {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
