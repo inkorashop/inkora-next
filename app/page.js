@@ -359,7 +359,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)'}}>
+          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
             <div style={s.emptyState}>
               <p>No hay diseños todavía.</p>
@@ -687,7 +687,7 @@ const styles = {
   mobileSearchBar: { position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90, background: 'rgba(27,47,94,0.95)', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, willChange: 'transform' },
   mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
   layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
-  catalogArea: { minHeight: '70vh', flex: 1 },
+  catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
   catalogHeader: { marginBottom: 16 },
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
