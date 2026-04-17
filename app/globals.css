@@ -26,3 +26,19 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+.tier-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: 'Barlow', sans-serif;
+  color: #2d3352;
+  font-size: 12px;
+  padding: 2px 4px;
+  width: 100%;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.tier-input:focus {
+  border-bottom: 1px solid #2D6BE4;
+}

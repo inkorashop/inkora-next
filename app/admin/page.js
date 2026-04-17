@@ -831,55 +831,56 @@ export default function Admin() {
                       const tiers = productTiers.filter(t => t.locality_id === localityId).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
                       const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
                       const isAdding = addingTier === key;
+                      const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
                       return (
-                        <div key={key} style={{borderTop: borderTop ? '1.5px solid #eef0f6' : 'none'}}>
-                          <div style={{padding:'4px 8px', background:'#f7f8fc', fontSize:11, fontWeight:700, color:'#5a6380', letterSpacing:0.3, textTransform:'uppercase'}}>{localityName}</div>
+                        <div key={key} style={{borderTop: borderTop ? '1px solid #f0f2f8' : 'none'}}>
+                          <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{localityName}</div>
                           <table style={{width:'100%', borderCollapse:'collapse'}}>
                             <thead>
-                              <tr>
-                                <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Cant. mín.</th>
-                                <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Precio/u</th>
-                                <th style={{...s.th, padding:'3px 4px', width:24}}></th>
+                              <tr style={{borderBottom:'1px solid #eef0f6'}}>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cant. mín.</th>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
+                                <th style={{padding:'2px 4px', width:22}}></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...s.td, color:'#9aa3bc', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 8px'}}>Sin escalas</td></tr>}
+                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 6px'}}>Sin escalas</td></tr>}
                               {tiers.map(t => {
                                 const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
                                 return (
-                                  <tr key={t.id} style={{borderTop:'1px solid #f0f2f8'}}>
-                                    <td style={{...s.td, padding:'3px 8px'}}>
-                                      <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                  <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
+                                    <td style={cellStyle}>
+                                      <input className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
                                     </td>
-                                    <td style={{...s.td, padding:'3px 8px'}}>
+                                    <td style={cellStyle}>
                                       <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                        <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
-                                        <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                        <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                        <input className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
                                         {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
                                       </div>
                                     </td>
-                                    <td style={{...s.td, padding:'3px 4px', textAlign:'center'}}>
+                                    <td style={{...cellStyle, textAlign:'center'}}>
                                       <TrashBtn onClick={() => deleteScale(t.id)} />
                                     </td>
                                   </tr>
                                 );
                               })}
                               {isAdding && (
-                                <tr style={{borderTop:'1px solid #f0f2f8', background:'#f7f8fc'}}>
-                                  <td style={{...s.td, padding:'3px 8px'}}>
+                                <tr style={{borderBottom:'1px solid #f0f2f8'}}>
+                                  <td style={cellStyle}>
                                     <input
-                                      style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                      className="tier-input"
                                       type="number" min="1" placeholder="Cantidad"
                                       value={nt.min_quantity}
                                       onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
                                       onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
                                     />
                                   </td>
-                                  <td style={{...s.td, padding:'3px 8px'}}>
+                                  <td style={cellStyle}>
                                     <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                      <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
+                                      <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
                                       <input
-                                        style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                        className="tier-input"
                                         type="number" min="0" placeholder="Precio"
                                         value={nt.price_per_unit}
                                         onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
@@ -888,15 +889,15 @@ export default function Admin() {
                                       />
                                     </div>
                                   </td>
-                                  <td style={{...s.td, padding:'3px 4px', textAlign:'center'}} />
+                                  <td style={{...cellStyle, textAlign:'center'}} />
                                 </tr>
                               )}
                             </tbody>
                           </table>
                           <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
                             {isAdding
-                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
-                              : <button style={{...s.editBtn, padding:'2px 8px', fontSize:11, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ Agregar escala</button>
+                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
+                              : <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ escala</button>
                             }
                           </div>
                         </div>
