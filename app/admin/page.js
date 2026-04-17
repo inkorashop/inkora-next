@@ -145,7 +145,6 @@ export default function Admin() {
     }
   }, [screen]);
 
-  useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
 
   useEffect(() => {
     function handleKeyDown(e) { if (e.key === 'Escape') setSelectedIds(new Set()); }
@@ -437,7 +436,7 @@ export default function Admin() {
       } catch { alert(`Error al subir "${entry.name}".`); anyError = true; }
     }
     setUploading(false);
-    if (!anyError) setPendingFiles([]);
+    if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
     console.log('Upload completo, recargando diseños...');
     loadDesigns();
   }
