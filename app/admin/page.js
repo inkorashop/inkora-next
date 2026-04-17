@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const CATEGORIES = ['deportes', 'animales', 'vehiculos', 'otros'];
 const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
@@ -92,6 +91,15 @@ export default function Admin() {
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
+  const [dragOverId, setDragOverId] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const dragSrcIdRef = useRef(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const lastSelectedIdRef = useRef(null);
+  const [newCatInputs, setNewCatInputs] = useState({});
+  const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
+  const [draggingLocalityId, setDraggingLocalityId] = useState(null);
+  const localityDragSrcIdRef = useRef(null);
 
   // Localities
   const [localities, setLocalities] = useState([]);
@@ -138,6 +146,12 @@ export default function Admin() {
   }, [screen]);
 
   useEffect(() => { return () => pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); }, [pendingFiles]);
+
+  useEffect(() => {
+    function handleKeyDown(e) { if (e.key === 'Escape') setSelectedIds(new Set()); }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const forms = {};
@@ -227,18 +241,136 @@ export default function Admin() {
 
   // ── Designs ──
   async function loadDesigns() {
-    const { data } = await supabase.from('designs').select('*, products(name)').order('created_at');
+    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order').order('created_at');
+    console.log('Diseños cargados:', data?.length, data);
     if (data) { setDesigns(data); setOrphanCount(data.filter(d => !d.product_id && d.active).length); }
   }
 
+  function handleDragStart(e, id) {
+    dragSrcIdRef.current = id;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(id);
+  }
+
+  function handleDragLeave() {
+    setDragOverId(null);
+  }
+
+  async function handleDrop(e, targetId) {
+    e.preventDefault();
+    setDragOverId(null);
+    const srcId = dragSrcIdRef.current;
+    dragSrcIdRef.current = null;
+    if (!srcId || srcId === targetId) return;
+
+    const filteredDesigns = designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct);
+
+    if (selectedIds.has(srcId) && selectedIds.size > 1) {
+      // Multi-item drag: move all selected to target position maintaining relative order
+      const selectedInOrder = filteredDesigns.filter(d => selectedIds.has(d.id));
+      const without = filteredDesigns.filter(d => !selectedIds.has(d.id));
+      const insertAt = without.findIndex(d => d.id === targetId);
+      if (insertAt === -1) return; // target is within the selected group
+      const reordered = [...without.slice(0, insertAt), ...selectedInOrder, ...without.slice(insertAt)];
+      await Promise.all(reordered.map((d, i) => supabase.from('designs').update({ sort_order: i }).eq('id', d.id)));
+      loadDesigns();
+    } else {
+      // Single-item drag
+      const srcIdx = filteredDesigns.findIndex(d => d.id === srcId);
+      const tgtIdx = filteredDesigns.findIndex(d => d.id === targetId);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const reordered = [...filteredDesigns];
+      const [removed] = reordered.splice(srcIdx, 1);
+      reordered.splice(tgtIdx, 0, removed);
+      await Promise.all(reordered.map((d, i) => supabase.from('designs').update({ sort_order: i }).eq('id', d.id)));
+      loadDesigns();
+    }
+  }
+
+  function handleDragEnd() {
+    dragSrcIdRef.current = null;
+    setDragOverId(null);
+    setDraggingId(null);
+  }
+
+  function handleDesignClick(e, id) {
+    if (e.shiftKey && lastSelectedIdRef.current) {
+      const visible = designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct);
+      const lastIdx = visible.findIndex(d => d.id === lastSelectedIdRef.current);
+      const currIdx = visible.findIndex(d => d.id === id);
+      if (lastIdx !== -1 && currIdx !== -1) {
+        const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
+        setSelectedIds(new Set(visible.slice(start, end + 1).map(d => d.id)));
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      lastSelectedIdRef.current = id;
+    } else {
+      setSelectedIds(new Set([id]));
+      lastSelectedIdRef.current = id;
+    }
+  }
+
+  function getProductCategories(productId) {
+    const p = products.find(pr => pr.id === productId);
+    const cats = p?.categories;
+    return (Array.isArray(cats) && cats.length > 0) ? cats : ['Todos'];
+  }
+
+  async function saveDesignCategory(id, category) {
+    const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
+    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ category }).eq('id', did)));
+    setDesigns(prev => prev.map(d => idsToUpdate.includes(d.id) ? { ...d, category } : d));
+  }
+
+  async function addProductCategory(productId, cat) {
+    const t = cat.trim();
+    if (!t) return;
+    const normalized = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+    const current = getProductCategories(productId);
+    if (current.includes(normalized)) return;
+    const updated = [...current, normalized];
+    await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    setNewCatInputs(prev => ({ ...prev, [productId]: '' }));
+    loadProducts();
+  }
+
+  async function removeProductCategory(productId, cat) {
+    const current = getProductCategories(productId);
+    if (current.length <= 1) return;
+    const updated = current.filter(c => c !== cat);
+    await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    loadProducts();
+  }
+
   async function toggleDesign(id, active) {
-    await supabase.from('designs').update({ active: !active }).eq('id', id);
+    const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
+    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ active: !active }).eq('id', did)));
     loadDesigns();
   }
 
   async function deleteDesign(id) {
-    await supabase.from('designs').delete().eq('id', id);
-    loadDesigns();
+    if (selectedIds.has(id) && selectedIds.size > 1) {
+      askConfirm(`¿Eliminar los ${selectedIds.size} diseños seleccionados? Esta acción no se puede deshacer.`, async () => {
+        await Promise.all([...selectedIds].map(did => supabase.from('designs').delete().eq('id', did)));
+        setSelectedIds(new Set());
+        loadDesigns();
+      });
+    } else {
+      await supabase.from('designs').delete().eq('id', id);
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      loadDesigns();
+    }
   }
 
   async function migrateOrphans() {
@@ -255,9 +387,10 @@ export default function Admin() {
   async function handleFileSelect(e) {
     if (!selectedProductId) { alert('Primero seleccioná un producto.'); e.target.value = ''; return; }
     const files = Array.from(e.target.files);
+    const defaultCategory = 'Sin categoría';
     const entries = files.map(file => ({
       file, preview: URL.createObjectURL(file),
-      name: file.name.replace(/\.[^.]+$/, ''), category: 'deportes',
+      name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
       nameExists: false, sizeError: file.size > maxSizeKb * 1024,
     }));
     setPendingFiles(entries);
@@ -305,13 +438,50 @@ export default function Admin() {
     }
     setUploading(false);
     if (!anyError) setPendingFiles([]);
+    console.log('Upload completo, recargando diseños...');
     loadDesigns();
   }
 
   // ── Localities ──
   async function loadLocalities() {
-    const { data } = await supabase.from('localities').select('*').order('created_at');
+    const { data } = await supabase.from('localities').select('*').order('sort_order').order('created_at');
     if (data) setLocalities(data);
+  }
+
+  function handleLocalityDragStart(e, id) {
+    localityDragSrcIdRef.current = id;
+    setDraggingLocalityId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleLocalityDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverLocalityId(id);
+  }
+
+  function handleLocalityDragLeave() { setDragOverLocalityId(null); }
+
+  async function handleLocalityDrop(e, targetId) {
+    e.preventDefault();
+    setDragOverLocalityId(null);
+    const srcId = localityDragSrcIdRef.current;
+    localityDragSrcIdRef.current = null;
+    if (!srcId || srcId === targetId) return;
+    const srcIdx = localities.findIndex(l => l.id === srcId);
+    const tgtIdx = localities.findIndex(l => l.id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const reordered = [...localities];
+    const [removed] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, removed);
+    await Promise.all(reordered.map((l, i) => supabase.from('localities').update({ sort_order: i }).eq('id', l.id)));
+    loadLocalities();
+  }
+
+  function handleLocalityDragEnd() {
+    localityDragSrcIdRef.current = null;
+    setDragOverLocalityId(null);
+    setDraggingLocalityId(null);
   }
 
   async function addLocality() {
@@ -609,6 +779,43 @@ export default function Admin() {
               </div>
             </div>
 
+            {/* CATEGORÍAS */}
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Categorías por producto</h2>
+              {products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p> : (
+                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
+                  {products.filter(p => p.active).map(product => {
+                    const cats = getProductCategories(product.id);
+                    const newCat = newCatInputs[product.id] || '';
+                    return (
+                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 200px', minWidth:180}}>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                        <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
+                          <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
+                          {cats.map(cat => (
+                            <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>
+                              {cat}
+                              <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:2}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
+                          <input
+                            style={{...s.tblInput, flex:1, padding:'3px 6px', fontSize:12}}
+                            placeholder="Nueva categoría..."
+                            value={newCat}
+                            onChange={e => setNewCatInputs(prev => ({...prev, [product.id]: e.target.value}))}
+                            onKeyDown={e => { if (e.key === 'Enter') addProductCategory(product.id, newCat); }}
+                          />
+                          <button style={{...s.editBtn, whiteSpace:'nowrap'}} onClick={() => addProductCategory(product.id, newCat)}>+ Agregar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* ESCALAS */}
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Escalas de precio por localidad</h2>
@@ -619,85 +826,88 @@ export default function Admin() {
                   {products.filter(p => p.active).map(product => {
                     const productTiers = priceTiers.filter(t => t.product_id === product.id);
                     const activeLocalities = localities.filter(l => l.active);
+
+                    const renderLocalityBlock = (localityId, localityName, borderTop) => {
+                      const key = `${product.id}_${localityId}`;
+                      const tiers = productTiers.filter(t => t.locality_id === localityId).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                      const isAdding = addingTier === key;
+                      return (
+                        <div key={key} style={{borderTop: borderTop ? '1.5px solid #eef0f6' : 'none'}}>
+                          <div style={{padding:'4px 8px', background:'#f7f8fc', fontSize:11, fontWeight:700, color:'#5a6380', letterSpacing:0.3, textTransform:'uppercase'}}>{localityName}</div>
+                          <table style={{width:'100%', borderCollapse:'collapse'}}>
+                            <thead>
+                              <tr>
+                                <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Cant. mín.</th>
+                                <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Precio/u</th>
+                                <th style={{...s.th, padding:'3px 4px', width:24}}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...s.td, color:'#9aa3bc', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 8px'}}>Sin escalas</td></tr>}
+                              {tiers.map(t => {
+                                const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                                return (
+                                  <tr key={t.id} style={{borderTop:'1px solid #f0f2f8'}}>
+                                    <td style={{...s.td, padding:'3px 8px'}}>
+                                      <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                    </td>
+                                    <td style={{...s.td, padding:'3px 8px'}}>
+                                      <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                        <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
+                                        <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                        {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
+                                      </div>
+                                    </td>
+                                    <td style={{...s.td, padding:'3px 4px', textAlign:'center'}}>
+                                      <TrashBtn onClick={() => deleteScale(t.id)} />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {isAdding && (
+                                <tr style={{borderTop:'1px solid #f0f2f8', background:'#f7f8fc'}}>
+                                  <td style={{...s.td, padding:'3px 8px'}}>
+                                    <input
+                                      style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                      type="number" min="1" placeholder="Cantidad"
+                                      value={nt.min_quantity}
+                                      onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
+                                      onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
+                                    />
+                                  </td>
+                                  <td style={{...s.td, padding:'3px 8px'}}>
+                                    <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                      <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
+                                      <input
+                                        style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
+                                        type="number" min="0" placeholder="Precio"
+                                        value={nt.price_per_unit}
+                                        onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
+                                        onBlur={() => addTierMatrix(product.id, localityId, key)}
+                                        onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td style={{...s.td, padding:'3px 4px', textAlign:'center'}} />
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                          <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
+                            {isAdding
+                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
+                              : <button style={{...s.editBtn, padding:'2px 8px', fontSize:11, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ Agregar escala</button>
+                            }
+                          </div>
+                        </div>
+                      );
+                    };
+
                     return (
                       <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 220px', minWidth:200}}>
                         <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
-                        {activeLocalities.map((locality, li) => {
-                          const key = `${product.id}_${locality.id}`;
-                          const tiers = productTiers.filter(t => t.locality_id === locality.id).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
-                          const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
-                          const isAdding = addingTier === key;
-                          return (
-                            <div key={locality.id} style={{borderTop: li > 0 ? '1.5px solid #eef0f6' : 'none'}}>
-                              <div style={{padding:'4px 8px', background:'#f7f8fc', fontSize:11, fontWeight:700, color:'#5a6380', letterSpacing:0.3, textTransform:'uppercase'}}>{locality.name}</div>
-                              <table style={{width:'100%', borderCollapse:'collapse'}}>
-                                <thead>
-                                  <tr>
-                                    <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Cant. mín.</th>
-                                    <th style={{...s.th, padding:'3px 8px', fontSize:10}}>Precio/u</th>
-                                    <th style={{...s.th, padding:'3px 4px', width:24}}></th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...s.td, color:'#9aa3bc', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 8px'}}>Sin escalas</td></tr>}
-                                  {tiers.map(t => {
-                                    const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
-                                    return (
-                                      <tr key={t.id} style={{borderTop:'1px solid #f0f2f8'}}>
-                                        <td style={{...s.td, padding:'3px 8px'}}>
-                                          <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
-                                        </td>
-                                        <td style={{...s.td, padding:'3px 8px'}}>
-                                          <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                            <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
-                                            <input style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}} type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
-                                            {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
-                                          </div>
-                                        </td>
-                                        <td style={{...s.td, padding:'3px 4px', textAlign:'center'}}>
-                                          <TrashBtn onClick={() => deleteScale(t.id)} />
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                  {isAdding && (
-                                    <tr style={{borderTop:'1px solid #f0f2f8', background:'#f7f8fc'}}>
-                                      <td style={{...s.td, padding:'3px 8px'}}>
-                                        <input
-                                          style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
-                                          type="number" min="1" placeholder="Cantidad"
-                                          value={nt.min_quantity}
-                                          onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
-                                          onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, locality.id, key); }}
-                                        />
-                                      </td>
-                                      <td style={{...s.td, padding:'3px 8px'}}>
-                                        <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                          <span style={{fontSize:11, color:'#9aa3bc'}}>$</span>
-                                          <input
-                                            style={{...s.tblInput, width:68, padding:'2px 5px', fontSize:12}}
-                                            type="number" min="0" placeholder="Precio"
-                                            value={nt.price_per_unit}
-                                            onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
-                                            onBlur={() => addTierMatrix(product.id, locality.id, key)}
-                                            onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, locality.id, key); }}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td style={{...s.td, padding:'3px 4px', textAlign:'center'}} />
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-                              <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
-                                {isAdding
-                                  ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
-                                  : <button style={{...s.editBtn, padding:'2px 8px', fontSize:11, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ Agregar escala</button>
-                                }
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
                       </div>
                     );
                   })}
@@ -744,7 +954,8 @@ export default function Admin() {
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                           </div>
                           <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                            <option value="Sin categoría">Sin categoría</option>
+                            {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
@@ -759,7 +970,10 @@ export default function Admin() {
             </div>
             <div style={s.card}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12}}>
-                <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
+                  {selectedIds.size > 1 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:700}}>{selectedIds.size} seleccionados</span>}
+                </div>
                 {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
               </div>
               <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
@@ -769,24 +983,59 @@ export default function Admin() {
                   </button>
                 ))}
               </div>
+              <div onClick={() => setSelectedIds(new Set())}>
               {designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct).map(d => (
-                <div key={d.id} style={{...s.designRow, opacity: d.active ? 1 : 0.45}}>
+                <div
+                  key={d.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, d.id)}
+                  onDragOver={e => handleDragOver(e, d.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={e => handleDrop(e, d.id)}
+                  onDragEnd={handleDragEnd}
+                  onClick={e => { e.stopPropagation(); handleDesignClick(e, d.id); }}
+                  style={{
+                    ...s.designRow,
+                    opacity: !d.active ? 0.45 : (draggingId && selectedIds.has(draggingId) && selectedIds.has(d.id) ? 0.35 : 1),
+                    background: dragOverId === d.id ? '#eef4ff' : selectedIds.has(d.id) ? '#f0f5ff' : undefined,
+                    borderLeft: dragOverId === d.id ? '3px solid #2D6BE4' : selectedIds.has(d.id) ? '3px solid #2D6BE4' : '3px solid transparent',
+                    transition: 'background 0.12s, border-left 0.12s',
+                    cursor: draggingId === d.id ? 'grabbing' : 'grab',
+                  }}
+                >
                   <div style={s.designInfo}>
                     {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
                     <div>
                       <div style={s.designName}>{d.name}</div>
                       <div style={s.designCat}>
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
-                        {' '}{d.category}
+                        {' '}
+                        {d.product_id ? (
+                          <select
+                            style={{fontSize:11, border:'1px solid #dde1ef', borderRadius:4, padding:'1px 4px', color:'#5a6380', fontFamily:'Barlow, sans-serif', cursor:'pointer', background:'white'}}
+                            value={d.category}
+                            onChange={async e => { await saveDesignCategory(d.id, e.target.value); }}
+                            onClick={e => e.stopPropagation()}
+                            onDragStart={e => e.stopPropagation()}
+                          >
+                            <option value="Sin categoría">Sin categoría</option>
+                            {getProductCategories(d.product_id).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span>{d.category}</span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
-                    <button style={s.iconBtn} onClick={() => toggleDesign(d.id, d.active)}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
-                    <TrashBtn onClick={() => deleteDesign(d.id)} />
+                    <button style={s.iconBtn} onClick={e => { e.stopPropagation(); toggleDesign(d.id, d.active); }}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
+                    <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           </>
         )}
@@ -869,7 +1118,23 @@ export default function Admin() {
               <h2 style={s.sectionTitle}>Localidades ({localities.length})</h2>
               {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavía.</p>}
               {localities.map(l => (
-                <div key={l.id} style={s.productRow}>
+                <div
+                  key={l.id}
+                  draggable
+                  onDragStart={e => handleLocalityDragStart(e, l.id)}
+                  onDragOver={e => handleLocalityDragOver(e, l.id)}
+                  onDragLeave={handleLocalityDragLeave}
+                  onDrop={e => handleLocalityDrop(e, l.id)}
+                  onDragEnd={handleLocalityDragEnd}
+                  style={{
+                    ...s.productRow,
+                    opacity: draggingLocalityId === l.id ? 0.35 : 1,
+                    background: dragOverLocalityId === l.id ? '#eef4ff' : undefined,
+                    borderLeft: dragOverLocalityId === l.id ? '3px solid #2D6BE4' : '3px solid transparent',
+                    transition: 'background 0.12s, border-left 0.12s',
+                    cursor: draggingLocalityId === l.id ? 'grabbing' : 'grab',
+                  }}
+                >
                   <div style={s.productName}>{l.name}</div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
                     <button style={s.iconBtn} onClick={() => toggleLocality(l.id, l.active)}>{l.active ? <EyeOpen /> : <EyeOff />}</button>
@@ -894,7 +1159,6 @@ export default function Admin() {
                   <div style={s.productMeta}>{u.email}</div>
                 </div>
                 <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
-                  <option value="">Sin localidad</option>
                   {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </div>
@@ -1052,7 +1316,7 @@ const styles = {
   designInfo: { display: 'flex', alignItems: 'center', gap: 10 },
   designThumb: { width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #dde1ef' },
   designName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
-  designCat: { fontSize: 11, color: '#9aa3bc', textTransform: 'uppercase', marginTop: 1 },
+  designCat: { fontSize: 11, color: '#9aa3bc', marginTop: 1 },
   productTag: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   orphanTag: { background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   tbl: { width: '100%', borderCollapse: 'collapse', minWidth: 820 },
