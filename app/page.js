@@ -37,10 +37,10 @@ export default function Home() {
   const [gridOpacity, setGridOpacity] = useState(1);
   const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
   const [cart, setCart] = useState({});
-  const [filter, setFilter] = useState('todos');
+  const [filter, setFilter] = useState('Todos');
   const [notes, setNotes] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [orderCode] = useState(generateCode());
+  const [orderCode, setOrderCode] = useState(generateCode());
   const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [success, setSuccess] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
@@ -90,16 +90,14 @@ export default function Home() {
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
     setProfile(data);
-    console.log('[PRICING] profile:', data);
-    console.log('[PRICING] locality_id:', data?.locality_id);
     if (data?.locality_id) {
-      const { data: tiers, error: tiersError } = await supabase
+      const { data: tiers } = await supabase
         .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
-      console.log('[PRICING] tiers loaded:', tiers, 'error:', tiersError);
       setPriceTiers(tiers || []);
     } else {
-      console.log('[PRICING] no locality_id — skipping tiers load');
-      setPriceTiers([]);
+      const { data: tiers } = await supabase
+        .from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
+      setPriceTiers(tiers || []);
     }
   }
 
@@ -109,7 +107,7 @@ export default function Home() {
     setGridOpacity(0);
     setTimeout(() => {
       setActiveProductId(id);
-      setFilter('todos');
+      setFilter('Todos');
       setSearchQuery('');
       requestAnimationFrame(() => requestAnimationFrame(() => {
         setGridTransition('opacity 0.2s ease');
@@ -156,7 +154,7 @@ export default function Home() {
   async function loadAllDesigns(productList) {
     const results = await Promise.all(
       productList.map(p =>
-        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('created_at')
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
       )
     );
     const map = {};
@@ -179,10 +177,10 @@ export default function Home() {
     return fuse.search(searchQuery.trim()).map(r => r.item);
   }, [searchQuery, fuse, designs]);
 
-  const categories = ['todos', ...new Set(designs.map(d => d.category))];
+  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
   const filtered = searchQuery.trim()
-    ? (filter === 'todos' ? searchResults : searchResults.filter(d => d.category === filter))
-    : (filter === 'todos' ? designs : designs.filter(d => d.category === filter));
+    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
+    : (filter === 'Todos' ? designs : designs.filter(d => d.category === filter && d.category !== 'Sin categoría'));
   const showPrices = !!user;
   const cartItems = Object.values(cart);
 
@@ -214,7 +212,7 @@ export default function Home() {
       if (applicable.length > 0) return Number(applicable[0].price_per_unit);
     }
 
-    return Number(products.find(p => p.id === productId)?.price_per_unit ?? 0);
+    return null;
   }
 
   const total = cartItems
@@ -270,6 +268,13 @@ export default function Home() {
       });
     }
     setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setSuccess(false);
+    setConfirmedOrder({ items: [], total: 0, form: {} });
+    setOrderCode(generateCode());
   }
 
   function removeFromCart(id) {
@@ -419,7 +424,7 @@ export default function Home() {
             {categories.map(cat => (
               <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
                 onClick={() => setFilter(cat)}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                {cat}
               </button>
             ))}
           </div>
@@ -460,7 +465,7 @@ export default function Home() {
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
-                      <span style={s.catTag}>{d.category}</span>
+                      {d.category !== 'Sin categoría' && <span style={s.catTag}>{d.category}</span>}
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
                         if (price !== null && price > 0) {
@@ -468,7 +473,7 @@ export default function Home() {
                         }
                         return null;
                       })()}
-                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white'}}>
+                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
                         <input
                           type="number"
@@ -640,13 +645,13 @@ export default function Home() {
       )}
 
       {modalOpen && (
-        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) setModalOpen(false); }}>
+        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) closeModal(); }}>
           <div style={s.modal}>
             {!success ? (
               <>
                 <div style={s.modalHeader}>
                   <span>Confirmar Pedido</span>
-                  <button style={s.closeBtn} onClick={() => setModalOpen(false)}>✕</button>
+                  <button style={s.closeBtn} onClick={closeModal}>✕</button>
                 </div>
                 <div style={s.modalBody}>
                   <div style={s.codeBanner}>
@@ -695,7 +700,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div style={s.modalActions}>
-                    <button style={s.btnSecondary} onClick={() => setModalOpen(false)}>Cancelar</button>
+                    <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
                     <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
                       {loading ? 'Enviando...' : 'Enviar pedido'}
                     </button>
@@ -711,7 +716,7 @@ export default function Home() {
                 <p>Te enviamos la confirmación a tu email.</p>
                 <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
                   `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showTotal ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
-                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm}>
+                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
                   💬 Confirmar por WhatsApp
                 </a>
               </div>
@@ -778,11 +783,11 @@ const styles = {
   filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
-  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
+  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
   cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
   img: { width: '100%', height: '100%', objectFit: 'cover' },
   catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
-  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
+  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
   cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
   cardMinQty: { fontSize: 11, color: '#9aa3bc', fontWeight: 500 },
