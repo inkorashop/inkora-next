@@ -1,10 +1,53 @@
 'use client';
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
 
+
+function ModelViewer({ url }) {
+  const mountRef = useRef(null);
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    el.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
+    camera.position.set(0, 0, 2.5);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.5);
+    dir.position.set(2, 4, 3);
+    scene.add(dir);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 4;
+    const loader = new GLTFLoader();
+    loader.load(url, gltf => {
+      const model = gltf.scene;
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      model.position.sub(center);
+      model.scale.setScalar(1.8 / maxDim);
+      scene.add(model);
+    });
+    let animId;
+    const animate = () => { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); };
+    animate();
+    return () => { cancelAnimationFrame(animId); renderer.dispose(); el.removeChild(renderer.domElement); };
+  }, [url]);
+  return <div ref={mountRef} style={{ width: '100%', height: '100%' }} />;
+}
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -459,7 +502,9 @@ export default function Home() {
                     onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
-                      {d.image_url
+                      {d.model_url
+                        ? <ModelViewer url={d.model_url} />
+                        : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={s.img} />
                         : <span style={{fontSize:36}}>🎨</span>}
                     </div>
