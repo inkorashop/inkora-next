@@ -1123,6 +1123,29 @@ export default function Admin() {
                         onClick={e => e.stopPropagation()}
                         onDragStart={e => e.stopPropagation()}
                       />
+                      <div style={{fontSize: 11, color: '#9aa3bc', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center'}}>
+                        {(d.tags || []).map((tag, ti) => (
+                          <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
+                            {tag}
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
+                          </span>
+                        ))}
+                        <input
+                          style={{fontSize: 11, border: '1px dashed #dde1ef', borderRadius: 4, padding: '1px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: 80, color: '#5a6380'}}
+                          placeholder="+ tag"
+                          onClick={e => e.stopPropagation()}
+                          onDragStart={e => e.stopPropagation()}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && e.target.value.trim()) {
+                              const newTag = e.target.value.trim().toLowerCase();
+                              const newTags = [...(d.tags || []), newTag];
+                              await supabase.from('designs').update({ tags: newTags }).eq('id', d.id);
+                              setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x));
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </div>
                       <div style={s.designCat}>
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
                         {' '}

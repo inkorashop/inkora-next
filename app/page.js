@@ -168,7 +168,7 @@ export default function Home() {
   }
 
   const fuse = useMemo(() => new Fuse(designs, {
-    keys: ['name'],
+    keys: ['name', 'tags'],
     threshold: 0.6,
     distance: 100,
     ignoreLocation: true,

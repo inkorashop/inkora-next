@@ -8,7 +8,7 @@ const barlow = Barlow({
 });
 
 export const metadata = {
-  title: 'INKORA — Catálogo',
+  title: 'INKORA',
   description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
 };
 
