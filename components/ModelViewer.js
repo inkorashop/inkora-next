@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url }) {
+export default function ModelViewer({ url, autoRotate = false }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -57,7 +57,7 @@ export default function ModelViewer({ url }) {
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = false;
-        controls.autoRotate = true;
+        controls.autoRotate = autoRotate === true;
         controls.autoRotateSpeed = 10;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
