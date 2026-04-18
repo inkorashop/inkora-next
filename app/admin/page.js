@@ -97,6 +97,7 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
+  const [designSearch, setDesignSearch] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -1091,8 +1092,16 @@ export default function Admin() {
                   </button>
                 ))}
               </div>
+              <div style={{marginBottom: 12}}>
+                <input
+                  style={{...s.input, maxWidth: 320}}
+                  placeholder="Buscar diseño..."
+                  value={designSearch ?? ''}
+                  onChange={e => setDesignSearch(e.target.value)}
+                />
+              </div>
               <div onClick={() => setSelectedIds(new Set())}>
-              {designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct).map(d => (
+              {designs.filter(d => (designFilterProduct === 'all' || d.product_id === designFilterProduct) && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))).map(d => (
                 <div
                   key={d.id}
                   draggable
