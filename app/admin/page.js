@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -714,6 +713,7 @@ export default function Admin() {
                       <th style={s.th}>Nombre</th>
                       <th style={s.th}>Cols PC</th>
                       <th style={s.th}>Cols Cel</th>
+                      <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
                       <th style={{...s.th, width: 32}}></th>
@@ -742,6 +742,16 @@ export default function Admin() {
                             <input ref={setRef(2)} style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={form.columns_mobile ?? 1} onChange={e => updateProductForm(p.id, 'columns_mobile', parseInt(e.target.value)||1)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
                           </td>
                           <td style={s.td}>
+                            <select style={{...s.tblInput, width: 72}} value={form.aspect_ratio || '2/3'} onChange={e => { updateProductForm(p.id, 'aspect_ratio', e.target.value); saveProduct(p.id, { aspect_ratio: e.target.value }); }}>
+                              <option value="1/1">1/1</option>
+                              <option value="2/3">2/3</option>
+                              <option value="3/4">3/4</option>
+                              <option value="4/3">4/3</option>
+                              <option value="3/2">3/2</option>
+                              <option value="16/9">16/9</option>
+                            </select>
+                          </td>
+                          <td style={s.td}>
                             <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="50" value={form.max_file_size_kb ?? 250} onChange={e => updateProductForm(p.id, 'max_file_size_kb', parseInt(e.target.value)||250)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
@@ -764,6 +774,16 @@ export default function Admin() {
                         <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="10" value={newProduct.columns_desktop} onChange={e => setNewProduct(p => ({...p, columns_desktop: parseInt(e.target.value)||1}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={newProduct.columns_mobile} onChange={e => setNewProduct(p => ({...p, columns_mobile: parseInt(e.target.value)||1}))} /></td>
+                        <td style={s.td}>
+                          <select style={{...s.tblInput, width: 72}} value={newProduct.aspect_ratio} onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))}>
+                            <option value="1/1">1/1</option>
+                            <option value="2/3">2/3</option>
+                            <option value="3/4">3/4</option>
+                            <option value="4/3">4/3</option>
+                            <option value="3/2">3/2</option>
+                            <option value="16/9">16/9</option>
+                          </select>
+                        </td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="50" value={newProduct.max_file_size_kb} onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value)||250}))} /></td>
                         <td style={{...s.td, textAlign:'center'}}>
                           <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, show_price: !p.show_price}))}>
@@ -1356,4 +1376,3 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
-
