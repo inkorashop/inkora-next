@@ -538,29 +538,29 @@ export default function Home() {
                 </div>
               ) : (
                 cartItems.map(item => (
-  <div key={item.id} style={s.cartItem}>
-    {item.image_url && (
-      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-    )}
-    <div style={s.cartItemInfo}>
-      <div style={s.cartItemName}>{item.name}</div>
-      {showPrices && item.showPrice !== false && (() => {
-        const price = getUnitPrice(item.product_id);
-        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
-        return null;
-      })()}
-    </div>
-    <div style={s.cartItemRight}>
-      <span style={s.cartQty}>×{item.qty}</span>
-      {showPrices && item.showPrice !== false && (() => {
-        const price = getUnitPrice(item.product_id);
-        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
-        return null;
-      })()}
-    </div>
-    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
-  </div>
-))
+                  <div key={item.id} style={s.cartItem}>
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    )}
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        return null;
+                      })()}
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
               )}
             </div>
             <div style={s.sidebarFooter}>
@@ -598,15 +598,21 @@ export default function Home() {
               ) : (
                 cartItems.map(item => (
                   <div key={item.id} style={s.cartItem}>
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    )}
                     <div style={s.cartItemInfo}>
                       <div style={s.cartItemName}>{item.name}</div>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        return null;
+                      })()}
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
-                        const minQty = getProductMinQty(item.product_id);
-                        if (price === null) return null;
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
@@ -812,6 +818,7 @@ const styles = {
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
   cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
+  cartItemUnitPrice: { fontSize: 10, color: '#9aa3bc', fontWeight: 500 },
   cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
   cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
   cartPrice: { fontSize: 12, color: '#5a6380' },
