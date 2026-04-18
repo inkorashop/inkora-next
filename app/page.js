@@ -818,7 +818,7 @@ const styles = {
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
   cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
-  cartItemUnitPrice: { fontSize: 10, color: '#9aa3bc', fontWeight: 500 },
+  cartItemUnitPrice: { fontSize: 10, color: '#2D6BE4', fontWeight: 600 },
   cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
   cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
   cartPrice: { fontSize: 12, color: '#5a6380' },
