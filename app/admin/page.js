@@ -395,7 +395,7 @@ export default function Admin() {
     }));
     setPendingFiles(entries);
     e.target.value = '';
-    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
+    const { data } = await supabase.from('designs').select('name').eq('active', true);
     const existing = new Set((data || []).map(d => d.name.toLowerCase()));
     setPendingFiles(prev => prev.map(entry => ({
       ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
@@ -406,7 +406,7 @@ export default function Admin() {
     setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
     if (field === 'name') {
       if (value.length > 2) {
-        const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
+        const { data } = await supabase.from('designs').select('name').eq('active', true);
         const exists = Array.isArray(data) && data.some(d => d.name.toLowerCase() === value.toLowerCase());
         setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: exists }; return next; });
       } else {
@@ -423,27 +423,37 @@ export default function Admin() {
     setUploading(true);
     let anyError = false;
     for (const entry of pendingFiles) {
-      if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
       try {
-        const base64 = await fileToBase64(entry.file);
-        const res = await fetch('/api/upload-image', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
-        });
-        const data = await res.json();
-        if (data.url) {
-          let modelUrl = null;
-          if (entry.modelFile) {
-            const modelBase64 = await fileToBase64(entry.modelFile);
-            const modelRes = await fetch('/api/upload-image', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileBase64: modelBase64, fileName: entry.modelFile.name, mimeType: 'application/octet-stream', folder: 'models' }),
-            });
-            const modelData = await modelRes.json();
-            if (modelData.url) modelUrl = modelData.url;
-          }
-          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, model_url: modelUrl, active: true, product_id: selectedProductId });
-        } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
+        let imageUrl = null;
+        let modelUrl = null;
+
+        // Subir imagen si existe
+        if (entry.file) {
+          if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
+          const base64 = await fileToBase64(entry.file);
+          const res = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
+          });
+          const data = await res.json();
+          if (data.url) imageUrl = data.url;
+          else { alert(`Error al subir "${entry.name}".`); anyError = true; continue; }
+        }
+
+        // Subir GLB si existe
+        if (entry.modelFile) {
+          const modelBase64 = await fileToBase64(entry.modelFile);
+          const modelRes = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: modelBase64, fileName: entry.modelFile.name, mimeType: 'application/octet-stream', folder: 'models' }),
+          });
+          const modelData = await modelRes.json();
+          if (modelData.url) modelUrl = modelData.url;
+        }
+
+        if (imageUrl || modelUrl) {
+          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId });
+        } else { alert(`"${entry.name}" no tiene imagen ni modelo.`); anyError = true; }
       } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
     setUploading(false);
@@ -626,7 +636,7 @@ export default function Admin() {
 
   const hasDupInBatch = (index, name) => name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
   const canSubmit = selectedProductId && pendingFiles.length > 0 &&
-    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError) &&
+    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
@@ -970,6 +980,22 @@ export default function Admin() {
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
+              {selectedProductId && (
+                <div style={s.formGroup}>
+                  <label style={s.label}>O subir solo GLB (sin imagen)</label>
+                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const name = file.name.replace(/\.[^.]+$/, '');
+                    setPendingFiles(prev => {
+                      const existing = prev.find(p => !p.file && p.modelFile?.name === file.name);
+                      if (existing) return prev;
+                      return [...prev, { file: null, preview: null, name, category: 'Sin categoría', nameExists: false, sizeError: false, modelFile: file }];
+                    });
+                    e.target.value = '';
+                  }} />
+                </div>
+              )}
 
               {pendingFiles.length > 0 && (
                 <>
@@ -979,7 +1005,7 @@ export default function Admin() {
                       const hasError = entry.nameExists || dupInBatch || entry.sizeError;
                       return (
                         <div key={i} style={s.fileRow}>
-                          <img src={entry.preview} alt="" style={s.fileThumb} />
+                          {entry.preview ? <img src={entry.preview} alt="" style={s.fileThumb} /> : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>GLB</div>}
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
@@ -994,6 +1020,7 @@ export default function Admin() {
                             <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
                             <input
                               type="file"
+                              accept=".glb"
                               style={{ fontSize: 11 }}
                               onChange={e => {
                                 const file = e.target.files[0] || null;
