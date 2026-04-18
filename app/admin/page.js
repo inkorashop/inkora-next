@@ -726,7 +726,7 @@ export default function Admin() {
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
-                      <th style={s.th}>3D</th>
+                      <th style={s.th}>Rotación</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -771,9 +771,12 @@ export default function Admin() {
                             </button>
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
-                            <button style={s.iconBtn} onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}>
-                              {form.allow_3d ? <EyeOpen /> : <EyeOff />}
-                            </button>
+                            <div
+                              onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
+                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                            >
+                              <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
@@ -807,9 +810,12 @@ export default function Admin() {
                           </button>
                         </td>
                         <td style={{...s.td, textAlign:'center'}}>
-                          <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d}))}>
-                            {newProduct.allow_3d ? <EyeOpen /> : <EyeOff />}
-                          </button>
+                          <div
+                            onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d}))}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                          >
+                            <div style={{ position: 'absolute', top: 2, left: newProduct.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </div>
                         </td>
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
