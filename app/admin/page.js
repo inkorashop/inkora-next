@@ -6,9 +6,10 @@ const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Error al leer el archivo'));
     reader.readAsDataURL(file);
   });
 }
@@ -433,7 +434,7 @@ export default function Admin() {
         if (data.url) {
           await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, active: true, product_id: selectedProductId });
         } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
-      } catch { alert(`Error al subir "${entry.name}".`); anyError = true; }
+      } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
     setUploading(false);
     if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }

@@ -1,9 +1,15 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(npm run:*)",
       "Bash(vercel:*)",
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(npx supabase:*)",
+      "Skill(keybindings-help)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Skill(update-config)"
     ]
   }
 }

@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 
+function escapeCSV(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 export async function POST(request) {
   try {
     const { orderCode, form, cartItems, total, notes } = await request.json();
+    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
     const itemsHtml = cartItems
-      .map(i => `<tr><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px">×${i.qty}</td><td style="padding:4px 8px">$${(i.qty * 500).toLocaleString()}</td></tr>`)
+      .map(i => `<tr><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px">×${i.qty}</td><td style="padding:4px 8px">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
       .join('');
 
     const html = `
@@ -22,6 +32,25 @@ export async function POST(request) {
       </table>
     `;
 
+    // CSV — una fila por item
+    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
+    const csvRows = cartItems.map((item, idx) => [
+      orderCode,
+      form.name,
+      form.email,
+      form.phone,
+      item.name,
+      item.qty,
+      item.pricePerUnit ?? '',
+      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
+      idx === 0 ? total : '',   // total solo en la primera fila
+      idx === 0 ? (notes || '') : '',
+      idx === 0 ? fecha : '',
+    ].map(escapeCSV).join(','));
+
+    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
+    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -33,6 +62,12 @@ export async function POST(request) {
         to: [process.env.EMAIL],
         subject: `Nuevo pedido ${orderCode} — ${form.name}`,
         html,
+        attachments: [
+          {
+            filename: `pedido-${orderCode}.csv`,
+            content: csvBase64,
+          },
+        ],
       }),
     });
 

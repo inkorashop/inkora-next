@@ -1,0 +1,3508 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.claude/settings.local.json
+.eslintrc.json
+.gitignore
+app/admin/page.js
+app/api/send-email/route.js
+app/api/upload-image/route.js
+app/auth/callback/route.js
+app/dashboard/page.js
+app/favicon.ico
+app/fonts/GeistMonoVF.woff
+app/fonts/GeistVF.woff
+app/globals.css
+app/layout.js
+app/page.js
+app/page.module.css
+components/AuthModal.js
+CONTEXT.md
+jsconfig.json
+lib/auth.js
+lib/supabase-browser.js
+lib/supabase-server.js
+lib/supabase.js
+middleware.js
+next.config.mjs
+package.json
+README.md
+sql/setup.sql
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="CONTEXT.md">
+# INKORA - Contexto del proyecto
+
+## Stack
+- Next.js 14 (App Router)
+- Supabase (DB + Auth + Storage)
+- Vercel (deploy automático desde GitHub)
+- Resend (emails)
+
+## URLs
+- Producción: inkora-next.vercel.app
+- Dominio en propagación: inkora.com.ar
+- Admin: /admin
+- Panel usuario: /dashboard
+
+## Supabase
+- URL: https://ylawwaoznxzxwetlkjel.supabase.co
+- Bucket storage: assets (carpeta thumbnails)
+
+## WhatsApp
+- Número: 5493765211017
+
+## Deploy
+- git add . && git commit -m "mensaje" && git push
+- Vercel detecta el push y deploya automáticamente
+- Antes de pushear: CI=true npm run build
+
+## Tablas principales Supabase
+- products, designs, orders, localities, price_tiers, profiles, admins, carts
+
+## Notas importantes
+- Google OAuth configurado en Supabase
+- Admin usa tabla "admins" para verificar acceso
+- Precios escalonados por localidad en price_tiers
+- "Sin localidad" es una localidad real en la tabla localities
+</file>
+
+<file path=".eslintrc.json">
+{
+  "extends": "next/core-web-vitals"
+}
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="app/page.module.css">
+.page {
+  --gray-rgb: 0, 0, 0;
+  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
+  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
+
+  --button-primary-hover: #383838;
+  --button-secondary-hover: #f2f2f2;
+
+  display: grid;
+  grid-template-rows: 20px 1fr 20px;
+  align-items: center;
+  justify-items: center;
+  min-height: 100svh;
+  padding: 80px;
+  gap: 64px;
+  font-family: var(--font-geist-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    --gray-rgb: 255, 255, 255;
+    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
+    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
+
+    --button-primary-hover: #ccc;
+    --button-secondary-hover: #1a1a1a;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  grid-row-start: 2;
+}
+
+.main ol {
+  font-family: var(--font-geist-mono);
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  list-style-position: inside;
+}
+
+.main li:not(:last-of-type) {
+  margin-bottom: 8px;
+}
+
+.main code {
+  font-family: inherit;
+  background: var(--gray-alpha-100);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ctas {
+  display: flex;
+  gap: 16px;
+}
+
+.ctas a {
+  appearance: none;
+  border-radius: 128px;
+  height: 48px;
+  padding: 0 20px;
+  border: none;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+a.primary {
+  background: var(--foreground);
+  color: var(--background);
+  gap: 8px;
+}
+
+a.secondary {
+  border-color: var(--gray-alpha-200);
+  min-width: 180px;
+}
+
+.footer {
+  grid-row-start: 3;
+  display: flex;
+  gap: 24px;
+}
+
+.footer a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer img {
+  flex-shrink: 0;
+}
+
+/* Enable hover only on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+  a.primary:hover {
+    background: var(--button-primary-hover);
+    border-color: transparent;
+  }
+
+  a.secondary:hover {
+    background: var(--button-secondary-hover);
+    border-color: transparent;
+  }
+
+  .footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 32px;
+    padding-bottom: 80px;
+  }
+
+  .main {
+    align-items: center;
+  }
+
+  .main ol {
+    text-align: center;
+  }
+
+  .ctas {
+    flex-direction: column;
+  }
+
+  .ctas a {
+    font-size: 14px;
+    height: 40px;
+    padding: 0 16px;
+  }
+
+  a.secondary {
+    min-width: auto;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo {
+    filter: invert();
+  }
+}
+</file>
+
+<file path="jsconfig.json">
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}
+</file>
+
+<file path="lib/supabase-server.js">
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export function createSupabaseServerClient() {
+  const cookieStore = cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+}
+</file>
+
+<file path="lib/supabase.js">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+</file>
+
+<file path="middleware.js">
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse } from 'next/server';
+
+export async function middleware(request) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // Refresca la sesión si el token expiró — escribe cookies actualizadas en la respuesta
+  await supabase.auth.getUser();
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+</file>
+
+<file path="next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+export default nextConfig;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="sql/setup.sql">
+-- ============================================================
+-- INKORA — Setup SQL
+-- Ejecutar en Supabase SQL Editor
+-- ============================================================
+
+-- ── LOCALIDADES ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS localities (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text NOT NULL,
+  price_per_unit   integer NOT NULL DEFAULT 500,
+  active           boolean NOT NULL DEFAULT true,
+  created_at       timestamptz DEFAULT now()
+);
+
+ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
+
+-- Cualquiera puede leer localidades activas
+CREATE POLICY "public_read_localities"
+  ON localities FOR SELECT
+  USING (active = true);
+
+-- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
+CREATE POLICY "admin_all_localities"
+  ON localities FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+
+-- ── PERFILES ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS profiles (
+  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         text,
+  name          text,
+  locality_id   uuid REFERENCES localities(id),
+  created_at    timestamptz DEFAULT now()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Cada usuario solo ve y edita su propio perfil
+CREATE POLICY "users_select_own_profile"
+  ON profiles FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "users_insert_own_profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "users_update_own_profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+
+-- ── TRIGGER: crear perfil al registrarse ─────────────────────
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+
+-- ── RPC ADMIN: listar todos los perfiles ─────────────────────
+-- SECURITY DEFINER permite que el anon key llame esta función
+-- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
+CREATE OR REPLACE FUNCTION admin_get_profiles()
+RETURNS TABLE (
+  id           uuid,
+  email        text,
+  name         text,
+  locality_id  uuid,
+  locality_name text,
+  created_at   timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    p.id,
+    p.email,
+    p.name,
+    p.locality_id,
+    l.name AS locality_name,
+    p.created_at
+  FROM profiles p
+  LEFT JOIN localities l ON p.locality_id = l.id
+  ORDER BY p.created_at DESC;
+$$;
+
+
+-- ── RPC ADMIN: asignar localidad a usuario ───────────────────
+CREATE OR REPLACE FUNCTION admin_update_user_locality(
+  p_user_id    uuid,
+  p_locality_id uuid
+)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE profiles
+  SET locality_id = p_locality_id
+  WHERE id = p_user_id;
+$$;
+</file>
+
+<file path="app/api/send-email/route.js">
+import { NextResponse } from 'next/server';
+
+function escapeCSV(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export async function POST(request) {
+  try {
+    const { orderCode, form, cartItems, total, notes } = await request.json();
+    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+
+    const itemsHtml = cartItems
+      .map(i => `<tr><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px">×${i.qty}</td><td style="padding:4px 8px">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+      .join('');
+
+    const html = `
+      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
+      <p><strong>Código:</strong> ${orderCode}</p>
+      <p><strong>Cliente:</strong> ${form.name}</p>
+      <p><strong>Teléfono:</strong> ${form.phone}</p>
+      <p><strong>Email:</strong> ${form.email}</p>
+      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
+        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+        <tfoot><tr><td colspan="2" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold">$${total.toLocaleString()}</td></tr></tfoot>
+      </table>
+    `;
+
+    // CSV — una fila por item
+    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
+    const csvRows = cartItems.map((item, idx) => [
+      orderCode,
+      form.name,
+      form.email,
+      form.phone,
+      item.name,
+      item.qty,
+      item.pricePerUnit ?? '',
+      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
+      idx === 0 ? total : '',   // total solo en la primera fila
+      idx === 0 ? (notes || '') : '',
+      idx === 0 ? fecha : '',
+    ].map(escapeCSV).join(','));
+
+    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
+    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'INKORA <onboarding@resend.dev>',
+        to: [process.env.EMAIL],
+        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
+        html,
+        attachments: [
+          {
+            filename: `pedido-${orderCode}.csv`,
+            content: csvBase64,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json({ error: err }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/api/upload-image/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+);
+
+export async function POST(request) {
+  try {
+    const { fileBase64, fileName, mimeType } = await request.json();
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const uniqueName = `thumbnails/${Date.now()}-${fileName}`;
+
+    const { error } = await supabase.storage
+      .from('assets')
+      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
+
+    return NextResponse.json({ url: data.publicUrl });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+</file>
+
+<file path="app/dashboard/page.js">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function statusLabel(status) {
+  const map = { pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', cancelled: 'Cancelado' };
+  return map[status] || status;
+}
+
+function statusColor(status) {
+  const map = { pending: '#f6a800', confirmed: '#2D6BE4', completed: '#18a36a', cancelled: '#e53e3e' };
+  return map[status] || '#9aa3bc';
+}
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('perfil');
+
+  // Profile form
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
+
+  // Password
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState('');
+
+  // Orders
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      if (!u) { router.replace('/'); return; }
+      setUser(u);
+      loadProfile(u.id, u.email);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadProfile(userId, email) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) {
+      setName(data.name || '');
+      setPhone(data.phone || '');
+    }
+    setLoading(false);
+    loadOrders(email);
+  }
+
+  async function loadOrders(email) {
+    setLoadingOrders(true);
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('customer_email', email)
+      .order('created_at', { ascending: false });
+    if (data) setOrders(data);
+    setLoadingOrders(false);
+  }
+
+  async function saveProfile() {
+    if (!user) return;
+    setSavingProfile(true);
+    await supabase.from('profiles').update({ name, phone }).eq('id', user.id);
+    setSavingProfile(false);
+    setSavedProfile(true);
+    setTimeout(() => setSavedProfile(false), 2000);
+  }
+
+  async function changePassword() {
+    setPasswordMsg('');
+    if (!newPassword || !confirmPassword) { setPasswordMsg('Completá ambos campos.'); return; }
+    if (newPassword !== confirmPassword) { setPasswordMsg('Las contraseñas no coinciden.'); return; }
+    if (newPassword.length < 6) { setPasswordMsg('Mínimo 6 caracteres.'); return; }
+    setSavingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setSavingPassword(false);
+    if (error) {
+      setPasswordMsg('Error: ' + error.message);
+    } else {
+      setPasswordMsg('¡Contraseña actualizada!');
+      setNewPassword(''); setConfirmPassword('');
+      setTimeout(() => setPasswordMsg(''), 3000);
+    }
+  }
+
+  const inp = { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' };
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 };
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Barlow, sans-serif' }}>
+      <div style={{ color: '#9aa3bc', fontSize: 16 }}>Cargando...</div>
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc' }}>
+
+      {/* Header */}
+      <header style={{ background: '#1B2F5E', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 16px rgba(27,47,94,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center' }}>
+            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{ height: 36, filter: 'brightness(0) invert(1)' }} />
+          </a>
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>|</span>
+          <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>Mi Cuenta</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{name || user?.email?.split('@')[0]}</span>
+          <button
+            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
+            onClick={async () => { await supabase.auth.signOut(); router.replace('/'); }}
+          >Cerrar sesión</button>
+        </div>
+      </header>
+
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '28px 20px' }}>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', marginBottom: 20, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
+          {[['perfil', 'Mi Perfil'], ['pedidos', 'Mis Pedidos']].map(([key, label]) => (
+            <button key={key}
+              style={{ flex: 1, padding: '13px 20px', border: 'none', background: activeTab === key ? '#1B2F5E' : 'white', color: activeTab === key ? 'white' : '#5a6380', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s, color 0.2s' }}
+              onClick={() => setActiveTab(key)}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* ── PERFIL ── */}
+        {activeTab === 'perfil' && (
+          <>
+            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24, marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 22 }}>Información de perfil</h2>
+
+<div style={{ display: 'grid', gap: 16 }}>
+                <div>
+                  <label style={lbl}>Nombre</label>
+                  <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" />
+                </div>
+                <div>
+                  <label style={lbl}>Email</label>
+                  <input style={{ ...inp, background: '#f7f8fc', color: '#9aa3bc', cursor: 'not-allowed' }}
+                    value={user?.email || ''} readOnly />
+                </div>
+                <div>
+                  <label style={lbl}>Teléfono</label>
+                  <input style={inp} type="tel" inputMode="numeric" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))} placeholder="3764000000" />
+                </div>
+              </div>
+
+              <button
+                style={{ marginTop: 22, background: savedProfile ? '#18a36a' : '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '11px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingProfile ? 0.6 : 1, transition: 'background 0.3s' }}
+                onClick={saveProfile} disabled={savingProfile}
+              >
+                {savingProfile ? 'Guardando...' : savedProfile ? '✓ Guardado' : 'Guardar cambios'}
+              </button>
+            </div>
+
+            {/* Cambiar contraseña */}
+            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>Cambiar contraseña</h2>
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div>
+                  <label style={lbl}>Nueva contraseña</label>
+                  <input type="password" style={inp} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                </div>
+                <div>
+                  <label style={lbl}>Confirmar contraseña</label>
+                  <input type="password" style={inp} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repetí la contraseña" />
+                </div>
+              </div>
+              {passwordMsg && (
+                <div style={{ marginTop: 10, fontSize: 13, color: passwordMsg.startsWith('¡') ? '#18a36a' : '#e53e3e', fontWeight: 600 }}>
+                  {passwordMsg}
+                </div>
+              )}
+              <button
+                style={{ marginTop: 18, background: 'white', color: '#1B2F5E', border: '1.5px solid #1B2F5E', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingPassword ? 0.6 : 1 }}
+                onClick={changePassword} disabled={savingPassword}
+              >
+                {savingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── PEDIDOS ── */}
+        {activeTab === 'pedidos' && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>
+              Historial de pedidos {orders.length > 0 && <span style={{ fontSize: 13, color: '#9aa3bc', fontWeight: 400 }}>({orders.length})</span>}
+            </h2>
+            {loadingOrders ? (
+              <p style={{ color: '#9aa3bc', fontSize: 13 }}>Cargando pedidos...</p>
+            ) : orders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9aa3bc' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
+                <p style={{ fontSize: 14 }}>Todavía no tenés pedidos.</p>
+                <a href="/" style={{ display: 'inline-block', marginTop: 12, background: '#1B2F5E', color: 'white', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>Ver catálogo →</a>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {['Código', 'Fecha', 'Items', 'Total', 'Estado'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(order => (
+                      <tr key={order.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#1B2F5E', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>{order.order_code}</td>
+                        <td style={{ padding: '11px 10px', color: '#5a6380', whiteSpace: 'nowrap' }}>{formatDate(order.created_at)}</td>
+                        <td style={{ padding: '11px 10px', color: '#2d3352', maxWidth: 220 }}>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {Array.isArray(order.items) ? order.items.map(i => `${i.name} ×${i.qty}`).join(', ') : '—'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#2d3352', whiteSpace: 'nowrap' }}>
+                          {order.total ? `$${Number(order.total).toLocaleString()}` : '—'}
+                        </td>
+                        <td style={{ padding: '11px 10px' }}>
+                          <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {statusLabel(order.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      <footer style={{ textAlign: 'center', padding: '20px', fontSize: 12, color: 'rgba(0,0,0,0.2)', letterSpacing: 1, marginTop: 20 }}>
+        INKORA® Soluciones Gráficas
+      </footer>
+    </div>
+  );
+}
+</file>
+
+<file path="app/layout.js">
+import { Barlow } from 'next/font/google';
+import './globals.css';
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'INKORA — Catálogo',
+  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" className={barlow.className}>
+      <body>{children}</body>
+    </html>
+  );
+}
+</file>
+
+<file path="lib/supabase-browser.js">
+'use client';
+
+import { createBrowserClient } from '@supabase/ssr';
+
+export function createBrowserSupabaseClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY
+  );
+}
+</file>
+
+<file path=".claude/settings.local.json">
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(vercel:*)",
+      "Bash(npx vercel:*)",
+      "Bash(npx supabase:*)",
+      "Skill(keybindings-help)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Skill(update-config)"
+    ]
+  }
+}
+</file>
+
+<file path="components/AuthModal.js">
+'use client';
+
+import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+function translateError(msg) {
+  if (!msg) return 'Ocurrió un error. Intentá de nuevo.';
+  const m = msg.toLowerCase();
+  if (m.includes('email not confirmed'))            return 'Por favor confirmá tu email antes de ingresar.';
+  if (m.includes('invalid login credentials') ||
+      m.includes('invalid email or password') ||
+      m.includes('email and password') ||
+      m.includes('wrong password'))                 return 'Email o contraseña incorrectos.';
+  if (m.includes('user already registered') ||
+      m.includes('already been registered') ||
+      m.includes('already registered'))             return 'Ya existe una cuenta con ese email.';
+  if (m.includes('password should be at least') ||
+      m.includes('password must be at least') ||
+      m.includes('at least 6'))                     return 'La contraseña debe tener al menos 6 caracteres.';
+  if (m.includes('unable to validate email') ||
+      m.includes('invalid email'))                  return 'El email ingresado no es válido.';
+  if (m.includes('email rate limit') ||
+      m.includes('too many requests') ||
+      m.includes('rate limit'))                     return 'Demasiados intentos. Esperá unos minutos.';
+  if (m.includes('network') ||
+      m.includes('fetch'))                          return 'Error de conexión. Verificá tu internet.';
+  if (m.includes('signup') && m.includes('disabled')) return 'El registro está deshabilitado temporalmente.';
+  return msg;
+}
+
+export default function AuthModal({ onClose, onSuccess }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit() {
+    setError('');
+    if (!form.email || !form.password) { setError('Completá todos los campos.'); return; }
+    setLoading(true);
+    try {
+      if (mode === 'login') {
+        const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        if (e) throw e;
+        onSuccess(data.user);
+      } else {
+        if (!form.name.trim()) { setError('Ingresá tu nombre.'); setLoading(false); return; }
+        const { data, error: e } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+          options: { data: { full_name: form.name } },
+        });
+        if (e) throw e;
+        onSuccess(data.user);
+      }
+    } catch (e) {
+      setError(translateError(e.message));
+    }
+    setLoading(false);
+  }
+
+  async function handleGoogle() {
+    setError('');
+    const { error: e } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
+    });
+    if (e) setError(translateError(e.message));
+  }
+
+  const s = styles;
+  return (
+    <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={s.modal}>
+        <div style={s.header}>
+          <span>{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
+          <button style={s.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={s.body}>
+          <div style={s.tabs}>
+            <button style={{...s.tab, ...(mode === 'login' ? s.tabActive : {})}} onClick={() => { setMode('login'); setError(''); }}>
+              Ingresar
+            </button>
+            <button style={{...s.tab, ...(mode === 'register' ? s.tabActive : {})}} onClick={() => { setMode('register'); setError(''); }}>
+              Registrarse
+            </button>
+          </div>
+
+          {mode === 'register' && (
+            <div style={s.formGroup}>
+              <label style={s.label}>Nombre</label>
+              <input style={s.input} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Tu nombre" />
+            </div>
+          )}
+
+          <div style={s.formGroup}>
+            <label style={s.label}>Email</label>
+            <input style={s.input} type="email" value={form.email}
+              onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="tu@email.com" />
+          </div>
+
+          <div style={s.formGroup}>
+            <label style={s.label}>Contraseña</label>
+            <input style={s.input} type="password" value={form.password}
+              onChange={e => setForm(f => ({...f, password: e.target.value}))}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
+              placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••'} />
+          </div>
+
+          {error && <div style={s.errorBox}>{error}</div>}
+
+          <button style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
+            {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
+          </button>
+
+          <div style={s.divider}><span style={{background:'white', padding:'0 10px', position:'relative', zIndex:1}}>o</span></div>
+
+          <button style={s.btnGoogle} onClick={handleGoogle}>
+            <svg viewBox="0 0 24 24" width="18" height="18" style={{flexShrink:0}}>
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continuar con Google
+          </button>
+
+          {mode === 'login' && (
+            <p style={s.hint}>¿No tenés cuenta? <button style={s.linkBtn} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' },
+  header: { background: '#1B2F5E', color: 'white', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16 },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  body: { padding: 24, display: 'flex', flexDirection: 'column' },
+  tabs: { display: 'flex', background: '#f7f8fc', borderRadius: 10, padding: 4, marginBottom: 20 },
+  tab: { flex: 1, background: 'none', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 14, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer' },
+  tabActive: { background: 'white', color: '#1B2F5E', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
+  formGroup: { marginBottom: 14 },
+  label: { display: 'block', fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box', outline: 'none' },
+  errorBox: { background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 14 },
+  btnPrimary: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 16 },
+  divider: { textAlign: 'center', color: '#dde1ef', fontSize: 12, marginBottom: 16, position: 'relative', borderTop: '1px solid #dde1ef', marginTop: 0 },
+  btnGoogle: { width: '100%', background: 'white', color: '#2d3352', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '11px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 },
+  hint: { textAlign: 'center', fontSize: 13, color: '#9aa3bc' },
+  linkBtn: { background: 'none', border: 'none', color: '#2D6BE4', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0 },
+};
+</file>
+
+<file path="lib/auth.js">
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+const supabase = createBrowserSupabaseClient();
+
+export async function signUp({ email, password, name }) {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } },
+  });
+}
+
+export async function signIn({ email, password }) {
+  return supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
+  });
+}
+
+export async function signOut() {
+  return supabase.auth.signOut();
+}
+
+export async function getUser() {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('*, localities(*)')
+    .eq('id', userId)
+    .single();
+  return data;
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "inkora-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.0",
+    "fuse.js": "^7.3.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35"
+  }
+}
+</file>
+
+<file path="app/globals.css">
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Barlow', sans-serif;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.tier-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: 'Barlow', sans-serif;
+  color: #2d3352;
+  font-size: 12px;
+  padding: 2px 4px;
+  width: 100%;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.tier-input:focus {
+  border-bottom: 1px solid #2D6BE4;
+}
+</file>
+
+<file path="app/auth/callback/route.js">
+import { NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
+
+export async function GET(request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
+
+  if (code) {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    console.log('AUTH CALLBACK - code:', code);
+    console.log('AUTH CALLBACK - data:', data);
+    console.log('AUTH CALLBACK - error:', error);
+    if (error) {
+      return NextResponse.redirect(`${origin}?auth_error=${error.message}`);
+    }
+  }
+
+  const next = searchParams.get('next');
+  const redirectTo = next === '/admin' ? `${origin}/admin` : `${origin}/`;
+  return NextResponse.redirect(redirectTo);
+}
+</file>
+
+<file path="app/admin/page.js">
+'use client';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+
+const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
+const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
+
+function fileToBase64(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+}
+
+function slugify(str) {
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function EyeOpen() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B2F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  );
+}
+
+function EyeOff() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9aa3bc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" style={{flexShrink:0}}>
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+  );
+}
+
+function TrashBtn({ onClick }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      style={{
+        background: hovered ? 'rgba(229,62,62,0.25)' : 'rgba(229,62,62,0.12)',
+        border: 'none', cursor: 'pointer', borderRadius: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#e53e3e', fontSize: 14, fontWeight: 600,
+        transition: 'background 0.2s', lineHeight: 1, width: 28, height: 28, flexShrink: 0,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
+    >✕</button>
+  );
+}
+
+export default function Admin() {
+  // ── Auth ──
+  const [screen, setScreen] = useState('login'); // 'login' | 'checking' | 'denied' | 'panel'
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('products');
+
+  // Products
+  const [products, setProducts] = useState([]);
+  const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [productForms, setProductForms] = useState({});
+  const [savedProductId, setSavedProductId] = useState(null);
+  const cellRefs = useRef([]);
+  const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
+
+  function askConfirm(message, onConfirm) { setConfirmModal({ open: true, message, onConfirm }); }
+  function closeConfirm() { setConfirmModal({ open: false, message: '', onConfirm: null }); }
+
+  // Designs
+  const [designs, setDesigns] = useState([]);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [orphanCount, setOrphanCount] = useState(0);
+  const [migrating, setMigrating] = useState(false);
+  const [designFilterProduct, setDesignFilterProduct] = useState('all');
+  const [dragOverId, setDragOverId] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const dragSrcIdRef = useRef(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const lastSelectedIdRef = useRef(null);
+  const [newCatInputs, setNewCatInputs] = useState({});
+  const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
+  const [draggingLocalityId, setDraggingLocalityId] = useState(null);
+  const localityDragSrcIdRef = useRef(null);
+
+  // Localities
+  const [localities, setLocalities] = useState([]);
+  const [newLocality, setNewLocality] = useState({ name: '' });
+  const [savingLocality, setSavingLocality] = useState(false);
+
+  // Users
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Admins
+  const [admins, setAdmins] = useState([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
+
+  // Orders
+  const [orders, setOrders] = useState([]);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderDetail, setOrderDetail] = useState(null);
+
+  // Price tiers
+  const [priceTiers, setPriceTiers] = useState([]);
+  const [newTiers, setNewTiers] = useState({});
+  const [editingTiers, setEditingTiers] = useState({});
+  const [savedTierId, setSavedTierId] = useState(null);
+  const [addingTier, setAddingTier] = useState(null);
+
+  // ── Auth listener ──
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') return;
+      if (event === 'SIGNED_IN' && session?.user?.email) {
+        checkAdmin(session.user.email);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'panel') {
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders();
+    }
+  }, [screen]);
+
+
+  useEffect(() => {
+    function handleKeyDown(e) { if (e.key === 'Escape') setSelectedIds(new Set()); }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const forms = {};
+    products.forEach(p => {
+      if (!productForms[p.id]) {
+        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false };
+      }
+    });
+    if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
+  // ── Auth functions ──
+  async function checkAdmin(email) {
+    setScreen('checking');
+    const { data } = await supabase.from('admins').select('email').eq('email', email).single();
+    if (data) { setCurrentUser(email); setScreen('panel'); }
+    else { setScreen('denied'); }
+  }
+
+  async function signInWithGoogle() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'https://inkora-next.vercel.app/admin' },
+    });
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setScreen('login');
+    setCurrentUser(null);
+  }
+
+  // ── Products ──
+  async function loadProducts() {
+    const { data } = await supabase.from('products').select('*').order('created_at');
+    if (data) setProducts(data);
+  }
+
+  function updateProductForm(id, field, value) {
+    setProductForms(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  }
+
+  async function saveProduct(id, overrides = {}) {
+    const data = { ...(productForms[id] || {}), ...overrides };
+    await supabase.from('products').update(data).eq('id', id);
+    setSavedProductId(id);
+    setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
+  }
+
+  function handleProductKeyDown(e, rowIdx, colIdx) {
+    const NCOLS = 4;
+    if ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowRight') {
+      if (colIdx + 1 < NCOLS) { e.preventDefault(); cellRefs.current[rowIdx]?.[colIdx + 1]?.focus(); }
+    } else if ((e.key === 'Tab' && e.shiftKey) || e.key === 'ArrowLeft') {
+      if (colIdx - 1 >= 0) { e.preventDefault(); cellRefs.current[rowIdx]?.[colIdx - 1]?.focus(); }
+    } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      if (rowIdx + 1 < cellRefs.current.length) { e.preventDefault(); cellRefs.current[rowIdx + 1]?.[colIdx]?.focus(); }
+    } else if (e.key === 'ArrowUp') {
+      if (rowIdx - 1 >= 0) { e.preventDefault(); cellRefs.current[rowIdx - 1]?.[colIdx]?.focus(); }
+    }
+  }
+
+  async function addProduct() {
+    if (!newProduct.name.trim() || !newProduct.slug.trim()) return;
+    setSavingProduct(true);
+    await supabase.from('products').insert({ ...newProduct, active: true });
+    setNewProduct(EMPTY_PRODUCT);
+    setSavingProduct(false);
+    setShowAddForm(false);
+    loadProducts();
+  }
+
+  function deleteProduct(id) {
+    askConfirm('¿Seguro que querés eliminar este producto? Esta acción no se puede deshacer.', async () => {
+      await supabase.from('products').delete().eq('id', id);
+      loadProducts();
+    });
+  }
+
+  async function toggleProduct(id, active) {
+    await supabase.from('products').update({ active: !active }).eq('id', id);
+    setSavedProductId(id);
+    setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
+    loadProducts();
+  }
+
+  // ── Designs ──
+  async function loadDesigns() {
+    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order').order('created_at');
+    console.log('Diseños cargados:', data?.length, data);
+    if (data) { setDesigns(data); setOrphanCount(data.filter(d => !d.product_id && d.active).length); }
+  }
+
+  function handleDragStart(e, id) {
+    dragSrcIdRef.current = id;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(id);
+  }
+
+  function handleDragLeave() {
+    setDragOverId(null);
+  }
+
+  async function handleDrop(e, targetId) {
+    e.preventDefault();
+    setDragOverId(null);
+    const srcId = dragSrcIdRef.current;
+    dragSrcIdRef.current = null;
+    if (!srcId || srcId === targetId) return;
+
+    const filteredDesigns = designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct);
+
+    if (selectedIds.has(srcId) && selectedIds.size > 1) {
+      // Multi-item drag: move all selected to target position maintaining relative order
+      const selectedInOrder = filteredDesigns.filter(d => selectedIds.has(d.id));
+      const without = filteredDesigns.filter(d => !selectedIds.has(d.id));
+      const insertAt = without.findIndex(d => d.id === targetId);
+      if (insertAt === -1) return; // target is within the selected group
+      const reordered = [...without.slice(0, insertAt), ...selectedInOrder, ...without.slice(insertAt)];
+      await Promise.all(reordered.map((d, i) => supabase.from('designs').update({ sort_order: i }).eq('id', d.id)));
+      loadDesigns();
+    } else {
+      // Single-item drag
+      const srcIdx = filteredDesigns.findIndex(d => d.id === srcId);
+      const tgtIdx = filteredDesigns.findIndex(d => d.id === targetId);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const reordered = [...filteredDesigns];
+      const [removed] = reordered.splice(srcIdx, 1);
+      reordered.splice(tgtIdx, 0, removed);
+      await Promise.all(reordered.map((d, i) => supabase.from('designs').update({ sort_order: i }).eq('id', d.id)));
+      loadDesigns();
+    }
+  }
+
+  function handleDragEnd() {
+    dragSrcIdRef.current = null;
+    setDragOverId(null);
+    setDraggingId(null);
+  }
+
+  function handleDesignClick(e, id) {
+    if (e.shiftKey && lastSelectedIdRef.current) {
+      const visible = designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct);
+      const lastIdx = visible.findIndex(d => d.id === lastSelectedIdRef.current);
+      const currIdx = visible.findIndex(d => d.id === id);
+      if (lastIdx !== -1 && currIdx !== -1) {
+        const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
+        setSelectedIds(new Set(visible.slice(start, end + 1).map(d => d.id)));
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+      lastSelectedIdRef.current = id;
+    } else {
+      setSelectedIds(new Set([id]));
+      lastSelectedIdRef.current = id;
+    }
+  }
+
+  function getProductCategories(productId) {
+    const p = products.find(pr => pr.id === productId);
+    const cats = p?.categories;
+    return (Array.isArray(cats) && cats.length > 0) ? cats : ['Todos'];
+  }
+
+  async function saveDesignCategory(id, category) {
+    const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
+    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ category }).eq('id', did)));
+    setDesigns(prev => prev.map(d => idsToUpdate.includes(d.id) ? { ...d, category } : d));
+  }
+
+  async function addProductCategory(productId, cat) {
+    const t = cat.trim();
+    if (!t) return;
+    const normalized = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+    const current = getProductCategories(productId);
+    if (current.includes(normalized)) return;
+    const updated = [...current, normalized];
+    await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    setNewCatInputs(prev => ({ ...prev, [productId]: '' }));
+    loadProducts();
+  }
+
+  async function removeProductCategory(productId, cat) {
+    const current = getProductCategories(productId);
+    if (current.length <= 1) return;
+    const updated = current.filter(c => c !== cat);
+    await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    loadProducts();
+  }
+
+  async function toggleDesign(id, active) {
+    const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
+    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ active: !active }).eq('id', did)));
+    loadDesigns();
+  }
+
+  async function deleteDesign(id) {
+    if (selectedIds.has(id) && selectedIds.size > 1) {
+      askConfirm(`¿Eliminar los ${selectedIds.size} diseños seleccionados? Esta acción no se puede deshacer.`, async () => {
+        await Promise.all([...selectedIds].map(did => supabase.from('designs').delete().eq('id', did)));
+        setSelectedIds(new Set());
+        loadDesigns();
+      });
+    } else {
+      await supabase.from('designs').delete().eq('id', id);
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      loadDesigns();
+    }
+  }
+
+  async function migrateOrphans() {
+    if (products.length === 0) { alert('Primero creá al menos un producto.'); return; }
+    setMigrating(true);
+    await supabase.from('designs').update({ product_id: products[0].id }).is('product_id', null).eq('active', true);
+    setMigrating(false);
+    loadDesigns();
+  }
+
+  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const maxSizeKb = selectedProduct ? selectedProduct.max_file_size_kb : 250;
+
+  async function handleFileSelect(e) {
+    if (!selectedProductId) { alert('Primero seleccioná un producto.'); e.target.value = ''; return; }
+    const files = Array.from(e.target.files);
+    const defaultCategory = 'Sin categoría';
+    const entries = files.map(file => ({
+      file, preview: URL.createObjectURL(file),
+      name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
+      nameExists: false, sizeError: file.size > maxSizeKb * 1024,
+    }));
+    setPendingFiles(entries);
+    e.target.value = '';
+    const { data } = await supabase.from('designs').select('name').eq('active', true);
+    const existing = new Set((data || []).map(d => d.name.toLowerCase()));
+    setPendingFiles(prev => prev.map(entry => ({
+      ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+    })));
+  }
+
+  const updateEntry = useCallback(async (index, field, value) => {
+    setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
+    if (field === 'name') {
+      if (value.length > 2) {
+        const { data } = await supabase.from('designs').select('name').eq('active', true);
+        const exists = Array.isArray(data) && data.some(d => d.name.toLowerCase() === value.toLowerCase());
+        setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: exists }; return next; });
+      } else {
+        setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: false }; return next; });
+      }
+    }
+  }, []);
+
+  function removePending(index) {
+    setPendingFiles(prev => { URL.revokeObjectURL(prev[index].preview); return prev.filter((_, i) => i !== index); });
+  }
+
+  async function addDesigns() {
+    setUploading(true);
+    let anyError = false;
+    for (const entry of pendingFiles) {
+      if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
+      try {
+        const base64 = await fileToBase64(entry.file);
+        const res = await fetch('/api/upload-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, active: true, product_id: selectedProductId });
+        } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
+      } catch { alert(`Error al subir "${entry.name}".`); anyError = true; }
+    }
+    setUploading(false);
+    if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
+    console.log('Upload completo, recargando diseños...');
+    loadDesigns();
+  }
+
+  // ── Localities ──
+  async function loadLocalities() {
+    const { data } = await supabase.from('localities').select('*').order('sort_order').order('created_at');
+    if (data) setLocalities(data);
+  }
+
+  function handleLocalityDragStart(e, id) {
+    localityDragSrcIdRef.current = id;
+    setDraggingLocalityId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleLocalityDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverLocalityId(id);
+  }
+
+  function handleLocalityDragLeave() { setDragOverLocalityId(null); }
+
+  async function handleLocalityDrop(e, targetId) {
+    e.preventDefault();
+    setDragOverLocalityId(null);
+    const srcId = localityDragSrcIdRef.current;
+    localityDragSrcIdRef.current = null;
+    if (!srcId || srcId === targetId) return;
+    const srcIdx = localities.findIndex(l => l.id === srcId);
+    const tgtIdx = localities.findIndex(l => l.id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const reordered = [...localities];
+    const [removed] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, removed);
+    await Promise.all(reordered.map((l, i) => supabase.from('localities').update({ sort_order: i }).eq('id', l.id)));
+    loadLocalities();
+  }
+
+  function handleLocalityDragEnd() {
+    localityDragSrcIdRef.current = null;
+    setDragOverLocalityId(null);
+    setDraggingLocalityId(null);
+  }
+
+  async function addLocality() {
+    if (!newLocality.name.trim()) return;
+    setSavingLocality(true);
+    await supabase.from('localities').insert({ ...newLocality, active: true });
+    setNewLocality({ name: '' });
+    setSavingLocality(false);
+    loadLocalities();
+  }
+
+  async function toggleLocality(id, active) {
+    await supabase.from('localities').update({ active: !active }).eq('id', id);
+    loadLocalities();
+  }
+
+  function deleteLocality(id) {
+    askConfirm('¿Seguro que querés eliminar esta localidad? Se eliminarán también todas sus escalas de precio.', async () => {
+      await supabase.from('price_tiers').delete().eq('locality_id', id);
+      await supabase.from('localities').delete().eq('id', id);
+      loadLocalities(); loadPriceTiers();
+    });
+  }
+
+  // ── Users ──
+  async function loadUsers() {
+    setLoadingUsers(true);
+    const { data } = await supabase.rpc('admin_get_profiles');
+    if (data) setUsers(data);
+    setLoadingUsers(false);
+  }
+
+  async function updateUserLocality(userId, localityId) {
+    await supabase.rpc('admin_update_user_locality', { p_user_id: userId, p_locality_id: localityId || null });
+    loadUsers();
+  }
+
+  // ── Price tiers ──
+  async function loadPriceTiers() {
+    const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
+    if (data) {
+      setPriceTiers(data);
+      const forms = {};
+      data.forEach(t => { forms[t.id] = { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit }; });
+      setEditingTiers(prev => ({ ...forms, ...prev }));
+    }
+  }
+
+  function updateTierForm(id, field, value) {
+    setEditingTiers(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  }
+
+  async function saveTierAuto(id) {
+    const ef = editingTiers[id];
+    if (!ef) return;
+    await supabase.from('price_tiers').update({ min_quantity: Number(ef.min_quantity), price_per_unit: Number(ef.price_per_unit) }).eq('id', id);
+    setSavedTierId(id);
+    setTimeout(() => setSavedTierId(prev => prev === id ? null : prev), 1200);
+  }
+
+  async function addTierMatrix(productId, localityId, key) {
+    const t = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+    if (!t.min_quantity || !t.price_per_unit) return;
+    await supabase.from('price_tiers').insert({ product_id: productId, locality_id: localityId, min_quantity: Number(t.min_quantity), price_per_unit: Number(t.price_per_unit) });
+    setNewTiers(prev => ({ ...prev, [key]: { min_quantity: '', price_per_unit: '' } }));
+    setAddingTier(null);
+    loadPriceTiers();
+  }
+
+  function deleteScale(id) {
+    askConfirm('¿Eliminar esta escala de precio?', async () => {
+      await supabase.from('price_tiers').delete().eq('id', id);
+      loadPriceTiers();
+    });
+  }
+
+  // ── Orders ──
+  async function loadOrders() {
+    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (data) setOrders(data);
+  }
+
+  async function updateOrderStatus(id, status) {
+    await supabase.from('orders').update({ status }).eq('id', id);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+  }
+
+  const ORDER_STATUSES = [
+    { value: 'pending',       label: 'Pendiente',      color: '#b45309', bg: '#fef3c7' },
+    { value: 'confirmed',     label: 'Confirmado',     color: '#1d4ed8', bg: '#dbeafe' },
+    { value: 'in_production', label: 'En producción',  color: '#6d28d9', bg: '#ede9fe' },
+    { value: 'ready',         label: 'Listo',          color: '#15803d', bg: '#dcfce7' },
+    { value: 'cancelled',     label: 'Cancelado',      color: '#b91c1c', bg: '#fee2e2' },
+  ];
+
+  function getStatusCfg(value) {
+    return ORDER_STATUSES.find(s => s.value === value) || ORDER_STATUSES[0];
+  }
+
+  function summarizeItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return '—';
+    return items.slice(0, 3).map(i => `${i.name} ×${i.qty}`).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '');
+  }
+
+  const filteredOrders = orders.filter(o => {
+    const q = orderSearch.toLowerCase();
+    return !q || (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_email || '').toLowerCase().includes(q);
+  });
+
+  // ── Admins ──
+  async function loadAdmins() {
+    const { data } = await supabase.from('admins').select('email').order('email');
+    if (data) setAdmins(data);
+  }
+
+  async function addAdmin() {
+    const email = newAdminEmail.trim().toLowerCase();
+    if (!email) return;
+    setAddingAdmin(true);
+    await supabase.from('admins').insert({ email });
+    setNewAdminEmail('');
+    setAddingAdmin(false);
+    loadAdmins();
+  }
+
+  async function deleteAdmin(email) {
+    if (email === currentUser) { alert('No podés eliminarte a vos mismo.'); return; }
+    await supabase.from('admins').delete().eq('email', email);
+    setDeleteConfirmEmail(null);
+    loadAdmins();
+  }
+
+  const hasDupInBatch = (index, name) => name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
+  const canSubmit = selectedProductId && pendingFiles.length > 0 &&
+    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError) &&
+    !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
+
+  const s = styles;
+
+  // ── PANTALLAS AUTH ──
+  const sessionBar = currentUser ? (
+    <div style={{position:'fixed', top:0, left:0, right:0, zIndex:999, background:'rgba(17,32,64,0.92)', backdropFilter:'blur(6px)', padding:'6px 20px', fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'right'}}>
+      {currentUser}
+    </div>
+  ) : null;
+
+  if (screen === 'login') return (
+    <div style={s.loginWrap}>
+      {sessionBar}
+      <div style={s.loginBox}>
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
+        <h2 style={s.loginTitle}>Panel de Administración</h2>
+        <button style={s.btnGoogle} onClick={signInWithGoogle}>
+          <GoogleIcon />
+          Ingresar con Google
+        </button>
+      </div>
+    </div>
+  );
+
+  if (screen === 'checking') return (
+    <div style={s.loginWrap}>
+      {sessionBar}
+      <div style={s.loginBox}>
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
+        <p style={{color: '#5a6380', fontSize: 14, margin: 0}}>Verificando acceso...</p>
+      </div>
+    </div>
+  );
+
+  if (screen === 'denied') return (
+    <div style={s.loginWrap}>
+      {sessionBar}
+      <div style={s.loginBox}>
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
+        <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>Acceso denegado</div>
+        <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>Tu cuenta no tiene permisos de administrador.</p>
+        <button style={s.btnPrimary} onClick={handleSignOut}>Cerrar sesión</button>
+      </div>
+    </div>
+  );
+
+  // ── PANEL ──
+  return (
+    <div style={s.wrap}>
+      <header style={s.header}>
+        <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
+        <span style={s.headerTitle}>Panel de Administración</span>
+        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
+        <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
+      </header>
+
+      <div style={s.tabBar}>
+        <div style={s.tabBarInner}>
+          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins']].map(([id, label]) => (
+            <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
+              {label}
+              {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
+              {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
+              {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
+              {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={s.content}>
+
+        {/* ══ PRODUCTOS ══ */}
+        {activeTab === 'products' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Productos</h2>
+              <div style={{overflowX: 'auto'}}>
+                <table style={s.tbl}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Mostrar</th>
+                      <th style={s.th}>Nombre</th>
+                      <th style={s.th}>Cols PC</th>
+                      <th style={s.th}>Cols Cel</th>
+                      <th style={s.th}>Tamaño Máx (KB)</th>
+                      <th style={s.th}>Precios</th>
+                      <th style={{...s.th, width: 32}}></th>
+                      <th style={{...s.th, width: 32}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p, rowIdx) => {
+                      const form = productForms[p.id] || {};
+                      const setRef = (colIdx) => (el) => {
+                        if (!cellRefs.current[rowIdx]) cellRefs.current[rowIdx] = [];
+                        cellRefs.current[rowIdx][colIdx] = el;
+                      };
+                      return (
+                        <tr key={p.id} style={{opacity: p.active ? 1 : 0.5}}>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(0)} style={s.tblInput} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(1)} style={{...s.tblInput, width: 58}} type="number" min="1" max="10" value={form.columns_desktop ?? 1} onChange={e => updateProductForm(p.id, 'columns_desktop', parseInt(e.target.value)||1)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(2)} style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={form.columns_mobile ?? 1} onChange={e => updateProductForm(p.id, 'columns_mobile', parseInt(e.target.value)||1)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="50" value={form.max_file_size_kb ?? 250} onChange={e => updateProductForm(p.id, 'max_file_size_kb', parseInt(e.target.value)||250)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button style={s.iconBtn} onClick={() => { const newVal = !form.show_price; updateProductForm(p.id, 'show_price', newVal); saveProduct(p.id, { show_price: newVal }); }}>
+                              {form.show_price ? <EyeOpen /> : <EyeOff />}
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center', width: 32}}>
+                            {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
+                          </td>
+                          <td style={{...s.td, textAlign:'center', width: 32}}>
+                            <TrashBtn onClick={() => deleteProduct(p.id)} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {showAddForm && (
+                      <tr style={{background:'#f7f8fc'}}>
+                        <td style={{...s.td, textAlign:'center', color:'#9aa3bc'}}>—</td>
+                        <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="10" value={newProduct.columns_desktop} onChange={e => setNewProduct(p => ({...p, columns_desktop: parseInt(e.target.value)||1}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={newProduct.columns_mobile} onChange={e => setNewProduct(p => ({...p, columns_mobile: parseInt(e.target.value)||1}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="50" value={newProduct.max_file_size_kb} onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value)||250}))} /></td>
+                        <td style={{...s.td, textAlign:'center'}}>
+                          <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, show_price: !p.show_price}))}>
+                            {newProduct.show_price ? <EyeOpen /> : <EyeOff />}
+                          </button>
+                        </td>
+                        <td style={s.td}>
+                          <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
+                            {savingProduct ? '...' : 'Crear'}
+                          </button>
+                        </td>
+                        <td style={s.td}></td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td colSpan={8} style={{padding:'10px 6px'}}>
+                        <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
+                          {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* CATEGORÍAS */}
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Categorías por producto</h2>
+              {products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p> : (
+                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
+                  {products.filter(p => p.active).map(product => {
+                    const cats = getProductCategories(product.id);
+                    const newCat = newCatInputs[product.id] || '';
+                    return (
+                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 200px', minWidth:180}}>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                        <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
+                          <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
+                          {cats.map(cat => (
+                            <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>
+                              {cat}
+                              <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:2}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
+                          <input
+                            style={{...s.tblInput, flex:1, padding:'3px 6px', fontSize:12}}
+                            placeholder="Nueva categoría..."
+                            value={newCat}
+                            onChange={e => setNewCatInputs(prev => ({...prev, [product.id]: e.target.value}))}
+                            onKeyDown={e => { if (e.key === 'Enter') addProductCategory(product.id, newCat); }}
+                          />
+                          <button style={{...s.editBtn, whiteSpace:'nowrap'}} onClick={() => addProductCategory(product.id, newCat)}>+ Agregar</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ESCALAS */}
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Escalas de precio por localidad</h2>
+              {localities.filter(l => l.active).length === 0 ? <p style={s.emptyMsg}>No hay localidades activas.</p>
+              : products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p>
+              : (
+                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
+                  {products.filter(p => p.active).map(product => {
+                    const productTiers = priceTiers.filter(t => t.product_id === product.id);
+                    const activeLocalities = localities.filter(l => l.active);
+
+                    const renderLocalityBlock = (localityId, localityName, borderTop) => {
+                      const key = `${product.id}_${localityId}`;
+                      const tiers = productTiers.filter(t => t.locality_id === localityId).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                      const isAdding = addingTier === key;
+                      const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
+                      return (
+                        <div key={key} style={{borderTop: borderTop ? '1px solid #f0f2f8' : 'none'}}>
+                          <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{localityName}</div>
+                          <table style={{width:'100%', borderCollapse:'collapse'}}>
+                            <thead>
+                              <tr style={{borderBottom:'1px solid #eef0f6'}}>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cant. mín.</th>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
+                                <th style={{padding:'2px 4px', width:22}}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 6px'}}>Sin escalas</td></tr>}
+                              {tiers.map(t => {
+                                const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                                return (
+                                  <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
+                                    <td style={cellStyle}>
+                                      <input className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                    </td>
+                                    <td style={cellStyle}>
+                                      <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                        <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                        <input className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                        {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
+                                      </div>
+                                    </td>
+                                    <td style={{...cellStyle, textAlign:'center'}}>
+                                      <TrashBtn onClick={() => deleteScale(t.id)} />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {isAdding && (
+                                <tr style={{borderBottom:'1px solid #f0f2f8'}}>
+                                  <td style={cellStyle}>
+                                    <input
+                                      className="tier-input"
+                                      type="number" min="1" placeholder="Cantidad"
+                                      value={nt.min_quantity}
+                                      onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
+                                      onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
+                                    />
+                                  </td>
+                                  <td style={cellStyle}>
+                                    <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                      <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                      <input
+                                        className="tier-input"
+                                        type="number" min="0" placeholder="Precio"
+                                        value={nt.price_per_unit}
+                                        onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
+                                        onBlur={() => addTierMatrix(product.id, localityId, key)}
+                                        onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td style={{...cellStyle, textAlign:'center'}} />
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                          <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
+                            {isAdding
+                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
+                              : <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ escala</button>
+                            }
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 220px', minWidth:200}}>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                        {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ══ DISEÑOS ══ */}
+        {activeTab === 'designs' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Agregar diseños</h2>
+              <div style={s.formGroup}>
+                <label style={s.label}>Producto *</label>
+                <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+                  {products.map(p => (
+                    <button key={p.id} onClick={() => { setSelectedProductId(p.id); if (p.id !== selectedProductId) setPendingFiles([]); }} style={{border:'none', borderRadius:7, padding:'6px 14px', fontSize:13, fontWeight:600, cursor:'pointer', background: selectedProductId === p.id ? '#1B2F5E' : '#eef0f6', color: selectedProductId === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {selectedProductId && (
+                <div style={s.formGroup}>
+                  <label style={s.label}>Imágenes (máx. {maxSizeKb}kb c/u)</label>
+                  <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
+                </div>
+              )}
+              {pendingFiles.length > 0 && (
+                <>
+                  <div style={s.fileList}>
+                    {pendingFiles.map((entry, i) => {
+                      const dupInBatch = hasDupInBatch(i, entry.name);
+                      const hasError = entry.nameExists || dupInBatch || entry.sizeError;
+                      return (
+                        <div key={i} style={s.fileRow}>
+                          <img src={entry.preview} alt="" style={s.fileThumb} />
+                          <div style={s.fileFields}>
+                            <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
+                            {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
+                            {entry.sizeError && <div style={s.errorMsg}>⚠ La imagen supera {maxSizeKb}kb</div>}
+                            {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
+                          </div>
+                          <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
+                            <option value="Sin categoría">Sin categoría</option>
+                            {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button style={{...s.btnPrimary, marginTop: 16, opacity: canSubmit && !uploading ? 1 : 0.5}} disabled={!canSubmit || uploading} onClick={addDesigns}>
+                    {uploading ? 'Subiendo...' : `Agregar ${pendingFiles.length} diseño${pendingFiles.length !== 1 ? 's' : ''}`}
+                  </button>
+                </>
+              )}
+            </div>
+            <div style={s.card}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12}}>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
+                  {selectedIds.size > 1 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:700}}>{selectedIds.size} seleccionados</span>}
+                </div>
+                {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
+              </div>
+              <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
+                {[{id:'all', name:'Todos'}, ...products].map(p => (
+                  <button key={p.id} onClick={() => setDesignFilterProduct(p.id)} style={{border:'none', borderRadius:7, padding:'5px 13px', fontSize:12, fontWeight:600, cursor:'pointer', background: designFilterProduct === p.id ? '#1B2F5E' : '#eef0f6', color: designFilterProduct === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              <div onClick={() => setSelectedIds(new Set())}>
+              {designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct).map(d => (
+                <div
+                  key={d.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, d.id)}
+                  onDragOver={e => handleDragOver(e, d.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={e => handleDrop(e, d.id)}
+                  onDragEnd={handleDragEnd}
+                  onClick={e => { e.stopPropagation(); handleDesignClick(e, d.id); }}
+                  style={{
+                    ...s.designRow,
+                    opacity: !d.active ? 0.45 : (draggingId && selectedIds.has(draggingId) && selectedIds.has(d.id) ? 0.35 : 1),
+                    background: dragOverId === d.id ? '#eef4ff' : selectedIds.has(d.id) ? '#f0f5ff' : undefined,
+                    borderLeft: dragOverId === d.id ? '3px solid #2D6BE4' : selectedIds.has(d.id) ? '3px solid #2D6BE4' : '3px solid transparent',
+                    transition: 'background 0.12s, border-left 0.12s',
+                    cursor: draggingId === d.id ? 'grabbing' : 'grab',
+                  }}
+                >
+                  <div style={s.designInfo}>
+                    {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
+                    <div>
+                      <div style={s.designName}>{d.name}</div>
+                      <div style={s.designCat}>
+                        {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
+                        {' '}
+                        {d.product_id ? (
+                          <select
+                            style={{fontSize:11, border:'1px solid #dde1ef', borderRadius:4, padding:'1px 4px', color:'#5a6380', fontFamily:'Barlow, sans-serif', cursor:'pointer', background:'white'}}
+                            value={d.category}
+                            onChange={async e => { await saveDesignCategory(d.id, e.target.value); }}
+                            onClick={e => e.stopPropagation()}
+                            onDragStart={e => e.stopPropagation()}
+                          >
+                            <option value="Sin categoría">Sin categoría</option>
+                            {getProductCategories(d.product_id).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span>{d.category}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <button style={s.iconBtn} onClick={e => { e.stopPropagation(); toggleDesign(d.id, d.active); }}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
+                    <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
+                  </div>
+                </div>
+              ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ══ PEDIDOS ══ */}
+        {activeTab === 'orders' && (
+          <div style={s.card}>
+            <h2 style={s.sectionTitle}>Pedidos ({filteredOrders.length})</h2>
+            <div style={{marginBottom: 12}}>
+              <input
+                style={{...s.input, maxWidth: 320}}
+                placeholder="Buscar por código, nombre o email..."
+                value={orderSearch}
+                onChange={e => setOrderSearch(e.target.value)}
+              />
+            </div>
+            {filteredOrders.length === 0 && <p style={s.emptyMsg}>No hay pedidos.</p>}
+            {filteredOrders.length > 0 && (
+              <div style={{overflowX: 'auto'}}>
+                <table style={s.tbl}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Código</th>
+                      <th style={s.th}>Fecha</th>
+                      <th style={s.th}>Cliente</th>
+                      <th style={s.th}>Email</th>
+                      <th style={s.th}>Items</th>
+                      <th style={s.th}>Total</th>
+                      <th style={s.th}>Estado</th>
+                      <th style={s.th}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map(o => {
+                      const sc = getStatusCfg(o.status);
+                      return (
+                        <tr key={o.id}>
+                          <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
+                          <td style={s.td}>
+                            <select
+                              value={o.status || 'pending'}
+                              onChange={e => updateOrderStatus(o.id, e.target.value)}
+                              style={{border:`1.5px solid ${sc.color}`, background:sc.bg, color:sc.color, borderRadius:6, padding:'3px 7px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                            >
+                              {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+                            </select>
+                          </td>
+                          <td style={s.td}>
+                            <button style={s.editBtn} onClick={() => setOrderDetail(o)}>Ver</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ LOCALIDADES ══ */}
+        {activeTab === 'localities' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Nueva localidad</h2>
+              <div style={s.formGroup}>
+                <label style={s.label}>Nombre *</label>
+                <input style={s.input} value={newLocality.name} onChange={e => setNewLocality(l => ({...l, name: e.target.value}))} placeholder="ej: Posadas" />
+              </div>
+              <button style={{...s.btnPrimary, opacity: newLocality.name && !savingLocality ? 1 : 0.5}} disabled={!newLocality.name || savingLocality} onClick={addLocality}>
+                {savingLocality ? 'Guardando...' : 'Crear localidad'}
+              </button>
+            </div>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Localidades ({localities.length})</h2>
+              {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavía.</p>}
+              {localities.map(l => (
+                <div
+                  key={l.id}
+                  draggable
+                  onDragStart={e => handleLocalityDragStart(e, l.id)}
+                  onDragOver={e => handleLocalityDragOver(e, l.id)}
+                  onDragLeave={handleLocalityDragLeave}
+                  onDrop={e => handleLocalityDrop(e, l.id)}
+                  onDragEnd={handleLocalityDragEnd}
+                  style={{
+                    ...s.productRow,
+                    opacity: draggingLocalityId === l.id ? 0.35 : 1,
+                    background: dragOverLocalityId === l.id ? '#eef4ff' : undefined,
+                    borderLeft: dragOverLocalityId === l.id ? '3px solid #2D6BE4' : '3px solid transparent',
+                    transition: 'background 0.12s, border-left 0.12s',
+                    cursor: draggingLocalityId === l.id ? 'grabbing' : 'grab',
+                  }}
+                >
+                  <div style={s.productName}>{l.name}</div>
+                  <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <button style={s.iconBtn} onClick={() => toggleLocality(l.id, l.active)}>{l.active ? <EyeOpen /> : <EyeOff />}</button>
+                    <TrashBtn onClick={() => deleteLocality(l.id)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ══ USUARIOS ══ */}
+        {activeTab === 'users' && (
+          <div style={s.card}>
+            <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
+            {loadingUsers && <p style={s.emptyMsg}>Cargando...</p>}
+            {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
+            {users.map(u => (
+              <div key={u.id} style={s.userRow}>
+                <div style={s.userInfo}>
+                  <div style={s.productName}>{u.name || '—'}</div>
+                  <div style={s.productMeta}>{u.email}</div>
+                </div>
+                <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
+                  {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══ ADMINS ══ */}
+        {activeTab === 'admins' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Agregar administrador</h2>
+              <div style={{display:'flex', gap:10, alignItems:'flex-end'}}>
+                <div style={{...s.formGroup, flex:1, marginBottom:0}}>
+                  <label style={s.label}>Email</label>
+                  <input style={s.input} type="email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addAdmin(); }} placeholder="usuario@email.com" />
+                </div>
+                <button style={{...s.btnPrimary, opacity: newAdminEmail.trim() && !addingAdmin ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newAdminEmail.trim() || addingAdmin} onClick={addAdmin}>
+                  {addingAdmin ? 'Guardando...' : '+ Agregar'}
+                </button>
+              </div>
+            </div>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Administradores ({admins.length})</h2>
+              {admins.length === 0 && <p style={s.emptyMsg}>No hay administradores.</p>}
+              {admins.map(a => (
+                <div key={a.email} style={s.productRow}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={s.productName}>{a.email}</span>
+                    {a.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
+                  </div>
+                  <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+      </div>
+
+      <footer style={s.footer}>INKORA® Admin</footer>
+
+      {/* MODAL DETALLE PEDIDO */}
+      {orderDetail && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setOrderDetail(null)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:520, maxHeight:'80vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Pedido {orderDetail.order_code}</div>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>✕</button>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 16px', fontSize:13}}>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Cliente</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_name || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div></div>
+              {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
+            </div>
+            <div>
+              <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
+              <table style={{width:'100%', borderCollapse:'collapse'}}>
+                <thead>
+                  <tr>
+                    <th style={{...s.th, padding:'4px 8px'}}>Diseño</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Cant.</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>P/u</th>
+                    <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => (
+                    <tr key={i}>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:16, borderTop:'1.5px solid #eef0f6', paddingTop:12}}>
+              <span style={{fontSize:13, color:'#5a6380'}}>Total</span>
+              <span style={{fontSize:18, fontWeight:800, color:'#1B2F5E'}}>{orderDetail.total ? `$${Number(orderDetail.total).toLocaleString('es-AR')}` : '—'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR */}
+      {confirmModal.open && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
+            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>¿Confirmar eliminación?</div>
+            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}>{confirmModal.message}</div>
+            <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
+              <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={closeConfirm}>Cancelar</button>
+              <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ELIMINAR ADMIN */}
+      {deleteConfirmEmail && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
+            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>¿Eliminar administrador?</div>
+            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}><strong>{deleteConfirmEmail}</strong> ya no podrá ingresar al panel.</div>
+            <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
+              <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={() => setDeleteConfirmEmail(null)}>Cancelar</button>
+              <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => deleteAdmin(deleteConfirmEmail)}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  loginWrap: { minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  loginBox: { background: 'white', borderRadius: 16, padding: 40, width: 360, boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
+  loginTitle: { fontSize: 20, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  btnGoogle: { display: 'flex', alignItems: 'center', gap: 10, background: 'white', color: '#2d3352', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
+  wrap: { minHeight: '100vh', background: '#f7f8fc', fontFamily: "'Barlow', sans-serif" },
+  header: { background: '#1B2F5E', padding: '0 20px', height: 46, display: 'flex', alignItems: 'center', gap: 12 },
+  headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
+  btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
+  tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
+  tabBarInner: { width: '90%', maxWidth: '100%', margin: '0 auto', padding: '0 16px', display: 'flex', gap: 0 },
+  tab: { background: 'none', border: 'none', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 },
+  tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
+  orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
+  content: { width: '90%', maxWidth: '100%', margin: '16px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 },
+  card: { background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 12 },
+  emptyMsg: { color: '#9aa3bc', fontSize: 12 },
+  formGroup: { marginBottom: 10 },
+  label: { display: 'block', fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', boxSizing: 'border-box' },
+  errorMsg: { fontSize: 11, color: '#dc2626', marginTop: 3 },
+  productRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6' },
+  productName: { fontSize: 13, fontWeight: 700, color: '#2d3352', marginBottom: 2 },
+  productMeta: { fontSize: 11, color: '#9aa3bc' },
+  fileList: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 },
+  fileRow: { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 10px', background: '#f7f8fc', borderRadius: 8, border: '1.5px solid #dde1ef' },
+  fileThumb: { width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid #dde1ef', flexShrink: 0 },
+  fileFields: { flex: 1, minWidth: 0 },
+  removePendingBtn: { background: 'none', border: 'none', color: '#9aa3bc', fontSize: 15, cursor: 'pointer', padding: '0 4px', flexShrink: 0, lineHeight: 1, marginTop: 8 },
+  btnPrimary: { background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  btnWarning: { background: '#fff8e1', color: '#7a5800', border: '1.5px solid #f6c200', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  editBtn: { background: '#e8eef9', color: '#2D6BE4', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
+  iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center', borderRadius: 5 },
+  designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6' },
+  designInfo: { display: 'flex', alignItems: 'center', gap: 10 },
+  designThumb: { width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #dde1ef' },
+  designName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
+  designCat: { fontSize: 11, color: '#9aa3bc', marginTop: 1 },
+  productTag: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
+  orphanTag: { background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
+  tbl: { width: '100%', borderCollapse: 'collapse', minWidth: 820 },
+  th: { fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 6px', borderBottom: '2px solid #dde1ef', textAlign: 'left', whiteSpace: 'nowrap' },
+  td: { padding: '4px 5px', borderBottom: '1px solid #f0f2f8', verticalAlign: 'middle' },
+  tblInput: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 6px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' },
+  footer: { textAlign: 'center', padding: '10px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
+  userBadge: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 },
+  userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6', gap: 10 },
+  userInfo: { flex: 1, minWidth: 0 },
+  formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
+};
+</file>
+
+<file path="app/page.js">
+'use client';
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Fuse from 'fuse.js';
+import { supabase } from '@/lib/supabase';
+import AuthModal from '@/components/AuthModal';
+
+
+const SearchIconWhite = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="6.5" cy="6.5" r="4.5" stroke="white" strokeWidth="1.5"/>
+    <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function generateCode() {
+  const year = new Date().getFullYear();
+  const num = String(Math.floor(Math.random() * 9000) + 1000);
+  return `INK-${year}-${num}`;
+}
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 768);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+}
+
+export default function Home() {
+  const [products, setProducts] = useState([]);
+  const [activeProductId, setActiveProductId] = useState(null);
+  const [designsByProduct, setDesignsByProduct] = useState({});
+  const [gridOpacity, setGridOpacity] = useState(1);
+  const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
+  const [cart, setCart] = useState({});
+  const [filter, setFilter] = useState('Todos');
+  const [notes, setNotes] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [orderCode, setOrderCode] = useState(generateCode());
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [success, setSuccess] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
+  const [loading, setLoading] = useState(false);
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stickySearchVisible, setStickySearchVisible] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const inlineSearchRef = useRef(null);
+  const [qtyAnim, setQtyAnim] = useState({});
+  const [cardPulse, setCardPulse] = useState({});
+  const [cardHover, setCardHover] = useState({});
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [priceTiers, setPriceTiers] = useState([]);
+
+  const width = useWindowWidth();
+  const isMobile = width < 768;
+
+  const activeProduct = products.find(p => p.id === activeProductId) || null;
+  const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
+
+  useEffect(() => {
+    document.body.style.paddingBottom = '1px';
+    loadProducts();
+
+    // getSession lee desde storage local — funciona correctamente post-OAuth redirect
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
+    });
+
+    // onAuthStateChange captura SIGNED_IN tras el redirect de Google OAuth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
+    setProfile(data);
+    if (data?.locality_id) {
+      const { data: tiers } = await supabase
+        .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
+      setPriceTiers(tiers || []);
+    } else {
+      const { data: tiers } = await supabase
+        .from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
+      setPriceTiers(tiers || []);
+    }
+  }
+
+  function switchProduct(id) {
+    if (id === activeProductId) return;
+    setGridTransition('opacity 0.15s ease');
+    setGridOpacity(0);
+    setTimeout(() => {
+      setActiveProductId(id);
+      setFilter('Todos');
+      setSearchQuery('');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setGridTransition('opacity 0.2s ease');
+        setGridOpacity(1);
+      }));
+    }, 160);
+  }
+
+  useEffect(() => {
+    const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
+    let lastY = getScrollY();
+    const handler = () => {
+      const currentY = getScrollY();
+      if (currentY < 10) { setHeaderVisible(true); }
+      else if (currentY > lastY) { setHeaderVisible(false); }
+      else if (currentY < lastY) { setHeaderVisible(true); }
+      lastY = currentY;
+    };
+    document.addEventListener('scroll', handler, { passive: true });
+    return () => document.removeEventListener('scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const el = inlineSearchRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setStickySearchVisible(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isMobile]);
+
+  async function loadProducts() {
+    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
+    if (data && data.length > 0) {
+      setProducts(data);
+      setActiveProductId(data[0].id);
+      loadAllDesigns(data);
+    }
+  }
+
+  async function loadAllDesigns(productList) {
+    const results = await Promise.all(
+      productList.map(p =>
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
+      )
+    );
+    const map = {};
+    productList.forEach((p, i) => {
+      if (results[i].data) map[p.id] = results[i].data;
+    });
+    setDesignsByProduct(map);
+  }
+
+  const fuse = useMemo(() => new Fuse(designs, {
+    keys: ['name'],
+    threshold: 0.6,
+    distance: 100,
+    ignoreLocation: true,
+    minMatchCharLength: 1,
+  }), [designs]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return designs;
+    return fuse.search(searchQuery.trim()).map(r => r.item);
+  }, [searchQuery, fuse, designs]);
+
+  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
+  const filtered = searchQuery.trim()
+    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
+    : (filter === 'Todos' ? designs : designs.filter(d => d.category === filter && d.category !== 'Sin categoría'));
+  const showPrices = !!user;
+  const cartItems = Object.values(cart);
+
+  // Cantidad total por producto en el carrito (para calcular tier correcto)
+  const cartByProduct = cartItems.reduce((acc, item) => {
+    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
+    return acc;
+  }, {});
+  // Cantidad mínima requerida por el tier más bajo del producto (null si no hay tiers)
+  function getProductMinQty(productId) {
+    const tiers = priceTiers.filter(t => t.product_id === productId);
+    if (tiers.length === 0) return null;
+    return Math.min(...tiers.map(t => Number(t.min_quantity)));
+  }
+
+  // Precio unitario efectivo según tiers — null si qty < mínimo del tier más bajo
+  function getUnitPrice(productId) {
+    const totalQty = cartByProduct[productId] || 0;
+    const productTiers = priceTiers
+      .filter(t => t.product_id === productId)
+      .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
+
+    if (productTiers.length > 0) {
+      const minRequired = Number(productTiers[0].min_quantity);
+      if (totalQty < minRequired) return null;
+      const applicable = productTiers
+        .filter(t => Number(t.min_quantity) <= totalQty)
+        .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
+      if (applicable.length > 0) return Number(applicable[0].price_per_unit);
+    }
+
+    return null;
+  }
+
+  const total = cartItems
+    .filter(i => i.showPrice !== false)
+    .reduce((s, i) => {
+      const price = getUnitPrice(i.product_id);
+      return s + (price !== null ? i.qty * price : 0);
+    }, 0);
+  const showTotal = showPrices && cartItems.some(i => {
+    const price = getUnitPrice(i.product_id);
+    return i.showPrice !== false && price !== null && price > 0;
+  });
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  const gridCols = isMobile
+    ? `repeat(${activeProduct?.columns_mobile ?? 2}, 1fr)`
+    : `repeat(${activeProduct?.columns_desktop ?? 5}, 1fr)`;
+  const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
+
+  function addToCart(design) {
+    const product = products.find(p => p.id === design.product_id);
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+      },
+    }));
+    triggerQtyAnim(design.id, 'pop');
+    triggerCardPulse(design.id);
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+    triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
+    triggerCardPulse(id);
+  }
+
+  function openModal() {
+    if (user) {
+      setForm({
+        name: profile?.name || '',
+        email: user.email || '',
+        phone: profile?.phone || '',
+      });
+    }
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setSuccess(false);
+    setConfirmedOrder({ items: [], total: 0, form: {} });
+    setOrderCode(generateCode());
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function triggerQtyAnim(id, type) {
+    setQtyAnim(prev => ({ ...prev, [id]: type }));
+    setTimeout(() => setQtyAnim(prev => { const n = { ...prev }; delete n[id]; return n; }), 200);
+  }
+
+  function triggerCardPulse(id) {
+    setCardPulse(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => setCardPulse(prev => { const n = { ...prev }; delete n[id]; return n; }), 350);
+  }
+
+  async function submitOrder() {
+    if (!form.name || !form.phone || !form.email) {
+      alert('Por favor completá todos los campos.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await supabase.from('orders').insert({
+        order_code: orderCode,
+        customer_name: form.name,
+        customer_phone: form.phone,
+        customer_email: form.email,
+        items: cartItems,
+        total,
+        notes,
+        status: 'pending'
+      });
+
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderCode, form, cartItems, total, notes })
+      });
+
+      setConfirmedOrder({ items: cartItems, total, form });
+      setSuccess(true);
+      setCart({});
+      setNotes('');
+    } catch (e) {
+      alert('Hubo un error. Intentá de nuevo.');
+    }
+    setLoading(false);
+  }
+
+  const s = styles;
+
+  return (
+    <div style={s.app}>
+      <style>{`
+        @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
+        @keyframes card-pulse { 0% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } 35% { border-color: #2D6BE4; box-shadow: 0 0 0 3px rgba(45,107,228,0.25), 0 2px 8px rgba(27,47,94,0.08); } 100% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } }
+        .qty-pop { animation: qty-pop 200ms ease-out; }
+        .qty-shrink { animation: qty-shrink 200ms ease-out; }
+        .card-pulse { animation: card-pulse 350ms ease-out; }
+        input::placeholder { color: rgba(255,255,255,0.6); }
+        .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
+        .qty-input::placeholder { color: #9aa3bc; }
+        .qty-input:focus::placeholder { color: transparent; }
+      `}</style>
+      <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
+        <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
+          <div style={s.logoWrap}>
+            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
+          </div>
+          <div style={s.headerActions}>
+            {user ? (
+              <div style={{position:'relative'}}>
+                <button style={s.btnUserHeader} onClick={() => setUserMenuOpen(v => !v)}>
+                  {profile?.name || user.email?.split('@')[0]} ▾
+                </button>
+                {userMenuOpen && (
+                  <div style={{position:'absolute', top:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, boxShadow:'0 4px 16px rgba(27,47,94,0.12)', minWidth:160, zIndex:200, overflow:'hidden'}} onClick={() => setUserMenuOpen(false)}>
+                    <a href="/dashboard" style={{display:'block', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#1B2F5E', textDecoration:'none', borderBottom:'1px solid #eef0f6'}}>Mi cuenta</a>
+                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button style={s.btnLoginHeader} onClick={() => setAuthModalOpen(true)}>
+                Ingresar
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {isMobile && (
+        <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
+          <span style={s.searchIcon}><SearchIconWhite /></span>
+          <input
+            className="desktop-search-input"
+            style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar diseño..."
+          />
+          {searchQuery && (
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        ...s.layout,
+        alignItems: 'start',
+        flex: 1,
+        width: '100%',
+        minHeight: 'calc(100vh - 64px)',
+        gridTemplateColumns: '1fr',
+        padding: isMobile ? 16 : 24,
+        paddingRight: isMobile ? 16 : 388,
+        paddingTop: isMobile ? 72 : 24,
+        paddingBottom: isMobile ? 88 : 24,
+        transition: isMobile ? 'padding-top 0.3s ease' : undefined,
+      }}>
+        <div style={s.catalogArea}>
+          <div style={s.catalogHeader}>
+            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catálogo</h1>
+            <p style={s.subtitle}>Seleccioná los diseños y armá tu pedido</p>
+          </div>
+
+          {/* Product tabs */}
+          {products.length > 1 && (
+            <div style={s.productTabs}>
+              {products.map(p => (
+                <button
+                  key={p.id}
+                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
+                  onClick={() => switchProduct(p.id)}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Category filters */}
+          <div style={s.filters}>
+            {categories.map(cat => (
+              <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
+                onClick={() => setFilter(cat)}>
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
+          {designs.length === 0 ? (
+            <div style={s.emptyState}>
+              <p>No hay diseños todavía.</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={s.emptyState}>
+              <p>Sin resultados para &quot;<strong>{searchQuery}</strong>&quot;.</p>
+            </div>
+          ) : (
+            <div style={{...s.grid, gridTemplateColumns: gridCols}}>
+              {filtered.map(d => {
+                const inCart = cart[d.id];
+                const isHovered = cardHover[d.id];
+                const isPulsing = cardPulse[d.id];
+                return (
+                  <div
+                    key={d.id}
+                    className={isPulsing ? 'card-pulse' : ''}
+                    style={{
+                      ...s.card,
+                      transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                      boxShadow: isHovered
+                        ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
+                        : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    }}
+                    onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
+                    onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
+                  >
+                    <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
+                      {d.image_url
+                        ? <img src={d.image_url} alt={d.name} style={s.img} />
+                        : <span style={{fontSize:36}}>🎨</span>}
+                    </div>
+                    <div style={s.cardBody}>
+                      <div style={s.cardName}>{d.name}</div>
+                      {d.category !== 'Sin categoría' && <span style={s.catTag}>{d.category}</span>}
+                      {showPrices && activeProduct?.show_price !== false && (() => {
+                        const price = getUnitPrice(activeProductId);
+                        if (price !== null && price > 0) {
+                          return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
+                        }
+                        return null;
+                      })()}
+                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
+                        <input
+                          type="number"
+                          className={`qty-input${qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : ''}`}
+                          style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
+                          value={inCart ? inCart.qty : ''}
+                          placeholder="0"
+                          onFocus={e => { if (!inCart) e.target.value = ''; else e.target.select(); }}
+                          onChange={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                            else if (!inCart) addToCart(d);
+                            else setCart(prev => ({ ...prev, [d.id]: { ...prev[d.id], qty: val } }));
+                          }}
+                          onBlur={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') e.target.blur();
+                          }}
+                          min="0"
+                        />
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
+                          if (inCart) changeQty(d.id, 1);
+                          else addToCart(d);
+                        }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </div>
+        </div>
+
+        {!isMobile && <>
+          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, transition: 'top 0.3s ease'}}>
+            <span style={s.searchIcon}><SearchIconWhite /></span>
+            <input
+              className="desktop-search-input"
+              style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif' }}
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar diseño..."
+            />
+            {searchQuery && (
+              <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
+            )}
+          </div>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease'}}>
+            <div style={s.sidebarHeader}>
+              <span style={s.sidebarTitle}>Tu Pedido</span>
+              <span style={s.badge}>{totalItems} ítems</span>
+            </div>
+            <div style={s.sidebarBody}>
+              {cartItems.length === 0 ? (
+                <div style={s.cartEmpty}>
+                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
+                </div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} style={s.cartItem}>
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        const minQty = getProductMinQty(item.product_id);
+                        if (price === null) return null;
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={s.sidebarFooter}>
+              <div style={s.totalRow}>
+                <span>Total</span>
+                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+              </div>
+              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Notas adicionales..." rows={2} />
+              <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                disabled={cartItems.length === 0} onClick={openModal}>
+                Confirmar pedido →
+              </button>
+            </div>
+          </div>
+        </>}
+      </div>
+
+      {isMobile && (
+        <>
+          {cartPanelOpen && (
+            <div style={s.cartPanelBackdrop} onClick={() => setCartPanelOpen(false)} />
+          )}
+
+          <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
+            <div style={s.cartPanelHeader}>
+              <span style={s.cartPanelTitle}>Tu Pedido</span>
+              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>✕</button>
+            </div>
+            <div style={s.cartPanelBody}>
+              {cartItems.length === 0 ? (
+                <div style={s.cartEmpty}>
+                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
+                </div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} style={s.cartItem}>
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        const minQty = getProductMinQty(item.product_id);
+                        if (price === null) return null;
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={s.cartPanelFooter}>
+              <div style={s.totalRow}>
+                <span>Total</span>
+                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+              </div>
+              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Notas adicionales..." rows={2} />
+              <button
+                style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                disabled={cartItems.length === 0}
+                onClick={() => { setCartPanelOpen(false); openModal(); }}
+              >
+                Confirmar pedido →
+              </button>
+            </div>
+          </div>
+
+          <div style={s.mobileBar}>
+            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
+              <span style={s.mobileBadge}>{totalItems}</span>
+              <span style={s.mobileTotal}>{showTotal ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
+              <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
+            </button>
+            <button
+              style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
+              disabled={cartItems.length === 0}
+              onClick={openModal}
+            >
+              Confirmar →
+            </button>
+          </div>
+        </>
+      )}
+
+      {modalOpen && (
+        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) closeModal(); }}>
+          <div style={s.modal}>
+            {!success ? (
+              <>
+                <div style={s.modalHeader}>
+                  <span>Confirmar Pedido</span>
+                  <button style={s.closeBtn} onClick={closeModal}>✕</button>
+                </div>
+                <div style={s.modalBody}>
+                  <div style={s.codeBanner}>
+                    <small style={s.codeLabel}>Código de pedido</small>
+                    <strong style={s.codeValue}>{orderCode}</strong>
+                  </div>
+                  {user ? (
+                    <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
+                      ✓ Pedido como cliente registrado.
+                    </div>
+                  ) : (
+                    <div style={s.notice}>
+                      ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
+                    </div>
+                  )}
+                  <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Nombre *</label>
+                      <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
+                    </div>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Teléfono *</label>
+                      <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
+                    </div>
+                  </div>
+                  <div style={s.formGroup}>
+                    <label style={s.label}>Email *</label>
+                    <input style={s.input} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="tu@email.com" />
+                  </div>
+                  <div style={s.orderSummary}>
+                    {cartItems.map(i => (
+                      <div key={i.id} style={s.summaryItem}>
+                        <span>{i.name} × {i.qty}</span>
+                        {showPrices && i.showPrice !== false && (() => {
+                          const price = getUnitPrice(i.product_id);
+                          const minQty = getProductMinQty(i.product_id);
+                          if (price === null) return null;
+                          if (price !== null && price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
+                          return null;
+                        })()}
+                      </div>
+                    ))}
+                    <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
+                      <span>Total</span>
+                      <span>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+                    </div>
+                  </div>
+                  <div style={s.modalActions}>
+                    <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
+                    <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
+                      {loading ? 'Enviando...' : 'Enviar pedido'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={s.successScreen}>
+                <div style={s.successIcon}>✓</div>
+                <h3 style={s.successTitle}>¡Pedido enviado!</h3>
+                <p>Código de tu pedido:</p>
+                <div style={s.successCode}>{orderCode}</div>
+                <p>Te enviamos la confirmación a tu email.</p>
+                <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
+                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showTotal ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
+                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
+                  💬 Confirmar por WhatsApp
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <a
+        href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent('Hola! Vengo desde la página. ')}`}
+        target="_blank"
+        rel="noreferrer"
+        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 24}}
+        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+        </svg>
+      </a>
+
+      <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
+        <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
+      </footer>
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
+  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)' },
+  headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
+  headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
+  btnLoginHeader: { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  btnUserHeader: { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
+  priceHint: { fontSize: 12, color: '#9aa3bc', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' },
+  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
+  btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
+  btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
+  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
+  layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
+  catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
+  catalogHeader: { marginBottom: 16 },
+  h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
+  subtitle: { color: '#5a6380', fontSize: 14 },
+  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
+  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 12 },
+  searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
+  searchInput: { border: 0, outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
+  searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
+  filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
+  filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  grid: { display: 'grid', gap: 14 },
+  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
+  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  img: { width: '100%', height: '100%', objectFit: 'cover' },
+  catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
+  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 },
+  cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
+  cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
+  cardMinQty: { fontSize: 11, color: '#9aa3bc', fontWeight: 500 },
+  cartMinQty: { fontSize: 11, color: '#9aa3bc', fontStyle: 'italic' },
+  qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
+  qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
+  qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
+  emptyState: { textAlign: 'center', padding: 40, color: '#9aa3bc' },
+  sidebar: { background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', overflow: 'hidden' },
+  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
+  badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
+  sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
+  sidebarBody: { padding: '16px 20px', maxHeight: 400, overflowY: 'auto' },
+  cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
+  cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
+  cartItemInfo: { flex: 1, minWidth: 0 },
+  cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
+  cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
+  cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
+  cartPrice: { fontSize: 12, color: '#5a6380' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 14 },
+  sidebarFooter: { padding: '16px 20px', borderTop: '1.5px solid #eef0f6' },
+  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontWeight: 700, color: '#1B2F5E', fontSize: 16 },
+  totalAmount: { fontSize: 20, fontWeight: 700 },
+  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
+  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
+  modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
+  modalBody: { padding: 24 },
+  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
+  codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
+  codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
+  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#7a5800' },
+  formRow: { display: 'grid', gap: 12 },
+  formGroup: { marginBottom: 14 },
+  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' },
+  orderSummary: { background: '#f7f8fc', borderRadius: 10, padding: 12, marginBottom: 16, maxHeight: 160, overflowY: 'auto' },
+  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderBottom: '1px solid #eef0f6' },
+  modalActions: { display: 'flex', gap: 10 },
+  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
+  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 10, padding: 12, fontSize: 16, fontWeight: 700, color: 'white', cursor: 'pointer' },
+  successScreen: { textAlign: 'center', padding: '32px 24px' },
+  successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
+  successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
+  btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
+  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none' },
+  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, paddingBottom: 64, fontSize: 12, marginTop: 40 },
+  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)' },
+  mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
+  mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
+  mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
+  mobileBarChevron: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
+  mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
+  cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },
+  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)' },
+  cartPanelHeader: { background: '#1B2F5E', borderRadius: '16px 16px 0 0', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  cartPanelTitle: { color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: 0.5 },
+  cartPanelClose: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
+  cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
+};
+</file>
+
+</files>

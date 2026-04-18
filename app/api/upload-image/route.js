@@ -11,7 +11,16 @@ export async function POST(request) {
     const { fileBase64, fileName, mimeType } = await request.json();
 
     const buffer = Buffer.from(fileBase64, 'base64');
-    const uniqueName = `thumbnails/${Date.now()}-${fileName}`;
+    function sanitizeFileName(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+}
+const safeName = sanitizeFileName(fileName);
+const uniqueName = `thumbnails/${Date.now()}-${safeName}`;
 
     const { error } = await supabase.storage
       .from('assets')
