@@ -8,7 +8,7 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { fileBase64, fileName, mimeType } = await request.json();
+    const { fileBase64, fileName, mimeType, folder } = await request.json();
 
     const buffer = Buffer.from(fileBase64, 'base64');
     function sanitizeFileName(name) {
@@ -20,7 +20,7 @@ export async function POST(request) {
     .toLowerCase();
 }
 const safeName = sanitizeFileName(fileName);
-const uniqueName = `thumbnails/${Date.now()}-${safeName}`;
+const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
 
     const { error } = await supabase.storage
       .from('assets')
