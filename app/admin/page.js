@@ -6,10 +6,9 @@ const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = () => reject(new Error('Error al leer el archivo'));
     reader.readAsDataURL(file);
   });
 }
@@ -89,6 +88,7 @@ export default function Admin() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [pendingModel, setPendingModel] = useState(null);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
@@ -428,13 +428,23 @@ export default function Admin() {
         const base64 = await fileToBase64(entry.file);
         const res = await fetch('/api/upload-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type }),
+          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
         });
         const data = await res.json();
         if (data.url) {
-          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, active: true, product_id: selectedProductId });
+          let modelUrl = null;
+          if (pendingModel) {
+            const modelBase64 = await fileToBase64(pendingModel);
+            const modelRes = await fetch('/api/upload-image', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileBase64: modelBase64, fileName: pendingModel.name, mimeType: 'model/gltf-binary', folder: 'models' }),
+            });
+            const modelData = await modelRes.json();
+            if (modelData.url) modelUrl = modelData.url;
+          }
+          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, model_url: modelUrl, active: true, product_id: selectedProductId });
         } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
-      } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
+      } catch { alert(`Error al subir "${entry.name}".`); anyError = true; }
     }
     setUploading(false);
     if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
@@ -937,6 +947,13 @@ export default function Admin() {
                 <div style={s.formGroup}>
                   <label style={s.label}>Imágenes (máx. {maxSizeKb}kb c/u)</label>
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
+                </div>
+              )}
+              {selectedProductId && (
+                <div style={s.formGroup}>
+                  <label style={s.label}>Modelo 3D opcional (GLB)</label>
+                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => setPendingModel(e.target.files[0] || null)} />
+                  {pendingModel && <div style={{fontSize:11, color:'#18a36a', marginTop:3}}>✓ {pendingModel.name} ({(pendingModel.size/1024).toFixed(0)}kb)</div>}
                 </div>
               )}
               {pendingFiles.length > 0 && (
