@@ -727,7 +727,7 @@ export default function Admin() {
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
-<th style={s.th}>Rotación</th>
+                      <th style={s.th}>Rotación</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -843,7 +843,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={9} style={{padding:'10px 6px'}}>
+                      <td colSpan={11} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -1050,7 +1050,7 @@ export default function Admin() {
                             <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, minWidth: 110 }}>
+                          {selectedProduct?.allow_glb && <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, minWidth: 110 }}>
                             <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
                             <input
                               type="file"
@@ -1064,7 +1064,7 @@ export default function Admin() {
                             {entry.modelFile && (
                               <span style={{ fontSize: 10, color: '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
                             )}
-                          </div>
+                          </div>}
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
