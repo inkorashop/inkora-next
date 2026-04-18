@@ -444,7 +444,7 @@ export default function Admin() {
           }
           await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, model_url: modelUrl, active: true, product_id: selectedProductId });
         } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
-      } catch { alert(`Error al subir "${entry.name}".`); anyError = true; }
+      } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
     setUploading(false);
     if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
