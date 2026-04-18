@@ -46,7 +46,7 @@ function ModelViewer({ url }) {
     animate();
     return () => { cancelAnimationFrame(animId); renderer.dispose(); el.removeChild(renderer.domElement); };
   }, [url]);
-  return <div ref={mountRef} style={{ width: '100%', height: '100%' }} />;
+  return <div ref={mountRef} style={{ width: '100%', height: '100%', minHeight: 200 }} />;
 }
 
 const SearchIconWhite = () => (
