@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -88,7 +89,6 @@ export default function Admin() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [pendingModel, setPendingModel] = useState(null);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
@@ -392,6 +392,7 @@ export default function Admin() {
       file, preview: URL.createObjectURL(file),
       name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
       nameExists: false, sizeError: file.size > maxSizeKb * 1024,
+      modelFile: null,
     }));
     setPendingFiles(entries);
     e.target.value = '';
@@ -433,11 +434,11 @@ export default function Admin() {
         const data = await res.json();
         if (data.url) {
           let modelUrl = null;
-          if (pendingModel) {
-            const modelBase64 = await fileToBase64(pendingModel);
+          if (entry.modelFile) {
+            const modelBase64 = await fileToBase64(entry.modelFile);
             const modelRes = await fetch('/api/upload-image', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileBase64: modelBase64, fileName: pendingModel.name, mimeType: 'model/gltf-binary', folder: 'models' }),
+              body: JSON.stringify({ fileBase64: modelBase64, fileName: entry.modelFile.name, mimeType: 'application/octet-stream', folder: 'models' }),
             });
             const modelData = await modelRes.json();
             if (modelData.url) modelUrl = modelData.url;
@@ -949,13 +950,7 @@ export default function Admin() {
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
-              {selectedProductId && (
-                <div style={s.formGroup}>
-                  <label style={s.label}>Modelo 3D opcional (GLB)</label>
-                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => setPendingModel(e.target.files[0] || null)} />
-                  {pendingModel && <div style={{fontSize:11, color:'#18a36a', marginTop:3}}>✓ {pendingModel.name} ({(pendingModel.size/1024).toFixed(0)}kb)</div>}
-                </div>
-              )}
+
               {pendingFiles.length > 0 && (
                 <>
                   <div style={s.fileList}>
@@ -975,6 +970,21 @@ export default function Admin() {
                             <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, minWidth: 110 }}>
+                            <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
+                            <input
+                              type="file"
+                              accept=".glb"
+                              style={{ fontSize: 11 }}
+                              onChange={e => {
+                                const file = e.target.files[0] || null;
+                                setPendingFiles(prev => { const next = [...prev]; next[i] = { ...next[i], modelFile: file }; return next; });
+                              }}
+                            />
+                            {entry.modelFile && (
+                              <span style={{ fontSize: 10, color: '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
+                            )}
+                          </div>
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
@@ -1347,3 +1357,4 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
+

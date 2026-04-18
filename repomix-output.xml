@@ -961,48 +961,6 @@ export async function POST(request) {
 }
 </file>
 
-<file path="app/api/upload-image/route.js">
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY
-);
-
-export async function POST(request) {
-  try {
-    const { fileBase64, fileName, mimeType } = await request.json();
-
-    const buffer = Buffer.from(fileBase64, 'base64');
-    function sanitizeFileName(name) {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9.\-_]/g, '-')
-    .replace(/-+/g, '-')
-    .toLowerCase();
-}
-const safeName = sanitizeFileName(fileName);
-const uniqueName = `thumbnails/${Date.now()}-${safeName}`;
-
-    const { error } = await supabase.storage
-      .from('assets')
-      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
-
-    return NextResponse.json({ url: data.publicUrl });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-</file>
-
 <file path="components/AuthModal.js">
 'use client';
 
@@ -1204,32 +1162,6 @@ export async function getUserProfile(userId) {
 }
 </file>
 
-<file path="package.json">
-{
-  "name": "inkora-next",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.0",
-    "fuse.js": "^7.3.0",
-    "next": "14.2.35",
-    "react": "^18",
-    "react-dom": "^18"
-  },
-  "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
-  }
-}
-</file>
-
 <file path=".claude/settings.local.json">
 {
   "permissions": {
@@ -1244,6 +1176,48 @@ export async function getUserProfile(userId) {
       "Bash(git commit -m ' *)",
       "Skill(update-config)"
     ]
+  }
+}
+</file>
+
+<file path="app/api/upload-image/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+);
+
+export async function POST(request) {
+  try {
+    const { fileBase64, fileName, mimeType, folder } = await request.json();
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    function sanitizeFileName(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+}
+const safeName = sanitizeFileName(fileName);
+const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
+
+    const { error } = await supabase.storage
+      .from('assets')
+      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
+
+    return NextResponse.json({ url: data.publicUrl });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 </file>
@@ -1295,6 +1269,33 @@ input[type="number"] {
 }
 </file>
 
+<file path="package.json">
+{
+  "name": "inkora-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.0",
+    "fuse.js": "^7.3.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35"
+  }
+}
+</file>
+
 <file path="app/auth/callback/route.js">
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
@@ -1329,10 +1330,9 @@ const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = () => reject(new Error('Error al leer el archivo'));
     reader.readAsDataURL(file);
   });
 }
@@ -1412,6 +1412,7 @@ export default function Admin() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [pendingModel, setPendingModel] = useState(null);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
@@ -1751,11 +1752,21 @@ export default function Admin() {
         const base64 = await fileToBase64(entry.file);
         const res = await fetch('/api/upload-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type }),
+          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
         });
         const data = await res.json();
         if (data.url) {
-          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, active: true, product_id: selectedProductId });
+          let modelUrl = null;
+          if (pendingModel) {
+            const modelBase64 = await fileToBase64(pendingModel);
+            const modelRes = await fetch('/api/upload-image', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileBase64: modelBase64, fileName: pendingModel.name, mimeType: 'model/gltf-binary', folder: 'models' }),
+            });
+            const modelData = await modelRes.json();
+            if (modelData.url) modelUrl = modelData.url;
+          }
+          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, model_url: modelUrl, active: true, product_id: selectedProductId });
         } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
       } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
@@ -2262,6 +2273,13 @@ export default function Admin() {
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
+              {selectedProductId && (
+                <div style={s.formGroup}>
+                  <label style={s.label}>Modelo 3D opcional (GLB)</label>
+                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => setPendingModel(e.target.files[0] || null)} />
+                  {pendingModel && <div style={{fontSize:11, color:'#18a36a', marginTop:3}}>✓ {pendingModel.name} ({(pendingModel.size/1024).toFixed(0)}kb)</div>}
+                </div>
+              )}
               {pendingFiles.length > 0 && (
                 <>
                   <div style={s.fileList}>
@@ -2657,12 +2675,55 @@ const styles = {
 
 <file path="app/page.js">
 'use client';
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
 
+
+function ModelViewer({ url }) {
+  const mountRef = useRef(null);
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+    const w = el.clientWidth, h = el.clientHeight;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    el.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
+    camera.position.set(0, 0, 2.5);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.5);
+    dir.position.set(2, 4, 3);
+    scene.add(dir);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 4;
+    const loader = new GLTFLoader();
+    loader.load(url, gltf => {
+      const model = gltf.scene;
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      model.position.sub(center);
+      model.scale.setScalar(1.8 / maxDim);
+      scene.add(model);
+    });
+    let animId;
+    const animate = () => { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); };
+    animate();
+    return () => { cancelAnimationFrame(animId); renderer.dispose(); el.removeChild(renderer.domElement); };
+  }, [url]);
+  return <div ref={mountRef} style={{ width: '100%', height: '100%', minHeight: 200 }} />;
+}
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3117,7 +3178,9 @@ export default function Home() {
                     onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
-                      {d.image_url
+                      {d.model_url
+                        ? <ModelViewer url={d.model_url} />
+                        : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={s.img} />
                         : <span style={{fontSize:36}}>🎨</span>}
                     </div>
@@ -3196,29 +3259,29 @@ export default function Home() {
                 </div>
               ) : (
                 cartItems.map(item => (
-  <div key={item.id} style={s.cartItem}>
-    {item.image_url && (
-      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-    )}
-    <div style={s.cartItemInfo}>
-      <div style={s.cartItemName}>{item.name}</div>
-      {showPrices && item.showPrice !== false && (() => {
-        const price = getUnitPrice(item.product_id);
-        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
-        return null;
-      })()}
-    </div>
-    <div style={s.cartItemRight}>
-      <span style={s.cartQty}>×{item.qty}</span>
-      {showPrices && item.showPrice !== false && (() => {
-        const price = getUnitPrice(item.product_id);
-        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
-        return null;
-      })()}
-    </div>
-    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
-  </div>
-))
+                  <div key={item.id} style={s.cartItem}>
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    )}
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        return null;
+                      })()}
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>×{item.qty}</span>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                  </div>
+                ))
               )}
             </div>
             <div style={s.sidebarFooter}>
@@ -3256,15 +3319,21 @@ export default function Home() {
               ) : (
                 cartItems.map(item => (
                   <div key={item.id} style={s.cartItem}>
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    )}
                     <div style={s.cartItemInfo}>
                       <div style={s.cartItemName}>{item.name}</div>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        return null;
+                      })()}
                     </div>
                     <div style={s.cartItemRight}>
                       <span style={s.cartQty}>×{item.qty}</span>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
-                        const minQty = getProductMinQty(item.product_id);
-                        if (price === null) return null;
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
@@ -3470,6 +3539,7 @@ const styles = {
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
   cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
+  cartItemUnitPrice: { fontSize: 10, color: '#2D6BE4', fontWeight: 600 },
   cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
   cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
   cartPrice: { fontSize: 12, color: '#5a6380' },
