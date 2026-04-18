@@ -974,7 +974,7 @@ export default function Admin() {
                             <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
                             <input
                               type="file"
-                              accept=".glb"
+                              accept=".glb,.gltf,model/gltf-binary,model/gltf+json,application/octet-stream"
                               style={{ fontSize: 11 }}
                               onChange={e => {
                                 const file = e.target.files[0] || null;

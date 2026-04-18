@@ -461,9 +461,9 @@ export default function Home() {
                     onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
                     onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
                   >
-                    <div style={{...s.cardImg, ...(d.model_url ? {} : {aspectRatio: cardAspectRatio})}}>
+                    <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <ModelViewer url={d.model_url} aspectRatio={cardAspectRatio} />
+                        ? <ModelViewer url={d.model_url} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={s.img} />
                         : <span style={{fontSize:36}}>🎨</span>}

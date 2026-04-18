@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url, aspectRatio = '2/3' }) {
+export default function ModelViewer({ url }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -15,7 +15,6 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
 
     async function init() {
       try {
-        // Imports dinámicos: se ejecutan SOLO en el cliente, nunca en SSR
         const THREE = await import('three');
         const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
         const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
@@ -27,19 +26,16 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
         const w = el.clientWidth || 200;
         const h = el.clientHeight || 200;
 
-        // Renderer
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(w, h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         el.appendChild(renderer.domElement);
 
-        // Escena y cámara
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 1000);
         camera.position.set(0, 0, 3);
 
-        // Luces
         scene.add(new THREE.AmbientLight(0xffffff, 1.5));
         const dir = new THREE.DirectionalLight(0xffffff, 2);
         dir.position.set(2, 4, 3);
@@ -48,27 +44,21 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
         fill.position.set(-2, -1, -2);
         scene.add(fill);
 
-        // Controles
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = false;
         controls.autoRotate = true;
         controls.autoRotateSpeed = 3;
-        controls.minDistance = 0.5;
-        controls.maxDistance = 10;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        // Carga del modelo
         const loader = new GLTFLoader();
         loader.load(
           url,
           (gltf) => {
             if (cancelled) return;
-
             const model = gltf.scene;
 
-            // Centrar y escalar al bounding box
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
@@ -78,7 +68,6 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
             const scale = 2 / maxDim;
             model.scale.setScalar(scale);
 
-            // Ajustar distancia de cámara al tamaño real del modelo
             const fov = camera.fov * (Math.PI / 180);
             const fitDist = (2 / scale) / (2 * Math.tan(fov / 2));
             camera.position.set(0, 0, fitDist * 1.3);
@@ -97,7 +86,6 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
           }
         );
 
-        // Loop de renderizado
         let animId;
         const animate = () => {
           animId = requestAnimationFrame(animate);
@@ -106,7 +94,6 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
         };
         animate();
 
-        // Redimensionado responsivo
         const ro = new ResizeObserver(() => {
           if (!el || cancelled) return;
           const nw = el.clientWidth;
@@ -144,14 +131,7 @@ export default function ModelViewer({ url, aspectRatio = '2/3' }) {
   }, [url]);
 
   return (
-    <div style={{
-      width: '100%',
-      aspectRatio,
-      position: 'relative',
-      background: '#eef0f6',
-      borderRadius: 8,
-      overflow: 'hidden',
-    }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
 
       {status === 'loading' && (
