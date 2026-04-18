@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false };
+const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
@@ -156,7 +156,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true };
+        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -726,7 +726,8 @@ export default function Admin() {
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
-                      <th style={s.th}>Rotación</th>
+                      <th style={s.th}>3D</th>
+<th style={s.th}>Rotación</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -772,6 +773,14 @@ export default function Admin() {
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
                             <div
+                              onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); }}
+                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                            >
+                              <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <div
                               onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
                               style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                             >
@@ -808,6 +817,14 @@ export default function Admin() {
                           <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, show_price: !p.show_price}))}>
                             {newProduct.show_price ? <EyeOpen /> : <EyeOff />}
                           </button>
+                        </td>
+                        <td style={{...s.td, textAlign:'center'}}>
+                          <div
+                            onClick={() => setNewProduct(p => ({...p, allow_glb: !p.allow_glb}))}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                          >
+                            <div style={{ position: 'absolute', top: 2, left: newProduct.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </div>
                         </td>
                         <td style={{...s.td, textAlign:'center'}}>
                           <div
@@ -997,7 +1014,7 @@ export default function Admin() {
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
-              {selectedProductId && (
+              {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
                   <label style={s.label}>O subir solo GLB (sin imagen)</label>
                   <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => {
