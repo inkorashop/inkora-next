@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
+const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
@@ -156,7 +156,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false };
+        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -726,6 +726,7 @@ export default function Admin() {
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
+                      <th style={s.th}>3D</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -769,6 +770,11 @@ export default function Admin() {
                               {form.show_price ? <EyeOpen /> : <EyeOff />}
                             </button>
                           </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button style={s.iconBtn} onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}>
+                              {form.allow_3d ? <EyeOpen /> : <EyeOff />}
+                            </button>
+                          </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
                           </td>
@@ -800,6 +806,11 @@ export default function Admin() {
                             {newProduct.show_price ? <EyeOpen /> : <EyeOff />}
                           </button>
                         </td>
+                        <td style={{...s.td, textAlign:'center'}}>
+                          <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d}))}>
+                            {newProduct.allow_3d ? <EyeOpen /> : <EyeOff />}
+                          </button>
+                        </td>
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
                             {savingProduct ? '...' : 'Crear'}
@@ -809,7 +820,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={8} style={{padding:'10px 6px'}}>
+                      <td colSpan={9} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
