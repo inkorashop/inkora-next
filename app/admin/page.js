@@ -395,7 +395,7 @@ export default function Admin() {
     }));
     setPendingFiles(entries);
     e.target.value = '';
-    const { data } = await supabase.from('designs').select('name').eq('active', true);
+    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
     const existing = new Set((data || []).map(d => d.name.toLowerCase()));
     setPendingFiles(prev => prev.map(entry => ({
       ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
@@ -406,7 +406,7 @@ export default function Admin() {
     setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
     if (field === 'name') {
       if (value.length > 2) {
-        const { data } = await supabase.from('designs').select('name').eq('active', true);
+        const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
         const exists = Array.isArray(data) && data.some(d => d.name.toLowerCase() === value.toLowerCase());
         setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: exists }; return next; });
       } else {
@@ -1053,7 +1053,15 @@ export default function Admin() {
                   <div style={s.designInfo}>
                     {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
                     <div>
-                      <div style={s.designName}>{d.name}</div>
+                      <input
+                        style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
+                        value={d.name}
+                        onFocus={e => e.target.style.borderColor = '#dde1ef'}
+                        onBlur={async e => { e.target.style.borderColor = 'transparent'; await supabase.from('designs').update({ name: e.target.value }).eq('id', d.id); }}
+                        onChange={e => setDesigns(prev => prev.map(x => x.id === d.id ? { ...x, name: e.target.value } : x))}
+                        onClick={e => e.stopPropagation()}
+                        onDragStart={e => e.stopPropagation()}
+                      />
                       <div style={s.designCat}>
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
                         {' '}
