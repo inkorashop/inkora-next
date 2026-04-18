@@ -23,8 +23,25 @@ export default function ModelViewer({ url }) {
         const el = mountRef.current;
         if (!el) return;
 
-        const w = el.clientWidth || 200;
-        const h = el.clientHeight || 200;
+        // Esperar a que el elemento tenga dimensiones reales
+        await new Promise(resolve => {
+          if (el.clientWidth > 0 && el.clientHeight > 0) {
+            resolve();
+            return;
+          }
+          const ro = new ResizeObserver(() => {
+            if (el.clientWidth > 0 && el.clientHeight > 0) {
+              ro.disconnect();
+              resolve();
+            }
+          });
+          ro.observe(el);
+        });
+
+        if (cancelled) return;
+
+        const w = el.clientWidth;
+        const h = el.clientHeight;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(w, h);
@@ -94,6 +111,7 @@ export default function ModelViewer({ url }) {
         };
         animate();
 
+        // Redimensionado
         const ro = new ResizeObserver(() => {
           if (!el || cancelled) return;
           const nw = el.clientWidth;
