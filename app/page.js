@@ -465,7 +465,7 @@ export default function Home() {
                       {d.model_url
                         ? <ModelViewer url={d.model_url} />
                         : d.image_url
-                        ? <img src={d.image_url} alt={d.name} style={s.img} />
+                        ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
                     </div>
                     <div style={s.cardBody}>
@@ -801,8 +801,8 @@ const styles = {
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
   card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
-  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  img: { width: '100%', height: '100%', objectFit: 'cover' },
+  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
+  img: { width: '100%', height: '100%', objectFit: 'contain', display: 'block' },
   catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
   cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 },
   cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
