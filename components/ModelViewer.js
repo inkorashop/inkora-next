@@ -58,7 +58,7 @@ export default function ModelViewer({ url }) {
         controls.enableZoom = true;
         controls.enablePan = false;
         controls.autoRotate = true;
-        controls.autoRotateSpeed = 3;
+        controls.autoRotateSpeed = 3.9;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
