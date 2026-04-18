@@ -23,17 +23,11 @@ export default function ModelViewer({ url }) {
         const el = mountRef.current;
         if (!el) return;
 
-        // Esperar a que el elemento tenga dimensiones reales
+        // Esperar dimensiones reales
         await new Promise(resolve => {
-          if (el.clientWidth > 0 && el.clientHeight > 0) {
-            resolve();
-            return;
-          }
+          if (el.clientWidth > 0 && el.clientHeight > 0) { resolve(); return; }
           const ro = new ResizeObserver(() => {
-            if (el.clientWidth > 0 && el.clientHeight > 0) {
-              ro.disconnect();
-              resolve();
-            }
+            if (el.clientWidth > 0 && el.clientHeight > 0) { ro.disconnect(); resolve(); }
           });
           ro.observe(el);
         });
@@ -50,15 +44,14 @@ export default function ModelViewer({ url }) {
         el.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 1000);
-        camera.position.set(0, 0, 3);
+        const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 10000);
 
         scene.add(new THREE.AmbientLight(0xffffff, 1.5));
         const dir = new THREE.DirectionalLight(0xffffff, 2);
-        dir.position.set(2, 4, 3);
+        dir.position.set(5, 10, 7);
         scene.add(dir);
         const fill = new THREE.DirectionalLight(0xffffff, 0.5);
-        fill.position.set(-2, -1, -2);
+        fill.position.set(-5, -5, -5);
         scene.add(fill);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -75,24 +68,39 @@ export default function ModelViewer({ url }) {
           (gltf) => {
             if (cancelled) return;
             const model = gltf.scene;
+            scene.add(model);
 
+            // Calcular bounding box DESPUÉS de agregar a la escena
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
 
-            model.position.sub(center);
-            const scale = 2 / maxDim;
-            model.scale.setScalar(scale);
+            console.log('Model size:', size, 'maxDim:', maxDim, 'center:', center);
 
+            // Centrar el modelo en el origen
+            model.position.set(-center.x, -center.y, -center.z);
+
+            // Posicionar cámara basada en el tamaño real del modelo
             const fov = camera.fov * (Math.PI / 180);
-            const fitDist = (2 / scale) / (2 * Math.tan(fov / 2));
-            camera.position.set(0, 0, fitDist * 1.3);
-            controls.minDistance = fitDist * 0.4;
-            controls.maxDistance = fitDist * 6;
+            const aspect = w / h;
+            // Distancia para que el modelo entre en pantalla con margen
+            const distV = (maxDim / 2) / Math.tan(fov / 2);
+            const distH = (maxDim / 2) / Math.tan((fov * aspect) / 2);
+            const dist = Math.max(distV, distH) * 1.5;
+
+            camera.position.set(0, 0, dist);
+            camera.near = dist / 1000;
+            camera.far = dist * 100;
+            camera.updateProjectionMatrix();
+
+            controls.target.set(0, 0, 0);
+            controls.minDistance = dist * 0.3;
+            controls.maxDistance = dist * 5;
             controls.update();
 
-            scene.add(model);
+            console.log('Camera distance:', dist, 'near:', camera.near, 'far:', camera.far);
+
             setStatus('ready');
           },
           undefined,
@@ -111,7 +119,6 @@ export default function ModelViewer({ url }) {
         };
         animate();
 
-        // Redimensionado
         const ro = new ResizeObserver(() => {
           if (!el || cancelled) return;
           const nw = el.clientWidth;
