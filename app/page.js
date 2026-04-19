@@ -521,7 +521,7 @@ export default function Home() {
         </div>
 
         {!isMobile && <>
-          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? 28 : 24, width: sidebarCollapsed ? 'calc(100% - 52px)' : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease'}}>
+          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 28, width: sidebarCollapsed ? 'calc(100% - 52px)' : 'calc(100% - 388px)', transition: 'top 0.3s ease, width 0.3s ease'}}>
             <span style={s.searchIcon}><SearchIconWhite /></span>
             <input
               className="desktop-search-input"
