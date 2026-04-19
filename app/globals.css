@@ -42,3 +42,11 @@ input[type="number"] {
 .tier-input:focus {
   border-bottom: 1px solid #2D6BE4;
 }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+body {
+  animation: fadeIn 0.3s ease;
+}
