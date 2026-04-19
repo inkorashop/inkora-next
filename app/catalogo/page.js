@@ -99,7 +99,29 @@ export default function Home() {
       });
 
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
-    return () => subscription.unsubscribe();
+
+    const originalTitle = document.title;
+    const awayMessages = ['👀 No te vayas...', '🎨 Tenemos diseños increíbles!', '✨ Volvé al catálogo!'];
+    let awayInterval;
+    let awayIndex = 0;
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        awayInterval = setInterval(() => {
+          document.title = awayMessages[awayIndex % awayMessages.length];
+          awayIndex++;
+        }, 1500);
+      } else {
+        clearInterval(awayInterval);
+        awayIndex = 0;
+        document.title = originalTitle;
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(awayInterval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
