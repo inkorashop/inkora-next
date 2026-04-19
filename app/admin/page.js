@@ -162,7 +162,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true };
+        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -734,6 +734,7 @@ export default function Admin() {
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Rotación</th>
+                      <th style={s.th}>Img Landing</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -791,6 +792,31 @@ export default function Admin() {
                               style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                             >
                               <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
+                          </td>
+                          <td style={s.td}>
+                            <div style={{display:'flex', alignItems:'center', gap:6}}>
+                              {form.landing_image && <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{fontSize:10, maxWidth:100}}
+                                onChange={async e => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+                                  const base64 = await fileToBase64(file);
+                                  const res = await fetch('/api/upload-image', {
+                                    method: 'POST', headers: {'Content-Type':'application/json'},
+                                    body: JSON.stringify({fileBase64: base64, fileName: file.name, mimeType: file.type, folder: 'landing'}),
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) {
+                                    updateProductForm(p.id, 'landing_image', data.url);
+                                    saveProduct(p.id, {landing_image: data.url});
+                                  }
+                                  e.target.value = '';
+                                }}
+                              />
                             </div>
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
