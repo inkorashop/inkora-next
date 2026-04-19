@@ -15,7 +15,7 @@ export default function Landing() {
 
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
+      .then(({ data }) => { if (data) { console.log('productos:', data); setProducts(data); } });
   }, []);
 
   return (
