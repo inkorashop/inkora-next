@@ -33,6 +33,7 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') !== 'light' : true;
 
   async function handleSubmit() {
     setError('');
@@ -68,20 +69,40 @@ export default function AuthModal({ onClose, onSuccess }) {
     if (e) setError(translateError(e.message));
   }
 
+  const modalBg = isDark ? 'rgba(27,47,94,0.75)' : 'rgba(240,244,255,0.82)';
+  const headerBg = isDark ? 'rgba(15,30,61,0.6)' : 'rgba(200,215,255,0.5)';
+  const headerColor = isDark ? 'white' : '#1B2F5E';
+  const labelColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(27,47,94,0.7)';
+  const inputBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)';
+  const inputColor = isDark ? 'white' : '#1B2F5E';
+  const inputBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
+  const dividerTextColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(27,47,94,0.4)';
+  const tabBg = isDark ? 'rgba(0,0,0,0.2)' : 'rgba(27,47,94,0.08)';
+  const tabColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.4)';
+  const tabActiveColor = isDark ? 'white' : '#1B2F5E';
+  const tabActiveBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.8)';
+  const btnEmailBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
+  const btnEmailColor = isDark ? 'white' : '#1B2F5E';
+  const btnEmailBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
+  const hintColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.5)';
+  const linkColor = isDark ? '#93c5fd' : '#2D6BE4';
+
   const s = styles;
   return (
     <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={s.modal}>
-        <div style={s.header}>
+      <div style={{...s.modal, background: modalBg}}>
+        <div style={{...s.header, background: headerBg, color: headerColor}}>
           <span>{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
         <div style={s.body}>
-          <div style={s.tabs}>
-            <button style={{...s.tab, ...(mode === 'login' ? s.tabActive : {})}} onClick={() => { setMode('login'); setError(''); }}>
+
+          <div style={{...s.tabs, background: tabBg}}>
+            <button style={{...s.tab, color: mode === 'login' ? tabActiveColor : tabColor, background: mode === 'login' ? tabActiveBg : 'none', boxShadow: mode === 'login' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('login'); setError(''); }}>
               Ingresar
             </button>
-            <button style={{...s.tab, ...(mode === 'register' ? s.tabActive : {})}} onClick={() => { setMode('register'); setError(''); }}>
+            <button style={{...s.tab, color: mode === 'register' ? tabActiveColor : tabColor, background: mode === 'register' ? tabActiveBg : 'none', boxShadow: mode === 'register' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('register'); setError(''); }}>
               Registrarse
             </button>
           </div>
@@ -96,26 +117,26 @@ export default function AuthModal({ onClose, onSuccess }) {
             Continuar con Google
           </button>
 
-          <div style={s.divider}>
-            <span style={{background:'transparent', padding:'0 10px', position:'relative', zIndex:1, color:'rgba(255,255,255,0.4)'}}>o</span>
+          <div style={{...s.divider, borderTopColor: dividerColor}}>
+            <span style={{padding:'0 10px', position:'relative', zIndex:1, color: dividerTextColor}}>o</span>
           </div>
 
           {mode === 'register' && (
             <div style={s.formGroup}>
-              <label style={s.label}>Nombre</label>
-              <input style={s.input} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Tu nombre" />
+              <label style={{...s.label, color: labelColor}}>Nombre</label>
+              <input style={{...s.input, background: inputBg, color: inputColor, border: inputBorder}} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Tu nombre" />
             </div>
           )}
 
           <div style={s.formGroup}>
-            <label style={s.label}>Email</label>
-            <input style={s.input} type="email" value={form.email}
+            <label style={{...s.label, color: labelColor}}>Email</label>
+            <input style={{...s.input, background: inputBg, color: inputColor, border: inputBorder}} type="email" value={form.email}
               onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="tu@email.com" />
           </div>
 
           <div style={s.formGroup}>
-            <label style={s.label}>Contraseña</label>
-            <input style={s.input} type="password" value={form.password}
+            <label style={{...s.label, color: labelColor}}>Contraseña</label>
+            <input style={{...s.input, background: inputBg, color: inputColor, border: inputBorder}} type="password" value={form.password}
               onChange={e => setForm(f => ({...f, password: e.target.value}))}
               onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
               placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••'} />
@@ -123,12 +144,12 @@ export default function AuthModal({ onClose, onSuccess }) {
 
           {error && <div style={s.errorBox}>{error}</div>}
 
-          <button style={{...s.btnPrimary, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
-            {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar con email' : 'Crear cuenta'}
+          <button style={{...s.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
+            {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
           </button>
 
           {mode === 'login' && (
-            <p style={s.hint}>¿No tenés cuenta? <button style={s.linkBtn} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
+            <p style={{...s.hint, color: hintColor}}>¿No tenés cuenta? <button style={{...s.linkBtn, color: linkColor}} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
           )}
         </div>
       </div>
@@ -138,20 +159,19 @@ export default function AuthModal({ onClose, onSuccess }) {
 
 const styles = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' },
-  modal: { background: 'rgba(27,47,94,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' },
-  header: { background: 'rgba(15,30,61,0.6)', color: 'white', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' },
+  modal: { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' },
+  header: { padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' },
   closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
   body: { padding: 24, display: 'flex', flexDirection: 'column' },
-  tabs: { display: 'flex', background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 4, marginBottom: 20 },
-  tab: { flex: 1, background: 'none', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' },
-  tabActive: { background: 'rgba(255,255,255,0.15)', color: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' },
+  tabs: { display: 'flex', borderRadius: 10, padding: 4, marginBottom: 20 },
+  tab: { flex: 1, border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', transition: 'background 0.2s, color 0.2s' },
   formGroup: { marginBottom: 14 },
-  label: { display: 'block', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
-  input: { width: '100%', border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', boxSizing: 'border-box', outline: 'none', background: 'rgba(255,255,255,0.1)' },
+  label: { display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  input: { width: '100%', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, boxSizing: 'border-box', outline: 'none' },
   errorBox: { background: 'rgba(220,38,38,0.2)', color: '#fca5a5', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 14, border: '1px solid rgba(220,38,38,0.3)' },
-  btnPrimary: { width: '100%', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 16 },
-  divider: { textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 12, marginBottom: 16, position: 'relative', borderTop: '1px solid rgba(255,255,255,0.15)', marginTop: 0 },
-  btnGoogle: { width: '100%', background: 'white', color: '#2d3352', border: 'none', borderRadius: 10, padding: '13px 16px', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' },
-  hint: { textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)' },
-  linkBtn: { background: 'none', border: 'none', color: '#93c5fd', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0 },
+  btnEmail: { width: '100%', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'Barlow, sans-serif' },
+  divider: { textAlign: 'center', fontSize: 12, marginBottom: 16, marginTop: 4, position: 'relative', borderTop: '1px solid' },
+  btnGoogle: { width: '100%', background: 'white', color: '#2d3352', border: 'none', borderRadius: 10, padding: '13px 16px', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', fontFamily: 'Barlow, sans-serif' },
+  hint: { textAlign: 'center', fontSize: 13 },
+  linkBtn: { background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'Barlow, sans-serif' },
 };
