@@ -437,7 +437,7 @@ export default function Home() {
           </div>
 
           {!isMobile && (
-            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: sidebarCollapsed ? 28 : 364, transition:'top 0.3s ease, margin-right 0.3s ease'}}>
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
               <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
                 <span style={s.searchIcon}><SearchIconWhite /></span>
                 <input
