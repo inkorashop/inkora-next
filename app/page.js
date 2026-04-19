@@ -436,6 +436,25 @@ export default function Home() {
             ))}
           </div>
 
+          {!isMobile && (
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: sidebarCollapsed ? 28 : 364, transition:'top 0.3s ease, margin-right 0.3s ease'}}>
+              <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
+                <span style={s.searchIcon}><SearchIconWhite /></span>
+                <input
+                  className="desktop-search-input"
+                  style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif' }}
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar diseño..."
+                />
+                {searchQuery && (
+                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
             <div style={s.emptyState}>
@@ -521,21 +540,8 @@ export default function Home() {
         </div>
 
         {!isMobile && <>
-          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 28, width: sidebarCollapsed ? 'calc(100% - 52px)' : 'calc(100% - 388px)', transition: 'top 0.3s ease, width 0.3s ease'}}>
-            <span style={s.searchIcon}><SearchIconWhite /></span>
-            <input
-              className="desktop-search-input"
-              style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif' }}
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar diseño..."
-            />
-            {searchQuery && (
-              <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
-            )}
-          </div>
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14}}>
+          
+          <div style={{...s.sidebar, position: 'fixed', top: 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
