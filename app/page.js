@@ -86,6 +86,7 @@ export default function Home() {
       if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
     });
 
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
