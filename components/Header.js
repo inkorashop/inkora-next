@@ -145,14 +145,14 @@ export default function Header({ headerVisible = true, showCart = false, page = 
               </button>
 
               {cartOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300 }}>
-                  <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
+                  <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
                     <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{totalItems} items</span>
                   </div>
                   <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
                     {cartItems.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '24px 16px', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                      <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? 'rgba(27,47,94,0.45)' : 'rgba(255,255,255,0.45)', fontSize: 13 }}>
                         Tu pedido está vacío
                       </div>
                     ) : (
@@ -160,10 +160,10 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
                           {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ color: 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
+                            <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                            <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
                           </div>
-                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
+                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: darkMode ? 'rgba(27,47,94,0.4)' : 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
                         </div>
                       ))
                     )}

@@ -33,7 +33,7 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') !== 'light' : true;
+  const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') === 'light' : false;
 
   async function handleSubmit() {
     setError('');
