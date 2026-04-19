@@ -1104,16 +1104,16 @@ export default function Admin() {
                   value={designSearch ?? ''}
                   onChange={e => setDesignSearch(e.target.value)}
                 />
-                <select
-                  style={{...s.input, width: 160}}
-                  value={designCatFilter ?? ''}
-                  onChange={e => setDesignCatFilter(e.target.value)}
-                >
-                  <option value="">Todas las categorías</option>
+                <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                  <button onClick={() => setDesignCatFilter('')} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: !designCatFilter ? '#1B2F5E' : '#eef0f6', color: !designCatFilter ? 'white' : '#5a6380', transition:'background 0.15s'}}>
+                    Todas
+                  </button>
                   {[...new Set(designs.flatMap(d => Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : [])))].sort().map(c => (
-                    <option key={c} value={c}>{c}</option>
+                    <button key={c} onClick={() => setDesignCatFilter(designCatFilter === c ? '' : c)} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: designCatFilter === c ? '#1B2F5E' : '#eef0f6', color: designCatFilter === c ? 'white' : '#5a6380', transition:'background 0.15s'}}>
+                      {c}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
               <div onClick={() => setSelectedIds(new Set())}>
               {designs.filter(d => {
@@ -1188,9 +1188,10 @@ export default function Admin() {
                                   key={c}
                                   onClick={async e => {
                                     e.stopPropagation();
+                                    const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
                                     const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
-                                    await supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', d.id);
-                                    setDesigns(prev => prev.map(x => x.id === d.id ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
+                                    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
+                                    setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
                                   }}
                                   style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
                                 >
