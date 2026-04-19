@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
 import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
+import Header from '@/components/Header';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -52,7 +53,6 @@ export default function Home() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stickySearchVisible, setStickySearchVisible] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartPanelOpen, setCartPanelOpen] = useState(false);
   const inlineSearchRef = useRef(null);
   const [qtyAnim, setQtyAnim] = useState({});
@@ -63,6 +63,7 @@ export default function Home() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [uiSettings, setUiSettings] = useState({});
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -87,6 +88,15 @@ export default function Home() {
       setUser(u);
       if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
     });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
 
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
     return () => subscription.unsubscribe();
@@ -184,9 +194,9 @@ export default function Home() {
     return fuse.search(searchQuery.trim()).map(r => r.item);
   }, [searchQuery, fuse, designs]);
 
-  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
+  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoria'))];
   const filtered = searchQuery.trim()
-    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
+    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
         const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category ? [d.category] : []);
         return cats.includes(filter);
@@ -279,7 +289,7 @@ export default function Home() {
 
   async function submitOrder() {
     if (!form.name || !form.phone || !form.email) {
-      alert('Por favor completá todos los campos.');
+      alert('Por favor completa todos los campos.');
       return;
     }
     setLoading(true);
@@ -306,7 +316,7 @@ export default function Home() {
       clearCart();
       setNotes('');
     } catch (e) {
-      alert('Hubo un error. Intentá de nuevo.');
+      alert('Hubo un error. Intenta de nuevo.');
     }
     setLoading(false);
   }
@@ -328,36 +338,7 @@ export default function Home() {
         .qty-input:focus::placeholder { color: transparent; }
       `}</style>
 
-      <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
-        <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
-          <div style={s.logoWrap}>
-            <a href="/" style={{display:'flex', alignItems:'center', textDecoration:'none'}}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{height: 36, width: 'auto', fill: 'white'}}>
-                <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
-              </svg>
-            </a>
-          </div>
-          <div style={s.headerActions}>
-            {user ? (
-              <div style={{position:'relative'}}>
-                <button style={s.btnUserHeader} onClick={() => setUserMenuOpen(v => !v)}>
-                  {profile?.name || user.email?.split('@')[0]} {'▾'}
-                </button>
-                {userMenuOpen && (
-                  <div style={{position:'absolute', top:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, boxShadow:'0 4px 16px rgba(27,47,94,0.12)', minWidth:160, zIndex:200, overflow:'hidden'}} onClick={() => setUserMenuOpen(false)}>
-                    <a href="/dashboard" style={{display:'block', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#1B2F5E', textDecoration:'none', borderBottom:'1px solid #eef0f6'}}>Mi cuenta</a>
-                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button style={s.btnLoginHeader} onClick={() => setAuthModalOpen(true)}>
-                Ingresar
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header headerVisible={headerVisible} showCart={false} page="catalogo" />
 
       {isMobile && (
         <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
@@ -368,10 +349,10 @@ export default function Home() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar diseño..."
+            placeholder="Buscar diseno..."
           />
           {searchQuery && (
-            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>{'✕'}</button>
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
           )}
         </div>
       )}
@@ -391,8 +372,8 @@ export default function Home() {
       }}>
         <div style={s.catalogArea}>
           <div style={s.catalogHeader}>
-            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catálogo</h1>
-            <p style={s.subtitle}>Selección los diseños y armá tu pedido</p>
+            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catalogo</h1>
+            <p style={s.subtitle}>Selecciona los disenos y arma tu pedido</p>
           </div>
 
           {products.length > 1 && (
@@ -428,10 +409,10 @@ export default function Home() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Buscar diseño..."
+                  placeholder="Buscar diseno..."
                 />
                 {searchQuery && (
-                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>{'✕'}</button>
+                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
                 )}
               </div>
             </div>
@@ -439,7 +420,7 @@ export default function Home() {
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
-            <div style={s.emptyState}><p>No hay diseños todavía.</p></div>
+            <div style={s.emptyState}><p>No hay disenos todavia.</p></div>
           ) : filtered.length === 0 ? (
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
@@ -467,11 +448,11 @@ export default function Home() {
                         ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
-                        : <span style={{fontSize:36}}>{'🎨'}</span>}
+                        : <span style={{fontSize:36}}>🎨</span>}
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
-                      {d.category !== 'Sin categoría' && <span style={s.catTag}>{d.category}</span>}
+                      {d.category !== 'Sin categoria' && <span style={s.catTag}>{d.category}</span>}
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
                         if (price !== null && price > 0) {
@@ -480,7 +461,7 @@ export default function Home() {
                         return null;
                       })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
-                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>{'−'}</button>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>-</button>
                         <input
                           type="number"
                           className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
@@ -504,7 +485,7 @@ export default function Home() {
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
                           if (inCart) changeQty(d.id, 1);
                           else addToCart(d);
-                        }}>{'+'}</button>
+                        }}>+</button>
                       </div>
                     </div>
                   </div>
@@ -516,13 +497,13 @@ export default function Home() {
         </div>
 
         {!isMobile && (
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 60, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
                 style={{flex:1, background:'#1B2F5E', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', writingMode:'vertical-rl', color:'rgba(255,255,255,0.7)', fontSize:11, fontWeight:700, letterSpacing:2, userSelect:'none', gap:8, flexDirection:'column'}}
               >
-                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>{'◀'}</span>
+                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>◀</span>
                 <span>TU PEDIDO</span>
                 {totalItems > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{totalItems}</span>}
               </div>
@@ -532,12 +513,12 @@ export default function Home() {
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
-                    <span style={s.badge}>{totalItems} ítems</span>
+                    <span style={s.badge}>{totalItems} items</span>
                   </div>
                 </div>
                 <div style={s.sidebarBody}>
                   {cartItems.length === 0 ? (
-                    <div style={s.cartEmpty}><p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p></div>
+                    <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
                   ) : (
                     cartItems.map(item => (
                       <div key={item.id} style={s.cartItem}>
@@ -553,14 +534,14 @@ export default function Home() {
                           })()}
                         </div>
                         <div style={s.cartItemRight}>
-                          <span style={s.cartQty}>{'×'}{item.qty}</span>
+                          <span style={s.cartQty}>x{item.qty}</span>
                           {showPrices && item.showPrice !== false && (() => {
                             const price = getUnitPrice(item.product_id);
                             if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                             return null;
                           })()}
                         </div>
-                        <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>{'✕'}</button>
+                        <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
                       </div>
                     ))
                   )}
@@ -568,13 +549,13 @@ export default function Home() {
                 <div style={s.sidebarFooter}>
                   <div style={s.totalRow}>
                     <span>Total</span>
-                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '—'}</span>
+                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                   </div>
                   <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                     placeholder="Notas adicionales..." rows={2} />
                   <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
                     disabled={cartItems.length === 0} onClick={openModal}>
-                    Confirmar pedido {'→'}
+                    Confirmar pedido →
                   </button>
                 </div>
               </>
@@ -591,11 +572,11 @@ export default function Home() {
           <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
             <div style={s.cartPanelHeader}>
               <span style={s.cartPanelTitle}>Tu Pedido</span>
-              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>{'✕'}</button>
+              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>X</button>
             </div>
             <div style={s.cartPanelBody}>
               {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}><p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p></div>
+                <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
               ) : (
                 cartItems.map(item => (
                   <div key={item.id} style={s.cartItem}>
@@ -611,14 +592,14 @@ export default function Home() {
                       })()}
                     </div>
                     <div style={s.cartItemRight}>
-                      <span style={s.cartQty}>{'×'}{item.qty}</span>
+                      <span style={s.cartQty}>x{item.qty}</span>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
                     </div>
-                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>{'✕'}</button>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
                   </div>
                 ))
               )}
@@ -626,7 +607,7 @@ export default function Home() {
             <div style={s.cartPanelFooter}>
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '—'}</span>
+                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -635,7 +616,7 @@ export default function Home() {
                 disabled={cartItems.length === 0}
                 onClick={() => { setCartPanelOpen(false); openModal(); }}
               >
-                Confirmar pedido {'→'}
+                Confirmar pedido →
               </button>
             </div>
           </div>
@@ -643,14 +624,14 @@ export default function Home() {
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
               <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' item' + (totalItems !== 1 ? 's' : '')}</span>
-              <span style={s.mobileBarChevron}>{cartPanelOpen ? '\u25bc' : '\u25b2'}</span>
+              <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
             </button>
             <button
               style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
               disabled={cartItems.length === 0}
               onClick={openModal}
             >
-              Confirmar {'→'}
+              Confirmar →
             </button>
           </div>
         </>
@@ -663,20 +644,20 @@ export default function Home() {
               <>
                 <div style={s.modalHeader}>
                   <span>Confirmar Pedido</span>
-                  <button style={s.closeBtn} onClick={closeModal}>{'✕'}</button>
+                  <button style={s.closeBtn} onClick={closeModal}>X</button>
                 </div>
                 <div style={s.modalBody}>
                   <div style={s.codeBanner}>
-                    <small style={s.codeLabel}>Código de pedido</small>
+                    <small style={s.codeLabel}>Codigo de pedido</small>
                     <strong style={s.codeValue}>{orderCode}</strong>
                   </div>
                   {user ? (
                     <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
-                      {'✓'} Pedido como cliente registrado.
+                      Pedido como cliente registrado.
                     </div>
                   ) : (
                     <div style={s.notice}>
-                      {'⚠️'} <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
+                      <strong>Cliente no registrado.</strong> Vamos a pedirte confirmacion por WhatsApp antes de procesar el pedido.
                     </div>
                   )}
                   <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
@@ -685,7 +666,7 @@ export default function Home() {
                       <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
                     </div>
                     <div style={s.formGroup}>
-                      <label style={s.label}>Teléfono *</label>
+                      <label style={s.label}>Telefono *</label>
                       <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
                     </div>
                   </div>
@@ -696,7 +677,7 @@ export default function Home() {
                   <div style={s.orderSummary}>
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
-                        <span>{i.name} {'×'} {i.qty}</span>
+                        <span>{i.name} x {i.qty}</span>
                         {showPrices && i.showPrice !== false && (() => {
                           const price = getUnitPrice(i.product_id);
                           if (price === null) return null;
@@ -707,7 +688,7 @@ export default function Home() {
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
                       <span>Total</span>
-                      <span>{showTotal ? '$' + total.toLocaleString() : '—'}</span>
+                      <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                     </div>
                   </div>
                   <div style={s.modalActions}>
@@ -720,15 +701,15 @@ export default function Home() {
               </>
             ) : (
               <div style={s.successScreen}>
-                <div style={s.successIcon}>{'✓'}</div>
-                <h3 style={s.successTitle}>{'¡Pedido enviado!'}</h3>
-                <p>Código de tu pedido:</p>
+                <div style={s.successIcon}>✓</div>
+                <h3 style={s.successTitle}>Pedido enviado!</h3>
+                <p>Codigo de tu pedido:</p>
                 <div style={s.successCode}>{orderCode}</div>
-                <p>Te enviamos la confirmación a tu email.</p>
+                <p>Te enviamos la confirmacion a tu email.</p>
                 <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
-                  "Hola INKORA! Quiero confirmar mi pedido\nCódigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " × " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                  "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
                 )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
-                  {'💬'} Confirmar por WhatsApp
+                  Confirmar por WhatsApp
                 </a>
               </div>
             )}
@@ -736,30 +717,32 @@ export default function Home() {
         </div>
       )}
 
-      <a
-        href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent('Hola! Vengo desde la página. ')}
-        target="_blank"
-        rel="noreferrer"
-        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-      >
-        <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-        </svg>
-      </a>
+      {uiSettings['catalogo_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent('Hola! Vengo desde la pagina. ')}
+          target="_blank"
+          rel="noreferrer"
+          style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
 
       <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
-        <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
+        <strong>INKORA</strong> Soluciones Graficas - Todos los derechos reservados 2026
       </footer>
 
       {clearConfirmOpen && (
         <div style={s.overlay} onClick={() => setClearConfirmOpen(false)}>
           <div style={{background:'white', borderRadius:16, padding:24, maxWidth:320, width:'100%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
-            <div style={{fontSize:32, marginBottom:12}}>{'🗑️'}</div>
-            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>{'¿Limpiar pedido?'}</h3>
-            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los diseños del carrito.</p>
+            <div style={{fontSize:32, marginBottom:12}}>🗑️</div>
+            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>Limpiar pedido?</h3>
+            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los disenos del carrito.</p>
             <div style={{display:'flex', gap:10}}>
               <button style={s.btnSecondary} onClick={() => setClearConfirmOpen(false)}>Cancelar</button>
               <button style={s.btnPrimary} onClick={() => { clearCart(); setClearConfirmOpen(false); }}>Limpiar</button>
@@ -780,18 +763,8 @@ export default function Home() {
 
 const styles = {
   app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
-  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)' },
-  headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
-  headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
-  btnLoginHeader: { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  btnUserHeader: { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
-  priceHint: { fontSize: 12, color: '#9aa3bc', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' },
-  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
-  btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
-  btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
-  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
+  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0 },
   layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
   catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
   catalogHeader: { marginBottom: 16 },
@@ -800,10 +773,9 @@ const styles = {
   productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
   productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
   productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
-  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 12 },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
-  searchInput: { border: 0, outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
   searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
+  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
   filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
@@ -825,7 +797,6 @@ const styles = {
   sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
   badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
-  sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
   sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
   cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
