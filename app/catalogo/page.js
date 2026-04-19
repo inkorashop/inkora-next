@@ -101,15 +101,14 @@ export default function Home() {
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
 
     const originalTitle = document.title;
-    const awayMessages = ['👀 No te vayas...', '🎨 Tenemos diseños increíbles!', '✨ Volvé al catálogo!'];
     let awayInterval;
-    let awayIndex = 0;
+    let awayToggle = false;
     function handleVisibilityChange() {
       if (document.hidden) {
         awayInterval = setInterval(() => {
-          document.title = awayMessages[awayIndex % awayMessages.length];
-          awayIndex++;
-        }, 1500);
+          document.title = awayToggle ? 'INKORA' : 'INKORA 🔷';
+          awayToggle = !awayToggle;
+        }, 1000);
       } else {
         clearInterval(awayInterval);
         awayIndex = 0;
