@@ -402,7 +402,7 @@ export default function Home() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar diseno..."
+            placeholder="Buscar diseño..."
           />
           {searchQuery && (
             <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
@@ -462,7 +462,7 @@ export default function Home() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Buscar diseno..."
+                  placeholder="Buscar diseño..."
                 />
                 {searchQuery && (
                   <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
