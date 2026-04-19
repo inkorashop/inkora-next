@@ -131,6 +131,10 @@ export default function Admin() {
 
   // ── Auth listener ──
   useEffect(() => {
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') return;
       if (event === 'SIGNED_IN' && session?.user?.email) {
