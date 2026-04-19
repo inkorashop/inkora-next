@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
+import AuthModal from '@/components/AuthModal';
 
 export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
   const [user, setUser] = useState(null);
@@ -12,6 +13,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   const [uiSettings, setUiSettings] = useState({});
   const cartRef = useRef(null);
   const { cartItems, totalItems, removeFromCart } = useCart();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('inkora_theme');
@@ -68,6 +70,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   }
 
   return (
+    <>
     <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
       <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}>
@@ -190,12 +193,19 @@ export default function Header({ headerVisible = true, showCart = false, page = 
               )}
             </div>
           ) : (
-            uiSettings[`${page}_show_account`] !== 'false' && <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
+            uiSettings[`${page}_show_account`] !== 'false' && <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setAuthModalOpen(true)}>
               Ingresar
             </button>
           )}
         </div>
       </div>
     </header>
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
