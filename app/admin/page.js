@@ -720,7 +720,7 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
+          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Escalas de precios'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
             <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
               {label}
               {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
@@ -953,7 +953,7 @@ export default function Admin() {
 
             {/* ESCALAS */}
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Escalas de precio por localidad</h2>
+              <h2 style={s.sectionTitle}>Escalas de precio</h2>
               {localities.filter(l => l.active).length === 0 ? <p style={s.emptyMsg}>No hay localidades activas.</p>
               : products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p>
               : (
