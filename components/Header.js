@@ -8,8 +8,25 @@ export default function Header({ headerVisible = true, showCart = false }) {
   const [profile, setProfile] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(null);
   const cartRef = useRef(null);
   const { cartItems, totalItems, removeFromCart } = useCart();
+
+  useEffect(() => {
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
+        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (darkMode === null) return;
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

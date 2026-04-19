@@ -17,8 +17,13 @@ export default function Landing() {
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('created_at')
       .then(({ data }) => { if (data) setProducts(data); });
-    supabase.from('settings').select('*').eq('key', 'landing_mode')
-      .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    }
   }, []);
 
   return (
