@@ -555,13 +555,7 @@ export default function Home() {
               <>
                 <div style={{...s.sidebarHeader}}>
                   <span style={s.sidebarTitle}>Tu Pedido</span>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <span style={s.badge}>{totalItems} ítems</span>
-                    <button
-                      onClick={() => setSidebarCollapsed(true)}
-                      style={{background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
-                    >▶</button>
-                  </div>
+                  <span style={s.badge}>{totalItems} ítems</span>
                 </div>
             <div style={{...s.sidebarBody, display: sidebarCollapsed ? 'none' : undefined}}>
               {cartItems.length === 0 ? (
