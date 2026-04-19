@@ -29,11 +29,11 @@ export default function Landing() {
 
       <Header />
 
-      <div style={{ textAlign: 'center', padding: '48px 24px 40px' }}>
-        <h1 style={{ fontSize: 48, fontWeight: 800, color: 'white', margin: 0, letterSpacing: -1 }}>
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: 'white', margin: 0, letterSpacing: -1 }}>
           {'\u00bfQu\u00e9 est\u00e1s buscando?'}
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 18, marginTop: 12 }}>
+        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, marginTop: 8 }}>
           {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
         </p>
       </div>
