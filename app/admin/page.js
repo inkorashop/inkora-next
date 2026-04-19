@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
+const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
@@ -163,7 +163,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
+        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -209,7 +209,7 @@ export default function Admin() {
   }
 
   function handleProductKeyDown(e, rowIdx, colIdx) {
-    const NCOLS = 4;
+    const NCOLS = 6;
     if ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowRight') {
       if (colIdx + 1 < NCOLS) { e.preventDefault(); cellRefs.current[rowIdx]?.[colIdx + 1]?.focus(); }
     } else if ((e.key === 'Tab' && e.shiftKey) || e.key === 'ArrowLeft') {
@@ -743,8 +743,10 @@ export default function Admin() {
                     <tr>
                       <th style={s.th}>Mostrar</th>
                       <th style={s.th}>Nombre</th>
-                      <th style={s.th}>Ancho card PC (px)</th>
-                      <th style={s.th}>Ancho card Cel (px)</th>
+                      <th style={s.th}>Card catálogo PC (px)</th>
+                      <th style={s.th}>Card catálogo Cel (px)</th>
+                      <th style={s.th}>Card landing PC (px)</th>
+                      <th style={s.th}>Card landing Cel (px)</th>
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
@@ -775,6 +777,12 @@ export default function Admin() {
                           </td>
                           <td style={s.td}>
                             <input ref={setRef(2)} style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={form.card_width_mobile ?? 160} onChange={e => updateProductForm(p.id, 'card_width_mobile', parseInt(e.target.value)||160)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="80" max="800" value={form.landing_card_width_desktop ?? 320} onChange={e => updateProductForm(p.id, 'landing_card_width_desktop', parseInt(e.target.value)||320)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
+                          </td>
+                          <td style={s.td}>
+                            <input ref={setRef(4)} style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={form.landing_card_width_mobile ?? 280} onChange={e => updateProductForm(p.id, 'landing_card_width_mobile', parseInt(e.target.value)||280)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 4)} />
                           </td>
                           <td style={s.td}>
                             <select style={{...s.tblInput, width: 72}} value={form.aspect_ratio || '2/3'} onChange={e => { updateProductForm(p.id, 'aspect_ratio', e.target.value); saveProduct(p.id, { aspect_ratio: e.target.value }); }}>
@@ -850,6 +858,8 @@ export default function Admin() {
                         <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.card_width_desktop} onChange={e => setNewProduct(p => ({...p, card_width_desktop: parseInt(e.target.value)||180}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={newProduct.card_width_mobile} onChange={e => setNewProduct(p => ({...p, card_width_mobile: parseInt(e.target.value)||160}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="800" value={newProduct.landing_card_width_desktop} onChange={e => setNewProduct(p => ({...p, landing_card_width_desktop: parseInt(e.target.value)||320}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.landing_card_width_mobile} onChange={e => setNewProduct(p => ({...p, landing_card_width_mobile: parseInt(e.target.value)||280}))} /></td>
                         <td style={s.td}>
                           <select style={{...s.tblInput, width: 72}} value={newProduct.aspect_ratio} onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))}>
                             <option value="1/1">1/1</option>

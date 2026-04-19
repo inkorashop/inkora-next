@@ -142,8 +142,12 @@ export default function Landing() {
               borderRadius: 20,
               overflow: 'hidden',
               position: 'relative',
-              width: 320,
-              height: 420,
+              width: typeof window !== 'undefined' && window.innerWidth < 768
+                ? (p.landing_card_width_mobile ?? 280)
+                : (p.landing_card_width_desktop ?? 320),
+              height: typeof window !== 'undefined' && window.innerWidth < 768
+                ? (p.landing_card_width_mobile ?? 280) * 1.4
+                : (p.landing_card_width_desktop ?? 320) * 1.3,
               display: 'block',
               boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
               transition: 'box-shadow 0.3s ease, transform 0.3s ease',
