@@ -120,6 +120,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
 
@@ -147,7 +148,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders();
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings();
     }
   }, [screen]);
 
@@ -584,6 +585,21 @@ export default function Admin() {
     });
   }
 
+  // ── Settings ──
+  async function loadSettings() {
+    const { data } = await supabase.from('settings').select('*');
+    if (data) {
+      const map = {};
+      data.forEach(s => { map[s.key] = s.value; });
+      setSettings(prev => ({ ...prev, ...map }));
+    }
+  }
+
+  async function saveSetting(key, value) {
+    await supabase.from('settings').upsert({ key, value });
+    setSettings(prev => ({ ...prev, [key]: value }));
+  }
+
   // ── Orders ──
   async function loadOrders() {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
@@ -702,7 +718,7 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins']].map(([id, label]) => (
+          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
             <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
               {label}
               {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
@@ -1398,6 +1414,41 @@ export default function Admin() {
               ))}
             </div>
           </>
+        )}
+
+      {/* ══ CONFIGURACIÓN ══ */}
+        {activeTab === 'config' && (
+          <div style={s.card}>
+            <h2 style={s.sectionTitle}>Apariencia</h2>
+            <div style={{display:'flex', flexDirection:'column', gap:20}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
+                <div>
+                  <div style={{fontSize:14, fontWeight:600, color:'#2d3352'}}>Modo de la Landing</div>
+                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Cambia el tema de inkora.com.ar</div>
+                </div>
+                <div style={{display:'flex', gap:8}}>
+                  <button
+                    onClick={() => saveSetting('landing_mode', 'light')}
+                    style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.landing_mode === 'light' ? '#1B2F5E' : 'white', color: settings.landing_mode === 'light' ? 'white' : '#5a6380'}}
+                  >☀️ Claro</button>
+                  <button
+                    onClick={() => saveSetting('landing_mode', 'dark')}
+                    style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.landing_mode === 'dark' ? '#1B2F5E' : 'white', color: settings.landing_mode === 'dark' ? 'white' : '#5a6380'}}
+                  >🌙 Oscuro</button>
+                </div>
+              </div>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:14, fontWeight:600, color:'#2d3352'}}>Modo del Catálogo</div>
+                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Próximamente — no afecta el catálogo aún</div>
+                </div>
+                <div style={{display:'flex', gap:8, opacity:0.4, pointerEvents:'none'}}>
+                  <button style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.catalogo_mode === 'light' ? '#1B2F5E' : 'white', color: settings.catalogo_mode === 'light' ? 'white' : '#5a6380'}}>☀️ Claro</button>
+                  <button style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.catalogo_mode === 'dark' ? '#1B2F5E' : 'white', color: settings.catalogo_mode === 'dark' ? 'white' : '#5a6380'}}>🌙 Oscuro</button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
       </div>

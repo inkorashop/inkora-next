@@ -12,14 +12,17 @@ function toSlug(name) {
 export default function Landing() {
   const [products, setProducts] = useState([]);
   const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('created_at')
-      .then(({ data }) => { if (data) { console.log('productos:', data); setProducts(data); } });
+      .then(({ data }) => { if (data) setProducts(data); });
+    supabase.from('settings').select('*').eq('key', 'landing_mode')
+      .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
   }, []);
 
   return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#0f1e3d', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
       <style>{`
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
         .page-exit { animation: fadeOut 0.3s ease forwards; }
@@ -37,10 +40,10 @@ export default function Landing() {
       <Header showCart={true} />
 
       <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: 'white', margin: 0, letterSpacing: -1 }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
           {'\u00bfQu\u00e9 est\u00e1s buscando?'}
         </h1>
-        <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, marginTop: 8 }}>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
           {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
         </p>
       </div>
@@ -81,12 +84,12 @@ export default function Landing() {
               }
             </div>
 
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: darkMode ? 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)' : 'linear-gradient(to top, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
 
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <h2 style={{ color: darkMode ? 'white' : '#1B2F5E', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: darkMode ? 'rgba(255,255,255,0.7)' : 'rgba(27,47,94,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
                 <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
               </div>
             </div>
@@ -106,7 +109,7 @@ export default function Landing() {
         </svg>
       </a>
 
-      <footer style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
         <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
       </footer>
     </div>
