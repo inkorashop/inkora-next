@@ -74,14 +74,14 @@ export default function Landing() {
           >
             <div style={{ position: 'absolute', inset: 0, background: '#1B2F5E', overflow: 'hidden' }}>
               {p.landing_image
-                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover', opacity:0.92}} />
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
                 : [...Array(4)].map((_, j) => (
                     <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
                   ))
               }
             </div>
 
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.95) 40%, rgba(10,20,50,0.3) 100%)', transition: 'opacity 0.3s ease' }} />
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
 
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
               <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
