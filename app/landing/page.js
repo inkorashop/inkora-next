@@ -40,7 +40,8 @@ export default function Landing() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px 60px', gap: 24, flexWrap: 'wrap' }}>
         {products.map((p, i) => (
           
-            key={p.id}
+            <a
+key={p.id}
             href={`/catalogo/${toSlug(p.name)}`}
             className="product-card"
             style={{ animationDelay: `${i * 0.1}s`, textDecoration: 'none', borderRadius: 20, overflow: 'hidden', position: 'relative', width: 320, height: 420, display: 'block', boxShadow: hovered === p.id ? '0 24px 60px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.3)', transition: 'box-shadow 0.3s ease, transform 0.3s ease', transform: hovered === p.id ? 'translateY(-6px)' : 'translateY(0)' }}
