@@ -26,10 +26,10 @@ export default function Landing() {
         .product-card:hover .card-overlay { opacity: 1 !important; }
         .product-card:hover .card-img { transform: scale(1.05); }
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card:nth-child(1) { animation: fadeUp 0.5s ease both, float 4s ease-in-out 0.5s infinite; }
-        .product-card:nth-child(2) { animation: fadeUp 0.5s ease both, float 4s ease-in-out 1.5s infinite; }
-        .product-card:nth-child(3) { animation: fadeUp 0.5s ease both, float 4s ease-in-out 2.5s infinite; }
-        .product-card:nth-child(4) { animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
+        .product-card:nth-child(1) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 0.5s infinite; }
+        .product-card:nth-child(2) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 1.5s infinite; }
+        .product-card:nth-child(3) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 2.5s infinite; }
+        .product-card:nth-child(4) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
       `}</style>
 
       <Header />
@@ -60,7 +60,7 @@ export default function Landing() {
               display: 'block',
               boxShadow: hovered === p.id ? '0 24px 60px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
               transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-              transform: hovered === p.id ? 'translateY(-6px)' : 'translateY(0)'
+              transform: 'translateY(0)'
             }}
             onMouseEnter={() => setHovered(p.id)}
             onMouseLeave={() => setHovered(null)}
