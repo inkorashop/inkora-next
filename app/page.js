@@ -541,6 +541,7 @@ export default function Home() {
 
         {!isMobile && <>
           
+          
           <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 99}}>
             {sidebarCollapsed ? (
               <div
