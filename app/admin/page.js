@@ -175,7 +175,7 @@ export default function Admin() {
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://inkora-next.vercel.app/admin' },
+      options: { redirectTo: 'https://www.inkora.com.ar/admin' },
     });
   }
 

@@ -63,7 +63,7 @@ export default function AuthModal({ onClose, onSuccess }) {
     setError('');
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
+      options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
     });
     if (e) setError(translateError(e.message));
   }
