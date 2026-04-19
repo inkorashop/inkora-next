@@ -47,6 +47,8 @@ app/admin/page.js
 app/api/send-email/route.js
 app/api/upload-image/route.js
 app/auth/callback/route.js
+app/catalogo/[producto]/page.js
+app/catalogo/page.js
 app/dashboard/page.js
 app/favicon.ico
 app/fonts/GeistMonoVF.woff
@@ -56,7 +58,10 @@ app/layout.js
 app/page.js
 app/page.module.css
 components/AuthModal.js
+components/Header.js
+components/ModelViewer.js
 CONTEXT.md
+contexts/CartContext.js
 jsconfig.json
 lib/auth.js
 lib/supabase-browser.js
@@ -117,462 +122,29 @@ yarn-error.log*
 next-env.d.ts
 </file>
 
-<file path="app/page.module.css">
-.page {
-  --gray-rgb: 0, 0, 0;
-  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
-  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-
-  display: grid;
-  grid-template-rows: 20px 1fr 20px;
-  align-items: center;
-  justify-items: center;
-  min-height: 100svh;
-  padding: 80px;
-  gap: 64px;
-  font-family: var(--font-geist-sans);
-}
-
-@media (prefers-color-scheme: dark) {
-  .page {
-    --gray-rgb: 255, 255, 255;
-    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
-    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-  }
-}
-
-.main {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  grid-row-start: 2;
-}
-
-.main ol {
-  font-family: var(--font-geist-mono);
-  padding-left: 0;
-  margin: 0;
-  font-size: 14px;
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  list-style-position: inside;
-}
-
-.main li:not(:last-of-type) {
-  margin-bottom: 8px;
-}
-
-.main code {
-  font-family: inherit;
-  background: var(--gray-alpha-100);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.ctas {
-  display: flex;
-  gap: 16px;
-}
-
-.ctas a {
-  appearance: none;
-  border-radius: 128px;
-  height: 48px;
-  padding: 0 20px;
-  border: none;
-  border: 1px solid transparent;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: 500;
-}
-
-a.primary {
-  background: var(--foreground);
-  color: var(--background);
-  gap: 8px;
-}
-
-a.secondary {
-  border-color: var(--gray-alpha-200);
-  min-width: 180px;
-}
-
-.footer {
-  grid-row-start: 3;
-  display: flex;
-  gap: 24px;
-}
-
-.footer a {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.footer img {
-  flex-shrink: 0;
-}
-
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
-  }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
-
-  .footer a:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
-}
-
-@media (max-width: 600px) {
-  .page {
-    padding: 32px;
-    padding-bottom: 80px;
-  }
-
-  .main {
-    align-items: center;
-  }
-
-  .main ol {
-    text-align: center;
-  }
-
-  .ctas {
-    flex-direction: column;
-  }
-
-  .ctas a {
-    font-size: 14px;
-    height: 40px;
-    padding: 0 16px;
-  }
-
-  a.secondary {
-    min-width: auto;
-  }
-
-  .footer {
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
-}
-</file>
-
-<file path="CONTEXT.md">
-# INKORA - Contexto del proyecto
-
-## Stack
-- Next.js 14 (App Router)
-- Supabase (DB + Auth + Storage)
-- Vercel (deploy automático desde GitHub)
-- Resend (emails)
-
-## URLs
-- Producción: inkora-next.vercel.app
-- Dominio en propagación: inkora.com.ar
-- Admin: /admin
-- Panel usuario: /dashboard
-
-## Supabase
-- URL: https://ylawwaoznxzxwetlkjel.supabase.co
-- Bucket storage: assets (carpeta thumbnails)
-
-## WhatsApp
-- Número: 5493765211017
-
-## Deploy
-- git add . && git commit -m "mensaje" && git push
-- Vercel detecta el push y deploya automáticamente
-- Antes de pushear: CI=true npm run build
-
-## Tablas principales Supabase
-- products, designs, orders, localities, price_tiers, profiles, admins, carts
-
-## Notas importantes
-- Google OAuth configurado en Supabase
-- Admin usa tabla "admins" para verificar acceso
-- Precios escalonados por localidad en price_tiers
-- "Sin localidad" es una localidad real en la tabla localities
-</file>
-
-<file path="jsconfig.json">
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./*"]
-    }
-  }
-}
-</file>
-
-<file path="lib/supabase-server.js">
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-
-export function createSupabaseServerClient() {
-  const cookieStore = cookies();
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_KEY,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-}
-</file>
-
-<file path="lib/supabase.js">
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
-</file>
-
-<file path="middleware.js">
-import { createServerClient } from '@supabase/ssr';
+<file path="app/auth/callback/route.js">
 import { NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
 
-export async function middleware(request) {
-  let response = NextResponse.next({ request });
+export async function GET(request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
+  if (code) {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    console.log('AUTH CALLBACK - code:', code);
+    console.log('AUTH CALLBACK - data:', data);
+    console.log('AUTH CALLBACK - error:', error);
+    if (error) {
+      return NextResponse.redirect(`${origin}?auth_error=${error.message}`);
     }
-  );
+  }
 
-  // Refresca la sesión si el token expiró — escribe cookies actualizadas en la respuesta
-  await supabase.auth.getUser();
-
-  return response;
+  const next = searchParams.get('next');
+  const redirectTo = next === '/admin' ? `${origin}/admin` : `${origin}/`;
+  return NextResponse.redirect(redirectTo);
 }
-
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-};
-</file>
-
-<file path="next.config.mjs">
-/** @type {import('next').NextConfig} */
-const nextConfig = {};
-
-export default nextConfig;
-</file>
-
-<file path="README.md">
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-</file>
-
-<file path="sql/setup.sql">
--- ============================================================
--- INKORA — Setup SQL
--- Ejecutar en Supabase SQL Editor
--- ============================================================
-
--- ── LOCALIDADES ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS localities (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name             text NOT NULL,
-  price_per_unit   integer NOT NULL DEFAULT 500,
-  active           boolean NOT NULL DEFAULT true,
-  created_at       timestamptz DEFAULT now()
-);
-
-ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
-
--- Cualquiera puede leer localidades activas
-CREATE POLICY "public_read_localities"
-  ON localities FOR SELECT
-  USING (active = true);
-
--- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
-CREATE POLICY "admin_all_localities"
-  ON localities FOR ALL
-  USING (true)
-  WITH CHECK (true);
-
-
--- ── PERFILES ─────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS profiles (
-  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email         text,
-  name          text,
-  locality_id   uuid REFERENCES localities(id),
-  created_at    timestamptz DEFAULT now()
-);
-
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-
--- Cada usuario solo ve y edita su propio perfil
-CREATE POLICY "users_select_own_profile"
-  ON profiles FOR SELECT
-  USING (auth.uid() = id);
-
-CREATE POLICY "users_insert_own_profile"
-  ON profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "users_update_own_profile"
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id);
-
-
--- ── TRIGGER: crear perfil al registrarse ─────────────────────
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, name)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
-  );
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
-
--- ── RPC ADMIN: listar todos los perfiles ─────────────────────
--- SECURITY DEFINER permite que el anon key llame esta función
--- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
-CREATE OR REPLACE FUNCTION admin_get_profiles()
-RETURNS TABLE (
-  id           uuid,
-  email        text,
-  name         text,
-  locality_id  uuid,
-  locality_name text,
-  created_at   timestamptz
-)
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT
-    p.id,
-    p.email,
-    p.name,
-    p.locality_id,
-    l.name AS locality_name,
-    p.created_at
-  FROM profiles p
-  LEFT JOIN localities l ON p.locality_id = l.id
-  ORDER BY p.created_at DESC;
-$$;
-
-
--- ── RPC ADMIN: asignar localidad a usuario ───────────────────
-CREATE OR REPLACE FUNCTION admin_update_user_locality(
-  p_user_id    uuid,
-  p_locality_id uuid
-)
-RETURNS void
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  UPDATE profiles
-  SET locality_id = p_locality_id
-  WHERE id = p_user_id;
-$$;
 </file>
 
 <file path="app/dashboard/page.js">
@@ -838,27 +410,181 @@ const [savingProfile, setSavingProfile] = useState(false);
 }
 </file>
 
-<file path="app/layout.js">
-import { Barlow } from 'next/font/google';
-import './globals.css';
+<file path="app/page.module.css">
+.page {
+  --gray-rgb: 0, 0, 0;
+  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
+  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
 
-const barlow = Barlow({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
+  --button-primary-hover: #383838;
+  --button-secondary-hover: #f2f2f2;
 
-export const metadata = {
-  title: 'INKORA — Catálogo',
-  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
-};
+  display: grid;
+  grid-template-rows: 20px 1fr 20px;
+  align-items: center;
+  justify-items: center;
+  min-height: 100svh;
+  padding: 80px;
+  gap: 64px;
+  font-family: var(--font-geist-sans);
+}
 
-export default function RootLayout({ children }) {
-  return (
-    <html lang="es" className={barlow.className}>
-      <body>{children}</body>
-    </html>
-  );
+@media (prefers-color-scheme: dark) {
+  .page {
+    --gray-rgb: 255, 255, 255;
+    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
+    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
+
+    --button-primary-hover: #ccc;
+    --button-secondary-hover: #1a1a1a;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  grid-row-start: 2;
+}
+
+.main ol {
+  font-family: var(--font-geist-mono);
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  list-style-position: inside;
+}
+
+.main li:not(:last-of-type) {
+  margin-bottom: 8px;
+}
+
+.main code {
+  font-family: inherit;
+  background: var(--gray-alpha-100);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ctas {
+  display: flex;
+  gap: 16px;
+}
+
+.ctas a {
+  appearance: none;
+  border-radius: 128px;
+  height: 48px;
+  padding: 0 20px;
+  border: none;
+  border: 1px solid transparent;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+a.primary {
+  background: var(--foreground);
+  color: var(--background);
+  gap: 8px;
+}
+
+a.secondary {
+  border-color: var(--gray-alpha-200);
+  min-width: 180px;
+}
+
+.footer {
+  grid-row-start: 3;
+  display: flex;
+  gap: 24px;
+}
+
+.footer a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer img {
+  flex-shrink: 0;
+}
+
+/* Enable hover only on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+  a.primary:hover {
+    background: var(--button-primary-hover);
+    border-color: transparent;
+  }
+
+  a.secondary:hover {
+    background: var(--button-secondary-hover);
+    border-color: transparent;
+  }
+
+  .footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 32px;
+    padding-bottom: 80px;
+  }
+
+  .main {
+    align-items: center;
+  }
+
+  .main ol {
+    text-align: center;
+  }
+
+  .ctas {
+    flex-direction: column;
+  }
+
+  .ctas a {
+    font-size: 14px;
+    height: 40px;
+    padding: 0 16px;
+  }
+
+  a.secondary {
+    min-width: auto;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo {
+    filter: invert();
+  }
+}
+</file>
+
+<file path="jsconfig.json">
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
 }
 </file>
 
@@ -872,6 +598,267 @@ export function createBrowserSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_KEY
   );
+}
+</file>
+
+<file path="lib/supabase-server.js">
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export function createSupabaseServerClient() {
+  const cookieStore = cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+}
+</file>
+
+<file path="lib/supabase.js">
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+</file>
+
+<file path="middleware.js">
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse } from 'next/server';
+
+export async function middleware(request) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // Refresca la sesión si el token expiró — escribe cookies actualizadas en la respuesta
+  await supabase.auth.getUser();
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+</file>
+
+<file path="next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+export default nextConfig;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="sql/setup.sql">
+-- ============================================================
+-- INKORA — Setup SQL
+-- Ejecutar en Supabase SQL Editor
+-- ============================================================
+
+-- ── LOCALIDADES ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS localities (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text NOT NULL,
+  price_per_unit   integer NOT NULL DEFAULT 500,
+  active           boolean NOT NULL DEFAULT true,
+  created_at       timestamptz DEFAULT now()
+);
+
+ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
+
+-- Cualquiera puede leer localidades activas
+CREATE POLICY "public_read_localities"
+  ON localities FOR SELECT
+  USING (active = true);
+
+-- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
+CREATE POLICY "admin_all_localities"
+  ON localities FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+
+-- ── PERFILES ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS profiles (
+  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         text,
+  name          text,
+  locality_id   uuid REFERENCES localities(id),
+  created_at    timestamptz DEFAULT now()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Cada usuario solo ve y edita su propio perfil
+CREATE POLICY "users_select_own_profile"
+  ON profiles FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "users_insert_own_profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "users_update_own_profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+
+-- ── TRIGGER: crear perfil al registrarse ─────────────────────
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+
+-- ── RPC ADMIN: listar todos los perfiles ─────────────────────
+-- SECURITY DEFINER permite que el anon key llame esta función
+-- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
+CREATE OR REPLACE FUNCTION admin_get_profiles()
+RETURNS TABLE (
+  id           uuid,
+  email        text,
+  name         text,
+  locality_id  uuid,
+  locality_name text,
+  created_at   timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    p.id,
+    p.email,
+    p.name,
+    p.locality_id,
+    l.name AS locality_name,
+    p.created_at
+  FROM profiles p
+  LEFT JOIN localities l ON p.locality_id = l.id
+  ORDER BY p.created_at DESC;
+$$;
+
+
+-- ── RPC ADMIN: asignar localidad a usuario ───────────────────
+CREATE OR REPLACE FUNCTION admin_update_user_locality(
+  p_user_id    uuid,
+  p_locality_id uuid
+)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE profiles
+  SET locality_id = p_locality_id
+  WHERE id = p_user_id;
+$$;
+</file>
+
+<file path=".claude/settings.local.json">
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(vercel:*)",
+      "Bash(npx vercel:*)",
+      "Bash(npx supabase:*)",
+      "Skill(keybindings-help)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Skill(update-config)"
+    ]
+  }
 }
 </file>
 
@@ -961,6 +948,20 @@ export async function POST(request) {
 }
 </file>
 
+<file path="app/catalogo/[producto]/page.js">
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function ProductoPage({ params }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/catalogo?producto=${params.producto}`);
+  }, [params.producto, router]);
+  return null;
+}
+</file>
+
 <file path="components/AuthModal.js">
 'use client';
 
@@ -1027,7 +1028,7 @@ export default function AuthModal({ onClose, onSuccess }) {
     setError('');
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
+      options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
     });
     if (e) setError(translateError(e.message));
   }
@@ -1119,6 +1120,43 @@ const styles = {
 };
 </file>
 
+<file path="CONTEXT.md">
+# INKORA - Contexto del proyecto
+
+## Stack
+- Next.js 14 (App Router)
+- Supabase (DB + Auth + Storage)
+- Vercel (deploy automático desde GitHub)
+- Resend (emails)
+
+## URLs
+- Producción: inkora-next.vercel.app
+- Dominio en propagación: inkora.com.ar
+- Admin: /admin
+- Panel usuario: /dashboard
+
+## Supabase
+- URL: https://ylawwaoznxzxwetlkjel.supabase.co
+- Bucket storage: assets (carpeta thumbnails)
+
+## WhatsApp
+- Número: 5493765211017
+
+## Deploy
+- git add . && git commit -m "mensaje" && git push
+- Vercel detecta el push y deploya automáticamente
+- Antes de pushear: CI=true npm run build
+
+## Tablas principales Supabase
+- products, designs, orders, localities, price_tiers, profiles, admins, carts
+
+## Notas importantes
+- Google OAuth configurado en Supabase
+- Admin usa tabla "admins" para verificar acceso
+- Precios escalonados por localidad en price_tiers
+- "Sin localidad" es una localidad real en la tabla localities
+</file>
+
 <file path="lib/auth.js">
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 
@@ -1139,7 +1177,7 @@ export async function signIn({ email, password }) {
 export async function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: 'https://inkora-next.vercel.app/auth/callback' },
+    options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
   });
 }
 
@@ -1162,20 +1200,29 @@ export async function getUserProfile(userId) {
 }
 </file>
 
-<file path=".claude/settings.local.json">
+<file path="package.json">
 {
-  "permissions": {
-    "defaultMode": "bypassPermissions",
-    "allow": [
-      "Bash(npm run:*)",
-      "Bash(vercel:*)",
-      "Bash(npx vercel:*)",
-      "Bash(npx supabase:*)",
-      "Skill(keybindings-help)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)",
-      "Skill(update-config)"
-    ]
+  "name": "inkora-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.0",
+    "fuse.js": "^7.3.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35"
   }
 }
 </file>
@@ -1222,6 +1269,102 @@ const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
 }
 </file>
 
+<file path="app/layout.js">
+import { Barlow } from 'next/font/google';
+import './globals.css';
+import { CartProvider } from '@/contexts/CartContext';
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'INKORA',
+  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" className={barlow.className}>
+      <body><CartProvider>{children}</CartProvider></body>
+    </html>
+  );
+}
+</file>
+
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('inkora_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  function addToCart(design, product) {
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
+}
+</file>
+
 <file path="app/globals.css">
 * {
   box-sizing: border-box;
@@ -1250,6 +1393,7 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .tier-input {
@@ -1267,57 +1411,1318 @@ input[type="number"] {
 .tier-input:focus {
   border-bottom: 1px solid #2D6BE4;
 }
-</file>
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-<file path="package.json">
-{
-  "name": "inkora-next",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.0",
-    "fuse.js": "^7.3.0",
-    "next": "14.2.35",
-    "react": "^18",
-    "react-dom": "^18",
-    "three": "^0.184.0"
-  },
-  "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
-  }
+body {
+  animation: fadeIn 0.3s ease;
+}
+.header-btn {
+  transition: box-shadow 0.3s ease, background 0.2s ease;
+}
+div.header-btn {
+  transition: box-shadow 0.3s ease;
+}
+.header-btn:hover {
+  box-shadow: 0 0 14px rgba(45,107,228,0.6);
+}
+.product-card:hover {
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 20px rgba(45,107,228,0.4);
 }
 </file>
 
-<file path="app/auth/callback/route.js">
-import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase-server';
+<file path="components/ModelViewer.js">
+'use client';
 
-export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
+import { useEffect, useRef, useState } from 'react';
 
-  if (code) {
-    const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    console.log('AUTH CALLBACK - code:', code);
-    console.log('AUTH CALLBACK - data:', data);
-    console.log('AUTH CALLBACK - error:', error);
-    if (error) {
-      return NextResponse.redirect(`${origin}?auth_error=${error.message}`);
+export default function ModelViewer({ url, autoRotate = false }) {
+  const mountRef = useRef(null);
+  const cleanupRef = useRef(null);
+  const [status, setStatus] = useState('loading');
+
+  useEffect(() => {
+    if (!url || !mountRef.current) return;
+
+    let cancelled = false;
+    setStatus('loading');
+
+    async function init() {
+      try {
+        const THREE = await import('three');
+        const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+        const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
+
+        if (cancelled) return;
+        const el = mountRef.current;
+        if (!el) return;
+
+        // Esperar dimensiones reales
+        await new Promise(resolve => {
+          if (el.clientWidth > 0 && el.clientHeight > 0) { resolve(); return; }
+          const ro = new ResizeObserver(() => {
+            if (el.clientWidth > 0 && el.clientHeight > 0) { ro.disconnect(); resolve(); }
+          });
+          ro.observe(el);
+        });
+
+        if (cancelled) return;
+
+        const w = el.clientWidth;
+        const h = el.clientHeight;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(w, h);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        el.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 10000);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const dir = new THREE.DirectionalLight(0xffffff, 2);
+        dir.position.set(5, 10, 7);
+        scene.add(dir);
+        const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+        fill.position.set(-5, -5, -5);
+        scene.add(fill);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableZoom = true;
+        controls.enablePan = false;
+        controls.autoRotate = autoRotate === true;
+        controls.autoRotateSpeed = 10;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const loader = new GLTFLoader();
+        loader.load(
+          url,
+          (gltf) => {
+            if (cancelled) return;
+            const model = gltf.scene;
+            scene.add(model);
+
+            // Calcular bounding box DESPUÉS de agregar a la escena
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+
+            console.log('Model size:', size, 'maxDim:', maxDim, 'center:', center);
+
+            // Centrar el modelo en el origen
+            model.position.set(-center.x, -center.y, -center.z);
+
+            // Posicionar cámara basada en el tamaño real del modelo
+            const fov = camera.fov * (Math.PI / 180);
+            const aspect = w / h;
+            // Distancia para que el modelo entre en pantalla con margen
+            const distV = (maxDim / 2) / Math.tan(fov / 2);
+            const distH = (maxDim / 2) / Math.tan((fov * aspect) / 2);
+            const dist = Math.max(distV, distH) * 1.5;
+
+            camera.position.set(0, 0, dist);
+            camera.near = dist / 1000;
+            camera.far = dist * 100;
+            camera.updateProjectionMatrix();
+
+            controls.target.set(0, 0, 0);
+            controls.minDistance = dist * 0.3;
+            controls.maxDistance = dist * 5;
+            controls.update();
+
+            console.log('Camera distance:', dist, 'near:', camera.near, 'far:', camera.far);
+
+            setStatus('ready');
+          },
+          undefined,
+          (err) => {
+            if (cancelled) return;
+            console.error('GLB load error:', err);
+            setStatus('error');
+          }
+        );
+
+        let animId;
+        const animate = () => {
+          animId = requestAnimationFrame(animate);
+          controls.update();
+          renderer.render(scene, camera);
+        };
+        animate();
+
+        const ro = new ResizeObserver(() => {
+          if (!el || cancelled) return;
+          const nw = el.clientWidth;
+          const nh = el.clientHeight;
+          if (!nw || !nh) return;
+          camera.aspect = nw / nh;
+          camera.updateProjectionMatrix();
+          renderer.setSize(nw, nh);
+        });
+        ro.observe(el);
+
+        cleanupRef.current = () => {
+          cancelAnimationFrame(animId);
+          ro.disconnect();
+          controls.dispose();
+          renderer.dispose();
+          if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
+        };
+
+      } catch (err) {
+        if (!cancelled) {
+          console.error('ModelViewer init error:', err);
+          setStatus('error');
+        }
+      }
+    }
+
+    init();
+
+    return () => {
+      cancelled = true;
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, [url]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
+
+      {status === 'loading' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          background: '#eef0f6', gap: 8,
+        }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+              stroke="#9aa3bc" strokeWidth="2" strokeLinecap="round"
+            >
+              <animateTransform
+                attributeName="transform" type="rotate"
+                from="0 12 12" to="360 12 12"
+                dur="1s" repeatCount="indefinite"
+              />
+            </path>
+          </svg>
+          <span style={{ fontSize: 11, color: '#9aa3bc' }}>Cargando modelo...</span>
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          background: '#fef2f2', gap: 4,
+        }}>
+          <span style={{ fontSize: 22 }}>⚠</span>
+          <span style={{ fontSize: 11, color: '#dc2626' }}>No se pudo cargar el modelo</span>
+        </div>
+      )}
+
+      {status === 'ready' && (
+        <div style={{
+          position: 'absolute', bottom: 5, right: 8,
+          fontSize: 10, color: 'rgba(0,0,0,0.3)',
+          pointerEvents: 'none', userSelect: 'none',
+        }}>
+          Arrastrá para rotar
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="app/catalogo/page.js">
+'use client';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Fuse from 'fuse.js';
+import { supabase } from '@/lib/supabase';
+import AuthModal from '@/components/AuthModal';
+import ModelViewer from '@/components/ModelViewer';
+import { useCart } from '@/contexts/CartContext';
+import Header from '@/components/Header';
+
+const SearchIconWhite = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="6.5" cy="6.5" r="4.5" stroke="white" strokeWidth="1.5"/>
+    <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function generateCode() {
+  const year = new Date().getFullYear();
+  const num = String(Math.floor(Math.random() * 9000) + 1000);
+  return 'INK-' + year + '-' + num;
+}
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 768);
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+}
+
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+export default function Home() {
+  const [products, setProducts] = useState([]);
+  const [activeProductId, setActiveProductId] = useState(null);
+  const [designsByProduct, setDesignsByProduct] = useState({});
+  const [gridOpacity, setGridOpacity] = useState(1);
+  const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
+  const [filter, setFilter] = useState('Todos');
+  const [notes, setNotes] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [orderCode, setOrderCode] = useState(generateCode());
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [success, setSuccess] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
+  const [loading, setLoading] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stickySearchVisible, setStickySearchVisible] = useState(false);
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const inlineSearchRef = useRef(null);
+  const [qtyAnim, setQtyAnim] = useState({});
+  const [cardPulse, setCardPulse] = useState({});
+  const [cardHover, setCardHover] = useState({});
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [priceTiers, setPriceTiers] = useState([]);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [uiSettings, setUiSettings] = useState({});
+
+  const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
+
+  const width = useWindowWidth();
+  const isMobile = width < 768;
+
+  const activeProduct = products.find(p => p.id === activeProductId) || null;
+  const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
+
+  useEffect(() => {
+    document.body.style.paddingBottom = '1px';
+    loadProducts();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
+    });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+
+    const originalTitle = document.title;
+    let awayInterval;
+    let awayToggle = false;
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        awayInterval = setInterval(() => {
+          document.title = awayToggle ? 'INKORA' : 'INKORA 🔷';
+          awayToggle = !awayToggle;
+        }, 1000);
+      } else {
+        clearInterval(awayInterval);
+        awayIndex = 0;
+        document.title = originalTitle;
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(awayInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
+    setProfile(data);
+    if (data?.locality_id) {
+      const { data: tiers } = await supabase.from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
+      setPriceTiers(tiers || []);
+    } else {
+      const { data: tiers } = await supabase.from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
+      setPriceTiers(tiers || []);
     }
   }
 
-  const next = searchParams.get('next');
-  const redirectTo = next === '/admin' ? `${origin}/admin` : `${origin}/`;
-  return NextResponse.redirect(redirectTo);
+  function switchProduct(id) {
+    if (id === activeProductId) return;
+    setGridTransition('opacity 0.15s ease');
+    setGridOpacity(0);
+    setTimeout(() => {
+      setActiveProductId(id);
+      setFilter('Todos');
+      setSearchQuery('');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setGridTransition('opacity 0.2s ease');
+        setGridOpacity(1);
+      }));
+    }, 160);
+  }
+
+  useEffect(() => {
+    const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
+    let lastY = getScrollY();
+    const handler = () => {
+      const currentY = getScrollY();
+      if (currentY < 10) { setHeaderVisible(true); }
+      else if (currentY > lastY) { setHeaderVisible(false); }
+      else if (currentY < lastY) { setHeaderVisible(true); }
+      lastY = currentY;
+    };
+    document.addEventListener('scroll', handler, { passive: true });
+    return () => document.removeEventListener('scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) return;
+    const el = inlineSearchRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setStickySearchVisible(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isMobile]);
+
+  async function loadProducts() {
+    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
+    if (data && data.length > 0) {
+      setProducts(data);
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('producto');
+      const match = slug ? data.find(p => toSlug(p.name) === slug) : null;
+      setActiveProductId(match ? match.id : data[0].id);
+      loadAllDesigns(data);
+    }
+  }
+
+  async function loadAllDesigns(productList) {
+    const results = await Promise.all(
+      productList.map(p =>
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
+      )
+    );
+    const map = {};
+    productList.forEach((p, i) => {
+      if (results[i].data) map[p.id] = results[i].data;
+    });
+    setDesignsByProduct(map);
+  }
+
+  const fuse = useMemo(() => new Fuse(designs, {
+    keys: ['name', 'tags'],
+    threshold: 0.6,
+    distance: 100,
+    ignoreLocation: true,
+    minMatchCharLength: 1,
+  }), [designs]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return designs;
+    return fuse.search(searchQuery.trim()).map(r => r.item);
+  }, [searchQuery, fuse, designs]);
+
+  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoria'))];
+  const filtered = searchQuery.trim()
+    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
+    : (filter === 'Todos' ? designs : designs.filter(d => {
+        const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category ? [d.category] : []);
+        return cats.includes(filter);
+      }));
+  const showPrices = !!user;
+
+  const cartByProduct = cartItems.reduce((acc, item) => {
+    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
+    return acc;
+  }, {});
+
+  function getProductMinQty(productId) {
+    const tiers = priceTiers.filter(t => t.product_id === productId);
+    if (tiers.length === 0) return null;
+    return Math.min(...tiers.map(t => Number(t.min_quantity)));
+  }
+
+  function getUnitPrice(productId) {
+    const totalQty = cartByProduct[productId] || 0;
+    const productTiers = priceTiers
+      .filter(t => t.product_id === productId)
+      .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
+    if (productTiers.length > 0) {
+      const minRequired = Number(productTiers[0].min_quantity);
+      if (totalQty < minRequired) return null;
+      const applicable = productTiers
+        .filter(t => Number(t.min_quantity) <= totalQty)
+        .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
+      if (applicable.length > 0) return Number(applicable[0].price_per_unit);
+    }
+    return null;
+  }
+
+  const total = cartItems
+    .filter(i => i.showPrice !== false)
+    .reduce((s, i) => {
+      const price = getUnitPrice(i.product_id);
+      return s + (price !== null ? i.qty * price : 0);
+    }, 0);
+  const showTotal = showPrices && cartItems.some(i => {
+    const price = getUnitPrice(i.product_id);
+    return i.showPrice !== false && price !== null && price > 0;
+  });
+
+  const gridCols = isMobile
+    ? 'repeat(' + (activeProduct?.columns_mobile ?? 2) + ', 1fr)'
+    : 'repeat(' + (activeProduct?.columns_desktop ?? 5) + ', 1fr)';
+  const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
+
+  function addToCart(design) {
+    const product = products.find(p => p.id === design.product_id);
+    addToCartCtx(design, product);
+    triggerQtyAnim(design.id, 'pop');
+    triggerCardPulse(design.id);
+  }
+
+  function changeQty(id, delta) {
+    changeQtyCtx(id, delta);
+    triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
+    triggerCardPulse(id);
+  }
+
+  function openModal() {
+    if (user) {
+      setForm({
+        name: profile?.name || '',
+        email: user.email || '',
+        phone: profile?.phone || '',
+      });
+    }
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setSuccess(false);
+    setConfirmedOrder({ items: [], total: 0, form: {} });
+    setOrderCode(generateCode());
+  }
+
+  function triggerQtyAnim(id, type) {
+    setQtyAnim(prev => ({ ...prev, [id]: type }));
+    setTimeout(() => setQtyAnim(prev => { const n = { ...prev }; delete n[id]; return n; }), 200);
+  }
+
+  function triggerCardPulse(id) {
+    setCardPulse(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => setCardPulse(prev => { const n = { ...prev }; delete n[id]; return n; }), 350);
+  }
+
+  async function submitOrder() {
+    if (!form.name || !form.phone || !form.email) {
+      alert('Por favor completa todos los campos.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await supabase.from('orders').insert({
+        order_code: orderCode,
+        customer_name: form.name,
+        customer_phone: form.phone,
+        customer_email: form.email,
+        items: cartItems,
+        total,
+        notes,
+        status: 'pending'
+      });
+
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderCode, form, cartItems, total, notes })
+      });
+
+      setConfirmedOrder({ items: cartItems, total, form });
+      setSuccess(true);
+      clearCart();
+      setNotes('');
+    } catch (e) {
+      alert('Hubo un error. Intenta de nuevo.');
+    }
+    setLoading(false);
+  }
+
+  const s = styles;
+
+  return (
+    <div style={s.app}>
+      <style>{`
+        @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
+        @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
+        @keyframes card-pulse { 0% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } 35% { border-color: #2D6BE4; box-shadow: 0 0 0 3px rgba(45,107,228,0.25), 0 2px 8px rgba(27,47,94,0.08); } 100% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } }
+        .qty-pop { animation: qty-pop 200ms ease-out; }
+        .qty-shrink { animation: qty-shrink 200ms ease-out; }
+        .card-pulse { animation: card-pulse 350ms ease-out; }
+        input::placeholder { color: rgba(255,255,255,0.6); }
+        .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
+        .qty-input::placeholder { color: #9aa3bc; }
+        .qty-input:focus::placeholder { color: transparent; }
+      `}</style>
+
+      <Header headerVisible={headerVisible} showCart={false} page="catalogo" />
+
+      {isMobile && (
+        <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
+          <span style={s.searchIcon}><SearchIconWhite /></span>
+          <input
+            className="desktop-search-input"
+            style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar diseno..."
+          />
+          {searchQuery && (
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        ...s.layout,
+        alignItems: 'start',
+        flex: 1,
+        width: '100%',
+        minHeight: 'calc(100vh - 64px)',
+        gridTemplateColumns: '1fr',
+        padding: isMobile ? 16 : 24,
+        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : 388),
+        paddingTop: isMobile ? 72 : 24,
+        paddingBottom: isMobile ? 88 : 24,
+        transition: isMobile ? 'padding-top 0.3s ease' : undefined,
+      }}>
+        <div style={s.catalogArea}>
+          <div style={s.catalogHeader}>
+            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catalogo</h1>
+            <p style={s.subtitle}>Selecciona los disenos y arma tu pedido</p>
+          </div>
+
+          {products.length > 1 && (
+            <div style={s.productTabs}>
+              {products.map(p => (
+                <button
+                  key={p.id}
+                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
+                  onClick={() => switchProduct(p.id)}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={s.filters}>
+            {categories.map(cat => (
+              <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
+                onClick={() => setFilter(cat)}>
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {!isMobile && (
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
+              <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
+                <span style={s.searchIcon}><SearchIconWhite /></span>
+                <input
+                  className="desktop-search-input"
+                  style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif' }}
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar diseno..."
+                />
+                {searchQuery && (
+                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>X</button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
+          {designs.length === 0 ? (
+            <div style={s.emptyState}><p>No hay disenos todavia.</p></div>
+          ) : filtered.length === 0 ? (
+            <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
+          ) : (
+            <div style={{...s.grid, gridTemplateColumns: gridCols}}>
+              {filtered.map(d => {
+                const inCart = cart[d.id];
+                const isHovered = cardHover[d.id];
+                const isPulsing = cardPulse[d.id];
+                return (
+                  <div
+                    key={d.id}
+                    className={isPulsing ? 'card-pulse' : ''}
+                    style={{
+                      ...s.card,
+                      transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                      boxShadow: isHovered
+                        ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
+                        : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    }}
+                    onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
+                    onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
+                  >
+                    <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
+                      {d.model_url
+                        ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} />
+                        : d.image_url
+                        ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
+                        : <span style={{fontSize:36}}>🎨</span>}
+                    </div>
+                    <div style={s.cardBody}>
+                      <div style={s.cardName}>{d.name}</div>
+                      {d.category !== 'Sin categoria' && <span style={s.catTag}>{d.category}</span>}
+                      {showPrices && activeProduct?.show_price !== false && (() => {
+                        const price = getUnitPrice(activeProductId);
+                        if (price !== null && price > 0) {
+                          return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
+                        }
+                        return null;
+                      })()}
+                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>-</button>
+                        <input
+                          type="number"
+                          className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
+                          style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
+                          value={inCart ? inCart.qty : ''}
+                          placeholder="0"
+                          onFocus={e => { if (!inCart) e.target.value = ''; else e.target.select(); }}
+                          onChange={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                            else if (!inCart) addToCart(d);
+                            else setCartItem(d.id, val);
+                          }}
+                          onBlur={e => {
+                            const val = parseInt(e.target.value);
+                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                          }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+                          min="0"
+                        />
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
+                          if (inCart) changeQty(d.id, 1);
+                          else addToCart(d);
+                        }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          </div>
+        </div>
+
+        {!isMobile && (
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+            {sidebarCollapsed ? (
+              <div
+                onClick={() => setSidebarCollapsed(false)}
+                style={{flex:1, background:'#1B2F5E', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', writingMode:'vertical-rl', color:'rgba(255,255,255,0.7)', fontSize:11, fontWeight:700, letterSpacing:2, userSelect:'none', gap:8, flexDirection:'column'}}
+              >
+                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>◀</span>
+                <span>TU PEDIDO</span>
+                {totalItems > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{totalItems}</span>}
+              </div>
+            ) : (
+              <>
+                <div style={s.sidebarHeader}>
+                  <span style={s.sidebarTitle}>Tu Pedido</span>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
+                    <span style={s.badge}>{totalItems} items</span>
+                  </div>
+                </div>
+                <div style={s.sidebarBody}>
+                  {cartItems.length === 0 ? (
+                    <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
+                  ) : (
+                    cartItems.map(item => (
+                      <div key={item.id} style={s.cartItem}>
+                        {item.image_url && (
+                          <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                        )}
+                        <div style={s.cartItemInfo}>
+                          <div style={s.cartItemName}>{item.name}</div>
+                          {showPrices && item.showPrice !== false && (() => {
+                            const price = getUnitPrice(item.product_id);
+                            if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                            return null;
+                          })()}
+                        </div>
+                        <div style={s.cartItemRight}>
+                          <span style={s.cartQty}>x{item.qty}</span>
+                          {showPrices && item.showPrice !== false && (() => {
+                            const price = getUnitPrice(item.product_id);
+                            if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                            return null;
+                          })()}
+                        </div>
+                        <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div style={s.sidebarFooter}>
+                  <div style={s.totalRow}>
+                    <span>Total</span>
+                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+                  </div>
+                  <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                    placeholder="Notas adicionales..." rows={2} />
+                  <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                    disabled={cartItems.length === 0} onClick={openModal}>
+                    Confirmar pedido →
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {isMobile && (
+        <>
+          {cartPanelOpen && (
+            <div style={s.cartPanelBackdrop} onClick={() => setCartPanelOpen(false)} />
+          )}
+          <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
+            <div style={s.cartPanelHeader}>
+              <span style={s.cartPanelTitle}>Tu Pedido</span>
+              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>X</button>
+            </div>
+            <div style={s.cartPanelBody}>
+              {cartItems.length === 0 ? (
+                <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
+              ) : (
+                cartItems.map(item => (
+                  <div key={item.id} style={s.cartItem}>
+                    {item.image_url && (
+                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    )}
+                    <div style={s.cartItemInfo}>
+                      <div style={s.cartItemName}>{item.name}</div>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        return null;
+                      })()}
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartQty}>x{item.qty}</span>
+                      {showPrices && item.showPrice !== false && (() => {
+                        const price = getUnitPrice(item.product_id);
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        return null;
+                      })()}
+                    </div>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={s.cartPanelFooter}>
+              <div style={s.totalRow}>
+                <span>Total</span>
+                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+              </div>
+              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Notas adicionales..." rows={2} />
+              <button
+                style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                disabled={cartItems.length === 0}
+                onClick={() => { setCartPanelOpen(false); openModal(); }}
+              >
+                Confirmar pedido →
+              </button>
+            </div>
+          </div>
+          <div style={s.mobileBar}>
+            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
+              <span style={s.mobileBadge}>{totalItems}</span>
+              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' item' + (totalItems !== 1 ? 's' : '')}</span>
+              <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
+            </button>
+            <button
+              style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
+              disabled={cartItems.length === 0}
+              onClick={openModal}
+            >
+              Confirmar →
+            </button>
+          </div>
+        </>
+      )}
+
+      {modalOpen && (
+        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) closeModal(); }}>
+          <div style={s.modal}>
+            {!success ? (
+              <>
+                <div style={s.modalHeader}>
+                  <span>Confirmar Pedido</span>
+                  <button style={s.closeBtn} onClick={closeModal}>X</button>
+                </div>
+                <div style={s.modalBody}>
+                  <div style={s.codeBanner}>
+                    <small style={s.codeLabel}>Codigo de pedido</small>
+                    <strong style={s.codeValue}>{orderCode}</strong>
+                  </div>
+                  {user ? (
+                    <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
+                      Pedido como cliente registrado.
+                    </div>
+                  ) : (
+                    <div style={s.notice}>
+                      <strong>Cliente no registrado.</strong> Vamos a pedirte confirmacion por WhatsApp antes de procesar el pedido.
+                    </div>
+                  )}
+                  <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Nombre *</label>
+                      <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
+                    </div>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Telefono *</label>
+                      <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
+                    </div>
+                  </div>
+                  <div style={s.formGroup}>
+                    <label style={s.label}>Email *</label>
+                    <input style={s.input} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="tu@email.com" />
+                  </div>
+                  <div style={s.orderSummary}>
+                    {cartItems.map(i => (
+                      <div key={i.id} style={s.summaryItem}>
+                        <span>{i.name} x {i.qty}</span>
+                        {showPrices && i.showPrice !== false && (() => {
+                          const price = getUnitPrice(i.product_id);
+                          if (price === null) return null;
+                          if (price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
+                          return null;
+                        })()}
+                      </div>
+                    ))}
+                    <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
+                      <span>Total</span>
+                      <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+                    </div>
+                  </div>
+                  <div style={s.modalActions}>
+                    <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
+                    <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
+                      {loading ? 'Enviando...' : 'Enviar pedido'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={s.successScreen}>
+                <div style={s.successIcon}>✓</div>
+                <h3 style={s.successTitle}>Pedido enviado!</h3>
+                <p>Codigo de tu pedido:</p>
+                <div style={s.successCode}>{orderCode}</div>
+                <p>Te enviamos la confirmacion a tu email.</p>
+                <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
+                  "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
+                  Confirmar por WhatsApp
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {uiSettings['catalogo_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent('Hola! Vengo desde la pagina. ')}
+          target="_blank"
+          rel="noreferrer"
+          style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
+      <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
+        <strong>INKORA</strong> Soluciones Graficas - Todos los derechos reservados 2026
+      </footer>
+
+      {clearConfirmOpen && (
+        <div style={s.overlay} onClick={() => setClearConfirmOpen(false)}>
+          <div style={{background:'white', borderRadius:16, padding:24, maxWidth:320, width:'100%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:32, marginBottom:12}}>🗑️</div>
+            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>Limpiar pedido?</h3>
+            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los disenos del carrito.</p>
+            <div style={{display:'flex', gap:10}}>
+              <button style={s.btnSecondary} onClick={() => setClearConfirmOpen(false)}>Cancelar</button>
+              <button style={s.btnPrimary} onClick={() => { clearCart(); setClearConfirmOpen(false); }}>Limpiar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => setAuthModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
+  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
+  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0 },
+  layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
+  catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
+  catalogHeader: { marginBottom: 16 },
+  h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
+  subtitle: { color: '#5a6380', fontSize: 14 },
+  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
+  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
+  searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
+  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
+  filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
+  filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  grid: { display: 'grid', gap: 14 },
+  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
+  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
+  img: { width: '100%', height: '100%', objectFit: 'contain', display: 'block' },
+  catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
+  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 },
+  cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
+  cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
+  cardMinQty: { fontSize: 11, color: '#9aa3bc', fontWeight: 500 },
+  cartMinQty: { fontSize: 11, color: '#9aa3bc', fontStyle: 'italic' },
+  qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
+  qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
+  qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
+  emptyState: { textAlign: 'center', padding: 40, color: '#9aa3bc' },
+  sidebar: { background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', overflow: 'hidden' },
+  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
+  badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
+  sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
+  cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
+  cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
+  cartItemInfo: { flex: 1, minWidth: 0 },
+  cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
+  cartItemUnitPrice: { fontSize: 10, color: '#2D6BE4', fontWeight: 600 },
+  cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
+  cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
+  cartPrice: { fontSize: 12, color: '#5a6380' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 14 },
+  sidebarFooter: { padding: '16px 20px', borderTop: '1.5px solid #eef0f6' },
+  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontWeight: 700, color: '#1B2F5E', fontSize: 16 },
+  totalAmount: { fontSize: 20, fontWeight: 700 },
+  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
+  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
+  modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
+  modalBody: { padding: 24 },
+  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
+  codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
+  codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
+  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#7a5800' },
+  formRow: { display: 'grid', gap: 12 },
+  formGroup: { marginBottom: 14 },
+  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' },
+  orderSummary: { background: '#f7f8fc', borderRadius: 10, padding: 12, marginBottom: 16, maxHeight: 160, overflowY: 'auto' },
+  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderBottom: '1px solid #eef0f6' },
+  modalActions: { display: 'flex', gap: 10 },
+  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
+  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 10, padding: 12, fontSize: 16, fontWeight: 700, color: 'white', cursor: 'pointer' },
+  successScreen: { textAlign: 'center', padding: '32px 24px' },
+  successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
+  successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
+  btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
+  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none' },
+  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, paddingBottom: 64, fontSize: 12, marginTop: 40 },
+  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)' },
+  mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
+  mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
+  mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
+  mobileBarChevron: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
+  mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
+  cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },
+  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)' },
+  cartPanelHeader: { background: '#1B2F5E', borderRadius: '16px 16px 0 0', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  cartPanelTitle: { color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: 0.5 },
+  cartPanelClose: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
+  cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
+};
+</file>
+
+<file path="components/Header.js">
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useCart } from '@/contexts/CartContext';
+
+export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(null);
+  const [uiSettings, setUiSettings] = useState({});
+  const cartRef = useRef(null);
+  const { cartItems, totalItems, removeFromCart } = useCart();
+
+  useEffect(() => {
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
+        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
+    }
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (darkMode === null) return;
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
+  }, [darkMode]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else setProfile(null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (cartRef.current && !cartRef.current.contains(e.target)) {
+        setCartOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    setProfile(data);
+  }
+
+  return (
+    <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
+        <a href="/" className="header-btn" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', borderRadius: 12, transition: 'box-shadow 0.3s ease, transform 0.3s ease' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white' }}>
+            <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
+          </svg>
+        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
+            <div
+              onClick={() => setDarkMode(v => !v)}
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease, box-shadow 0.3s ease', flexShrink: 0 }}
+            >
+              <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                {darkMode ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ position: 'absolute', left: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0.3 : 0, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div style={{ position: 'absolute', right: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0 : 0.3, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
+            <div ref={cartRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setCartOpen(v => !v)}
+                className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                  <line x1="3" y1="6" x2="21" y2="6"/>
+                  <path d="M16 10a4 4 0 01-8 0"/>
+                </svg>
+                {totalItems > 0 && (
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+
+              {cartOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300 }}>
+                  <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
+                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{totalItems} items</span>
+                  </div>
+                  <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
+                    {cartItems.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '24px 16px', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                        Tu pedido está vacío
+                      </div>
+                    ) : (
+                      cartItems.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
+                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
+                          </div>
+                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {cartItems.length > 0 && (
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                        Ver pedido completo
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
+            <div style={{ position: 'relative' }}>
+              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
+                {profile?.name || user.email?.split('@')[0]} {'▾'}
+              </button>
+              {userMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
+                  <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
+                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            uiSettings[`${page}_show_account`] !== 'false' && <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
+              Ingresar
+            </button>
+          )}
+        </div>
+      </div>
+    </header>
+  );
 }
 </file>
 
@@ -1326,7 +2731,7 @@ export async function GET(request) {
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true };
+const EMPTY_PRODUCT = { name: '', slug: '', columns_desktop: 5, columns_mobile: 2, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
@@ -1412,7 +2817,6 @@ export default function Admin() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [pendingModel, setPendingModel] = useState(null);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
@@ -1422,6 +2826,8 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
+  const [designSearch, setDesignSearch] = useState('');
+  const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -1443,6 +2849,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
 
@@ -1455,6 +2862,10 @@ export default function Admin() {
 
   // ── Auth listener ──
   useEffect(() => {
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') return;
       if (event === 'SIGNED_IN' && session?.user?.email) {
@@ -1466,7 +2877,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders();
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings();
     }
   }, [screen]);
 
@@ -1481,7 +2892,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false };
+        forms[p.id] = { name: p.name, columns_desktop: p.columns_desktop, columns_mobile: p.columns_mobile, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -1499,7 +2910,7 @@ export default function Admin() {
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://inkora-next.vercel.app/admin' },
+      options: { redirectTo: 'https://www.inkora.com.ar/admin' },
     });
   }
 
@@ -1716,6 +3127,7 @@ export default function Admin() {
       file, preview: URL.createObjectURL(file),
       name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
       nameExists: false, sizeError: file.size > maxSizeKb * 1024,
+      modelFile: null,
     }));
     setPendingFiles(entries);
     e.target.value = '';
@@ -1747,27 +3159,37 @@ export default function Admin() {
     setUploading(true);
     let anyError = false;
     for (const entry of pendingFiles) {
-      if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
       try {
-        const base64 = await fileToBase64(entry.file);
-        const res = await fetch('/api/upload-image', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
-        });
-        const data = await res.json();
-        if (data.url) {
-          let modelUrl = null;
-          if (pendingModel) {
-            const modelBase64 = await fileToBase64(pendingModel);
-            const modelRes = await fetch('/api/upload-image', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileBase64: modelBase64, fileName: pendingModel.name, mimeType: 'model/gltf-binary', folder: 'models' }),
-            });
-            const modelData = await modelRes.json();
-            if (modelData.url) modelUrl = modelData.url;
-          }
-          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: data.url, model_url: modelUrl, active: true, product_id: selectedProductId });
-        } else { alert(`Error al subir "${entry.name}".`); anyError = true; }
+        let imageUrl = null;
+        let modelUrl = null;
+
+        // Subir imagen si existe
+        if (entry.file) {
+          if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
+          const base64 = await fileToBase64(entry.file);
+          const res = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: base64, fileName: entry.file.name, mimeType: entry.file.type, folder: 'thumbnails' }),
+          });
+          const data = await res.json();
+          if (data.url) imageUrl = data.url;
+          else { alert(`Error al subir "${entry.name}".`); anyError = true; continue; }
+        }
+
+        // Subir GLB si existe
+        if (entry.modelFile) {
+          const modelBase64 = await fileToBase64(entry.modelFile);
+          const modelRes = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: modelBase64, fileName: entry.modelFile.name, mimeType: 'application/octet-stream', folder: 'models' }),
+          });
+          const modelData = await modelRes.json();
+          if (modelData.url) modelUrl = modelData.url;
+        }
+
+        if (imageUrl || modelUrl) {
+          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId });
+        } else { alert(`"${entry.name}" no tiene imagen ni modelo.`); anyError = true; }
       } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
     setUploading(false);
@@ -1892,6 +3314,21 @@ export default function Admin() {
     });
   }
 
+  // ── Settings ──
+  async function loadSettings() {
+    const { data } = await supabase.from('settings').select('*');
+    if (data) {
+      const map = {};
+      data.forEach(s => { map[s.key] = s.value; });
+      setSettings(prev => ({ ...prev, ...map }));
+    }
+  }
+
+  async function saveSetting(key, value) {
+    await supabase.from('settings').upsert({ key, value });
+    setSettings(prev => ({ ...prev, [key]: value }));
+  }
+
   // ── Orders ──
   async function loadOrders() {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
@@ -1950,7 +3387,7 @@ export default function Admin() {
 
   const hasDupInBatch = (index, name) => name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
   const canSubmit = selectedProductId && pendingFiles.length > 0 &&
-    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError) &&
+    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
@@ -2010,7 +3447,7 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins']].map(([id, label]) => (
+          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Localidades'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
             <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
               {label}
               {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
@@ -2037,8 +3474,12 @@ export default function Admin() {
                       <th style={s.th}>Nombre</th>
                       <th style={s.th}>Cols PC</th>
                       <th style={s.th}>Cols Cel</th>
+                      <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
+                      <th style={s.th}>3D</th>
+                      <th style={s.th}>Rotación</th>
+                      <th style={s.th}>Img Landing</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -2065,12 +3506,63 @@ export default function Admin() {
                             <input ref={setRef(2)} style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={form.columns_mobile ?? 1} onChange={e => updateProductForm(p.id, 'columns_mobile', parseInt(e.target.value)||1)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
                           </td>
                           <td style={s.td}>
+                            <select style={{...s.tblInput, width: 72}} value={form.aspect_ratio || '2/3'} onChange={e => { updateProductForm(p.id, 'aspect_ratio', e.target.value); saveProduct(p.id, { aspect_ratio: e.target.value }); }}>
+                              <option value="1/1">1/1</option>
+                              <option value="2/3">2/3</option>
+                              <option value="3/4">3/4</option>
+                              <option value="4/3">4/3</option>
+                              <option value="3/2">3/2</option>
+                              <option value="16/9">16/9</option>
+                            </select>
+                          </td>
+                          <td style={s.td}>
                             <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="50" value={form.max_file_size_kb ?? 250} onChange={e => updateProductForm(p.id, 'max_file_size_kb', parseInt(e.target.value)||250)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => { const newVal = !form.show_price; updateProductForm(p.id, 'show_price', newVal); saveProduct(p.id, { show_price: newVal }); }}>
                               {form.show_price ? <EyeOpen /> : <EyeOff />}
                             </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <div
+                              onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); }}
+                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                            >
+                              <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <div
+                              onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
+                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                            >
+                              <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </div>
+                          </td>
+                          <td style={s.td}>
+                            <div style={{display:'flex', alignItems:'center', gap:6}}>
+                              {form.landing_image && <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{fontSize:10, maxWidth:100}}
+                                onChange={async e => {
+                                  const file = e.target.files[0];
+                                  if (!file) return;
+                                  const base64 = await fileToBase64(file);
+                                  const res = await fetch('/api/upload-image', {
+                                    method: 'POST', headers: {'Content-Type':'application/json'},
+                                    body: JSON.stringify({fileBase64: base64, fileName: file.name, mimeType: file.type, folder: 'landing'}),
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) {
+                                    updateProductForm(p.id, 'landing_image', data.url);
+                                    saveProduct(p.id, {landing_image: data.url});
+                                  }
+                                  e.target.value = '';
+                                }}
+                              />
+                            </div>
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
@@ -2087,11 +3579,37 @@ export default function Admin() {
                         <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="10" value={newProduct.columns_desktop} onChange={e => setNewProduct(p => ({...p, columns_desktop: parseInt(e.target.value)||1}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 58}} type="number" min="1" max="4" value={newProduct.columns_mobile} onChange={e => setNewProduct(p => ({...p, columns_mobile: parseInt(e.target.value)||1}))} /></td>
+                        <td style={s.td}>
+                          <select style={{...s.tblInput, width: 72}} value={newProduct.aspect_ratio} onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))}>
+                            <option value="1/1">1/1</option>
+                            <option value="2/3">2/3</option>
+                            <option value="3/4">3/4</option>
+                            <option value="4/3">4/3</option>
+                            <option value="3/2">3/2</option>
+                            <option value="16/9">16/9</option>
+                          </select>
+                        </td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="50" value={newProduct.max_file_size_kb} onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value)||250}))} /></td>
                         <td style={{...s.td, textAlign:'center'}}>
                           <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, show_price: !p.show_price}))}>
                             {newProduct.show_price ? <EyeOpen /> : <EyeOff />}
                           </button>
+                        </td>
+                        <td style={{...s.td, textAlign:'center'}}>
+                          <div
+                            onClick={() => setNewProduct(p => ({...p, allow_glb: !p.allow_glb}))}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                          >
+                            <div style={{ position: 'absolute', top: 2, left: newProduct.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </div>
+                        </td>
+                        <td style={{...s.td, textAlign:'center'}}>
+                          <div
+                            onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d}))}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                          >
+                            <div style={{ position: 'absolute', top: 2, left: newProduct.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </div>
                         </td>
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
@@ -2102,7 +3620,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={8} style={{padding:'10px 6px'}}>
+                      <td colSpan={11} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -2273,13 +3791,23 @@ export default function Admin() {
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
-              {selectedProductId && (
+              {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>Modelo 3D opcional (GLB)</label>
-                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => setPendingModel(e.target.files[0] || null)} />
-                  {pendingModel && <div style={{fontSize:11, color:'#18a36a', marginTop:3}}>✓ {pendingModel.name} ({(pendingModel.size/1024).toFixed(0)}kb)</div>}
+                  <label style={s.label}>O subir solo GLB (sin imagen)</label>
+                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const name = file.name.replace(/\.[^.]+$/, '');
+                    setPendingFiles(prev => {
+                      const existing = prev.find(p => !p.file && p.modelFile?.name === file.name);
+                      if (existing) return prev;
+                      return [...prev, { file: null, preview: null, name, category: 'Sin categoría', nameExists: false, sizeError: false, modelFile: file }];
+                    });
+                    e.target.value = '';
+                  }} />
                 </div>
               )}
+
               {pendingFiles.length > 0 && (
                 <>
                   <div style={s.fileList}>
@@ -2288,7 +3816,7 @@ export default function Admin() {
                       const hasError = entry.nameExists || dupInBatch || entry.sizeError;
                       return (
                         <div key={i} style={s.fileRow}>
-                          <img src={entry.preview} alt="" style={s.fileThumb} />
+                          {entry.preview ? <img src={entry.preview} alt="" style={s.fileThumb} /> : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>GLB</div>}
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
@@ -2299,6 +3827,21 @@ export default function Admin() {
                             <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
+                          {selectedProduct?.allow_glb && <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, minWidth: 110 }}>
+                            <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
+                            <input
+                              type="file"
+                              accept=".glb"
+                              style={{ fontSize: 11 }}
+                              onChange={e => {
+                                const file = e.target.files[0] || null;
+                                setPendingFiles(prev => { const next = [...prev]; next[i] = { ...next[i], modelFile: file }; return next; });
+                              }}
+                            />
+                            {entry.modelFile && (
+                              <span style={{ fontSize: 10, color: '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
+                            )}
+                          </div>}
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
@@ -2325,8 +3868,31 @@ export default function Admin() {
                   </button>
                 ))}
               </div>
+              <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom: 12, alignItems:'center'}}>
+                <input
+                  style={{...s.input, maxWidth: 220}}
+                  placeholder="Buscar diseño..."
+                  value={designSearch ?? ''}
+                  onChange={e => setDesignSearch(e.target.value)}
+                />
+                <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                  <button onClick={() => setDesignCatFilter('')} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: !designCatFilter ? '#1B2F5E' : '#eef0f6', color: !designCatFilter ? 'white' : '#5a6380', transition:'background 0.15s'}}>
+                    Todas
+                  </button>
+                  {[...new Set(designs.flatMap(d => Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : [])))].sort().map(c => (
+                    <button key={c} onClick={() => setDesignCatFilter(designCatFilter === c ? '' : c)} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: designCatFilter === c ? '#1B2F5E' : '#eef0f6', color: designCatFilter === c ? 'white' : '#5a6380', transition:'background 0.15s'}}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div onClick={() => setSelectedIds(new Set())}>
-              {designs.filter(d => designFilterProduct === 'all' || d.product_id === designFilterProduct).map(d => (
+              {designs.filter(d => {
+                const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
+                  && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
+                  && (!designCatFilter || cats.includes(designCatFilter));
+              }).map(d => (
                 <div
                   key={d.id}
                   draggable
@@ -2348,23 +3914,63 @@ export default function Admin() {
                   <div style={s.designInfo}>
                     {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
                     <div>
-                      <div style={s.designName}>{d.name}</div>
+                      <input
+                        style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
+                        value={d.name}
+                        onFocus={e => e.target.style.borderColor = '#dde1ef'}
+                        onBlur={async e => { e.target.style.borderColor = 'transparent'; await supabase.from('designs').update({ name: e.target.value }).eq('id', d.id); }}
+                        onChange={e => setDesigns(prev => prev.map(x => x.id === d.id ? { ...x, name: e.target.value } : x))}
+                        onClick={e => e.stopPropagation()}
+                        onDragStart={e => e.stopPropagation()}
+                      />
+                      <div style={{fontSize: 11, color: '#9aa3bc', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center'}}>
+                        {(d.tags || []).map((tag, ti) => (
+                          <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
+                            {tag}
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
+                          </span>
+                        ))}
+                        <input
+                          style={{fontSize: 11, border: '1px dashed #dde1ef', borderRadius: 4, padding: '1px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: 80, color: '#5a6380'}}
+                          placeholder="+ tag"
+                          onClick={e => e.stopPropagation()}
+                          onDragStart={e => e.stopPropagation()}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && e.target.value.trim()) {
+                              const newTag = e.target.value.trim().toLowerCase();
+                              const newTags = [...(d.tags || []), newTag];
+                              await supabase.from('designs').update({ tags: newTags }).eq('id', d.id);
+                              setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x));
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </div>
                       <div style={s.designCat}>
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
                         {' '}
                         {d.product_id ? (
-                          <select
-                            style={{fontSize:11, border:'1px solid #dde1ef', borderRadius:4, padding:'1px 4px', color:'#5a6380', fontFamily:'Barlow, sans-serif', cursor:'pointer', background:'white'}}
-                            value={d.category}
-                            onChange={async e => { await saveDesignCategory(d.id, e.target.value); }}
-                            onClick={e => e.stopPropagation()}
-                            onDragStart={e => e.stopPropagation()}
-                          >
-                            <option value="Sin categoría">Sin categoría</option>
-                            {getProductCategories(d.product_id).map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
+                          <div style={{display:'flex', flexWrap:'wrap', gap:3}} onClick={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()}>
+                            {getProductCategories(d.product_id).map(c => {
+                              const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                              const active = cats.includes(c);
+                              return (
+                                <span
+                                  key={c}
+                                  onClick={async e => {
+                                    e.stopPropagation();
+                                    const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
+                                    const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
+                                    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
+                                    setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
+                                  }}
+                                  style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
+                                >
+                                  {c}
+                                </span>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <span>{d.category}</span>
                         )}
@@ -2539,6 +4145,49 @@ export default function Admin() {
           </>
         )}
 
+      {/* ══ CONFIGURACIÓN ══ */}
+        {activeTab === 'config' && (
+          <>
+            {[
+              { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
+              { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
+            ].map(({ page, label, subtitle }) => (
+              <div key={page} style={s.card}>
+                <h2 style={s.sectionTitle}>{label} <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>{subtitle}</span></h2>
+                <div style={{display:'flex', flexDirection:'column', gap:0}}>
+                  {[
+                    { key: `${page}_mode`, label: 'Tema', desc: 'Modo oscuro o claro', type: 'theme', disabled: page === 'catalogo' },
+                    { key: `${page}_show_theme`, label: 'Botón tema', desc: 'Switch oscuro/claro visible para usuarios' },
+                    { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
+                    { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
+                    { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                  ].map(({ key, label: rowLabel, desc, type, disabled }, i, arr) => (
+                    <div key={key} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom: i < arr.length - 1 ? '1px solid #eef0f6' : 'none', opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto'}}>
+                      <div>
+                        <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{rowLabel}</div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>{desc}{disabled ? ' — próximamente' : ''}</div>
+                      </div>
+                      {type === 'theme' ? (
+                        <div style={{display:'flex', gap:6}}>
+                          <button onClick={() => saveSetting(key, 'light')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] === 'light' ? '#1B2F5E' : 'white', color: settings[key] === 'light' ? 'white' : '#5a6380'}}>☀️ Claro</button>
+                          <button onClick={() => saveSetting(key, 'dark')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] !== 'light' ? '#1B2F5E' : 'white', color: settings[key] !== 'light' ? 'white' : '#5a6380'}}>🌙 Oscuro</button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => saveSetting(key, settings[key] === 'false' ? 'true' : 'false')}
+                          style={{ width: 36, height: 20, borderRadius: 10, background: settings[key] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                        >
+                          <div style={{ position: 'absolute', top: 2, left: settings[key] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
       </div>
 
       <footer style={s.footer}>INKORA® Admin</footer>
@@ -2675,920 +4324,152 @@ const styles = {
 
 <file path="app/page.js">
 'use client';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import Fuse from 'fuse.js';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import AuthModal from '@/components/AuthModal';
+import Header from '@/components/Header';
 
-
-function ModelViewer({ url }) {
-  const mountRef = useRef(null);
-  useEffect(() => {
-    const el = mountRef.current;
-    if (!el) return;
-    const w = el.clientWidth, h = el.clientHeight;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    el.appendChild(renderer.domElement);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
-    camera.position.set(0, 0, 2.5);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.5);
-    dir.position.set(2, 4, 3);
-    scene.add(dir);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableZoom = false;
-    controls.enablePan = false;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 4;
-    const loader = new GLTFLoader();
-    loader.load(url, gltf => {
-      const model = gltf.scene;
-      const box = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      model.position.sub(center);
-      model.scale.setScalar(1.8 / maxDim);
-      scene.add(model);
-    });
-    let animId;
-    const animate = () => { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); };
-    animate();
-    return () => { cancelAnimationFrame(animId); renderer.dispose(); el.removeChild(renderer.domElement); };
-  }, [url]);
-  return <div ref={mountRef} style={{ width: '100%', height: '100%', minHeight: 200 }} />;
-}
-
-const SearchIconWhite = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="6.5" cy="6.5" r="4.5" stroke="white" strokeWidth="1.5"/>
-    <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-  </svg>
-);
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
-function generateCode() {
-  const year = new Date().getFullYear();
-  const num = String(Math.floor(Math.random() * 9000) + 1000);
-  return `INK-${year}-${num}`;
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-function useWindowWidth() {
-  const [width, setWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 768);
-  useEffect(() => {
-    const handler = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return width;
-}
-
-export default function Home() {
+export default function Landing() {
   const [products, setProducts] = useState([]);
-  const [activeProductId, setActiveProductId] = useState(null);
-  const [designsByProduct, setDesignsByProduct] = useState({});
-  const [gridOpacity, setGridOpacity] = useState(1);
-  const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
-  const [cart, setCart] = useState({});
-  const [filter, setFilter] = useState('Todos');
-  const [notes, setNotes] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [orderCode, setOrderCode] = useState(generateCode());
-  const [form, setForm] = useState({ name: '', phone: '', email: '' });
-  const [success, setSuccess] = useState(false);
-  const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
-  const [loading, setLoading] = useState(false);
-  const [cartPanelOpen, setCartPanelOpen] = useState(false);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [stickySearchVisible, setStickySearchVisible] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const inlineSearchRef = useRef(null);
-  const [qtyAnim, setQtyAnim] = useState({});
-  const [cardPulse, setCardPulse] = useState({});
-  const [cardHover, setCardHover] = useState({});
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [priceTiers, setPriceTiers] = useState([]);
-
-  const width = useWindowWidth();
-  const isMobile = width < 768;
-
-  const activeProduct = products.find(p => p.id === activeProductId) || null;
-  const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
+  const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
 
   useEffect(() => {
-    document.body.style.paddingBottom = '1px';
-    loadProducts();
+    supabase.from('products').select('*').eq('active', true).order('created_at')
+      .then(({ data }) => { if (data) setProducts(data); });
 
-    // getSession lee desde storage local — funciona correctamente post-OAuth redirect
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id);
-    });
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
 
-    // onAuthStateChange captura SIGNED_IN tras el redirect de Google OAuth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
-    });
-
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
-    setProfile(data);
-    if (data?.locality_id) {
-      const { data: tiers } = await supabase
-        .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
-      setPriceTiers(tiers || []);
-    } else {
-      const { data: tiers } = await supabase
-        .from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
-      setPriceTiers(tiers || []);
-    }
-  }
-
-  function switchProduct(id) {
-    if (id === activeProductId) return;
-    setGridTransition('opacity 0.15s ease');
-    setGridOpacity(0);
-    setTimeout(() => {
-      setActiveProductId(id);
-      setFilter('Todos');
-      setSearchQuery('');
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        setGridTransition('opacity 0.2s ease');
-        setGridOpacity(1);
-      }));
-    }, 160);
-  }
-
-  useEffect(() => {
-    const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
-    let lastY = getScrollY();
     const handler = () => {
-      const currentY = getScrollY();
-      if (currentY < 10) { setHeaderVisible(true); }
-      else if (currentY > lastY) { setHeaderVisible(false); }
-      else if (currentY < lastY) { setHeaderVisible(true); }
-      lastY = currentY;
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
     };
-    document.addEventListener('scroll', handler, { passive: true });
-    return () => document.removeEventListener('scroll', handler);
+    window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    }
+
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+    };
   }, []);
-
-  useEffect(() => {
-    if (isMobile) return;
-    const el = inlineSearchRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setStickySearchVisible(!entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isMobile]);
-
-  async function loadProducts() {
-    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
-    if (data && data.length > 0) {
-      setProducts(data);
-      setActiveProductId(data[0].id);
-      loadAllDesigns(data);
-    }
-  }
-
-  async function loadAllDesigns(productList) {
-    const results = await Promise.all(
-      productList.map(p =>
-        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
-      )
-    );
-    const map = {};
-    productList.forEach((p, i) => {
-      if (results[i].data) map[p.id] = results[i].data;
-    });
-    setDesignsByProduct(map);
-  }
-
-  const fuse = useMemo(() => new Fuse(designs, {
-    keys: ['name'],
-    threshold: 0.6,
-    distance: 100,
-    ignoreLocation: true,
-    minMatchCharLength: 1,
-  }), [designs]);
-
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return designs;
-    return fuse.search(searchQuery.trim()).map(r => r.item);
-  }, [searchQuery, fuse, designs]);
-
-  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
-  const filtered = searchQuery.trim()
-    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
-    : (filter === 'Todos' ? designs : designs.filter(d => d.category === filter && d.category !== 'Sin categoría'));
-  const showPrices = !!user;
-  const cartItems = Object.values(cart);
-
-  // Cantidad total por producto en el carrito (para calcular tier correcto)
-  const cartByProduct = cartItems.reduce((acc, item) => {
-    acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
-    return acc;
-  }, {});
-  // Cantidad mínima requerida por el tier más bajo del producto (null si no hay tiers)
-  function getProductMinQty(productId) {
-    const tiers = priceTiers.filter(t => t.product_id === productId);
-    if (tiers.length === 0) return null;
-    return Math.min(...tiers.map(t => Number(t.min_quantity)));
-  }
-
-  // Precio unitario efectivo según tiers — null si qty < mínimo del tier más bajo
-  function getUnitPrice(productId) {
-    const totalQty = cartByProduct[productId] || 0;
-    const productTiers = priceTiers
-      .filter(t => t.product_id === productId)
-      .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
-
-    if (productTiers.length > 0) {
-      const minRequired = Number(productTiers[0].min_quantity);
-      if (totalQty < minRequired) return null;
-      const applicable = productTiers
-        .filter(t => Number(t.min_quantity) <= totalQty)
-        .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
-      if (applicable.length > 0) return Number(applicable[0].price_per_unit);
-    }
-
-    return null;
-  }
-
-  const total = cartItems
-    .filter(i => i.showPrice !== false)
-    .reduce((s, i) => {
-      const price = getUnitPrice(i.product_id);
-      return s + (price !== null ? i.qty * price : 0);
-    }, 0);
-  const showTotal = showPrices && cartItems.some(i => {
-    const price = getUnitPrice(i.product_id);
-    return i.showPrice !== false && price !== null && price > 0;
-  });
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  const gridCols = isMobile
-    ? `repeat(${activeProduct?.columns_mobile ?? 2}, 1fr)`
-    : `repeat(${activeProduct?.columns_desktop ?? 5}, 1fr)`;
-  const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
-
-  function addToCart(design) {
-    const product = products.find(p => p.id === design.product_id);
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-      },
-    }));
-    triggerQtyAnim(design.id, 'pop');
-    triggerCardPulse(design.id);
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-    triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
-    triggerCardPulse(id);
-  }
-
-  function openModal() {
-    if (user) {
-      setForm({
-        name: profile?.name || '',
-        email: user.email || '',
-        phone: profile?.phone || '',
-      });
-    }
-    setModalOpen(true);
-  }
-
-  function closeModal() {
-    setModalOpen(false);
-    setSuccess(false);
-    setConfirmedOrder({ items: [], total: 0, form: {} });
-    setOrderCode(generateCode());
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
-  function triggerQtyAnim(id, type) {
-    setQtyAnim(prev => ({ ...prev, [id]: type }));
-    setTimeout(() => setQtyAnim(prev => { const n = { ...prev }; delete n[id]; return n; }), 200);
-  }
-
-  function triggerCardPulse(id) {
-    setCardPulse(prev => ({ ...prev, [id]: true }));
-    setTimeout(() => setCardPulse(prev => { const n = { ...prev }; delete n[id]; return n; }), 350);
-  }
-
-  async function submitOrder() {
-    if (!form.name || !form.phone || !form.email) {
-      alert('Por favor completá todos los campos.');
-      return;
-    }
-    setLoading(true);
-    try {
-      await supabase.from('orders').insert({
-        order_code: orderCode,
-        customer_name: form.name,
-        customer_phone: form.phone,
-        customer_email: form.email,
-        items: cartItems,
-        total,
-        notes,
-        status: 'pending'
-      });
-
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems, total, notes })
-      });
-
-      setConfirmedOrder({ items: cartItems, total, form });
-      setSuccess(true);
-      setCart({});
-      setNotes('');
-    } catch (e) {
-      alert('Hubo un error. Intentá de nuevo.');
-    }
-    setLoading(false);
-  }
-
-  const s = styles;
 
   return (
-    <div style={s.app}>
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
       <style>{`
-        @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
-        @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
-        @keyframes card-pulse { 0% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } 35% { border-color: #2D6BE4; box-shadow: 0 0 0 3px rgba(45,107,228,0.25), 0 2px 8px rgba(27,47,94,0.08); } 100% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } }
-        .qty-pop { animation: qty-pop 200ms ease-out; }
-        .qty-shrink { animation: qty-shrink 200ms ease-out; }
-        .card-pulse { animation: card-pulse 350ms ease-out; }
-        input::placeholder { color: rgba(255,255,255,0.6); }
-        .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
-        .qty-input::placeholder { color: #9aa3bc; }
-        .qty-input:focus::placeholder { color: transparent; }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .product-card { animation: fadeUp 0.5s ease both; }
+        .product-card:hover .card-overlay { opacity: 1 !important; }
+        .product-card:hover .card-img { transform: scale(1.05); }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .product-card:nth-child(1) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 0.5s infinite; }
+        .product-card:nth-child(2) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 1.5s infinite; }
+        .product-card:nth-child(3) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 2.5s infinite; }
+        .product-card:nth-child(4) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
       `}</style>
-      <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
-        <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
-          <div style={s.logoWrap}>
-            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{height: 40, filter: 'brightness(0) invert(1)'}} />
-          </div>
-          <div style={s.headerActions}>
-            {user ? (
-              <div style={{position:'relative'}}>
-                <button style={s.btnUserHeader} onClick={() => setUserMenuOpen(v => !v)}>
-                  {profile?.name || user.email?.split('@')[0]} ▾
-                </button>
-                {userMenuOpen && (
-                  <div style={{position:'absolute', top:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, boxShadow:'0 4px 16px rgba(27,47,94,0.12)', minWidth:160, zIndex:200, overflow:'hidden'}} onClick={() => setUserMenuOpen(false)}>
-                    <a href="/dashboard" style={{display:'block', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#1B2F5E', textDecoration:'none', borderBottom:'1px solid #eef0f6'}}>Mi cuenta</a>
-                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button style={s.btnLoginHeader} onClick={() => setAuthModalOpen(true)}>
-                Ingresar
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
 
-      {isMobile && (
-        <div style={{...s.mobileSearchBar, top: headerVisible ? 64 : 0, transition: 'top 0.3s ease'}}>
-          <span style={s.searchIcon}><SearchIconWhite /></span>
-          <input
-            className="desktop-search-input"
-            style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar diseño..."
-          />
-          {searchQuery && (
-            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
-          )}
-        </div>
-      )}
+      <Header showCart={true} page="landing" />
 
-      <div style={{
-        ...s.layout,
-        alignItems: 'start',
-        flex: 1,
-        width: '100%',
-        minHeight: 'calc(100vh - 64px)',
-        gridTemplateColumns: '1fr',
-        padding: isMobile ? 16 : 24,
-        paddingRight: isMobile ? 16 : 388,
-        paddingTop: isMobile ? 72 : 24,
-        paddingBottom: isMobile ? 88 : 24,
-        transition: isMobile ? 'padding-top 0.3s ease' : undefined,
-      }}>
-        <div style={s.catalogArea}>
-          <div style={s.catalogHeader}>
-            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catálogo</h1>
-            <p style={s.subtitle}>Seleccioná los diseños y armá tu pedido</p>
-          </div>
-
-          {/* Product tabs */}
-          {products.length > 1 && (
-            <div style={s.productTabs}>
-              {products.map(p => (
-                <button
-                  key={p.id}
-                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
-                  onClick={() => switchProduct(p.id)}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Category filters */}
-          <div style={s.filters}>
-            {categories.map(cat => (
-              <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
-                onClick={() => setFilter(cat)}>
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
-          {designs.length === 0 ? (
-            <div style={s.emptyState}>
-              <p>No hay diseños todavía.</p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div style={s.emptyState}>
-              <p>Sin resultados para &quot;<strong>{searchQuery}</strong>&quot;.</p>
-            </div>
-          ) : (
-            <div style={{...s.grid, gridTemplateColumns: gridCols}}>
-              {filtered.map(d => {
-                const inCart = cart[d.id];
-                const isHovered = cardHover[d.id];
-                const isPulsing = cardPulse[d.id];
-                return (
-                  <div
-                    key={d.id}
-                    className={isPulsing ? 'card-pulse' : ''}
-                    style={{
-                      ...s.card,
-                      transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-                      boxShadow: isHovered
-                        ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
-                        : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
-                    }}
-                    onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
-                    onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
-                  >
-                    <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
-                      {d.model_url
-                        ? <ModelViewer url={d.model_url} />
-                        : d.image_url
-                        ? <img src={d.image_url} alt={d.name} style={s.img} />
-                        : <span style={{fontSize:36}}>🎨</span>}
-                    </div>
-                    <div style={s.cardBody}>
-                      <div style={s.cardName}>{d.name}</div>
-                      {d.category !== 'Sin categoría' && <span style={s.catTag}>{d.category}</span>}
-                      {showPrices && activeProduct?.show_price !== false && (() => {
-                        const price = getUnitPrice(activeProductId);
-                        if (price !== null && price > 0) {
-                          return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
-                        }
-                        return null;
-                      })()}
-                      <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
-                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
-                        <input
-                          type="number"
-                          className={`qty-input${qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : ''}`}
-                          style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
-                          value={inCart ? inCart.qty : ''}
-                          placeholder="0"
-                          onFocus={e => { if (!inCart) e.target.value = ''; else e.target.select(); }}
-                          onChange={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
-                            else if (!inCart) addToCart(d);
-                            else setCart(prev => ({ ...prev, [d.id]: { ...prev[d.id], qty: val } }));
-                          }}
-                          onBlur={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') e.target.blur();
-                          }}
-                          min="0"
-                        />
-                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
-                          if (inCart) changeQty(d.id, 1);
-                          else addToCart(d);
-                        }}>+</button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          </div>
-        </div>
-
-        {!isMobile && <>
-          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, transition: 'top 0.3s ease'}}>
-            <span style={s.searchIcon}><SearchIconWhite /></span>
-            <input
-              className="desktop-search-input"
-              style={{ border: 'none', background: 'transparent', color: 'white', outline: 'none', flex: 1, fontSize: 14, fontFamily: 'Barlow, sans-serif' }}
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar diseño..."
-            />
-            {searchQuery && (
-              <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
-            )}
-          </div>
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease'}}>
-            <div style={s.sidebarHeader}>
-              <span style={s.sidebarTitle}>Tu Pedido</span>
-              <span style={s.badge}>{totalItems} ítems</span>
-            </div>
-            <div style={s.sidebarBody}>
-              {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}>
-                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
-                </div>
-              ) : (
-                cartItems.map(item => (
-                  <div key={item.id} style={s.cartItem}>
-                    {item.image_url && (
-                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                    )}
-                    <div style={s.cartItemInfo}>
-                      <div style={s.cartItemName}>{item.name}</div>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
-                        return null;
-                      })()}
-                    </div>
-                    <div style={s.cartItemRight}>
-                      <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
-                        return null;
-                      })()}
-                    </div>
-                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div style={s.sidebarFooter}>
-              <div style={s.totalRow}>
-                <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
-              </div>
-              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Notas adicionales..." rows={2} />
-              <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
-                disabled={cartItems.length === 0} onClick={openModal}>
-                Confirmar pedido →
-              </button>
-            </div>
-          </div>
-        </>}
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
+          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
+        </h1>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
+          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
+        </p>
       </div>
 
-      {isMobile && (
-        <>
-          {cartPanelOpen && (
-            <div style={s.cartPanelBackdrop} onClick={() => setCartPanelOpen(false)} />
-          )}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px 60px', gap: 24, flexWrap: 'wrap' }}>
+        {products.map((p, i) => (
+          <a
+            key={p.id}
+            href="#"
+            className="product-card"
+            onClick={e => {
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
+            style={{
+              animationDelay: (i * 0.1) + "s",
+              textDecoration: 'none',
+              borderRadius: 20,
+              overflow: 'hidden',
+              position: 'relative',
+              width: 320,
+              height: 420,
+              display: 'block',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              transform: 'translateY(0)'
+            }}
+            onMouseEnter={() => setHovered(p.id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div style={{ position: 'absolute', inset: 0, background: '#1B2F5E', overflow: 'hidden' }}>
+              {p.landing_image
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                : [...Array(4)].map((_, j) => (
+                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
+                  ))
+              }
+            </div>
 
-          <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
-            <div style={s.cartPanelHeader}>
-              <span style={s.cartPanelTitle}>Tu Pedido</span>
-              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>✕</button>
-            </div>
-            <div style={s.cartPanelBody}>
-              {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}>
-                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
-                </div>
-              ) : (
-                cartItems.map(item => (
-                  <div key={item.id} style={s.cartItem}>
-                    {item.image_url && (
-                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                    )}
-                    <div style={s.cartItemInfo}>
-                      <div style={s.cartItemName}>{item.name}</div>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
-                        return null;
-                      })()}
-                    </div>
-                    <div style={s.cartItemRight}>
-                      <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
-                        return null;
-                      })()}
-                    </div>
-                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div style={s.cartPanelFooter}>
-              <div style={s.totalRow}>
-                <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
               </div>
-              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Notas adicionales..." rows={2} />
-              <button
-                style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
-                disabled={cartItems.length === 0}
-                onClick={() => { setCartPanelOpen(false); openModal(); }}
-              >
-                Confirmar pedido →
-              </button>
             </div>
-          </div>
+          </a>
+        ))}
+      </div>
 
-          <div style={s.mobileBar}>
-            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
-              <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showTotal ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
-              <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
-            </button>
-            <button
-              style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
-              disabled={cartItems.length === 0}
-              onClick={openModal}
-            >
-              Confirmar →
-            </button>
-          </div>
-        </>
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
       )}
 
-      {modalOpen && (
-        <div style={s.overlay} onClick={e => { if(e.target === e.currentTarget) closeModal(); }}>
-          <div style={s.modal}>
-            {!success ? (
-              <>
-                <div style={s.modalHeader}>
-                  <span>Confirmar Pedido</span>
-                  <button style={s.closeBtn} onClick={closeModal}>✕</button>
-                </div>
-                <div style={s.modalBody}>
-                  <div style={s.codeBanner}>
-                    <small style={s.codeLabel}>Código de pedido</small>
-                    <strong style={s.codeValue}>{orderCode}</strong>
-                  </div>
-                  {user ? (
-                    <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
-                      ✓ Pedido como cliente registrado.
-                    </div>
-                  ) : (
-                    <div style={s.notice}>
-                      ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
-                    </div>
-                  )}
-                  <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
-                    <div style={s.formGroup}>
-                      <label style={s.label}>Nombre *</label>
-                      <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
-                    </div>
-                    <div style={s.formGroup}>
-                      <label style={s.label}>Teléfono *</label>
-                      <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
-                    </div>
-                  </div>
-                  <div style={s.formGroup}>
-                    <label style={s.label}>Email *</label>
-                    <input style={s.input} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="tu@email.com" />
-                  </div>
-                  <div style={s.orderSummary}>
-                    {cartItems.map(i => (
-                      <div key={i.id} style={s.summaryItem}>
-                        <span>{i.name} × {i.qty}</span>
-                        {showPrices && i.showPrice !== false && (() => {
-                          const price = getUnitPrice(i.product_id);
-                          const minQty = getProductMinQty(i.product_id);
-                          if (price === null) return null;
-                          if (price !== null && price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
-                          return null;
-                        })()}
-                      </div>
-                    ))}
-                    <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
-                      <span>Total</span>
-                      <span>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
-                    </div>
-                  </div>
-                  <div style={s.modalActions}>
-                    <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
-                    <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
-                      {loading ? 'Enviando...' : 'Enviar pedido'}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={s.successScreen}>
-                <div style={s.successIcon}>✓</div>
-                <h3 style={s.successTitle}>¡Pedido enviado!</h3>
-                <p>Código de tu pedido:</p>
-                <div style={s.successCode}>{orderCode}</div>
-                <p>Te enviamos la confirmación a tu email.</p>
-                <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
-                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showTotal ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
-                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
-                  💬 Confirmar por WhatsApp
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <a
-        href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent('Hola! Vengo desde la página. ')}`}
-        target="_blank"
-        rel="noreferrer"
-        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 24}}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-      >
-        <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-        </svg>
-      </a>
-
-      <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
-        <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
+        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
       </footer>
-
-      {authModalOpen && (
-        <AuthModal
-          onClose={() => setAuthModalOpen(false)}
-          onSuccess={() => setAuthModalOpen(false)}
-        />
-      )}
     </div>
   );
 }
-
-const styles = {
-  app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
-  header: { background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)' },
-  headerInner: { maxWidth: 1400, margin: '0 auto', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  logoWrap: { display: 'flex', alignItems: 'center', gap: 12 },
-  headerActions: { display: 'flex', alignItems: 'center', gap: 10 },
-  btnLoginHeader: { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  btnUserHeader: { background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
-  priceHint: { fontSize: 12, color: '#9aa3bc', textAlign: 'center', marginBottom: 8, fontStyle: 'italic' },
-  sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
-  btnWa: { background: '#25D366', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 },
-  btnSearchToggle: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
-  mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
-  layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
-  catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
-  catalogHeader: { marginBottom: 16 },
-  h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
-  subtitle: { color: '#5a6380', fontSize: 14 },
-  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
-  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
-  productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
-  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 12 },
-  searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
-  searchInput: { border: 0, outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0, WebkitAppearance: 'none', MozAppearance: 'none', appearance: 'none' },
-  searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
-  filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
-  filterBtn: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
-  filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
-  grid: { display: 'grid', gap: 14 },
-  card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
-  cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  img: { width: '100%', height: '100%', objectFit: 'cover' },
-  catTag: { alignSelf: 'flex-start', background: 'rgba(27,47,94,0.15)', color: '#1B2F5E', fontSize: 10, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' },
-  cardBody: { padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 },
-  cardName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
-  cardUnitPrice: { fontSize: 11, color: '#2D6BE4', fontWeight: 600 },
-  cardMinQty: { fontSize: 11, color: '#9aa3bc', fontWeight: 500 },
-  cartMinQty: { fontSize: 11, color: '#9aa3bc', fontStyle: 'italic' },
-  qtyControl: { display: 'flex', alignItems: 'center', border: '1.5px solid #2D6BE4', borderRadius: 8, overflow: 'hidden' },
-  qtyBtn: { background: 'none', border: 'none', width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: '#5a6380' },
-  qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
-  emptyState: { textAlign: 'center', padding: 40, color: '#9aa3bc' },
-  sidebar: { background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', overflow: 'hidden' },
-  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
-  badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
-  sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
-  sidebarBody: { padding: '16px 20px', maxHeight: 400, overflowY: 'auto' },
-  cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
-  cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
-  cartItemInfo: { flex: 1, minWidth: 0 },
-  cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
-  cartItemUnitPrice: { fontSize: 10, color: '#2D6BE4', fontWeight: 600 },
-  cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
-  cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
-  cartPrice: { fontSize: 12, color: '#5a6380' },
-  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 14 },
-  sidebarFooter: { padding: '16px 20px', borderTop: '1.5px solid #eef0f6' },
-  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontWeight: 700, color: '#1B2F5E', fontSize: 16 },
-  totalAmount: { fontSize: 20, fontWeight: 700 },
-  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
-  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
-  modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
-  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
-  modalBody: { padding: 24 },
-  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
-  codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
-  codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
-  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#7a5800' },
-  formRow: { display: 'grid', gap: 12 },
-  formGroup: { marginBottom: 14 },
-  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
-  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' },
-  orderSummary: { background: '#f7f8fc', borderRadius: 10, padding: 12, marginBottom: 16, maxHeight: 160, overflowY: 'auto' },
-  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderBottom: '1px solid #eef0f6' },
-  modalActions: { display: 'flex', gap: 10 },
-  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
-  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 10, padding: 12, fontSize: 16, fontWeight: 700, color: 'white', cursor: 'pointer' },
-  successScreen: { textAlign: 'center', padding: '32px 24px' },
-  successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
-  successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
-  successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
-  btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
-  waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none' },
-  footer: { background: '#112040', color: 'rgba(255,255,255,0.45)', textAlign: 'center', padding: 20, paddingBottom: 64, fontSize: 12, marginTop: 40 },
-  mobileBar: { position: 'fixed', bottom: 0, left: 0, right: 0, height: 64, background: '#1B2F5E', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', zIndex: 160, boxShadow: '0 -2px 16px rgba(27,47,94,0.3)' },
-  mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
-  mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
-  mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
-  mobileBarChevron: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
-  mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
-  mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
-  cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },
-  cartPanel: { position: 'fixed', bottom: 64, left: 0, right: 0, height: '55vh', background: 'white', borderRadius: '16px 16px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', transition: 'transform 0.3s ease', boxShadow: '0 -4px 24px rgba(27,47,94,0.2)' },
-  cartPanelHeader: { background: '#1B2F5E', borderRadius: '16px 16px 0 0', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
-  cartPanelTitle: { color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: 0.5 },
-  cartPanelClose: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
-  cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
-  cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
-};
 </file>
 
 </files>

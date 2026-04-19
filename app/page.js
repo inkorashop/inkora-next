@@ -43,9 +43,46 @@ export default function Landing() {
         .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
     }
 
+    let tabInterval;
+    let tabToggle = false;
+
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const always = cfg.tab_always === 'true';
+      clearInterval(tabInterval);
+
+      function animate() {
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      if (always) {
+        animate();
+      } else {
+        function handleVisibility() {
+          if (document.hidden) { animate(); }
+          else { clearInterval(tabInterval); tabToggle = false; document.title = 'INKORA'; }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
+      }
+    }
+
+    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_always'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
     return () => {
       window.removeEventListener('storage', handler);
       window.removeEventListener('inkora_theme_change', handler);
+      clearInterval(tabInterval);
     };
   }, []);
 

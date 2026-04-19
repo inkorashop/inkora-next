@@ -100,26 +100,45 @@ export default function Home() {
 
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
 
-    const originalTitle = document.title;
-    let awayInterval;
-    let awayToggle = false;
-    function handleVisibilityChange() {
-      if (document.hidden) {
-        awayInterval = setInterval(() => {
-          document.title = awayToggle ? 'INKORA' : 'INKORA 🔷';
-          awayToggle = !awayToggle;
-        }, 1000);
+    let tabInterval;
+    let tabToggle = false;
+
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const always = cfg.tab_always === 'true';
+      clearInterval(tabInterval);
+
+      function animate() {
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      if (always) {
+        animate();
       } else {
-        clearInterval(awayInterval);
-        awayIndex = 0;
-        document.title = originalTitle;
+        function handleVisibility() {
+          if (document.hidden) { animate(); }
+          else { clearInterval(tabInterval); tabToggle = false; document.title = 'INKORA'; }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
       }
     }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    supabase.from('settings').select('*').in('key', ['catalogo_tab_text', 'catalogo_tab_interval', 'catalogo_tab_always'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('catalogo_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
     return () => {
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(awayInterval);
+      clearInterval(tabInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
