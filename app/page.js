@@ -84,12 +84,12 @@ export default function Landing() {
               }
             </div>
 
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: darkMode ? 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)' : 'linear-gradient(to top, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
 
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: darkMode ? 'white' : '#1B2F5E', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: darkMode ? 'rgba(255,255,255,0.7)' : 'rgba(27,47,94,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
                 <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
               </div>
             </div>
