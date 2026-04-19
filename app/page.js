@@ -48,7 +48,7 @@ export default function Home() {
   const [success, setSuccess] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
   const [loading, setLoading] = useState(false);
-  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stickySearchVisible, setStickySearchVisible] = useState(false);
@@ -828,8 +828,6 @@ const styles = {
   sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
   badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
   sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
-  const [cartPanelOpen, setCartPanelOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
