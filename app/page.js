@@ -541,7 +541,7 @@ export default function Home() {
 
         {!isMobile && <>
           
-          
+
           <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 99}}>
             {sidebarCollapsed ? (
               <div
@@ -770,7 +770,7 @@ export default function Home() {
         href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent('Hola! Vengo desde la página. ')}`}
         target="_blank"
         rel="noreferrer"
-        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 24}}
+        style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 388}}
         onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
         onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
       >
