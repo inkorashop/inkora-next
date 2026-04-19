@@ -521,7 +521,7 @@ export default function Home() {
         </div>
 
         {!isMobile && <>
-          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? -400 : 24, transition: 'top 0.3s ease, right 0.3s ease', opacity: sidebarCollapsed ? 0 : 1, pointerEvents: sidebarCollapsed ? 'none' : 'auto'}}>
+          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? 28 : 24, width: sidebarCollapsed ? 'calc(100% - 52px)' : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease'}}>
             <span style={s.searchIcon}><SearchIconWhite /></span>
             <input
               className="desktop-search-input"
@@ -535,17 +535,28 @@ export default function Home() {
               <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
             )}
           </div>
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 24 : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease', bottom: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
-            <div style={{...s.sidebarHeader, justifyContent: sidebarCollapsed ? 'center' : 'space-between', padding: sidebarCollapsed ? '16px 0' : '16px 20px', cursor: sidebarCollapsed ? 'pointer' : 'default'}} onClick={() => sidebarCollapsed && setSidebarCollapsed(false)}>
-              {!sidebarCollapsed && <span style={s.sidebarTitle}>Tu Pedido</span>}
-              {!sidebarCollapsed && <span style={s.badge}>{totalItems} ítems</span>}
-              <button
-                onClick={e => { e.stopPropagation(); setSidebarCollapsed(v => !v); }}
-                style={{background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:20, height:28, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14}}>
+            {sidebarCollapsed ? (
+              <div
+                onClick={() => setSidebarCollapsed(false)}
+                style={{flex:1, background:'#1B2F5E', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', writingMode:'vertical-rl', color:'rgba(255,255,255,0.7)', fontSize:11, fontWeight:700, letterSpacing:2, userSelect:'none', gap:8, flexDirection:'column'}}
               >
-                {sidebarCollapsed ? '◀' : '▶'}
-              </button>
-            </div>
+                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>◀</span>
+                <span>TU PEDIDO</span>
+                {totalItems > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{totalItems}</span>}
+              </div>
+            ) : (
+              <>
+                <div style={{...s.sidebarHeader}}>
+                  <span style={s.sidebarTitle}>Tu Pedido</span>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={s.badge}>{totalItems} ítems</span>
+                    <button
+                      onClick={() => setSidebarCollapsed(true)}
+                      style={{background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+                    >▶</button>
+                  </div>
+                </div>
             <div style={{...s.sidebarBody, display: sidebarCollapsed ? 'none' : undefined}}>
               {cartItems.length === 0 ? (
                 <div style={s.cartEmpty}>
@@ -578,7 +589,7 @@ export default function Home() {
                 ))
               )}
             </div>
-            <div style={{...s.sidebarFooter, display: sidebarCollapsed ? 'none' : undefined}}>
+            <div style={s.sidebarFooter}>
               <div style={s.totalRow}>
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
@@ -590,6 +601,8 @@ export default function Home() {
                 Confirmar pedido →
               </button>
             </div>
+              </>
+            )}
           </div>
         </>}
       </div>
