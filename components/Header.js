@@ -69,13 +69,15 @@ export default function Header({ headerVisible = true, showCart = false }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
           {darkMode !== null && (
-            <button
+            <div
               onClick={() => setDarkMode(v => !v)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
               title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              style={{ width: 56, height: 28, borderRadius: 14, background: darkMode ? '#1a1a2e' : 'rgba(255,255,255,0.2)', border: '1.5px solid rgba(255,255,255,0.25)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', padding: '0 4px', transition: 'background 0.3s ease', flexShrink: 0 }}
             >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
+              <span style={{ position: 'absolute', left: 6, fontSize: 13, opacity: darkMode ? 0.4 : 1, transition: 'opacity 0.3s' }}>☀️</span>
+              <span style={{ position: 'absolute', right: 6, fontSize: 13, opacity: darkMode ? 1 : 0.4, transition: 'opacity 0.3s' }}>🌙</span>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#2D6BE4', position: 'absolute', top: 3, left: darkMode ? 'calc(100% - 23px)' : 3, transition: 'left 0.3s ease', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
+            </div>
           )}
 
           {showCart && (
