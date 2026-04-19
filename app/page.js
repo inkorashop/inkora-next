@@ -22,6 +22,7 @@ export default function Landing() {
       if (saved) setDarkMode(saved === 'dark');
     };
     window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
     const saved = localStorage.getItem('inkora_theme');
     if (saved) {
       setDarkMode(saved === 'dark');
@@ -29,7 +30,10 @@ export default function Landing() {
       supabase.from('settings').select('*').eq('key', 'landing_mode')
         .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
     }
-  return () => window.removeEventListener('storage', handler);
+  return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+    };
   }, []);
 
   return (

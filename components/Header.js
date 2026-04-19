@@ -26,6 +26,7 @@ export default function Header({ headerVisible = true, showCart = false }) {
     if (darkMode === null) return;
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
     localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
   }, [darkMode]);
 
   useEffect(() => {
