@@ -120,7 +120,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
 
@@ -1418,37 +1418,45 @@ export default function Admin() {
 
       {/* ══ CONFIGURACIÓN ══ */}
         {activeTab === 'config' && (
-          <div style={s.card}>
-            <h2 style={s.sectionTitle}>Apariencia</h2>
-            <div style={{display:'flex', flexDirection:'column', gap:20}}>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
-                <div>
-                  <div style={{fontSize:14, fontWeight:600, color:'#2d3352'}}>Modo de la Landing</div>
-                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Cambia el tema de inkora.com.ar</div>
-                </div>
-                <div style={{display:'flex', gap:8}}>
-                  <button
-                    onClick={() => saveSetting('landing_mode', 'light')}
-                    style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.landing_mode === 'light' ? '#1B2F5E' : 'white', color: settings.landing_mode === 'light' ? 'white' : '#5a6380'}}
-                  >☀️ Claro</button>
-                  <button
-                    onClick={() => saveSetting('landing_mode', 'dark')}
-                    style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.landing_mode === 'dark' ? '#1B2F5E' : 'white', color: settings.landing_mode === 'dark' ? 'white' : '#5a6380'}}
-                  >🌙 Oscuro</button>
+          <>
+            {[
+              { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
+              { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
+            ].map(({ page, label, subtitle }) => (
+              <div key={page} style={s.card}>
+                <h2 style={s.sectionTitle}>{label} <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>{subtitle}</span></h2>
+                <div style={{display:'flex', flexDirection:'column', gap:0}}>
+                  {[
+                    { key: `${page}_mode`, label: 'Tema', desc: 'Modo oscuro o claro', type: 'theme', disabled: page === 'catalogo' },
+                    { key: `${page}_show_theme`, label: 'Botón tema', desc: 'Switch oscuro/claro visible para usuarios' },
+                    { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
+                    { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
+                    { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                  ].map(({ key, label: rowLabel, desc, type, disabled }, i, arr) => (
+                    <div key={key} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom: i < arr.length - 1 ? '1px solid #eef0f6' : 'none', opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto'}}>
+                      <div>
+                        <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{rowLabel}</div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>{desc}{disabled ? ' — próximamente' : ''}</div>
+                      </div>
+                      {type === 'theme' ? (
+                        <div style={{display:'flex', gap:6}}>
+                          <button onClick={() => saveSetting(key, 'light')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] === 'light' ? '#1B2F5E' : 'white', color: settings[key] === 'light' ? 'white' : '#5a6380'}}>☀️ Claro</button>
+                          <button onClick={() => saveSetting(key, 'dark')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] !== 'light' ? '#1B2F5E' : 'white', color: settings[key] !== 'light' ? 'white' : '#5a6380'}}>🌙 Oscuro</button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => saveSetting(key, settings[key] === 'false' ? 'true' : 'false')}
+                          style={{ width: 36, height: 20, borderRadius: 10, background: settings[key] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                        >
+                          <div style={{ position: 'absolute', top: 2, left: settings[key] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
-                <div>
-                  <div style={{fontSize:14, fontWeight:600, color:'#2d3352'}}>Modo del Catálogo</div>
-                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Próximamente — no afecta el catálogo aún</div>
-                </div>
-                <div style={{display:'flex', gap:8, opacity:0.4, pointerEvents:'none'}}>
-                  <button style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.catalogo_mode === 'light' ? '#1B2F5E' : 'white', color: settings.catalogo_mode === 'light' ? 'white' : '#5a6380'}}>☀️ Claro</button>
-                  <button style={{padding:'6px 16px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:13, fontWeight:600, cursor:'pointer', background: settings.catalogo_mode === 'dark' ? '#1B2F5E' : 'white', color: settings.catalogo_mode === 'dark' ? 'white' : '#5a6380'}}>🌙 Oscuro</button>
-                </div>
-              </div>
-            </div>
-          </div>
+            ))}
+          </>
         )}
 
       </div>

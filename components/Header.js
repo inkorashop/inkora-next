@@ -3,12 +3,13 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 
-export default function Header({ headerVisible = true, showCart = false }) {
+export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(null);
+  const [uiSettings, setUiSettings] = useState({});
   const cartRef = useRef(null);
   const { cartItems, totalItems, removeFromCart } = useCart();
 
@@ -20,6 +21,14 @@ export default function Header({ headerVisible = true, showCart = false }) {
       supabase.from('settings').select('value').eq('key', 'landing_mode').single()
         .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
     }
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
   }, []);
 
   useEffect(() => {
@@ -68,7 +77,7 @@ export default function Header({ headerVisible = true, showCart = false }) {
         </a>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
-          {darkMode !== null && (
+          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
             <div
               onClick={() => setDarkMode(v => !v)}
               title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
@@ -114,7 +123,7 @@ export default function Header({ headerVisible = true, showCart = false }) {
             </div>
           )}
 
-          {showCart && (
+          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
             <div ref={cartRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setCartOpen(v => !v)}
@@ -168,7 +177,7 @@ export default function Header({ headerVisible = true, showCart = false }) {
             </div>
           )}
 
-          {user ? (
+          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
             <div style={{ position: 'relative' }}>
               <button style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
                 {profile?.name || user.email?.split('@')[0]} {'▾'}
@@ -181,7 +190,7 @@ export default function Header({ headerVisible = true, showCart = false }) {
               )}
             </div>
           ) : (
-            <button style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
+            uiSettings[`${page}_show_account`] !== 'false' && <button style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
               Ingresar
             </button>
           )}

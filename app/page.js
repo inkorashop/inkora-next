@@ -13,16 +13,28 @@ export default function Landing() {
   const [products, setProducts] = useState([]);
   const [hovered, setHovered] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
 
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('created_at')
       .then(({ data }) => { if (data) setProducts(data); });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+
     const handler = () => {
       const saved = localStorage.getItem('inkora_theme');
       if (saved) setDarkMode(saved === 'dark');
     };
     window.addEventListener('storage', handler);
     window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
     const saved = localStorage.getItem('inkora_theme');
     if (saved) {
       setDarkMode(saved === 'dark');
@@ -30,7 +42,8 @@ export default function Landing() {
       supabase.from('settings').select('*').eq('key', 'landing_mode')
         .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
     }
-  return () => {
+
+    return () => {
       window.removeEventListener('storage', handler);
       window.removeEventListener('inkora_theme_change', handler);
     };
@@ -52,7 +65,7 @@ export default function Landing() {
         .product-card:nth-child(4) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
       `}</style>
 
-      <Header showCart={true} />
+      <Header showCart={true} page="landing" />
 
       <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
         <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
@@ -112,17 +125,19 @@ export default function Landing() {
         ))}
       </div>
 
-      <a
-        href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
-        target="_blank"
-        rel="noreferrer"
-        style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
-      >
-        <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-        </svg>
-      </a>
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
 
       <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
         <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
