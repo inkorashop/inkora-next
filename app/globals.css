@@ -51,3 +51,9 @@ input[type="number"] {
 body {
   animation: fadeIn 0.3s ease;
 }
+.header-btn {
+  transition: box-shadow 0.3s ease, background 0.2s ease;
+}
+.header-btn:hover {
+  box-shadow: 0 0 12px rgba(255,255,255,0.25);
+}

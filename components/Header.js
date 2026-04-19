@@ -81,7 +81,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
             <div
               onClick={() => setDarkMode(v => !v)}
               title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-              style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease', flexShrink: 0 }}
+              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease', flexShrink: 0 }}
             >
               <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
                 {darkMode ? (
@@ -179,7 +179,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
 
           {uiSettings[`${page}_show_account`] !== 'false' && user ? (
             <div style={{ position: 'relative' }}>
-              <button style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
+              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
                 {profile?.name || user.email?.split('@')[0]} {'▾'}
               </button>
               {userMenuOpen && (
@@ -190,7 +190,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
               )}
             </div>
           ) : (
-            uiSettings[`${page}_show_account`] !== 'false' && <button style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
+            uiSettings[`${page}_show_account`] !== 'false' && <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => window.location.href = '/catalogo'}>
               Ingresar
             </button>
           )}
