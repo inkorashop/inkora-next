@@ -400,7 +400,7 @@ export default function Home() {
         minHeight: 'calc(100vh - 64px)',
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
-        paddingRight: isMobile ? 16 : 388,
+        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : 388),
         paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
@@ -521,7 +521,7 @@ export default function Home() {
         </div>
 
         {!isMobile && <>
-          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, transition: 'top 0.3s ease'}}>
+          <div style={{...s.sidebarSearchBox, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? -400 : 24, transition: 'top 0.3s ease, right 0.3s ease', opacity: sidebarCollapsed ? 0 : 1, pointerEvents: sidebarCollapsed ? 'none' : 'auto'}}>
             <span style={s.searchIcon}><SearchIconWhite /></span>
             <input
               className="desktop-search-input"
@@ -535,12 +535,18 @@ export default function Home() {
               <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
             )}
           </div>
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 24, display: 'flex', flexDirection: 'column'}}>
-            <div style={s.sidebarHeader}>
-              <span style={s.sidebarTitle}>Tu Pedido</span>
-              <span style={s.badge}>{totalItems} ítems</span>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 24 : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease', bottom: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+            <div style={{...s.sidebarHeader, justifyContent: sidebarCollapsed ? 'center' : 'space-between', padding: sidebarCollapsed ? '16px 0' : '16px 20px', cursor: sidebarCollapsed ? 'pointer' : 'default'}} onClick={() => sidebarCollapsed && setSidebarCollapsed(false)}>
+              {!sidebarCollapsed && <span style={s.sidebarTitle}>Tu Pedido</span>}
+              {!sidebarCollapsed && <span style={s.badge}>{totalItems} ítems</span>}
+              <button
+                onClick={e => { e.stopPropagation(); setSidebarCollapsed(v => !v); }}
+                style={{background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:20, height:28, cursor:'pointer', fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+              >
+                {sidebarCollapsed ? '◀' : '▶'}
+              </button>
             </div>
-            <div style={s.sidebarBody}>
+            <div style={{...s.sidebarBody, display: sidebarCollapsed ? 'none' : undefined}}>
               {cartItems.length === 0 ? (
                 <div style={s.cartEmpty}>
                   <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
@@ -572,7 +578,7 @@ export default function Home() {
                 ))
               )}
             </div>
-            <div style={s.sidebarFooter}>
+            <div style={{...s.sidebarFooter, display: sidebarCollapsed ? 'none' : undefined}}>
               <div style={s.totalRow}>
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
@@ -822,7 +828,8 @@ const styles = {
   sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
   badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
   sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
-  sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
