@@ -692,7 +692,9 @@ export default function Admin() {
     </div>
   );
 
-  if (screen === 'checking') return null;
+  if (screen === 'checking') return (
+    <div style={{ minHeight: '100vh', background: '#f7f8fc' }} />
+  );
 
   if (screen === 'denied') return (
     <div style={s.loginWrap}>
