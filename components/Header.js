@@ -67,6 +67,16 @@ export default function Header({ headerVisible = true, showCart = false }) {
         </a>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
+          {darkMode !== null && (
+            <button
+              onClick={() => setDarkMode(v => !v)}
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+          )}
+
           {showCart && (
             <div ref={cartRef} style={{ position: 'relative' }}>
               <button

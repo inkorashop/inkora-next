@@ -17,6 +17,11 @@ export default function Landing() {
   useEffect(() => {
     supabase.from('products').select('*').eq('active', true).order('created_at')
       .then(({ data }) => { if (data) setProducts(data); });
+    const handler = () => {
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
+    };
+    window.addEventListener('storage', handler);
     const saved = localStorage.getItem('inkora_theme');
     if (saved) {
       setDarkMode(saved === 'dark');
@@ -24,6 +29,7 @@ export default function Landing() {
       supabase.from('settings').select('*').eq('key', 'landing_mode')
         .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
     }
+  return () => window.removeEventListener('storage', handler);
   }, []);
 
   return (
