@@ -541,7 +541,7 @@ export default function Home() {
 
         {!isMobile && <>
           
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'top 0.3s ease, right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14, zIndex: 99}}>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 99}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
@@ -557,7 +557,7 @@ export default function Home() {
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <span style={s.badge}>{totalItems} ítems</span>
                 </div>
-            <div style={{...s.sidebarBody, display: sidebarCollapsed ? 'none' : undefined}}>
+            <div style={s.sidebarBody}>
               {cartItems.length === 0 ? (
                 <div style={s.cartEmpty}>
                   <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
@@ -841,6 +841,7 @@ const styles = {
   sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
   badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
   sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
+  sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
   cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
