@@ -21,6 +21,8 @@ export default function Landing() {
   return (
     <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#0f1e3d', display: 'flex', flexDirection: 'column' }}>
       <style>{`
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
         .product-card { animation: fadeUp 0.5s ease both; }
         .product-card:hover .card-overlay { opacity: 1 !important; }
@@ -47,8 +49,13 @@ export default function Landing() {
         {products.map((p, i) => (
           <a
             key={p.id}
-            href={"/catalogo/" + toSlug(p.name)}
+            href="#"
             className="product-card"
+            onClick={e => {
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
             style={{
               animationDelay: (i * 0.1) + "s",
               textDecoration: 'none',
