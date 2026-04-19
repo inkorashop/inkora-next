@@ -541,7 +541,7 @@ export default function Home() {
 
         {!isMobile && <>
           
-          <div style={{...s.sidebar, position: 'fixed', top: 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14}}>
+          <div style={{...s.sidebar, position: 'fixed', top: 0, right: sidebarCollapsed ? 0 : 24, width: sidebarCollapsed ? 20 : 340, transition: 'right 0.3s ease, width 0.3s ease', bottom: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: sidebarCollapsed ? '8px 0 0 8px' : 14, zIndex: 101}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
