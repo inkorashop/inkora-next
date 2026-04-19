@@ -32,7 +32,7 @@ export default function Landing() {
         .product-card:nth-child(4) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
       `}</style>
 
-      <Header />
+      <Header showCart={true} />
 
       <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
         <h1 style={{ fontSize: 36, fontWeight: 800, color: 'white', margin: 0, letterSpacing: -1 }}>

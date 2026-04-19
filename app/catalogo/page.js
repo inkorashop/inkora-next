@@ -1,13 +1,10 @@
-
 'use client';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
 import ModelViewer from '@/components/ModelViewer';
-
-
-
+import { useCart } from '@/contexts/CartContext';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -20,7 +17,7 @@ const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 function generateCode() {
   const year = new Date().getFullYear();
   const num = String(Math.floor(Math.random() * 9000) + 1000);
-  return `INK-${year}-${num}`;
+  return 'INK-' + year + '-' + num;
 }
 
 function useWindowWidth() {
@@ -43,7 +40,6 @@ export default function Home() {
   const [designsByProduct, setDesignsByProduct] = useState({});
   const [gridOpacity, setGridOpacity] = useState(1);
   const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
-  const [cart, setCart] = useState({});
   const [filter, setFilter] = useState('Todos');
   const [notes, setNotes] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,6 +53,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stickySearchVisible, setStickySearchVisible] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
   const inlineSearchRef = useRef(null);
   const [qtyAnim, setQtyAnim] = useState({});
   const [cardPulse, setCardPulse] = useState({});
@@ -66,6 +63,8 @@ export default function Home() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -77,14 +76,12 @@ export default function Home() {
     document.body.style.paddingBottom = '1px';
     loadProducts();
 
-    // getSession lee desde storage local — funciona correctamente post-OAuth redirect
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) loadProfile(u.id);
     });
 
-    // onAuthStateChange captura SIGNED_IN tras el redirect de Google OAuth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
@@ -100,12 +97,10 @@ export default function Home() {
     const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
     setProfile(data);
     if (data?.locality_id) {
-      const { data: tiers } = await supabase
-        .from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
+      const { data: tiers } = await supabase.from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
       setPriceTiers(tiers || []);
     } else {
-      const { data: tiers } = await supabase
-        .from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
+      const { data: tiers } = await supabase.from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
       setPriceTiers(tiers || []);
     }
   }
@@ -189,35 +184,31 @@ export default function Home() {
     return fuse.search(searchQuery.trim()).map(r => r.item);
   }, [searchQuery, fuse, designs]);
 
-  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
+  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categor\u00eda'))];
   const filtered = searchQuery.trim()
-    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
+    ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categor\u00eda'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
         const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category ? [d.category] : []);
         return cats.includes(filter);
       }));
   const showPrices = !!user;
-  const cartItems = Object.values(cart);
 
-  // Cantidad total por producto en el carrito (para calcular tier correcto)
   const cartByProduct = cartItems.reduce((acc, item) => {
     acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
     return acc;
   }, {});
-  // Cantidad mínima requerida por el tier más bajo del producto (null si no hay tiers)
+
   function getProductMinQty(productId) {
     const tiers = priceTiers.filter(t => t.product_id === productId);
     if (tiers.length === 0) return null;
     return Math.min(...tiers.map(t => Number(t.min_quantity)));
   }
 
-  // Precio unitario efectivo según tiers — null si qty < mínimo del tier más bajo
   function getUnitPrice(productId) {
     const totalQty = cartByProduct[productId] || 0;
     const productTiers = priceTiers
       .filter(t => t.product_id === productId)
       .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
-
     if (productTiers.length > 0) {
       const minRequired = Number(productTiers[0].min_quantity);
       if (totalQty < minRequired) return null;
@@ -226,7 +217,6 @@ export default function Home() {
         .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
       if (applicable.length > 0) return Number(applicable[0].price_per_unit);
     }
-
     return null;
   }
 
@@ -240,36 +230,21 @@ export default function Home() {
     const price = getUnitPrice(i.product_id);
     return i.showPrice !== false && price !== null && price > 0;
   });
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
 
   const gridCols = isMobile
-    ? `repeat(${activeProduct?.columns_mobile ?? 2}, 1fr)`
-    : `repeat(${activeProduct?.columns_desktop ?? 5}, 1fr)`;
+    ? 'repeat(' + (activeProduct?.columns_mobile ?? 2) + ', 1fr)'
+    : 'repeat(' + (activeProduct?.columns_desktop ?? 5) + ', 1fr)';
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design) {
     const product = products.find(p => p.id === design.product_id);
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-      },
-    }));
+    addToCartCtx(design, product);
     triggerQtyAnim(design.id, 'pop');
     triggerCardPulse(design.id);
   }
 
   function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
+    changeQtyCtx(id, delta);
     triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
     triggerCardPulse(id);
   }
@@ -292,10 +267,6 @@ export default function Home() {
     setOrderCode(generateCode());
   }
 
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
   function triggerQtyAnim(id, type) {
     setQtyAnim(prev => ({ ...prev, [id]: type }));
     setTimeout(() => setQtyAnim(prev => { const n = { ...prev }; delete n[id]; return n; }), 200);
@@ -308,7 +279,7 @@ export default function Home() {
 
   async function submitOrder() {
     if (!form.name || !form.phone || !form.email) {
-      alert('Por favor completá todos los campos.');
+      alert('Por favor complet\u00e1 todos los campos.');
       return;
     }
     setLoading(true);
@@ -332,10 +303,10 @@ export default function Home() {
 
       setConfirmedOrder({ items: cartItems, total, form });
       setSuccess(true);
-      setCart({});
+      clearCart();
       setNotes('');
     } catch (e) {
-      alert('Hubo un error. Intentá de nuevo.');
+      alert('Hubo un error. Intent\u00e1 de nuevo.');
     }
     setLoading(false);
   }
@@ -356,6 +327,7 @@ export default function Home() {
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
       `}</style>
+
       <header style={{...s.header, transform: isMobile ? 'translateY(0)' : (headerVisible ? 'translateY(0)' : 'translateY(-100%)'), transition: 'transform 0.3s ease'}}>
         <div style={{...s.headerInner, padding: isMobile ? '0 16px' : '0 24px'}}>
           <div style={s.logoWrap}>
@@ -369,12 +341,12 @@ export default function Home() {
             {user ? (
               <div style={{position:'relative'}}>
                 <button style={s.btnUserHeader} onClick={() => setUserMenuOpen(v => !v)}>
-                  {profile?.name || user.email?.split('@')[0]} ▾
+                  {profile?.name || user.email?.split('@')[0]} {'▾'}
                 </button>
                 {userMenuOpen && (
                   <div style={{position:'absolute', top:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, boxShadow:'0 4px 16px rgba(27,47,94,0.12)', minWidth:160, zIndex:200, overflow:'hidden'}} onClick={() => setUserMenuOpen(false)}>
                     <a href="/dashboard" style={{display:'block', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#1B2F5E', textDecoration:'none', borderBottom:'1px solid #eef0f6'}}>Mi cuenta</a>
-                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                    <button style={{display:'block', width:'100%', padding:'10px 16px', fontSize:13, fontWeight:600, color:'#e53e3e', background:'none', border:'none', cursor:'pointer', textAlign:'left'}} onClick={() => supabase.auth.signOut()}>Cerrar sesi\u00f3n</button>
                   </div>
                 )}
               </div>
@@ -396,10 +368,10 @@ export default function Home() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar diseño..."
+            placeholder="Buscar dise\u00f1o..."
           />
           {searchQuery && (
-            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
+            <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>{'✕'}</button>
           )}
         </div>
       )}
@@ -419,11 +391,10 @@ export default function Home() {
       }}>
         <div style={s.catalogArea}>
           <div style={s.catalogHeader}>
-            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catálogo</h1>
-            <p style={s.subtitle}>Seleccioná los diseños y armá tu pedido</p>
+            <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Cat\u00e1logo</h1>
+            <p style={s.subtitle}>Selecci\u00f3n los dise\u00f1os y arm\u00e1 tu pedido</p>
           </div>
 
-          {/* Product tabs */}
           {products.length > 1 && (
             <div style={s.productTabs}>
               {products.map(p => (
@@ -438,7 +409,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Category filters */}
           <div style={s.filters}>
             {categories.map(cat => (
               <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
@@ -458,10 +428,10 @@ export default function Home() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Buscar diseño..."
+                  placeholder="Buscar dise\u00f1o..."
                 />
                 {searchQuery && (
-                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
+                  <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>{'✕'}</button>
                 )}
               </div>
             </div>
@@ -469,13 +439,9 @@ export default function Home() {
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
-            <div style={s.emptyState}>
-              <p>No hay diseños todavía.</p>
-            </div>
+            <div style={s.emptyState}><p>No hay dise\u00f1os todav\u00eda.</p></div>
           ) : filtered.length === 0 ? (
-            <div style={s.emptyState}>
-              <p>Sin resultados para &quot;<strong>{searchQuery}</strong>&quot;.</p>
-            </div>
+            <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
             <div style={{...s.grid, gridTemplateColumns: gridCols}}>
               {filtered.map(d => {
@@ -501,11 +467,11 @@ export default function Home() {
                         ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
-                        : <span style={{fontSize:36}}>🎨</span>}
+                        : <span style={{fontSize:36}}>{'🎨'}</span>}
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
-                      {d.category !== 'Sin categoría' && <span style={s.catTag}>{d.category}</span>}
+                      {d.category !== 'Sin categor\u00eda' && <span style={s.catTag}>{d.category}</span>}
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
                         if (price !== null && price > 0) {
@@ -514,10 +480,10 @@ export default function Home() {
                         return null;
                       })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
-                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>−</button>
+                        <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>{'−'}</button>
                         <input
                           type="number"
-                          className={`qty-input${qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : ''}`}
+                          className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
                           value={inCart ? inCart.qty : ''}
                           placeholder="0"
@@ -526,21 +492,19 @@ export default function Home() {
                             const val = parseInt(e.target.value);
                             if (isNaN(val) || val <= 0) removeFromCart(d.id);
                             else if (!inCart) addToCart(d);
-                            else setCart(prev => ({ ...prev, [d.id]: { ...prev[d.id], qty: val } }));
+                            else setCartItem(d.id, val);
                           }}
                           onBlur={e => {
                             const val = parseInt(e.target.value);
                             if (isNaN(val) || val <= 0) removeFromCart(d.id);
                           }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') e.target.blur();
-                          }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
                           min="0"
                         />
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
                           if (inCart) changeQty(d.id, 1);
                           else addToCart(d);
-                        }}>+</button>
+                        }}>{'+'}</button>
                       </div>
                     </div>
                   </div>
@@ -551,76 +515,72 @@ export default function Home() {
           </div>
         </div>
 
-        {!isMobile && <>
-          
-
+        {!isMobile && (
           <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 100, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
                 style={{flex:1, background:'#1B2F5E', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', writingMode:'vertical-rl', color:'rgba(255,255,255,0.7)', fontSize:11, fontWeight:700, letterSpacing:2, userSelect:'none', gap:8, flexDirection:'column'}}
               >
-                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>◀</span>
+                <span style={{fontSize:14, writingMode:'horizontal-tb'}}>{'◀'}</span>
                 <span>TU PEDIDO</span>
                 {totalItems > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{totalItems}</span>}
               </div>
             ) : (
               <>
-                <div style={{...s.sidebarHeader}}>
+                <div style={s.sidebarHeader}>
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
-                    <span style={s.badge}>{totalItems} ítems</span>
+                    <span style={s.badge}>{totalItems} \u00edtems</span>
                   </div>
                 </div>
-            <div style={s.sidebarBody}>
-              {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}>
-                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
+                <div style={s.sidebarBody}>
+                  {cartItems.length === 0 ? (
+                    <div style={s.cartEmpty}><p>Tu pedido est\u00e1 vac\u00edo.<br/>Agreg\u00e1 dise\u00f1os del cat\u00e1logo.</p></div>
+                  ) : (
+                    cartItems.map(item => (
+                      <div key={item.id} style={s.cartItem}>
+                        {item.image_url && (
+                          <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                        )}
+                        <div style={s.cartItemInfo}>
+                          <div style={s.cartItemName}>{item.name}</div>
+                          {showPrices && item.showPrice !== false && (() => {
+                            const price = getUnitPrice(item.product_id);
+                            if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                            return null;
+                          })()}
+                        </div>
+                        <div style={s.cartItemRight}>
+                          <span style={s.cartQty}>{'×'}{item.qty}</span>
+                          {showPrices && item.showPrice !== false && (() => {
+                            const price = getUnitPrice(item.product_id);
+                            if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                            return null;
+                          })()}
+                        </div>
+                        <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>{'✕'}</button>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ) : (
-                cartItems.map(item => (
-                  <div key={item.id} style={s.cartItem}>
-                    {item.image_url && (
-                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                    )}
-                    <div style={s.cartItemInfo}>
-                      <div style={s.cartItemName}>{item.name}</div>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
-                        return null;
-                      })()}
-                    </div>
-                    <div style={s.cartItemRight}>
-                      <span style={s.cartQty}>×{item.qty}</span>
-                      {showPrices && item.showPrice !== false && (() => {
-                        const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
-                        return null;
-                      })()}
-                    </div>
-                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                <div style={s.sidebarFooter}>
+                  <div style={s.totalRow}>
+                    <span>Total</span>
+                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '\u2014'}</span>
                   </div>
-                ))
-              )}
-            </div>
-            <div style={s.sidebarFooter}>
-              <div style={s.totalRow}>
-                <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
-              </div>
-              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Notas adicionales..." rows={2} />
-              <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
-                disabled={cartItems.length === 0} onClick={openModal}>
-                Confirmar pedido →
-              </button>
-            </div>
+                  <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
+                    placeholder="Notas adicionales..." rows={2} />
+                  <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
+                    disabled={cartItems.length === 0} onClick={openModal}>
+                    Confirmar pedido {'\u2192'}
+                  </button>
+                </div>
               </>
             )}
           </div>
-        </>}
+        )}
       </div>
 
       {isMobile && (
@@ -628,17 +588,14 @@ export default function Home() {
           {cartPanelOpen && (
             <div style={s.cartPanelBackdrop} onClick={() => setCartPanelOpen(false)} />
           )}
-
           <div style={{...s.cartPanel, transform: cartPanelOpen ? 'translateY(0)' : 'translateY(100%)'}}>
             <div style={s.cartPanelHeader}>
               <span style={s.cartPanelTitle}>Tu Pedido</span>
-              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>✕</button>
+              <button style={s.cartPanelClose} onClick={() => setCartPanelOpen(false)}>{'✕'}</button>
             </div>
             <div style={s.cartPanelBody}>
               {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}>
-                  <p>Tu pedido está vacío.<br/>Agregá diseños del catálogo.</p>
-                </div>
+                <div style={s.cartEmpty}><p>Tu pedido est\u00e1 vac\u00edo.<br/>Agreg\u00e1 dise\u00f1os del cat\u00e1logo.</p></div>
               ) : (
                 cartItems.map(item => (
                   <div key={item.id} style={s.cartItem}>
@@ -654,14 +611,14 @@ export default function Home() {
                       })()}
                     </div>
                     <div style={s.cartItemRight}>
-                      <span style={s.cartQty}>×{item.qty}</span>
+                      <span style={s.cartQty}>{'×'}{item.qty}</span>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
                         if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
                         return null;
                       })()}
                     </div>
-                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>✕</button>
+                    <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>{'✕'}</button>
                   </div>
                 ))
               )}
@@ -669,7 +626,7 @@ export default function Home() {
             <div style={s.cartPanelFooter}>
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '\u2014'}</span>
               </div>
               <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Notas adicionales..." rows={2} />
@@ -678,23 +635,22 @@ export default function Home() {
                 disabled={cartItems.length === 0}
                 onClick={() => { setCartPanelOpen(false); openModal(); }}
               >
-                Confirmar pedido →
+                Confirmar pedido {'\u2192'}
               </button>
             </div>
           </div>
-
           <div style={s.mobileBar}>
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showTotal ? `$${total.toLocaleString()}` : `${totalItems} item${totalItems !== 1 ? 's' : ''}`}</span>
-              <span style={s.mobileBarChevron}>{cartPanelOpen ? '▼' : '▲'}</span>
+              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' item' + (totalItems !== 1 ? 's' : '')}</span>
+              <span style={s.mobileBarChevron}>{cartPanelOpen ? '\u25bc' : '\u25b2'}</span>
             </button>
             <button
               style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
               disabled={cartItems.length === 0}
               onClick={openModal}
             >
-              Confirmar →
+              Confirmar {'\u2192'}
             </button>
           </div>
         </>
@@ -707,20 +663,20 @@ export default function Home() {
               <>
                 <div style={s.modalHeader}>
                   <span>Confirmar Pedido</span>
-                  <button style={s.closeBtn} onClick={closeModal}>✕</button>
+                  <button style={s.closeBtn} onClick={closeModal}>{'✕'}</button>
                 </div>
                 <div style={s.modalBody}>
                   <div style={s.codeBanner}>
-                    <small style={s.codeLabel}>Código de pedido</small>
+                    <small style={s.codeLabel}>C\u00f3digo de pedido</small>
                     <strong style={s.codeValue}>{orderCode}</strong>
                   </div>
                   {user ? (
                     <div style={{...s.notice, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d'}}>
-                      ✓ Pedido como cliente registrado.
+                      {'✓'} Pedido como cliente registrado.
                     </div>
                   ) : (
                     <div style={s.notice}>
-                      ⚠️ <strong>Cliente no registrado.</strong> Vamos a pedirte confirmación por WhatsApp antes de procesar el pedido.
+                      {'⚠️'} <strong>Cliente no registrado.</strong> Vamos a pedirte confirmaci\u00f3n por WhatsApp antes de procesar el pedido.
                     </div>
                   )}
                   <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
@@ -729,7 +685,7 @@ export default function Home() {
                       <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
                     </div>
                     <div style={s.formGroup}>
-                      <label style={s.label}>Teléfono *</label>
+                      <label style={s.label}>Tel\u00e9fono *</label>
                       <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
                     </div>
                   </div>
@@ -740,19 +696,18 @@ export default function Home() {
                   <div style={s.orderSummary}>
                     {cartItems.map(i => (
                       <div key={i.id} style={s.summaryItem}>
-                        <span>{i.name} × {i.qty}</span>
+                        <span>{i.name} {'×'} {i.qty}</span>
                         {showPrices && i.showPrice !== false && (() => {
                           const price = getUnitPrice(i.product_id);
-                          const minQty = getProductMinQty(i.product_id);
                           if (price === null) return null;
-                          if (price !== null && price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
+                          if (price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
                           return null;
                         })()}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
                       <span>Total</span>
-                      <span>{showTotal ? `$${total.toLocaleString()}` : '—'}</span>
+                      <span>{showTotal ? '$' + total.toLocaleString() : '\u2014'}</span>
                     </div>
                   </div>
                   <div style={s.modalActions}>
@@ -765,15 +720,15 @@ export default function Home() {
               </>
             ) : (
               <div style={s.successScreen}>
-                <div style={s.successIcon}>✓</div>
-                <h3 style={s.successTitle}>¡Pedido enviado!</h3>
-                <p>Código de tu pedido:</p>
+                <div style={s.successIcon}>{'✓'}</div>
+                <h3 style={s.successTitle}>{'¡Pedido enviado!'}</h3>
+                <p>C\u00f3digo de tu pedido:</p>
                 <div style={s.successCode}>{orderCode}</div>
-                <p>Te enviamos la confirmación a tu email.</p>
-                <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
-                  `Hola INKORA! Quiero confirmar mi pedido\nCódigo: ${orderCode}\nNombre: ${confirmedOrder.form.name}\nItems:\n${confirmedOrder.items.map(i => `- ${i.name} × ${i.qty}`).join('\n')}${showTotal ? `\nTotal: $${confirmedOrder.total.toLocaleString()}` : ''}`
-                )}`} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
-                  💬 Confirmar por WhatsApp
+                <p>Te enviamos la confirmaci\u00f3n a tu email.</p>
+                <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
+                  "Hola INKORA! Quiero confirmar mi pedido\nC\u00f3digo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " \u00d7 " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
+                  {'💬'} Confirmar por WhatsApp
                 </a>
               </div>
             )}
@@ -782,7 +737,7 @@ export default function Home() {
       )}
 
       <a
-        href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent('Hola! Vengo desde la página. ')}`}
+        href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent('Hola! Vengo desde la p\u00e1gina. ')}
         target="_blank"
         rel="noreferrer"
         style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : 24}}
@@ -796,18 +751,18 @@ export default function Home() {
       </a>
 
       <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
-        <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
+        <strong>INKORA®</strong> Soluciones Gr\u00e1ficas — Todos los derechos reservados © 2026
       </footer>
 
       {clearConfirmOpen && (
         <div style={s.overlay} onClick={() => setClearConfirmOpen(false)}>
           <div style={{background:'white', borderRadius:16, padding:24, maxWidth:320, width:'100%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
-            <div style={{fontSize:32, marginBottom:12}}>🗑️</div>
-            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>¿Limpiar pedido?</h3>
-            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los diseños del carrito.</p>
+            <div style={{fontSize:32, marginBottom:12}}>{'🗑️'}</div>
+            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>{'¿Limpiar pedido?'}</h3>
+            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los dise\u00f1os del carrito.</p>
             <div style={{display:'flex', gap:10}}>
               <button style={s.btnSecondary} onClick={() => setClearConfirmOpen(false)}>Cancelar</button>
-              <button style={s.btnPrimary} onClick={() => { setCart({}); setClearConfirmOpen(false); }}>Limpiar</button>
+              <button style={s.btnPrimary} onClick={() => { clearCart(); setClearConfirmOpen(false); }}>Limpiar</button>
             </div>
           </div>
         </div>
@@ -926,4 +881,3 @@ const styles = {
   cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
   cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
 };
-
