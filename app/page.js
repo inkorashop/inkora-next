@@ -61,6 +61,7 @@ export default function Home() {
   const [profile, setProfile] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [priceTiers, setPriceTiers] = useState([]);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const width = useWindowWidth();
   const isMobile = width < 768;
@@ -556,7 +557,10 @@ export default function Home() {
               <>
                 <div style={{...s.sidebarHeader}}>
                   <span style={s.sidebarTitle}>Tu Pedido</span>
-                  <span style={s.badge}>{totalItems} ítems</span>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
+                    <span style={s.badge}>{totalItems} ítems</span>
+                  </div>
                 </div>
             <div style={s.sidebarBody}>
               {cartItems.length === 0 ? (
@@ -783,6 +787,20 @@ export default function Home() {
       <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
         <strong>INKORA®</strong> Soluciones Gráficas — Todos los derechos reservados © 2026
       </footer>
+
+      {clearConfirmOpen && (
+        <div style={s.overlay} onClick={() => setClearConfirmOpen(false)}>
+          <div style={{background:'white', borderRadius:16, padding:24, maxWidth:320, width:'100%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:32, marginBottom:12}}>🗑️</div>
+            <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>¿Limpiar pedido?</h3>
+            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los diseños del carrito.</p>
+            <div style={{display:'flex', gap:10}}>
+              <button style={s.btnSecondary} onClick={() => setClearConfirmOpen(false)}>Cancelar</button>
+              <button style={s.btnPrimary} onClick={() => { setCart({}); setClearConfirmOpen(false); }}>Limpiar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {authModalOpen && (
         <AuthModal
