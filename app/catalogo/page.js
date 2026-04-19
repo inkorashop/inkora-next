@@ -426,7 +426,7 @@ export default function Home() {
         <div style={s.catalogArea}>
           <div style={s.catalogHeader}>
             <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catalogo</h1>
-            <p style={s.subtitle}>Selecciona los disenos y arma tu pedido</p>
+            <p style={s.subtitle}>Selecciona los diseños y arma tu pedido</p>
           </div>
 
           {products.length > 1 && (
@@ -473,7 +473,7 @@ export default function Home() {
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
-            <div style={s.emptyState}><p>No hay disenos todavia.</p></div>
+            <div style={s.emptyState}><p>No hay diseños todavia.</p></div>
           ) : filtered.length === 0 ? (
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
@@ -571,7 +571,7 @@ export default function Home() {
                 </div>
                 <div style={s.sidebarBody}>
                   {cartItems.length === 0 ? (
-                    <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
+                    <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega diseños del catalogo.</p></div>
                   ) : (
                     cartItems.map(item => (
                       <div key={item.id} style={s.cartItem}>
@@ -629,7 +629,7 @@ export default function Home() {
             </div>
             <div style={s.cartPanelBody}>
               {cartItems.length === 0 ? (
-                <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega disenos del catalogo.</p></div>
+                <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega diseños del catalogo.</p></div>
               ) : (
                 cartItems.map(item => (
                   <div key={item.id} style={s.cartItem}>
@@ -795,7 +795,7 @@ export default function Home() {
           <div style={{background:'white', borderRadius:16, padding:24, maxWidth:320, width:'100%', textAlign:'center'}} onClick={e => e.stopPropagation()}>
             <div style={{fontSize:32, marginBottom:12}}>🗑️</div>
             <h3 style={{color:'#1B2F5E', fontWeight:700, marginBottom:8}}>Limpiar pedido?</h3>
-            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los disenos del carrito.</p>
+            <p style={{color:'#5a6380', fontSize:14, marginBottom:20}}>Se van a eliminar todos los diseños del carrito.</p>
             <div style={{display:'flex', gap:10}}>
               <button style={s.btnSecondary} onClick={() => setClearConfirmOpen(false)}>Cancelar</button>
               <button style={s.btnPrimary} onClick={() => { clearCart(); setClearConfirmOpen(false); }}>Limpiar</button>
