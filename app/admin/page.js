@@ -120,7 +120,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
 
@@ -1429,6 +1429,30 @@ export default function Admin() {
       {/* ══ CONFIGURACIÓN ══ */}
         {activeTab === 'config' && (
           <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Inicio de sesión</h2>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Método de login</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Cómo ingresan los usuarios al catálogo</div>
+                </div>
+                <div style={{display:'flex', gap:6}}>
+                  <button
+                    onClick={() => saveSetting('login_method', 'modal')}
+                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings.login_method !== 'google' ? '#1B2F5E' : 'white', color: settings.login_method !== 'google' ? 'white' : '#5a6380'}}
+                  >
+                    📋 Modal completo
+                  </button>
+                  <button
+                    onClick={() => saveSetting('login_method', 'google')}
+                    style={{display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings.login_method === 'google' ? '#1B2F5E' : 'white', color: settings.login_method === 'google' ? 'white' : '#5a6380'}}
+                  >
+                    <GoogleIcon /> Solo Google
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {[
               { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
               { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
