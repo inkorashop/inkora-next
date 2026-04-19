@@ -98,6 +98,7 @@ export default function Admin() {
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
   const [designSearch, setDesignSearch] = useState('');
+  const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -1096,16 +1097,31 @@ export default function Admin() {
                   </button>
                 ))}
               </div>
-              <div style={{marginBottom: 12}}>
+              <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom: 12, alignItems:'center'}}>
                 <input
-                  style={{...s.input, maxWidth: 320}}
+                  style={{...s.input, maxWidth: 220}}
                   placeholder="Buscar diseño..."
                   value={designSearch ?? ''}
                   onChange={e => setDesignSearch(e.target.value)}
                 />
+                <select
+                  style={{...s.input, width: 160}}
+                  value={designCatFilter ?? ''}
+                  onChange={e => setDesignCatFilter(e.target.value)}
+                >
+                  <option value="">Todas las categorías</option>
+                  {[...new Set(designs.flatMap(d => Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : [])))].sort().map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
               <div onClick={() => setSelectedIds(new Set())}>
-              {designs.filter(d => (designFilterProduct === 'all' || d.product_id === designFilterProduct) && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))).map(d => (
+              {designs.filter(d => {
+                const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
+                  && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
+                  && (!designCatFilter || cats.includes(designCatFilter));
+              }).map(d => (
                 <div
                   key={d.id}
                   draggable
