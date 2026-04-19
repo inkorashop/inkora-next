@@ -19,7 +19,7 @@ const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
 function generateCode() {
   const year = new Date().getFullYear();
-  const num = String(Math.floor(Math.random() * 9000) + 1000);
+  const num = String(Math.floor(Math.random() * 9000) + 100);
   return `INK-${year}-${num}`;
 }
 
