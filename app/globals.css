@@ -54,6 +54,9 @@ body {
 .header-btn {
   transition: box-shadow 0.3s ease, background 0.2s ease;
 }
+div.header-btn {
+  transition: box-shadow 0.3s ease;
+}
 .header-btn:hover {
-  box-shadow: 0 0 12px rgba(255,255,255,0.25);
+  box-shadow: 0 0 14px rgba(45,107,228,0.6);
 }
