@@ -106,28 +106,40 @@ export default function Home() {
     function startTabAnim(cfg) {
       const text = cfg.tab_text || 'INKORA 🔷';
       const interval = parseInt(cfg.tab_interval) || 1000;
-      const always = cfg.tab_always === 'true';
+      const onAway = cfg.tab_on_away === 'true';
+      const onActive = cfg.tab_on_active === 'true';
       clearInterval(tabInterval);
 
+      if (!onAway && !onActive) return;
+
       function animate() {
+        clearInterval(tabInterval);
         tabInterval = setInterval(() => {
           document.title = tabToggle ? 'INKORA' : text;
           tabToggle = !tabToggle;
         }, interval);
       }
 
-      if (always) {
+      function stop() {
+        clearInterval(tabInterval);
+        tabToggle = false;
+        document.title = 'INKORA';
+      }
+
+      if (onAway && onActive) {
         animate();
       } else {
         function handleVisibility() {
-          if (document.hidden) { animate(); }
-          else { clearInterval(tabInterval); tabToggle = false; document.title = 'INKORA'; }
+          if (document.hidden && onAway) { animate(); }
+          else if (!document.hidden && onActive) { animate(); }
+          else { stop(); }
         }
         document.addEventListener('visibilitychange', handleVisibility);
+        if (onActive && !document.hidden) animate();
       }
     }
 
-    supabase.from('settings').select('*').in('key', ['catalogo_tab_text', 'catalogo_tab_interval', 'catalogo_tab_always'])
+    supabase.from('settings').select('*').in('key', ['catalogo_tab_text', 'catalogo_tab_interval', 'catalogo_tab_on_away', 'catalogo_tab_on_active'])
       .then(({ data }) => {
         if (data) {
           const cfg = {};

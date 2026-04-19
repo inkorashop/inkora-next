@@ -120,7 +120,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_always: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_always: 'false' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
 
@@ -1434,7 +1434,8 @@ export default function Admin() {
                     { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
                     { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
-                    { key: `${page}_tab_always`, label: 'Animar siempre', desc: 'Si está apagado, solo anima al cambiar de pestaña' },
+                    { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaña' },
+{ key: `${page}_tab_on_active`, label: 'Animar al estar', desc: 'Anima mientras el usuario está viendo la página' },
                   ].map(({ key, label: rowLabel, desc, type, disabled }, i, arr) => (
                     <div key={key} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom: i < arr.length - 1 ? '1px solid #eef0f6' : 'none', opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto'}}>
                       <div>
