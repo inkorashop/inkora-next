@@ -183,7 +183,10 @@ export default function Home() {
   const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoría'))];
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoría'))
-    : (filter === 'Todos' ? designs : designs.filter(d => d.category === filter && d.category !== 'Sin categoría'));
+    : (filter === 'Todos' ? designs : designs.filter(d => {
+        const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category ? [d.category] : []);
+        return cats.includes(filter);
+      }));
   const showPrices = !!user;
   const cartItems = Object.values(cart);
 

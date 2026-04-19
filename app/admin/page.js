@@ -1159,18 +1159,26 @@ export default function Admin() {
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
                         {' '}
                         {d.product_id ? (
-                          <select
-                            style={{fontSize:11, border:'1px solid #dde1ef', borderRadius:4, padding:'1px 4px', color:'#5a6380', fontFamily:'Barlow, sans-serif', cursor:'pointer', background:'white'}}
-                            value={d.category}
-                            onChange={async e => { await saveDesignCategory(d.id, e.target.value); }}
-                            onClick={e => e.stopPropagation()}
-                            onDragStart={e => e.stopPropagation()}
-                          >
-                            <option value="Sin categoría">Sin categoría</option>
-                            {getProductCategories(d.product_id).map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
+                          <div style={{display:'flex', flexWrap:'wrap', gap:3}} onClick={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()}>
+                            {getProductCategories(d.product_id).map(c => {
+                              const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                              const active = cats.includes(c);
+                              return (
+                                <span
+                                  key={c}
+                                  onClick={async e => {
+                                    e.stopPropagation();
+                                    const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
+                                    await supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', d.id);
+                                    setDesigns(prev => prev.map(x => x.id === d.id ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
+                                  }}
+                                  style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
+                                >
+                                  {c}
+                                </span>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <span>{d.category}</span>
                         )}
