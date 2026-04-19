@@ -293,9 +293,10 @@ export default function Home() {
     return i.showPrice !== false && price !== null && price > 0;
   });
 
-  const gridCols = isMobile
-    ? 'repeat(' + (activeProduct?.columns_mobile ?? 2) + ', 1fr)'
-    : 'repeat(' + (activeProduct?.columns_desktop ?? 5) + ', 1fr)';
+  const cardWidth = isMobile
+    ? (activeProduct?.card_width_mobile ?? 160)
+    : (activeProduct?.card_width_desktop ?? 180);
+  const gridCols = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design) {
