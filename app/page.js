@@ -535,7 +535,7 @@ export default function Home() {
               <button style={{...s.searchClear, color: 'rgba(255,255,255,0.8)', background: 'none', border: 'none'}} onClick={() => setSearchQuery('')}>✕</button>
             )}
           </div>
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease'}}>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 139 : 75, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 24, display: 'flex', flexDirection: 'column'}}>
             <div style={s.sidebarHeader}>
               <span style={s.sidebarTitle}>Tu Pedido</span>
               <span style={s.badge}>{totalItems} ítems</span>
@@ -822,7 +822,7 @@ const styles = {
   sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
   badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
   sidebarSearch: { padding: '12px 20px', borderBottom: '1.5px solid #dde1ef', position: 'relative', display: 'flex', alignItems: 'center' },
-  sidebarBody: { padding: '16px 20px', maxHeight: 400, overflowY: 'auto' },
+  sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
   cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
   cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
   cartItemInfo: { flex: 1, minWidth: 0 },
