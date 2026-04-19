@@ -66,7 +66,7 @@ function TrashBtn({ onClick }) {
 
 export default function Admin() {
   // ── Auth ──
-  const [screen, setScreen] = useState('login'); // 'login' | 'checking' | 'denied' | 'panel'
+  const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
 
@@ -137,8 +137,16 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        checkAdmin(session.user.email);
+      } else {
+        setScreen('login');
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') return;
+      if (event === 'SIGNED_OUT') { setScreen('login'); return; }
       if (event === 'SIGNED_IN' && session?.user?.email) {
         checkAdmin(session.user.email);
       }
@@ -684,15 +692,7 @@ export default function Admin() {
     </div>
   );
 
-  if (screen === 'checking') return (
-    <div style={s.loginWrap}>
-      {sessionBar}
-      <div style={s.loginBox}>
-        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
-        <p style={{color: '#5a6380', fontSize: 14, margin: 0}}>Verificando acceso...</p>
-      </div>
-    </div>
-  );
+  if (screen === 'checking') return null;
 
   if (screen === 'denied') return (
     <div style={s.loginWrap}>
