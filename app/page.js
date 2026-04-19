@@ -145,7 +145,7 @@ export default function Landing() {
               width: 320,
               height: 420,
               display: 'block',
-              boxShadow: hovered === p.id ? '0 24px 60px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
               transition: 'box-shadow 0.3s ease, transform 0.3s ease',
               transform: 'translateY(0)'
             }}
