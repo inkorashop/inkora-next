@@ -817,7 +817,7 @@ const styles = {
   app: { fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc', display: 'flex', flexDirection: 'column' },
   mobileSearchBar: { position: 'fixed', top: 64, right: 12, width: 180, zIndex: 90, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.25)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', gap: 8 },
   mobileSearchInput: { border: 'none', borderRadius: 8, padding: '8px 12px', outline: 'none', flex: 1, background: 'rgba(255,255,255,0.15)', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: 'white', minWidth: 0 },
-  layout: { maxWidth: 1400, margin: '0 auto', display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
+  layout: { display: 'grid', gap: 24, alignItems: 'start', alignContent: 'start' },
   catalogArea: { minHeight: '70vh', flex: 1, width: '100%', alignSelf: 'flex-start' },
   catalogHeader: { marginBottom: 16 },
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
