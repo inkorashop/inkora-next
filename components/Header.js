@@ -65,8 +65,8 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    setProfile(data);
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    setProfile(data || null);
   }
 
   return (

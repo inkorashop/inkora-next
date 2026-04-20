@@ -53,7 +53,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   }, []);
 
   async function loadProfile(userId, email) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (data) {
       setName(data.name || '');
       setPhone(data.phone || '');

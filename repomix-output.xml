@@ -1099,7 +1099,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   }, []);
 
   async function loadProfile(userId, email) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (data) {
       setName(data.name || '');
       setPhone(data.phone || '');
@@ -3501,7 +3501,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     setProfile(data);
   }
 
