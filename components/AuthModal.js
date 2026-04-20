@@ -35,6 +35,7 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
   const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') === 'light' : false;
 
   async function handleSubmit() {
@@ -68,6 +69,18 @@ export default function AuthModal({ onClose, onSuccess }) {
       setError(translateError(e.message));
     }
     setLoading(false);
+  }
+
+  async function handleReset() {
+    setError('');
+    if (!form.email) { setError('Ingresá tu email.'); return; }
+    setLoading(true);
+    const { error: e } = await supabase.auth.resetPasswordForEmail(form.email, {
+      redirectTo: 'https://www.inkora.com.ar/auth/reset-password',
+    });
+    setLoading(false);
+    if (e) { setError(translateError(e.message)); return; }
+    setResetSent(true);
   }
 
   async function handleGoogle() {
@@ -118,7 +131,7 @@ export default function AuthModal({ onClose, onSuccess }) {
             </button>
           </div>
 
-          <button style={styles.btnGoogle} onClick={handleGoogle}>
+          {mode !== 'reset' && <button style={styles.btnGoogle} onClick={handleGoogle}>
             <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -126,13 +139,13 @@ export default function AuthModal({ onClose, onSuccess }) {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
             Continuar con Google
-          </button>
+          </button>}
 
-          <div style={{...styles.divider, borderTopColor: dividerColor}}>
+          {mode !== 'reset' && <div style={{...styles.divider, borderTopColor: dividerColor}}>
             <span style={{padding:'0 10px', position:'relative', zIndex:1, color: dividerTextColor}}>o</span>
-          </div>
+          </div>}
 
-          {mode === 'register' && (
+          {mode !== 'reset' && mode === 'register' && (
             <div style={styles.formGroup}>
               <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Nombre de tu comercio" />
             </div>
@@ -159,12 +172,39 @@ export default function AuthModal({ onClose, onSuccess }) {
 
           {error && <div style={styles.errorBox}>{error}</div>}
 
-          <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
+          {mode !== 'reset' && <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
             {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
-          </button>
+          </button>}
 
           {mode === 'login' && (
             <p style={{...styles.hint, color: hintColor}}>¿No tenés cuenta? <button style={{...styles.linkBtn, color: linkColor}} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
+          )}
+          {mode === 'login' && (
+            <p style={{...styles.hint, color: hintColor, marginTop: 4}}>
+              <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('reset'); setError(''); setResetSent(false); }}>¿Olvidaste tu contraseña?</button>
+            </p>
+          )}
+          {mode === 'reset' && !resetSent && (
+            <div>
+              <p style={{...styles.hint, color: hintColor, marginBottom: 12, textAlign: 'left'}}>Ingresá tu email y te mandamos un link para resetear tu contraseña.</p>
+              <div style={styles.formGroup}>
+                <input style={inputStyle} type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="tu@email.com" onKeyDown={e => { if (e.key === 'Enter') handleReset(); }} />
+              </div>
+              {error && <div style={styles.errorBox}>{error}</div>}
+              <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleReset}>
+                {loading ? 'Enviando...' : 'Enviar link'}
+              </button>
+              <p style={{...styles.hint, color: hintColor, marginTop: 8}}>
+                <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('login'); setError(''); }}>Volver</button>
+              </p>
+            </div>
+          )}
+          {mode === 'reset' && resetSent && (
+            <div style={{textAlign: 'center', padding: '16px 0'}}>
+              <div style={{fontSize: 32, marginBottom: 12}}>📧</div>
+              <p style={{color: hintColor, fontSize: 14, lineHeight: 1.5}}>Te mandamos un email con el link para resetear tu contraseña. Revisá tu bandeja de entrada.</p>
+              <button style={{...styles.linkBtn, color: linkColor, marginTop: 16, display: 'block', margin: '16px auto 0'}} onClick={() => { setMode('login'); setError(''); setResetSent(false); }}>Volver al inicio</button>
+            </div>
           )}
         </div>
       </div>
