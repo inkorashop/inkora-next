@@ -14,5 +14,7 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  const redirectUrl = new URL(`${origin}${next}`);
+  redirectUrl.searchParams.set('auth_success', '1');
+  return NextResponse.redirect(redirectUrl.toString());
 }

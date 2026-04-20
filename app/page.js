@@ -16,6 +16,15 @@ export default function Landing() {
   const [uiSettings, setUiSettings] = useState({});
 
   useEffect(() => {
+    if (window.location.search.includes('auth_success')) {
+      window.history.replaceState(null, '', window.location.pathname);
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          window.dispatchEvent(new Event('inkora_auth_success'));
+        }
+      });
+    }
+
     supabase.from('products').select('*').eq('active', true).order('created_at')
       .then(({ data }) => { if (data) setProducts(data); });
 

@@ -51,7 +51,18 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       setUser(u);
       if (u) loadProfile(u.id); else setProfile(null);
     });
-    return () => subscription.unsubscribe();
+    function handleAuthSuccess() {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) loadProfile(u.id);
+      });
+    }
+    window.addEventListener('inkora_auth_success', handleAuthSuccess);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('inkora_auth_success', handleAuthSuccess);
+    };
   }, []);
 
   useEffect(() => {
