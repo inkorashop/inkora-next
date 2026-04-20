@@ -390,13 +390,16 @@ export default function Home() {
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
 
-        /* 👇 AGREGAR ESTO */
+        /* Eliminamos el borde y contorno negro al hacer clic */
         button:focus {
-          outline: none;
+          outline: none !important;
+          box-shadow: none !important;
         }
 
+        /* Solo mostramos un estilo si el usuario navega con teclado */
         button:focus-visible {
-          box-shadow: 0 0 0 2px rgba(45,107,228,0.5);
+          outline: 2px solid #2D6BE4 !important;
+          outline-offset: 2px;
         }
       `}</style>
 
