@@ -25,7 +25,6 @@ export async function middleware(request) {
     }
   );
 
-  // Refresca la sesión si el token expiró — escribe cookies actualizadas en la respuesta
   await supabase.auth.getUser();
 
   return response;
@@ -33,6 +32,6 @@ export async function middleware(request) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api|auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
