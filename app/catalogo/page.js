@@ -523,6 +523,11 @@ export default function Home() {
                         if (price !== null && price > 0) {
                           return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
                         }
+                        const minQty = getProductMinQty(activeProductId);
+                        const currentQty = cartByProduct[activeProductId] || 0;
+                        if (minQty && currentQty > 0 && currentQty < minQty) {
+                          return <div style={{...s.cardUnitPrice, color: '#e53e3e'}}>Mín. {minQty}u.</div>;
+                        }
                         return null;
                       })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
@@ -570,7 +575,7 @@ export default function Home() {
               >
                 <span style={{fontSize:14, writingMode:'horizontal-tb'}}>◀</span>
                 <span>TU PEDIDO</span>
-                {totalItems > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{totalItems}</span>}
+                {cartItems.length > 0 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'3px 6px', fontSize:10, writingMode:'horizontal-tb'}}>{cartItems.length}</span>}
               </div>
             ) : (
               <>
@@ -578,7 +583,7 @@ export default function Home() {
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
-                    <span style={s.badge}>{totalItems} items</span>
+                    <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
                   </div>
                 </div>
                 <div style={s.sidebarBody}>
@@ -597,7 +602,7 @@ export default function Home() {
                             if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
                             const minQty = getProductMinQty(item.product_id);
                             const currentQty = cartByProduct[item.product_id] || 0;
-                            if (minQty && currentQty < minQty) return <div style={{...s.cartItemUnitPrice, color:'#f59e0b'}}>Mín. {minQty}u.</div>;
+                            if (minQty && currentQty < minQty) return <div style={{...s.cartItemUnitPrice, color:'#e53e3e'}}>Mín. {minQty}u.</div>;
                             return null;
                           })()}
                         </div>

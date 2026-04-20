@@ -148,7 +148,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                 <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
                   <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
-                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{totalItems} items</span>
+                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
                   </div>
                   <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
                     {cartItems.length === 0 ? (
