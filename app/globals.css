@@ -76,3 +76,8 @@ button:focus-within {
 * {
   outline: none !important;
 }
+.filter-btn:focus,
+.filter-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
