@@ -870,7 +870,11 @@ export default function Admin() {
                             <input ref={setRef(5)} style={{...s.tblInput, width: 70}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />
                           </td>
                           <td style={s.td}>
-                            
+                            {!form.landing_image && uploadingLandingImage !== p.id && (
+                              <span style={{fontSize:9, color:'#9aa3bc', display:'block', marginBottom:3}}>
+                                Máx. {(form.landing_max_file_size_kb ?? 4096) >= 1024 ? ((form.landing_max_file_size_kb ?? 4096)/1024).toFixed(0) + 'MB' : (form.landing_max_file_size_kb ?? 4096) + 'KB'}
+                              </span>
+                            )}
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               {form.landing_image ? (
                                 <>
@@ -880,9 +884,7 @@ export default function Admin() {
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
                                   >✕</button>
                                 </>
-                              ) : (
-                                <span style={{fontSize:9, color:'#9aa3bc', display:'block', marginBottom:2}}>Máx. {form.max_file_size_kb >= 1024 ? (form.max_file_size_kb/1024).toFixed(0) + 'MB' : form.max_file_size_kb + 'KB'}</span>
-                              )}
+                              ) : null}
                               {uploadingLandingImage === p.id ? (
                                 <div style={{display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#2D6BE4'}}>
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D6BE4" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin 0.8s linear infinite', flexShrink:0}}>
