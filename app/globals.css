@@ -67,6 +67,9 @@ div.header-btn {
   from { opacity: 0; transform: translateY(-8px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-button:focus {
-  outline: none;
+button:focus,
+button:focus-visible,
+button:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
 }
