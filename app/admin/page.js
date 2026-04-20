@@ -870,11 +870,7 @@ export default function Admin() {
                             <input ref={setRef(5)} style={{...s.tblInput, width: 70}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />
                           </td>
                           <td style={s.td}>
-                            {!form.landing_image && uploadingLandingImage !== p.id && (
-                              <span style={{fontSize:9, color:'#9aa3bc', display:'block', marginBottom:3}}>
-                                Máx. {(form.landing_max_file_size_kb ?? 4096) >= 1024 ? ((form.landing_max_file_size_kb ?? 4096)/1024).toFixed(0) + 'MB' : (form.landing_max_file_size_kb ?? 4096) + 'KB'}
-                              </span>
-                            )}
+                            
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               {form.landing_image ? (
                                 <>
