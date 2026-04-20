@@ -46,6 +46,45 @@ function GoogleIcon() {
   );
 }
 
+function HoldButton({ onConfirm }) {
+  const [progress, setProgress] = React.useState(0);
+  const intervalRef = React.useRef(null);
+
+  function startHold() {
+    intervalRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(intervalRef.current);
+          onConfirm();
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 100);
+  }
+
+  function stopHold() {
+    clearInterval(intervalRef.current);
+    setProgress(0);
+  }
+
+  return (
+    <button
+      onMouseDown={startHold}
+      onMouseUp={stopHold}
+      onMouseLeave={stopHold}
+      onTouchStart={startHold}
+      onTouchEnd={stopHold}
+      style={{position:'relative', background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)', overflow:'hidden', minWidth:140, userSelect:'none'}}
+    >
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', width: progress + '%', transition:'width 0.05s linear'}} />
+      <span style={{position:'relative', zIndex:1}}>
+        {progress === 0 ? 'Mantené para eliminar' : progress >= 100 ? '✓ Eliminado' : `${Math.round(progress)}%`}
+      </span>
+    </button>
+  );
+}
+
 function TrashBtn({ onClick }) {
   const [hovered, setHovered] = React.useState(false);
   return (
@@ -241,9 +280,14 @@ export default function Admin() {
   }
 
   function deleteProduct(id) {
-    askConfirm('¿Seguro que querés eliminar este producto? Esta acción no se puede deshacer.', async () => {
-      await supabase.from('products').delete().eq('id', id);
-      loadProducts();
+    setConfirmModal({
+      open: true,
+      message: '¿Seguro que querés eliminar este producto? Los diseños y escalas quedarán en la base de datos pero desvinculados.',
+      onConfirm: async () => {
+        await supabase.from('products').delete().eq('id', id);
+        loadProducts();
+      },
+      requireHold: true,
     });
   }
 
@@ -1594,7 +1638,11 @@ export default function Admin() {
             <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}>{confirmModal.message}</div>
             <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
               <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={closeConfirm}>Cancelar</button>
-              <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}>Eliminar</button>
+              {confirmModal.requireHold ? (
+                <HoldButton onConfirm={() => { confirmModal.onConfirm(); closeConfirm(); }} />
+              ) : (
+                <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}>Eliminar</button>
+              )}
             </div>
           </div>
         </div>
