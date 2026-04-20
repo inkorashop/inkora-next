@@ -620,6 +620,23 @@ export default function Home() {
                   )}
                 </div>
                 <div style={s.sidebarFooter}>
+                  {showPrices && products.filter(p => cartByProduct[p.id] > 0).length > 0 && (
+                    <div style={{marginBottom:12, display:'flex', flexDirection:'column', gap:4}}>
+                      {products.filter(p => cartByProduct[p.id] > 0).map(p => {
+                        const qty = cartByProduct[p.id] || 0;
+                        const minQty = getProductMinQty(p.id);
+                        const reached = !minQty || qty >= minQty;
+                        return (
+                          <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:11, padding:'4px 8px', borderRadius:6, background: reached ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reached ? '#bbf7d0' : '#fecaca'}`}}>
+                            <span style={{color: reached ? '#15803d' : '#dc2626', fontWeight:600}}>{p.name}</span>
+                            <span style={{color: reached ? '#15803d' : '#dc2626', fontWeight:700}}>
+                              {qty}{minQty && !reached ? ` / ${minQty} mín.` : 'u.'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div style={s.totalRow}>
                     <span>Total</span>
                     <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
@@ -678,6 +695,23 @@ export default function Home() {
               )}
             </div>
             <div style={s.cartPanelFooter}>
+              {showPrices && products.filter(p => cartByProduct[p.id] > 0).length > 0 && (
+                <div style={{marginBottom:12, display:'flex', flexDirection:'column', gap:4}}>
+                  {products.filter(p => cartByProduct[p.id] > 0).map(p => {
+                    const qty = cartByProduct[p.id] || 0;
+                    const minQty = getProductMinQty(p.id);
+                    const reached = !minQty || qty >= minQty;
+                    return (
+                      <div key={p.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:11, padding:'4px 8px', borderRadius:6, background: reached ? '#f0fdf4' : '#fef2f2', border: `1px solid ${reached ? '#bbf7d0' : '#fecaca'}`}}>
+                        <span style={{color: reached ? '#15803d' : '#dc2626', fontWeight:600}}>{p.name}</span>
+                        <span style={{color: reached ? '#15803d' : '#dc2626', fontWeight:700}}>
+                          {qty}{minQty && !reached ? ` / ${minQty} mín.` : 'u.'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div style={s.totalRow}>
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
