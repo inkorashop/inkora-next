@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+const supabase = createBrowserSupabaseClient();
 
 function translateError(msg) {
   if (!msg) return 'Ocurrió un error. Intentá de nuevo.';
@@ -43,6 +45,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       if (mode === 'login') {
         const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
         if (e) throw e;
+        if (!data.user) throw new Error('invalid login credentials');
         onSuccess(data.user);
       } else {
         if (!form.name.trim()) { setError('Ingresá el nombre de tu comercio.'); setLoading(false); return; }
