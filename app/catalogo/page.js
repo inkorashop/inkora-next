@@ -389,6 +389,15 @@ export default function Home() {
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
+
+        /* 👇 AGREGAR ESTO */
+        button:focus {
+          outline: none;
+        }
+
+        button:focus-visible {
+          box-shadow: 0 0 0 2px rgba(45,107,228,0.5);
+        }
       `}</style>
 
       <Header headerVisible={headerVisible} showCart={false} page="catalogo" />
