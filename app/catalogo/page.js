@@ -445,7 +445,7 @@ export default function Home() {
 
           <div style={s.filters}>
             {categories.map(cat => (
-              <button key={cat} style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
+              <button key={cat} className="filter-btn" style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
                 onClick={() => setFilter(cat)}>
                 {cat}
               </button>
