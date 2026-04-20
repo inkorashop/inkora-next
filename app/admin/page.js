@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
+const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 
 function fileToBase64(file) {
@@ -211,7 +211,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
+        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -799,6 +799,7 @@ export default function Admin() {
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Rotación</th>
+                      <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
@@ -866,9 +867,12 @@ export default function Admin() {
                             </div>
                           </td>
                           <td style={s.td}>
+                            <input ref={setRef(5)} style={{...s.tblInput, width: 70}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />
+                          </td>
+                          <td style={s.td}>
                             {!form.landing_image && uploadingLandingImage !== p.id && (
                               <span style={{fontSize:9, color:'#9aa3bc', display:'block', marginBottom:3}}>
-                                Máx. {(form.max_file_size_kb >= 1024 ? (form.max_file_size_kb/1024).toFixed(0) + 'MB' : form.max_file_size_kb + 'KB')}
+                                Máx. {(form.landing_max_file_size_kb ?? 4096) >= 1024 ? ((form.landing_max_file_size_kb ?? 4096)/1024).toFixed(0) + 'MB' : (form.landing_max_file_size_kb ?? 4096) + 'KB'}
                               </span>
                             )}
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
@@ -898,7 +902,8 @@ export default function Admin() {
                                   onChange={async e => {
                                     const file = e.target.files[0];
                                     if (!file) return;
-                                    if (file.size > 20 * 1024 * 1024) { alert('La imagen supera 20MB.'); e.target.value = ''; return; }
+                                    const maxLanding = (form.landing_max_file_size_kb ?? 4096) * 1024;
+                                    if (file.size > maxLanding) { alert('La imagen supera ' + (form.landing_max_file_size_kb >= 1024 ? (form.landing_max_file_size_kb/1024).toFixed(0) + 'MB' : form.landing_max_file_size_kb + 'KB') + '.'); e.target.value = ''; return; }
                                     setUploadingLandingImage(p.id);
                                     const base64 = await fileToBase64(file);
                                     const res = await fetch('/api/upload-image', {
