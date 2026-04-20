@@ -982,6 +982,49 @@ export default function ModelViewer({ url, autoRotate = false }) {
 }
 </file>
 
+<file path="lib/auth.js">
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+const supabase = createBrowserSupabaseClient();
+
+export async function signUp({ email, password, name }) {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } },
+  });
+}
+
+export async function signIn({ email, password }) {
+  return supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
+  });
+}
+
+export async function signOut() {
+  return supabase.auth.signOut();
+}
+
+export async function getUser() {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('*, localities(*)')
+    .eq('id', userId)
+    .single();
+  return data;
+}
+</file>
+
 <file path="lib/supabase-browser.js">
 'use client';
 
@@ -1301,49 +1344,6 @@ export default function RootLayout({ children }) {
       <body><CartProvider>{children}</CartProvider></body>
     </html>
   );
-}
-</file>
-
-<file path="lib/auth.js">
-import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
-
-const supabase = createBrowserSupabaseClient();
-
-export async function signUp({ email, password, name }) {
-  return supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: name } },
-  });
-}
-
-export async function signIn({ email, password }) {
-  return supabase.auth.signInWithPassword({ email, password });
-}
-
-export async function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
-  });
-}
-
-export async function signOut() {
-  return supabase.auth.signOut();
-}
-
-export async function getUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
-
-export async function getUserProfile(userId) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('*, localities(*)')
-    .eq('id', userId)
-    .single();
-  return data;
 }
 </file>
 
@@ -1676,6 +1676,11 @@ button:focus-within {
 }
 * {
   outline: none !important;
+}
+.filter-btn:focus,
+.filter-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 </file>
 
