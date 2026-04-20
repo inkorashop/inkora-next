@@ -822,27 +822,39 @@ export default function Admin() {
                           </td>
                           <td style={s.td}>
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
-                              {form.landing_image && <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                style={{fontSize:10, maxWidth:100}}
-                                onChange={async e => {
-                                  const file = e.target.files[0];
-                                  if (!file) return;
-                                  const base64 = await fileToBase64(file);
-                                  const res = await fetch('/api/upload-image', {
-                                    method: 'POST', headers: {'Content-Type':'application/json'},
-                                    body: JSON.stringify({fileBase64: base64, fileName: file.name, mimeType: file.type, folder: 'landing'}),
-                                  });
-                                  const data = await res.json();
-                                  if (data.url) {
-                                    updateProductForm(p.id, 'landing_image', data.url);
-                                    saveProduct(p.id, {landing_image: data.url});
-                                  }
-                                  e.target.value = '';
-                                }}
-                              />
+                              {form.landing_image ? (
+                                <>
+                                  <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
+                                  <button
+                                    onClick={() => { updateProductForm(p.id, 'landing_image', ''); saveProduct(p.id, {landing_image: null}); }}
+                                    style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+                                  >✕</button>
+                                </>
+                              ) : (
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/webp,image/gif"
+                                  style={{fontSize:10, maxWidth:110}}
+                                  onChange={async e => {
+                                    const file = e.target.files[0];
+                                    if (!file) return;
+                                    if (file.size > 20 * 1024 * 1024) { alert('La imagen supera 20MB.'); e.target.value = ''; return; }
+                                    const base64 = await fileToBase64(file);
+                                    const res = await fetch('/api/upload-image', {
+                                      method: 'POST', headers: {'Content-Type':'application/json'},
+                                      body: JSON.stringify({fileBase64: base64, fileName: file.name, mimeType: file.type, folder: 'landing'}),
+                                    });
+                                    const data = await res.json();
+                                    if (data.url) {
+                                      updateProductForm(p.id, 'landing_image', data.url);
+                                      saveProduct(p.id, {landing_image: data.url});
+                                    } else {
+                                      alert('Error al subir la imagen: ' + (data.error || 'desconocido'));
+                                    }
+                                    e.target.value = '';
+                                  }}
+                                />
+                              )}
                             </div>
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
