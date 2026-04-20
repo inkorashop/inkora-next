@@ -77,6 +77,7 @@ export default function Admin() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [productForms, setProductForms] = useState({});
   const [savedProductId, setSavedProductId] = useState(null);
+  const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
   const cellRefs = useRef([]);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
@@ -830,6 +831,13 @@ export default function Admin() {
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
                                   >✕</button>
                                 </>
+                              ) : uploadingLandingImage === p.id ? (
+                                <div style={{display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#2D6BE4'}}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D6BE4" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin 0.8s linear infinite', flexShrink:0}}>
+                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                  </svg>
+                                  Subiendo...
+                                </div>
                               ) : (
                                 <input
                                   type="file"
@@ -839,6 +847,7 @@ export default function Admin() {
                                     const file = e.target.files[0];
                                     if (!file) return;
                                     if (file.size > 20 * 1024 * 1024) { alert('La imagen supera 20MB.'); e.target.value = ''; return; }
+                                    setUploadingLandingImage(p.id);
                                     const base64 = await fileToBase64(file);
                                     const res = await fetch('/api/upload-image', {
                                       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -851,6 +860,7 @@ export default function Admin() {
                                     } else {
                                       alert('Error al subir la imagen: ' + (data.error || 'desconocido'));
                                     }
+                                    setUploadingLandingImage(null);
                                     e.target.value = '';
                                   }}
                                 />
