@@ -4,19 +4,15 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const next = searchParams.get('next') || '/';
 
   if (code) {
     const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    console.log('AUTH CALLBACK - code:', code);
-    console.log('AUTH CALLBACK - data:', data);
-    console.log('AUTH CALLBACK - error:', error);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      return NextResponse.redirect(`${origin}?auth_error=${error.message}`);
+      return NextResponse.redirect(`${origin}?auth_error=${encodeURIComponent(error.message)}`);
     }
   }
 
-  const next = searchParams.get('next');
-  const redirectTo = next === '/admin' ? `${origin}/admin` : `${origin}/`;
-  return NextResponse.redirect(redirectTo);
+  return NextResponse.redirect(`${origin}${next}`);
 }
