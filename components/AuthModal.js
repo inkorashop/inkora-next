@@ -56,6 +56,12 @@ export default function AuthModal({ onClose, onSuccess }) {
           options: { data: { full_name: form.name, phone: form.phone } },
         });
         if (e) throw e;
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setError('Ya existe una cuenta con ese email.');
+          setLoading(false);
+          return;
+        }
+        if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
         onSuccess(data.user);
       }
     } catch (e) {
