@@ -1413,7 +1413,7 @@ export default function Admin() {
         {activeTab === 'localities' && (
           <>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Nueva localidad</h2>
+              <h2 style={s.sectionTitle}>Nueva escala</h2>
               <div style={s.formGroup}>
                 <label style={s.label}>Nombre *</label>
                 <input style={s.input} value={newLocality.name} onChange={e => setNewLocality(l => ({...l, name: e.target.value}))} placeholder="ej: Posadas" />

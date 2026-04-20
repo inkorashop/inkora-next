@@ -595,6 +595,9 @@ export default function Home() {
                           {showPrices && item.showPrice !== false && (() => {
                             const price = getUnitPrice(item.product_id);
                             if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                            const minQty = getProductMinQty(item.product_id);
+                            const currentQty = cartByProduct[item.product_id] || 0;
+                            if (minQty && currentQty < minQty) return <div style={{...s.cartItemUnitPrice, color:'#f59e0b'}}>Mín. {minQty}u.</div>;
                             return null;
                           })()}
                         </div>

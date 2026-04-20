@@ -123,8 +123,8 @@ export default function AuthModal({ onClose, onSuccess }) {
 
           {mode === 'register' && (
             <div style={s.formGroup}>
-              <label style={{...s.label, color: labelColor}}>Nombre</label>
-              <input style={{...s.input, background: inputBg, color: inputColor, border: inputBorder}} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Tu nombre" />
+              <label style={{...s.label, color: labelColor}}>Nombre de tu comercio</label>
+              <input style={{...s.input, background: inputBg, color: inputColor, border: inputBorder}} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Tu comercio" />
             </div>
           )}
 

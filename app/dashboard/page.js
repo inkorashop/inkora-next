@@ -149,7 +149,7 @@ const [savingProfile, setSavingProfile] = useState(false);
 
 <div style={{ display: 'grid', gap: 16 }}>
                 <div>
-                  <label style={lbl}>Nombre</label>
+                  <label style={lbl}>Nombre de tu comercio</label>
                   <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" />
                 </div>
                 <div>
