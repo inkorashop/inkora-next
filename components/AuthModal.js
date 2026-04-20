@@ -66,10 +66,9 @@ export default function AuthModal({ onClose, onSuccess }) {
 
   async function handleGoogle() {
     setError('');
-    const currentPath = window.location.pathname + window.location.search;
     const { error: e } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(currentPath)}` },
+      options: { redirectTo: window.location.href },
     });
     if (e) setError(translateError(e.message));
   }

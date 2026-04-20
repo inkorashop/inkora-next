@@ -229,7 +229,7 @@ export default function Admin() {
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://www.inkora.com.ar/auth/callback?next=/admin' },
+      options: { redirectTo: 'https://www.inkora.com.ar/admin' },
     });
   }
 
