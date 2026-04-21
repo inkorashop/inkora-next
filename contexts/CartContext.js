@@ -24,6 +24,7 @@ export function CartProvider({ children }) {
         qty: 1,
         pricePerUnit: product?.price_per_unit ?? 0,
         showPrice: product?.show_price !== false,
+        productName: product?.name ?? '',
       },
     }));
   }

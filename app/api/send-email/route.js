@@ -15,7 +15,7 @@ export async function POST(request) {
     const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
     const itemsHtml = cartItems
-      .map((i, idx) => `<tr><td style="padding:4px 8px;text-align:center">${idx + 1}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+      .map((i, idx) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
       .join('');
 
     const html = `
@@ -27,7 +27,7 @@ export async function POST(request) {
       ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
       ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
       <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">#</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
         <tbody>${itemsHtml}</tbody>
         <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
       </table>
@@ -80,7 +80,7 @@ export async function POST(request) {
     // Email de confirmación al cliente
     if (form.email && sendConfirmation !== false) {
       const clientItemsHtml = cartItems
-        .map((i, idx) => `<tr><td style="padding:4px 8px;text-align:center">${idx + 1}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+        .map((i) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
         .join('');
 
       const clientHtml = `
@@ -89,7 +89,7 @@ export async function POST(request) {
         <p><strong>Código de pedido:</strong> ${orderCode}</p>
         ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
         <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">#</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
           <tbody>${clientItemsHtml}</tbody>
           <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
         </table>

@@ -369,7 +369,7 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems, total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
+        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) ?? i.pricePerUnit })), total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
       });
 
       setConfirmedOrder({ items: cartItems, total, form });
@@ -634,7 +634,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
-                    <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
+                    <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'producto' : 'productos'}</span>
                   </div>
                 </div>
                 <div style={s.sidebarBody}>
@@ -781,7 +781,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           <div style={s.mobileBar}>
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' item' + (totalItems !== 1 ? 's' : '')}</span>
+              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
               <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
             </button>
             <button
