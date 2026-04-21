@@ -1641,17 +1641,19 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Historial de pedidos</h2>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
-                <div>
-                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Mostrar estado del pedido</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra la columna Estado en el historial de pedidos del usuario</div>
-                </div>
-                <div
-                  onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')}
-                  style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                >
-                  <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+              <h2 style={s.sectionTitle}>Dashboard <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>inkora.com.ar/dashboard</span></h2>
+              <div style={{display:'flex', flexDirection:'column', gap:0}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Estado de pedidos</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra la columna Estado en el historial de pedidos del usuario</div>
+                  </div>
+                  <div
+                    onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
                 </div>
               </div>
             </div>
