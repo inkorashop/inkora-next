@@ -1023,25 +1023,16 @@ export default function Admin() {
                                 {cat}
                                 <span
                                   title="Color de la categoría"
-                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => ({...prev, [pickerKey]: true})); setTimeout(() => { e.target.nextSibling?.querySelector('input[type=color]')?.click(); }, 30); }}
+                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => ({...prev, [pickerKey]: true})); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
                                   style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                                 />
-                                {pickerOpen && (
-                                  <span
-                                    style={{position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, padding:'6px 8px', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap'}}
-                                    onClick={e => e.stopPropagation()}
-                                  >
-                                    <input
-                                      type="color"
-                                      defaultValue={savedColor}
-                                      style={{width:28, height:28, border:'none', padding:0, cursor:'pointer', borderRadius:4, background:'none'}}
-                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
-                                      onBlur={e => { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); }}
-                                    />
-                                    <span style={{fontSize:10, color:'#9aa3bc'}}>Enter para cerrar</span>
-                                    <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:12, padding:0}} onClick={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}>✕</button>
-                                  </span>
-                                )}
+                                <input
+                                  type="color"
+                                  defaultValue={savedColor}
+                                  style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
+                                  onChange={e => saveCategoryColor(product.id, cat, e.target.value)}
+                                  onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
+                                />
                                 <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
                             );
