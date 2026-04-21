@@ -1023,7 +1023,7 @@ export default function Admin() {
                                 {cat}
                                 <span
                                   title="Color de la categoría"
-                                  onClick={() => setCatColorPicker(prev => ({...prev, [pickerKey]: !prev[pickerKey]}))}
+                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => ({...prev, [pickerKey]: true})); setTimeout(() => { e.target.nextSibling?.querySelector('input[type=color]')?.click(); }, 30); }}
                                   style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                                 />
                                 {pickerOpen && (
@@ -1035,8 +1035,8 @@ export default function Admin() {
                                       type="color"
                                       defaultValue={savedColor}
                                       style={{width:28, height:28, border:'none', padding:0, cursor:'pointer', borderRadius:4, background:'none'}}
-                                      onKeyDown={e => { if (e.key === 'Enter') { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); }}}
-                                      onChange={e => { saveCategoryColor(product.id, cat, e.target.value); }}
+                                      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
+                                      onBlur={e => { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); }}
                                     />
                                     <span style={{fontSize:10, color:'#9aa3bc'}}>Enter para cerrar</span>
                                     <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:12, padding:0}} onClick={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}>✕</button>
