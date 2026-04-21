@@ -108,6 +108,18 @@ export default function Admin() {
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
+  const [tabOrder, setTabOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('admin_tab_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const all = ['products','designs','orders','localities','users','admins','config'];
+        if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
+      }
+    } catch {}
+    return ['products','designs','orders','localities','users','admins','config'];
+  });
+  const [draggingTab, setDraggingTab] = useState(null);
 
   // Products
   const [products, setProducts] = useState([]);
@@ -797,15 +809,26 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Escalas de precios'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
-            <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
-              {label}
-              {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
-              {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
-              {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
-              {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
-            </button>
-          ))}
+          {(() => {
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', admins:'Admins', config:'Configuración' };
+            return tabOrder.map(id => (
+              <button
+                key={id}
+                draggable
+                onDragStart={e => { e.stopPropagation(); setDraggingTab(id); }}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingTab && draggingTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingTab); return next; }); }}}
+                onDragEnd={() => { setDraggingTab(null); localStorage.setItem('admin_tab_order', JSON.stringify(tabOrder)); }}
+                onClick={() => setActiveTab(id)}
+                style={{...s.tab, ...(activeTab === id ? s.tabActive : {}), opacity: draggingTab === id ? 0.4 : 1, cursor: draggingTab ? 'grabbing' : 'grab', userSelect: 'none'}}
+              >
+                {ALL_TABS[id]}
+                {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
+                {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
+                {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
+              </button>
+            ));
+          })()}
         </div>
       </div>
 
@@ -1596,6 +1619,7 @@ export default function Admin() {
                     { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
                     { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
                     { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                    { key: `${page}_show_order_status`, label: 'Estado del pedido', desc: 'Muestra la columna Estado en el historial de pedidos del usuario' },
                     { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
                     { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaña' },

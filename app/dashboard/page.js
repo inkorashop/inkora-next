@@ -41,6 +41,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   // Orders
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [showOrderStatus, setShowOrderStatus] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -60,6 +61,8 @@ const [savingProfile, setSavingProfile] = useState(false);
     }
     setLoading(false);
     loadOrders(email);
+    supabase.from('settings').select('value').eq('key', 'catalogo_show_order_status').single()
+      .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
   }
 
   async function loadOrders(email) {
@@ -218,7 +221,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {['Código', 'Fecha', 'Items', 'Total', 'Estado'].map(h => (
+                      {['Código', 'Fecha', 'Items', 'Total', ...(showOrderStatus ? ['Estado'] : [])].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -236,11 +239,13 @@ const [savingProfile, setSavingProfile] = useState(false);
                         <td style={{ padding: '11px 10px', fontWeight: 700, color: '#2d3352', whiteSpace: 'nowrap' }}>
                           {order.total ? `$${Number(order.total).toLocaleString()}` : '—'}
                         </td>
-                        <td style={{ padding: '11px 10px' }}>
-                          <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {statusLabel(order.status)}
-                          </span>
-                        </td>
+                        {showOrderStatus && (
+                          <td style={{ padding: '11px 10px' }}>
+                            <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {statusLabel(order.status)}
+                            </span>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
