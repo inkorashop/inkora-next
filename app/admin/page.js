@@ -138,6 +138,7 @@ export default function Admin() {
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
   const [catColorPicker, setCatColorPicker] = useState({}); // { "productId:catName": true/false }
+  const catColorValueRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -1030,9 +1031,9 @@ export default function Admin() {
                                   type="color"
                                   defaultValue={savedColor}
                                   style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
-                                  onChange={e => saveCategoryColor(product.id, cat, e.target.value)}
+                                  onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(product.id, cat, e.target.value); }}
                                   onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
-                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
                                 />
                                 <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
