@@ -444,12 +444,14 @@ export default function Home() {
         flex: 1,
         width: '100%',
         minHeight: 'calc(100vh - 64px)',
-        gridTemplateColumns: '1fr',
+        display: isMobile ? 'block' : 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? '1fr 48px' : '1fr 364px'),
+        gap: 24,
         padding: isMobile ? 16 : 24,
-        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : sidebarWidth),
         paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
+        boxSizing: 'border-box',
       }}>
         <div style={{...s.catalogArea, position: 'relative', zIndex: 99}}>
           <div style={s.catalogHeader}>
@@ -583,7 +585,7 @@ export default function Home() {
         </div>
 
         {!isMobile && (
-          <div ref={sidebarRef} style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 10}}>
+          <div style={{...s.sidebar, position: 'sticky', top: headerVisible ? 88 : 24, maxHeight: 'calc(100vh - 112px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 10, alignSelf: 'start'}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
