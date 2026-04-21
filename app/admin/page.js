@@ -137,8 +137,28 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
-  const [catColorPicker, setCatColorPicker] = useState({}); // { "productId:catName": true/false }
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key !== 'Escape') return;
+      const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
+      if (openKeys.length === 0) return;
+      e.preventDefault();
+      openKeys.forEach(pickerKey => {
+        const val = catColorValueRef.current[pickerKey];
+        if (val) {
+          const [productId, ...catParts] = pickerKey.split(':');
+          const cat = catParts.join(':');
+          saveCategoryColor(productId, cat, val);
+        }
+      });
+      setCatColorPicker({});
+      catColorPickerRef.current = {};
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []); // { "productId:catName": true/false }
   const catColorValueRef = useRef({});
+  const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -1024,7 +1044,7 @@ export default function Admin() {
                                 {cat}
                                 <span
                                   title="Color de la categoría"
-                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => ({...prev, [pickerKey]: true})); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
+                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => { const next = {...prev, [pickerKey]: true}; catColorPickerRef.current = next; return next; }); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
                                   style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                                 />
                                 <input
@@ -1033,7 +1053,7 @@ export default function Admin() {
                                   style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
                                   onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(product.id, cat, e.target.value); }}
                                   onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
-                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
                                 />
                                 <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
