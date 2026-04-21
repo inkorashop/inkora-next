@@ -468,7 +468,7 @@ export default function Home() {
           </div>
 
           {!isMobile && (
-            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:10, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
               <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
                 <span style={s.searchIcon}><SearchIconWhite /></span>
                 <input
@@ -570,7 +570,7 @@ export default function Home() {
         </div>
 
         {!isMobile && (
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 200}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
