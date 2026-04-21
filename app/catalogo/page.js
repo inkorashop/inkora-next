@@ -16,9 +16,9 @@ const SearchIconWhite = () => (
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
 function generateCode() {
-  const year = new Date().getFullYear();
-  const num = String(Math.floor(Math.random() * 9000) + 1000);
-  return 'INK-' + year + '-' + num;
+  const ts = Date.now().toString(36).toUpperCase().slice(-4);
+  const rand = Math.random().toString(36).toUpperCase().slice(2, 6);
+  return 'INK-' + ts + rand;
 }
 
 function useWindowWidth() {
