@@ -137,6 +137,7 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
+  const [catColorPicker, setCatColorPicker] = useState({}); // { "productId:catName": true/false }
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -401,6 +402,14 @@ export default function Admin() {
     const updated = [...current, normalized];
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
     setNewCatInputs(prev => ({ ...prev, [productId]: '' }));
+    loadProducts();
+  }
+
+  async function saveCategoryColor(productId, cat, color) {
+    const p = products.find(pr => pr.id === productId);
+    const current = p?.category_colors || {};
+    const updated = { ...current, [cat]: color };
+    await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
     loadProducts();
   }
 
@@ -1004,12 +1013,39 @@ export default function Admin() {
                         <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
                         <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
                           <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
-                          {cats.map(cat => (
-                            <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>
-                              {cat}
-                              <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:2}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
-                            </span>
-                          ))}
+                          {cats.map(cat => {
+                            const p = products.find(pr => pr.id === product.id);
+                            const savedColor = p?.category_colors?.[cat] || '#e8eef9';
+                            const pickerKey = `${product.id}:${cat}`;
+                            const pickerOpen = catColorPicker[pickerKey];
+                            return (
+                              <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative'}}>
+                                {cat}
+                                <span
+                                  title="Color de la categoría"
+                                  onClick={() => setCatColorPicker(prev => ({...prev, [pickerKey]: !prev[pickerKey]}))}
+                                  style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
+                                />
+                                {pickerOpen && (
+                                  <span
+                                    style={{position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, padding:'6px 8px', boxShadow:'0 4px 12px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap'}}
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="color"
+                                      defaultValue={savedColor}
+                                      style={{width:28, height:28, border:'none', padding:0, cursor:'pointer', borderRadius:4, background:'none'}}
+                                      onKeyDown={e => { if (e.key === 'Enter') { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); }}}
+                                      onChange={e => { saveCategoryColor(product.id, cat, e.target.value); }}
+                                    />
+                                    <span style={{fontSize:10, color:'#9aa3bc'}}>Enter para cerrar</span>
+                                    <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:12, padding:0}} onClick={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}>✕</button>
+                                  </span>
+                                )}
+                                <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
+                              </span>
+                            );
+                          })}
                         </div>
                         <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
                           <input

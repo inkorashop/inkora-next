@@ -462,12 +462,38 @@ export default function Home() {
           )}
 
           <div style={s.filters}>
-            {categories.map(cat => (
-              <button key={cat} className="filter-btn" style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
-                onClick={() => setFilter(cat)}>
-                {cat}
-              </button>
-            ))}
+            {categories.map(cat => {
+              const activeProd = products.find(p => p.id === activeProductId);
+              const savedColor = activeProd?.category_colors?.[cat];
+              const bg = savedColor || '#e8eef9';
+              let textColor = '#2D6BE4';
+              if (savedColor) {
+                const hex = savedColor.replace('#', '');
+                const r = parseInt(hex.slice(0, 2), 16);
+                const g = parseInt(hex.slice(2, 4), 16);
+                const b = parseInt(hex.slice(4, 6), 16);
+                textColor = (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#2d3352' : '#ffffff';
+              }
+              const isActive = filter === cat;
+              return (
+                <button
+                  key={cat}
+                  className="filter-btn"
+                  style={{
+                    ...s.filterBtn,
+                    background: isActive ? (savedColor || '#1B2F5E') : bg,
+                    color: isActive ? (savedColor ? textColor : 'white') : textColor,
+                    transform: isActive ? 'scale(1.06)' : 'scale(1)',
+                    boxShadow: isActive ? `0 2px 8px ${bg}99` : 'none',
+                    transition: 'all 0.15s ease',
+                    opacity: isActive ? 1 : 0.85,
+                  }}
+                  onClick={() => setFilter(cat)}
+                >
+                  {cat}
+                </button>
+              );
+            })}
           </div>
 
           {!isMobile && (
@@ -884,13 +910,13 @@ const styles = {
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
   productTabs: { display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' },
-  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTab: { background: 'white', border: 'none', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
   productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
   searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
-  filterBtn: { background: '#e8eef9', border: '1.5px solid #b8c8e8', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  filterBtn: { background: '#e8eef9', border: 'none', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
   card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
