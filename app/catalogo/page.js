@@ -861,14 +861,16 @@ export default function Home() {
                 <p>Codigo de tu pedido:</p>
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmacion a tu email.</p>
-                <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
-                  "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
-                )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
-                  Confirmar por WhatsApp
-                </a>
-                <button style={{background:'none', border:'none', color:'#9aa3bc', fontSize:13, cursor:'pointer', marginTop:8, textDecoration:'underline', fontFamily:'Barlow, sans-serif'}} onClick={closeModal}>
-                  Omitir, ya está confirmado
-                </button>
+                <div style={{display:'flex', gap:10, marginTop:16, justifyContent:'center'}}>
+                  <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
+                    "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                  )} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, background:'rgba(37,211,102,0.15)', color:'#18a36a', border:'1.5px solid #25D366'}} onClick={closeModal}>
+                    Confirmar por WhatsApp
+                  </a>
+                  <button style={{background:'#1B2F5E', border:'none', color:'white', borderRadius:10, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}} onClick={closeModal}>
+                    Listo ✓
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -988,7 +990,7 @@ const styles = {
   modalActions: { display: 'flex', gap: 8 },
   btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
   btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' },
-  successScreen: { textAlign: 'center', padding: '32px 24px' },
+  successScreen: { textAlign: 'center', padding: '32px 24px', overflowX: 'hidden' },
   successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
   successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
   successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
