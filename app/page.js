@@ -14,6 +14,14 @@ export default function Landing() {
   const [hovered, setHovered] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const [uiSettings, setUiSettings] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     
@@ -136,7 +144,7 @@ export default function Landing() {
         </p>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: typeof window !== 'undefined' && window.innerWidth < 768 ? '0 20px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
         {products.map((p, i) => (
           <a
             key={p.id}
@@ -154,12 +162,8 @@ export default function Landing() {
               borderRadius: 20,
               overflow: 'hidden',
               position: 'relative',
-              width: typeof window !== 'undefined' && window.innerWidth < 768
-                ? Math.min(p.landing_card_width_mobile ?? 280, window.innerWidth - 40)
-                : (p.landing_card_width_desktop ?? 320),
-              height: typeof window !== 'undefined' && window.innerWidth < 768
-                ? Math.min(p.landing_card_width_mobile ?? 280, window.innerWidth - 40) * 1.4
-                : (p.landing_card_width_desktop ?? 320) * 1.3,
+              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
+              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
               display: 'block',
               boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
               transition: 'box-shadow 0.3s ease, transform 0.3s ease',
