@@ -137,26 +137,7 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key !== 'Escape') return;
-      const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
-      if (openKeys.length === 0) return;
-      e.preventDefault();
-      openKeys.forEach(pickerKey => {
-        const val = catColorValueRef.current[pickerKey];
-        if (val) {
-          const [productId, ...catParts] = pickerKey.split(':');
-          const cat = catParts.join(':');
-          saveCategoryColor(productId, cat, val);
-        }
-      });
-      setCatColorPicker({});
-      catColorPickerRef.current = {};
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []); // { "productId:catName": true/false }
+  const [catColorPicker, setCatColorPicker] = useState({});
   const catColorValueRef = useRef({});
   const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
@@ -224,7 +205,28 @@ export default function Admin() {
 
 
   useEffect(() => {
-    function handleKeyDown(e) { if (e.key === 'Escape') setSelectedIds(new Set()); }
+    function handleKeyDown(e) {
+      if (e.key !== 'Escape') return;
+      const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
+      if (openKeys.length > 0) {
+        e.preventDefault();
+        openKeys.forEach(pickerKey => {
+          const val = catColorValueRef.current[pickerKey];
+          if (val) {
+            const [productId, ...catParts] = pickerKey.split(':');
+            const cat = catParts.join(':');
+            supabase.from('products').select('*').eq('id', productId).single().then(({ data: p }) => {
+              const current = p?.category_colors || {};
+              supabase.from('products').update({ category_colors: { ...current, [cat]: val } }).eq('id', productId).then(() => loadProducts());
+            });
+          }
+        });
+        setCatColorPicker({});
+        catColorPickerRef.current = {};
+      } else {
+        setSelectedIds(new Set());
+      }
+    }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
@@ -1044,7 +1046,7 @@ export default function Admin() {
                                 {cat}
                                 <span
                                   title="Color de la categoría"
-                                  onClick={e => { e.stopPropagation(); setCatColorPicker(prev => { const next = {...prev, [pickerKey]: true}; catColorPickerRef.current = next; return next; }); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
+                                  onClick={e => { e.stopPropagation(); const pickerOpen = catColorPicker[pickerKey]; setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
                                   style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                                 />
                                 <input

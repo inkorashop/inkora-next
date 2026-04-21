@@ -169,7 +169,7 @@ export default function Landing() {
             onMouseEnter={() => setHovered(p.id)}
             onMouseLeave={() => setHovered(null)}
           >
-            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#2a2d35' : '#1B2F5E', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
               {p.landing_image
                 ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
                 : [...Array(4)].map((_, j) => (
