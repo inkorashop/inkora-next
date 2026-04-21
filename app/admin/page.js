@@ -1585,16 +1585,18 @@ export default function Admin() {
                   <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
                     {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
-                  <div
-                    onClick={() => {
-                      const newVal = u.send_confirmation_email === false ? true : false;
-                      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
-                      supabase.from('profiles').update({ send_confirmation_email: newVal }).eq('id', u.id);
-                    }}
-                    title={u.send_confirmation_email === false ? 'Email confirmación desactivado' : 'Email confirmación activado'}
-                    style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                  >
-                    <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  <div style={{display:'flex', alignItems:'center', gap:6}}>
+                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Email confirm.</span>
+                    <div
+                      onClick={() => {
+                        const newVal = u.send_confirmation_email === false ? true : false;
+                        setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
+                        supabase.from('profiles').update({ send_confirmation_email: newVal }).eq('id', u.id);
+                      }}
+                      style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                    >
+                      <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                    </div>
                   </div>
                   <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
                     <button
