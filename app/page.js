@@ -110,10 +110,19 @@ export default function Landing() {
         .product-card:hover .card-overlay { opacity: 1 !important; }
         .product-card:hover .card-img { transform: scale(1.05); }
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card:nth-child(1) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 0.5s infinite; }
-        .product-card:nth-child(2) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 1.5s infinite; }
-        .product-card:nth-child(3) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 2.5s infinite; }
-        .product-card:nth-child(4) { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out 3.5s infinite; }
+        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
+        .product-card:nth-child(1) { --card-index: 0.5; }
+        .product-card:nth-child(2) { --card-index: 1.5; }
+        .product-card:nth-child(3) { --card-index: 2.5; }
+        .product-card:nth-child(4) { --card-index: 3.5; }
+        .product-card:nth-child(5) { --card-index: 0.8; }
+        .product-card:nth-child(6) { --card-index: 1.8; }
+        .product-card:nth-child(7) { --card-index: 2.8; }
+        .product-card:nth-child(8) { --card-index: 3.8; }
+        .product-card:nth-child(9) { --card-index: 1.2; }
+        .product-card:nth-child(10) { --card-index: 2.2; }
+        .product-card:nth-child(11) { --card-index: 3.2; }
+        .product-card:nth-child(12) { --card-index: 0.3; }
       `}</style>
 
       <Header showCart={true} page="landing" />
@@ -131,9 +140,10 @@ export default function Landing() {
         {products.map((p, i) => (
           <a
             key={p.id}
-            href="#"
+            href={"/catalogo/" + toSlug(p.name)}
             className="product-card"
             onClick={e => {
+              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
               e.preventDefault();
               document.body.classList.add('page-exit');
               setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);

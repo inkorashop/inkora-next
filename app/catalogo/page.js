@@ -175,6 +175,11 @@ export default function Home() {
       setActiveProductId(id);
       setFilter('Todos');
       setSearchQuery('');
+      const product = products.find(p => p.id === id);
+      if (product) {
+        const slug = toSlug(product.name);
+        window.history.replaceState(null, '', '/catalogo?producto=' + slug);
+      }
       requestAnimationFrame(() => requestAnimationFrame(() => {
         setGridTransition('opacity 0.2s ease');
         setGridOpacity(1);
@@ -391,15 +396,13 @@ export default function Home() {
         .qty-input:focus::placeholder { color: transparent; }
 
         /* Eliminamos el borde y contorno negro al hacer clic */
-        button:focus {
+        *:focus {
           outline: none !important;
           box-shadow: none !important;
         }
-
-        /* Solo mostramos un estilo si el usuario navega con teclado */
-        button:focus-visible {
-          outline: 2px solid #2D6BE4 !important;
-          outline-offset: 2px;
+        *:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
         }
       `}</style>
 
