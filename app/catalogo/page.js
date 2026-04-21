@@ -398,15 +398,10 @@ export default function Home() {
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
 
-        /* Eliminamos el borde y contorno negro al hacer clic */
-        *:focus {
-          outline: none !important;
-          box-shadow: none !important;
-        }
-        *:focus-visible {
-          outline: none !important;
-          box-shadow: none !important;
-        }
+        .prod-tab { transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, border-color 0.18s ease; will-change: transform; }
+        .prod-tab:hover { transform: scale(1.06) !important; opacity: 1 !important; }
+        *:focus { outline: none !important; box-shadow: none !important; }
+        *:focus-visible { outline: none !important; box-shadow: none !important; }
       `}</style>
 
       <Header headerVisible={headerVisible} showCart={false} page="catalogo" />
@@ -455,6 +450,7 @@ export default function Home() {
                   <button
                     key={p.id}
                     onClick={() => switchProduct(p.id)}
+                    className="prod-tab"
                     style={{
                       position: 'relative',
                       width: 140,
@@ -467,7 +463,6 @@ export default function Home() {
                       flexShrink: 0,
                       boxShadow: isActive ? '0 4px 14px rgba(45,107,228,0.35)' : '0 2px 6px rgba(27,47,94,0.12)',
                       transform: isActive ? 'scale(1.04)' : 'scale(1)',
-                      transition: 'all 0.18s ease',
                       opacity: isActive ? 1 : 0.72,
                     }}
                   >
