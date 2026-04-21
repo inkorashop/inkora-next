@@ -1591,7 +1591,7 @@ export default function Admin() {
                       onClick={() => {
                         const newVal = u.send_confirmation_email === false ? true : false;
                         setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
-                        supabase.from('profiles').update({ send_confirmation_email: newVal }).eq('id', u.id);
+                        supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal });
                       }}
                       style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                     >
