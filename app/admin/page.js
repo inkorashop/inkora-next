@@ -1648,11 +1648,27 @@ export default function Admin() {
                     <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Estado de pedidos</div>
                     <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra la columna Estado en el historial de pedidos del usuario</div>
                   </div>
-                  <div
-                    onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')}
-                    style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                  >
+                  <div onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
                     <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderTop:'1px solid #eef0f6'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Botón historial en Landing</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra el ícono de historial de pedidos en el header de Landing</div>
+                  </div>
+                  <div onClick={() => saveSetting('landing_show_history', settings['landing_show_history'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['landing_show_history'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: 2, left: settings['landing_show_history'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderTop:'1px solid #eef0f6'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Botón historial en Catálogo</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra el ícono de historial de pedidos en el header del Catálogo</div>
+                  </div>
+                  
+                  <div onClick={() => saveSetting('catalogo_show_history', settings['catalogo_show_history'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['catalogo_show_history'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: 2, left: settings['catalogo_show_history'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                   </div>
                 </div>
               </div>

@@ -14,6 +14,10 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   const cartRef = useRef(null);
   const { cartItems, totalItems, removeFromCart } = useCart();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const historyRef = useRef(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('inkora_theme');
@@ -79,6 +83,21 @@ export default function Header({ headerVisible = true, showCart = false, page = 
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     setProfile(data || null);
   }
+
+  async function loadOrders(email) {
+    setLoadingOrders(true);
+    const { data } = await supabase.from('orders').select('*').eq('customer_email', email).order('created_at', { ascending: false }).limit(5);
+    if (data) setOrders(data);
+    setLoadingOrders(false);
+  }
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (historyRef.current && !historyRef.current.contains(e.target)) setHistoryOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   return (
     <>
@@ -186,6 +205,62 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                       </a>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {uiSettings[`${page}_show_history`] !== 'false' && user && (
+            <div ref={historyRef} style={{ position: 'relative' }}>
+              <button
+                className="header-btn"
+                onClick={() => { setHistoryOpen(v => { if (!v && user?.email) loadOrders(user.email); return !v; }); }}
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                title="Mis pedidos"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="18" height="18">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
+              {historyOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 320, background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 32px rgba(27,47,94,0.18)', overflow: 'hidden', zIndex: 300 }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid #eef0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#1B2F5E', fontWeight: 700, fontSize: 14 }}>Mis pedidos</span>
+                    <a href="/dashboard" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {loadingOrders ? (
+                      <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>Cargando...</div>
+                    ) : orders.length === 0 ? (
+                      <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>No tenés pedidos todavía.</div>
+                    ) : orders.map(o => {
+                      const statusMap = { pending: { label: 'Pendiente', color: '#f6a800' }, confirmed: { label: 'Confirmado', color: '#2D6BE4' }, in_production: { label: 'En producción', color: '#6d28d9' }, ready: { label: 'Listo', color: '#18a36a' }, cancelled: { label: 'Cancelado', color: '#e53e3e' } };
+                      const st = statusMap[o.status] || statusMap.pending;
+                      return (
+                        <div key={o.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f2f8' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{o.order_code}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: st.color, background: st.color + '18', borderRadius: 5, padding: '2px 7px' }}>{st.label}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#9aa3bc' }}>
+                            {Array.isArray(o.items) ? o.items.slice(0,2).map(i => `${i.name} ×${i.qty}`).join(', ') + (o.items.length > 2 ? ` +${o.items.length - 2}` : '') : '—'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2 }}>
+                            {o.total ? `$${Number(o.total).toLocaleString()}` : '—'} · {o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR') : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ padding: '10px 16px', borderTop: '1px solid #eef0f6' }}>
+                    <a href="/dashboard" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                      Ver historial completo
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
