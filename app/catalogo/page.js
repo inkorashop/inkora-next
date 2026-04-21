@@ -846,7 +846,7 @@ export default function Home() {
                       <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                     </div>
                   </div>
-                  <div style={s.modalActions}>
+                  <div style={{...s.modalActions, position:'sticky', bottom:0, background:'white', paddingTop:12, marginTop:8, borderTop:'1.5px solid #eef0f6', marginLeft:-24, marginRight:-24, paddingLeft:24, paddingRight:24, paddingBottom:24}}>
                     <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
                     <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
                       {loading ? 'Enviando...' : 'Enviar pedido'}
@@ -968,10 +968,10 @@ const styles = {
   notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
   confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'hidden', display: 'flex', flexDirection: 'column' },
   modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
   closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
-  modalBody: { padding: 24 },
+  modalBody: { padding: 24, overflowY: 'auto', flex: 1 },
   codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
   codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
   codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
