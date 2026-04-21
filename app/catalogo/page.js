@@ -866,6 +866,9 @@ export default function Home() {
                 )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
                   Confirmar por WhatsApp
                 </a>
+                <button style={{background:'none', border:'none', color:'#9aa3bc', fontSize:13, cursor:'pointer', marginTop:8, textDecoration:'underline', fontFamily:'Barlow, sans-serif'}} onClick={closeModal}>
+                  Omitir, ya está confirmado
+                </button>
               </div>
             )}
           </div>
