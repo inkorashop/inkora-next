@@ -120,6 +120,7 @@ export default function Admin() {
     return ['products','designs','orders','localities','users','admins','config'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
+  const [draggingConfigTab, setDraggingConfigTab] = useState(null);
 
   // Products
   const [products, setProducts] = useState([]);
@@ -815,11 +816,11 @@ export default function Admin() {
               <button
                 key={id}
                 draggable
-                onDragStart={e => { e.stopPropagation(); setDraggingTab(id); }}
-                onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingTab && draggingTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingTab); return next; }); }}}
-                onDragEnd={() => { setDraggingTab(null); localStorage.setItem('admin_tab_order', JSON.stringify(tabOrder)); }}
+                onDragStart={undefined}
+                onDragOver={undefined}
+                onDragEnd={undefined}
                 onClick={() => setActiveTab(id)}
-                style={{...s.tab, ...(activeTab === id ? s.tabActive : {}), opacity: draggingTab === id ? 0.4 : 1, cursor: draggingTab ? 'grabbing' : 'grab', userSelect: 'none'}}
+                style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
@@ -1606,6 +1607,55 @@ export default function Admin() {
               </div>
             </div>
 
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Orden de pestañas</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                {(() => {
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', admins:'Admins', config:'Configuración' };
+                  return tabOrder.map((id, idx) => (
+                    <div
+                      key={id}
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); setDraggingConfigTab(id); }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingConfigTab && draggingConfigTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingConfigTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingConfigTab); return next; }); }}}
+                      onDragEnd={() => { setDraggingConfigTab(null); localStorage.setItem('admin_tab_order', JSON.stringify(tabOrder)); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 12px', borderRadius: 8,
+                        border: '1.5px solid #dde1ef',
+                        background: draggingConfigTab === id ? '#eef4ff' : 'white',
+                        cursor: draggingConfigTab ? 'grabbing' : 'grab',
+                        opacity: draggingConfigTab === id ? 0.4 : 1,
+                        transition: 'background 0.12s, opacity 0.12s',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <span style={{color:'#b0b8d0', fontSize:16, lineHeight:1}}>⠿</span>
+                      <span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{ALL_TABS[id]}</span>
+                      <span style={{marginLeft:'auto', fontSize:11, color:'#b0b8d0'}}>#{idx + 1}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Historial de pedidos</h2>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Mostrar estado del pedido</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra la columna Estado en el historial de pedidos del usuario</div>
+                </div>
+                <div
+                  onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')}
+                  style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                >
+                  <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </div>
+
             {[
               { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
               { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
@@ -1619,7 +1669,7 @@ export default function Admin() {
                     { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
                     { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
                     { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
-                    { key: `${page}_show_order_status`, label: 'Estado del pedido', desc: 'Muestra la columna Estado en el historial de pedidos del usuario' },
+                    
                     { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
                     { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaña' },

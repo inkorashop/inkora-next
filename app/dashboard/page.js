@@ -61,7 +61,7 @@ const [savingProfile, setSavingProfile] = useState(false);
     }
     setLoading(false);
     loadOrders(email);
-    supabase.from('settings').select('value').eq('key', 'catalogo_show_order_status').single()
+    supabase.from('settings').select('value').eq('key', 'show_order_status').single()
       .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
   }
 
