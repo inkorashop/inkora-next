@@ -1652,25 +1652,7 @@ export default function Admin() {
                     <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                   </div>
                 </div>
-                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderTop:'1px solid #eef0f6'}}>
-                  <div>
-                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Botón historial en Landing</div>
-                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra el ícono de historial de pedidos en el header de Landing</div>
-                  </div>
-                  <div onClick={() => saveSetting('landing_show_history', settings['landing_show_history'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['landing_show_history'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <div style={{ position: 'absolute', top: 2, left: settings['landing_show_history'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                  </div>
-                </div>
-                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderTop:'1px solid #eef0f6'}}>
-                  <div>
-                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Botón historial en Catálogo</div>
-                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra el ícono de historial de pedidos en el header del Catálogo</div>
-                  </div>
-                  
-                  <div onClick={() => saveSetting('catalogo_show_history', settings['catalogo_show_history'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['catalogo_show_history'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <div style={{ position: 'absolute', top: 2, left: settings['catalogo_show_history'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                  </div>
-                </div>
+                
               </div>
             </div>
 
@@ -1687,6 +1669,7 @@ export default function Admin() {
                     { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
                     { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
                     { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                    { key: `${page}_show_history`, label: 'Botón historial', desc: 'Ícono de historial de pedidos en el header' },
                     
                     { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
