@@ -113,14 +113,17 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','admins','config'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','admins','config'];
+    return ['products','designs','orders','localities','users','sellers','admins','config'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
+  const [sellers, setSellers] = useState([]);
+  const [newSeller, setNewSeller] = useState({ name: '', email: '', phone: '' });
+  const [savingSeller, setSavingSeller] = useState(false);
 
   // Products
   const [products, setProducts] = useState([]);
@@ -212,7 +215,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings();
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
     }
   }, [screen]);
 
@@ -731,6 +734,43 @@ export default function Admin() {
     return !q || (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_email || '').toLowerCase().includes(q);
   });
 
+  // ── Sellers ──
+  async function loadSellers() {
+    const { data } = await supabase.from('sellers').select('*').order('name');
+    if (data) setSellers(data);
+  }
+
+  async function addSeller() {
+    if (!newSeller.name.trim()) return;
+    setSavingSeller(true);
+    await supabase.from('sellers').insert({ ...newSeller, active: true });
+    setNewSeller({ name: '', email: '', phone: '' });
+    setSavingSeller(false);
+    loadSellers();
+  }
+
+  async function toggleSeller(id, active) {
+    await supabase.from('sellers').update({ active: !active }).eq('id', id);
+    loadSellers();
+  }
+
+  async function deleteSeller(id) {
+    askConfirm('¿Eliminar este vendedor?', async () => {
+      await supabase.from('sellers').delete().eq('id', id);
+      loadSellers();
+    });
+  }
+
+  async function updateSellerField(id, field, value) {
+    await supabase.from('sellers').update({ [field]: value }).eq('id', id);
+    loadSellers();
+  }
+
+  async function updateUserSeller(userId, sellerId) {
+    await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    loadUsers();
+  }
+
   // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
@@ -811,7 +851,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', admins:'Admins', config:'Configuración' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -1541,12 +1581,77 @@ export default function Admin() {
                   <div style={s.productName}>{u.name || '—'}</div>
                   <div style={s.productMeta}>{u.email}</div>
                 </div>
-                <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
-                  {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                  <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
+                    {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <select style={{...s.input, width: 160, fontSize: 13, padding: '6px 10px'}} value={u.seller_id || ''} onChange={e => updateUserSeller(u.id, e.target.value)}>
+                    <option value="">Sin vendedor</option>
+                    {sellers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {/* ══ VENDEDORES ══ */}
+        {activeTab === 'sellers' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Nuevo vendedor</h2>
+              <div style={{display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end'}}>
+                <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
+                  <label style={s.label}>Nombre *</label>
+                  <input style={s.input} value={newSeller.name} onChange={e => setNewSeller(v => ({...v, name: e.target.value}))} placeholder="Nombre completo" />
+                </div>
+                <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
+                  <label style={s.label}>Email</label>
+                  <input style={s.input} type="email" value={newSeller.email} onChange={e => setNewSeller(v => ({...v, email: e.target.value}))} placeholder="email@ejemplo.com" />
+                </div>
+                <div style={{...s.formGroup, flex:'1 1 130px', marginBottom:0}}>
+                  <label style={s.label}>Teléfono</label>
+                  <input style={s.input} value={newSeller.phone} onChange={e => setNewSeller(v => ({...v, phone: e.target.value}))} placeholder="+54 9 ..." />
+                </div>
+                <button style={{...s.btnPrimary, opacity: newSeller.name.trim() && !savingSeller ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newSeller.name.trim() || savingSeller} onClick={addSeller}>
+                  {savingSeller ? 'Guardando...' : '+ Agregar'}
+                </button>
+              </div>
+            </div>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Vendedores ({sellers.length})</h2>
+              {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavía.</p>}
+              {sellers.map(sel => (
+                <div key={sel.id} style={{...s.productRow, alignItems:'flex-start', gap:10}}>
+                  <div style={{flex:1, minWidth:0}}>
+                    <input
+                      style={{...s.tblInput, fontWeight:700, marginBottom:4}}
+                      defaultValue={sel.name}
+                      onBlur={e => updateSellerField(sel.id, 'name', e.target.value)}
+                    />
+                    <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+                      <input
+                        style={{...s.tblInput, fontSize:12}}
+                        defaultValue={sel.email || ''}
+                        placeholder="Email"
+                        onBlur={e => updateSellerField(sel.id, 'email', e.target.value)}
+                      />
+                      <input
+                        style={{...s.tblInput, fontSize:12, maxWidth:160}}
+                        defaultValue={sel.phone || ''}
+                        placeholder="Teléfono"
+                        onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:4, paddingTop:4}}>
+                    <button style={s.iconBtn} onClick={() => toggleSeller(sel.id, sel.active)}>{sel.active ? <EyeOpen /> : <EyeOff />}</button>
+                    <TrashBtn onClick={() => deleteSeller(sel.id)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* ══ ADMINS ══ */}
@@ -1612,7 +1717,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', admins:'Admins', config:'Configuración' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
