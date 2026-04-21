@@ -1032,7 +1032,7 @@ export default function Admin() {
                                   style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
                                   onChange={e => saveCategoryColor(product.id, cat, e.target.value)}
                                   onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
-                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); saveCategoryColor(product.id, cat, e.target.value); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); e.target.blur(); }}}
                                 />
                                 <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
