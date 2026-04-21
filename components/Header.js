@@ -230,7 +230,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                 <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 320, background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 32px rgba(27,47,94,0.18)', overflow: 'hidden', zIndex: 300 }}>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid #eef0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#1B2F5E', fontWeight: 700, fontSize: 14 }}>Mis pedidos</span>
-                    <a href="/dashboard" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
+                    <a href="/dashboard#pedidos" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
                   </div>
                   <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                     {loadingOrders ? (
@@ -240,11 +240,12 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     ) : orders.map(o => {
                       const statusMap = { pending: { label: 'Pendiente', color: '#f6a800' }, confirmed: { label: 'Confirmado', color: '#2D6BE4' }, in_production: { label: 'En producción', color: '#6d28d9' }, ready: { label: 'Listo', color: '#18a36a' }, cancelled: { label: 'Cancelado', color: '#e53e3e' } };
                       const st = statusMap[o.status] || statusMap.pending;
+                      const showStatus = uiSettings['show_order_status'] !== 'false';
                       return (
                         <div key={o.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f2f8' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                             <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{o.order_code}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: st.color, background: st.color + '18', borderRadius: 5, padding: '2px 7px' }}>{st.label}</span>
+                            {showStatus && <span style={{ fontSize: 10, fontWeight: 700, color: st.color, background: st.color + '18', borderRadius: 5, padding: '2px 7px' }}>{st.label}</span>}
                           </div>
                           <div style={{ fontSize: 11, color: '#9aa3bc' }}>
                             {Array.isArray(o.items) ? o.items.slice(0,2).map(i => `${i.name} ×${i.qty}`).join(', ') + (o.items.length > 2 ? ` +${o.items.length - 2}` : '') : '—'}
@@ -257,7 +258,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     })}
                   </div>
                   <div style={{ padding: '10px 16px', borderTop: '1px solid #eef0f6' }}>
-                    <a href="/dashboard" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                    <a href="/dashboard#pedidos" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
                       Ver historial completo
                     </a>
                   </div>
