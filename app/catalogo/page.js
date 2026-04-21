@@ -369,7 +369,7 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems, total, notes })
+        body: JSON.stringify({ orderCode, form, cartItems, total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
       });
 
       setConfirmedOrder({ items: cartItems, total, form });
