@@ -398,8 +398,9 @@ export default function Home() {
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
 
-        .prod-tab { transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, border-color 0.18s ease; will-change: transform; }
-        .prod-tab:hover { transform: scale(1.06) !important; opacity: 1 !important; }
+        .prod-tab { transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, border-color 0.18s ease; will-change: transform; border: 2.5px solid transparent; box-shadow: 0 2px 6px rgba(27,47,94,0.12); opacity: 0.72; }
+        .prod-tab:hover { transform: scale(1.06); opacity: 1; }
+        .prod-tab-active { border-color: #2D6BE4 !important; box-shadow: 0 4px 14px rgba(45,107,228,0.35) !important; transform: scale(1.04); opacity: 1 !important; }
         *:focus { outline: none !important; box-shadow: none !important; }
         *:focus-visible { outline: none !important; box-shadow: none !important; }
       `}</style>
@@ -450,20 +451,16 @@ export default function Home() {
                   <button
                     key={p.id}
                     onClick={() => switchProduct(p.id)}
-                    className="prod-tab"
+                    className={isActive ? 'prod-tab prod-tab-active' : 'prod-tab'}
                     style={{
                       position: 'relative',
                       width: 140,
                       height: 56,
                       borderRadius: 10,
                       overflow: 'hidden',
-                      border: isActive ? '2.5px solid #2D6BE4' : '2.5px solid transparent',
                       padding: 0,
                       cursor: 'pointer',
                       flexShrink: 0,
-                      boxShadow: isActive ? '0 4px 14px rgba(45,107,228,0.35)' : '0 2px 6px rgba(27,47,94,0.12)',
-                      transform: isActive ? 'scale(1.04)' : 'scale(1)',
-                      opacity: isActive ? 1 : 0.72,
                     }}
                   >
                     {p.landing_image
