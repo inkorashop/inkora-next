@@ -269,6 +269,31 @@ const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
 }
 </file>
 
+<file path="app/layout.js">
+import { Barlow } from 'next/font/google';
+import './globals.css';
+import { CartProvider } from '@/contexts/CartContext';
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'INKORA',
+  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" className={barlow.className}>
+      <body><CartProvider>{children}</CartProvider></body>
+    </html>
+  );
+}
+</file>
+
 <file path="app/page.module.css">
 .page {
   --gray-rgb: 0, 0, 0;
@@ -685,6 +710,77 @@ export default function ModelViewer({ url, autoRotate = false }) {
 - "Sin localidad" es una localidad real en la tabla localities
 </file>
 
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('inkora_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  function addToCart(design, product) {
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
+}
+</file>
+
 <file path="jsconfig.json">
 {
   "compilerOptions": {
@@ -992,31 +1088,6 @@ export default function ResetPassword() {
 }
 </file>
 
-<file path="app/layout.js">
-import { Barlow } from 'next/font/google';
-import './globals.css';
-import { CartProvider } from '@/contexts/CartContext';
-
-const barlow = Barlow({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
-
-export const metadata = {
-  title: 'INKORA',
-  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="es" className={barlow.className}>
-      <body><CartProvider>{children}</CartProvider></body>
-    </html>
-  );
-}
-</file>
-
 <file path="lib/auth.js">
 import { supabase } from '@/lib/supabase';
 
@@ -1073,6 +1144,115 @@ export default function ProductoPage({ params }) {
 }
 </file>
 
+<file path="next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
+};
+
+export default nextConfig;
+</file>
+
+<file path="lib/supabase-browser.js">
+'use client';
+
+import { supabase } from '@/lib/supabase';
+
+export function createBrowserSupabaseClient() {
+  return supabase;
+}
+</file>
+
+<file path="lib/supabase.js">
+import { createBrowserClient } from '@supabase/ssr';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
+
+export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+</file>
+
+<file path="middleware.js">
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse } from 'next/server';
+
+export async function middleware(request) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  await supabase.auth.getUser();
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+</file>
+
+<file path="app/auth/callback/route.js">
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export async function GET(request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
+  const next = searchParams.get('next') || '/';
+
+  if (code) {
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_KEY,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error('Auth callback error:', error.message);
+      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(error.message)}`);
+    }
+  }
+
+  return NextResponse.redirect(`${origin}${next}`);
+}
+</file>
+
 <file path="app/dashboard/page.js">
 'use client';
 
@@ -1117,6 +1297,7 @@ const [savingProfile, setSavingProfile] = useState(false);
   // Orders
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [showOrderStatus, setShowOrderStatus] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1136,6 +1317,8 @@ const [savingProfile, setSavingProfile] = useState(false);
     }
     setLoading(false);
     loadOrders(email);
+    supabase.from('settings').select('value').eq('key', 'show_order_status').single()
+      .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
   }
 
   async function loadOrders(email) {
@@ -1294,7 +1477,7 @@ const [savingProfile, setSavingProfile] = useState(false);
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      {['Código', 'Fecha', 'Items', 'Total', 'Estado'].map(h => (
+                      {['Código', 'Fecha', 'Items', 'Total', ...(showOrderStatus ? ['Estado'] : [])].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -1312,11 +1495,13 @@ const [savingProfile, setSavingProfile] = useState(false);
                         <td style={{ padding: '11px 10px', fontWeight: 700, color: '#2d3352', whiteSpace: 'nowrap' }}>
                           {order.total ? `$${Number(order.total).toLocaleString()}` : '—'}
                         </td>
-                        <td style={{ padding: '11px 10px' }}>
-                          <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {statusLabel(order.status)}
-                          </span>
-                        </td>
+                        {showOrderStatus && (
+                          <td style={{ padding: '11px 10px' }}>
+                            <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {statusLabel(order.status)}
+                            </span>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -1333,186 +1518,6 @@ const [savingProfile, setSavingProfile] = useState(false);
       </footer>
     </div>
   );
-}
-</file>
-
-<file path="contexts/CartContext.js">
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const CartContext = createContext(null);
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('inkora_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('inkora_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  function addToCart(design, product) {
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-      },
-    }));
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
-  function clearCart() {
-    setCart({});
-  }
-
-  function setCartItem(id, qty) {
-    setCart(prev => {
-      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...prev[id], qty } };
-    });
-  }
-
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  return (
-    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  return useContext(CartContext);
-}
-</file>
-
-<file path="next.config.mjs">
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '20mb',
-    },
-  },
-};
-
-export default nextConfig;
-</file>
-
-<file path="lib/supabase-browser.js">
-'use client';
-
-import { supabase } from '@/lib/supabase';
-
-export function createBrowserSupabaseClient() {
-  return supabase;
-}
-</file>
-
-<file path="lib/supabase.js">
-import { createBrowserClient } from '@supabase/ssr';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
-
-export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
-</file>
-
-<file path="middleware.js">
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse } from 'next/server';
-
-export async function middleware(request) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  await supabase.auth.getUser();
-
-  return response;
-}
-
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-};
-</file>
-
-<file path="app/auth/callback/route.js">
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-
-export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') || '/';
-
-  if (code) {
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_KEY,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      console.error('Auth callback error:', error.message);
-      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(error.message)}`);
-    }
-  }
-
-  return NextResponse.redirect(`${origin}${next}`);
 }
 </file>
 
@@ -1857,6 +1862,14 @@ export default function Landing() {
   const [hovered, setHovered] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const [uiSettings, setUiSettings] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     
@@ -1979,7 +1992,7 @@ export default function Landing() {
         </p>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px 60px', gap: 24, flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
         {products.map((p, i) => (
           <a
             key={p.id}
@@ -1997,12 +2010,8 @@ export default function Landing() {
               borderRadius: 20,
               overflow: 'hidden',
               position: 'relative',
-              width: typeof window !== 'undefined' && window.innerWidth < 768
-                ? (p.landing_card_width_mobile ?? 280)
-                : (p.landing_card_width_desktop ?? 320),
-              height: typeof window !== 'undefined' && window.innerWidth < 768
-                ? (p.landing_card_width_mobile ?? 280) * 1.4
-                : (p.landing_card_width_desktop ?? 320) * 1.3,
+              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
+              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
               display: 'block',
               boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
               transition: 'box-shadow 0.3s ease, transform 0.3s ease',
@@ -2012,7 +2021,7 @@ export default function Landing() {
             onMouseEnter={() => setHovered(p.id)}
             onMouseLeave={() => setHovered(null)}
           >
-            <div style={{ position: 'absolute', inset: 0, background: '#1B2F5E', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
               {p.landing_image
                 ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
                 : [...Array(4)].map((_, j) => (
@@ -2052,6 +2061,319 @@ export default function Landing() {
         <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
       </footer>
     </div>
+  );
+}
+</file>
+
+<file path="components/Header.js">
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useCart } from '@/contexts/CartContext';
+import AuthModal from '@/components/AuthModal';
+
+export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(null);
+  const [uiSettings, setUiSettings] = useState({});
+  const cartRef = useRef(null);
+  const { cartItems, totalItems, removeFromCart } = useCart();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const historyRef = useRef(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
+        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
+    }
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (darkMode === null) return;
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
+  }, [darkMode]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else setProfile(null);
+    });
+    function handleAuthSuccess() {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) loadProfile(u.id);
+      });
+    }
+    window.addEventListener('inkora_auth_success', handleAuthSuccess);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('inkora_auth_success', handleAuthSuccess);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (cartRef.current && !cartRef.current.contains(e.target)) {
+        setCartOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    setProfile(data || null);
+  }
+
+  async function loadOrders(email) {
+    setLoadingOrders(true);
+    const { data } = await supabase.from('orders').select('*').eq('customer_email', email).order('created_at', { ascending: false }).limit(5);
+    if (data) setOrders(data);
+    setLoadingOrders(false);
+  }
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (historyRef.current && !historyRef.current.contains(e.target)) setHistoryOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <>
+    <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
+        <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white', fillRule: 'evenodd' }}>
+            <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
+          </svg>
+        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
+            <div
+              onClick={() => setDarkMode(v => !v)}
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease, box-shadow 0.3s ease', flexShrink: 0 }}
+            >
+              <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                {darkMode ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ position: 'absolute', left: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0.3 : 0, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div style={{ position: 'absolute', right: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0 : 0.3, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
+            <div ref={cartRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setCartOpen(v => !v)}
+                className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                  <line x1="3" y1="6" x2="21" y2="6"/>
+                  <path d="M16 10a4 4 0 01-8 0"/>
+                </svg>
+                {totalItems > 0 && (
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+
+              {cartOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
+                  <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
+                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
+                  </div>
+                  <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
+                    {cartItems.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? 'rgba(27,47,94,0.45)' : 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                        Tu pedido está vacío
+                      </div>
+                    ) : (
+                      cartItems.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
+                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                            <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
+                          </div>
+                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: darkMode ? 'rgba(27,47,94,0.4)' : 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {cartItems.length > 0 && (
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                        Ver pedido completo
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {uiSettings[`${page}_show_history`] !== 'false' && user && (
+            <div ref={historyRef} style={{ position: 'relative' }}>
+              <button
+                className="header-btn"
+                onClick={() => { setHistoryOpen(v => { if (!v && user?.email) loadOrders(user.email); return !v; }); }}
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                title="Mis pedidos"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="18" height="18">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </button>
+              {historyOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 320, background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 32px rgba(27,47,94,0.18)', overflow: 'hidden', zIndex: 300 }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid #eef0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#1B2F5E', fontWeight: 700, fontSize: 14 }}>Mis pedidos</span>
+                    <a href="/dashboard#pedidos" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {loadingOrders ? (
+                      <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>Cargando...</div>
+                    ) : orders.length === 0 ? (
+                      <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>No tenés pedidos todavía.</div>
+                    ) : orders.map(o => {
+                      const statusMap = { pending: { label: 'Pendiente', color: '#f6a800' }, confirmed: { label: 'Confirmado', color: '#2D6BE4' }, in_production: { label: 'En producción', color: '#6d28d9' }, ready: { label: 'Listo', color: '#18a36a' }, cancelled: { label: 'Cancelado', color: '#e53e3e' } };
+                      const st = statusMap[o.status] || statusMap.pending;
+                      const showStatus = uiSettings['show_order_status'] !== 'false';
+                      return (
+                        <div key={o.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f2f8' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{o.order_code}</span>
+                            {showStatus && <span style={{ fontSize: 10, fontWeight: 700, color: st.color, background: st.color + '18', borderRadius: 5, padding: '2px 7px' }}>{st.label}</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#9aa3bc' }}>
+                            {Array.isArray(o.items) ? o.items.slice(0,2).map(i => `${i.name} ×${i.qty}`).join(', ') + (o.items.length > 2 ? ` +${o.items.length - 2}` : '') : '—'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2 }}>
+                            {o.total ? `$${Number(o.total).toLocaleString()}` : '—'} · {o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR') : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ padding: '10px 16px', borderTop: '1px solid #eef0f6' }}>
+                    <a href="/dashboard#pedidos" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                      Ver historial completo
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
+            <div style={{ position: 'relative' }}>
+              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
+                {profile?.name || user.email?.split('@')[0]} {'▾'}
+              </button>
+              {userMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
+                  <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
+                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            uiSettings[`${page}_show_account`] !== 'false' && (
+              uiSettings['login_method'] === 'google' ? (
+                <button className="header-btn" onClick={async () => {
+                  const next = window.location.pathname + window.location.search;
+                  await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` } });
+                }} style={{ background: 'white', color: '#2d3352', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                  Ingresar
+                </button>
+              ) : (
+                <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setAuthModalOpen(true)}>
+                  Ingresar
+                </button>
+              )
+            )
+          )}
+        </div>
+      </div>
+    </header>
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={(u) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } }}
+        />
+      )}
+    </>
   );
 }
 </file>
@@ -2167,6 +2489,22 @@ export default function Admin() {
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
+  const [tabOrder, setTabOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('admin_tab_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const all = ['products','designs','orders','localities','users','sellers','admins','config'];
+        if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
+      }
+    } catch {}
+    return ['products','designs','orders','localities','users','sellers','admins','config'];
+  });
+  const [draggingTab, setDraggingTab] = useState(null);
+  const [draggingConfigTab, setDraggingConfigTab] = useState(null);
+  const [sellers, setSellers] = useState([]);
+  const [newSeller, setNewSeller] = useState({ name: '', email: '', phone: '' });
+  const [savingSeller, setSavingSeller] = useState(false);
 
   // Products
   const [products, setProducts] = useState([]);
@@ -2196,6 +2534,9 @@ export default function Admin() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
+  const [catColorPicker, setCatColorPicker] = useState({});
+  const catColorValueRef = useRef({});
+  const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -2255,13 +2596,34 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings();
+      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
     }
   }, [screen]);
 
 
   useEffect(() => {
-    function handleKeyDown(e) { if (e.key === 'Escape') setSelectedIds(new Set()); }
+    function handleKeyDown(e) {
+      if (e.key !== 'Escape') return;
+      const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
+      if (openKeys.length > 0) {
+        e.preventDefault();
+        openKeys.forEach(pickerKey => {
+          const val = catColorValueRef.current[pickerKey];
+          if (val) {
+            const [productId, ...catParts] = pickerKey.split(':');
+            const cat = catParts.join(':');
+            supabase.from('products').select('*').eq('id', productId).single().then(({ data: p }) => {
+              const current = p?.category_colors || {};
+              supabase.from('products').update({ category_colors: { ...current, [cat]: val } }).eq('id', productId).then(() => loadProducts());
+            });
+          }
+        });
+        setCatColorPicker({});
+        catColorPickerRef.current = {};
+      } else {
+        setSelectedIds(new Set());
+      }
+    }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
@@ -2460,6 +2822,14 @@ export default function Admin() {
     const updated = [...current, normalized];
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
     setNewCatInputs(prev => ({ ...prev, [productId]: '' }));
+    loadProducts();
+  }
+
+  async function saveCategoryColor(productId, cat, color) {
+    const p = products.find(pr => pr.id === productId);
+    const current = p?.category_colors || {};
+    const updated = { ...current, [cat]: color };
+    await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
     loadProducts();
   }
 
@@ -2745,6 +3115,43 @@ export default function Admin() {
     return !q || (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_email || '').toLowerCase().includes(q);
   });
 
+  // ── Sellers ──
+  async function loadSellers() {
+    const { data } = await supabase.from('sellers').select('*').order('name');
+    if (data) setSellers(data);
+  }
+
+  async function addSeller() {
+    if (!newSeller.name.trim()) return;
+    setSavingSeller(true);
+    await supabase.from('sellers').insert({ ...newSeller, active: true });
+    setNewSeller({ name: '', email: '', phone: '' });
+    setSavingSeller(false);
+    loadSellers();
+  }
+
+  async function toggleSeller(id, active) {
+    await supabase.from('sellers').update({ active: !active }).eq('id', id);
+    loadSellers();
+  }
+
+  async function deleteSeller(id) {
+    askConfirm('¿Eliminar este vendedor?', async () => {
+      await supabase.from('sellers').delete().eq('id', id);
+      loadSellers();
+    });
+  }
+
+  async function updateSellerField(id, field, value) {
+    await supabase.from('sellers').update({ [field]: value }).eq('id', id);
+    loadSellers();
+  }
+
+  async function updateUserSeller(userId, sellerId) {
+    await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    loadUsers();
+  }
+
   // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
@@ -2824,15 +3231,26 @@ export default function Admin() {
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
-          {[['products','Productos'],['designs','Diseños'],['orders','Pedidos'],['localities','Escalas de precios'],['users','Usuarios'],['admins','Admins'],['config','Configuración']].map(([id, label]) => (
-            <button key={id} style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}} onClick={() => setActiveTab(id)}>
-              {label}
-              {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
-              {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
-              {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
-              {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
-            </button>
-          ))}
+          {(() => {
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+            return tabOrder.map(id => (
+              <button
+                key={id}
+                draggable
+                onDragStart={undefined}
+                onDragOver={undefined}
+                onDragEnd={undefined}
+                onClick={() => setActiveTab(id)}
+                style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
+              >
+                {ALL_TABS[id]}
+                {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
+                {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
+                {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
+              </button>
+            ));
+          })()}
         </div>
       </div>
 
@@ -3063,12 +3481,31 @@ export default function Admin() {
                         <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
                         <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
                           <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
-                          {cats.map(cat => (
-                            <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>
-                              {cat}
-                              <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:2}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
-                            </span>
-                          ))}
+                          {cats.map(cat => {
+                            const p = products.find(pr => pr.id === product.id);
+                            const savedColor = p?.category_colors?.[cat] || '#e8eef9';
+                            const pickerKey = `${product.id}:${cat}`;
+                            const pickerOpen = catColorPicker[pickerKey];
+                            return (
+                              <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative'}}>
+                                {cat}
+                                <span
+                                  title="Color de la categoría"
+                                  onClick={e => { e.stopPropagation(); const pickerOpen = catColorPicker[pickerKey]; setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
+                                  style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
+                                />
+                                <input
+                                  type="color"
+                                  defaultValue={savedColor}
+                                  style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
+                                  onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(product.id, cat, e.target.value); }}
+                                  onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
+                                />
+                                <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
+                              </span>
+                            );
+                          })}
                         </div>
                         <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
                           <input
@@ -3525,12 +3962,87 @@ export default function Admin() {
                   <div style={s.productName}>{u.name || '—'}</div>
                   <div style={s.productMeta}>{u.email}</div>
                 </div>
-                <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
-                  {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                  <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
+                    {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <select style={{...s.input, width: 160, fontSize: 13, padding: '6px 10px'}} value={u.seller_id || ''} onChange={e => updateUserSeller(u.id, e.target.value)}>
+                    <option value="">Sin vendedor</option>
+                    {sellers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {/* ══ VENDEDORES ══ */}
+        {activeTab === 'sellers' && (
+          <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Nuevo vendedor</h2>
+              <div style={{display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end'}}>
+                <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
+                  <label style={s.label}>Nombre *</label>
+                  <input style={s.input} value={newSeller.name} onChange={e => setNewSeller(v => ({...v, name: e.target.value}))} placeholder="Nombre completo" />
+                </div>
+                <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
+                  <label style={s.label}>Teléfono INKORA</label>
+                  <input style={s.input} value={newSeller.phone} onChange={e => setNewSeller(v => ({...v, phone: e.target.value}))} placeholder="+54 9 ..." />
+                </div>
+                <button style={{...s.btnPrimary, opacity: newSeller.name.trim() && !savingSeller ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newSeller.name.trim() || savingSeller} onClick={addSeller}>
+                  {savingSeller ? 'Guardando...' : '+ Agregar'}
+                </button>
+              </div>
+            </div>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Vendedores ({sellers.length})</h2>
+              {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavía.</p>}
+              {sellers.length > 0 && (
+                <div style={{overflowX:'auto'}}>
+                  <table style={s.tbl}>
+                    <thead>
+                      <tr>
+                        <th style={s.th}>Nombre</th>
+                        <th style={s.th}>Teléfono INKORA</th>
+                        <th style={s.th}>Visible</th>
+                        <th style={{...s.th, width:32}}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sellers.map(sel => (
+                        <tr key={sel.id} style={{opacity: sel.active ? 1 : 0.5}}>
+                          <td style={s.td}>
+                            <input
+                              style={s.tblInput}
+                              defaultValue={sel.name}
+                              onBlur={e => updateSellerField(sel.id, 'name', e.target.value)}
+                            />
+                          </td>
+                          <td style={s.td}>
+                            <input
+                              style={{...s.tblInput, maxWidth:180}}
+                              defaultValue={sel.phone || ''}
+                              placeholder="Teléfono"
+                              onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
+                            />
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button style={s.iconBtn} onClick={() => toggleSeller(sel.id, sel.active)}>
+                              {sel.active ? <EyeOpen /> : <EyeOff />}
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <TrashBtn onClick={() => deleteSeller(sel.id)} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* ══ ADMINS ══ */}
@@ -3591,6 +4103,55 @@ export default function Admin() {
               </div>
             </div>
 
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Orden de pestañas</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                {(() => {
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+                  return tabOrder.map((id, idx) => (
+                    <div
+                      key={id}
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); setDraggingConfigTab(id); }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingConfigTab && draggingConfigTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingConfigTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingConfigTab); return next; }); }}}
+                      onDragEnd={() => { setDraggingConfigTab(null); localStorage.setItem('admin_tab_order', JSON.stringify(tabOrder)); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 12px', borderRadius: 8,
+                        border: '1.5px solid #dde1ef',
+                        background: draggingConfigTab === id ? '#eef4ff' : 'white',
+                        cursor: draggingConfigTab ? 'grabbing' : 'grab',
+                        opacity: draggingConfigTab === id ? 0.4 : 1,
+                        transition: 'background 0.12s, opacity 0.12s',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <span style={{color:'#b0b8d0', fontSize:16, lineHeight:1}}>⠿</span>
+                      <span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{ALL_TABS[id]}</span>
+                      <span style={{marginLeft:'auto', fontSize:11, color:'#b0b8d0'}}>#{idx + 1}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Dashboard <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>inkora.com.ar/dashboard</span></h2>
+              <div style={{display:'flex', flexDirection:'column', gap:0}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Estado de pedidos</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Muestra la columna Estado en el historial de pedidos del usuario</div>
+                  </div>
+                  <div onClick={() => saveSetting('show_order_status', settings['show_order_status'] === 'false' ? 'true' : 'false')} style={{ width: 36, height: 20, borderRadius: 10, background: settings['show_order_status'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: 2, left: settings['show_order_status'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+
             {[
               { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
               { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
@@ -3604,6 +4165,8 @@ export default function Admin() {
                     { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Ícono de carrito en el header', disabled: page === 'catalogo' },
                     { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
                     { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                    { key: `${page}_show_history`, label: 'Botón historial', desc: 'Ícono de historial de pedidos en el header' },
+                    
                     { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
                     { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaña' },
@@ -3788,243 +4351,6 @@ const styles = {
 };
 </file>
 
-<file path="components/Header.js">
-'use client';
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useCart } from '@/contexts/CartContext';
-import AuthModal from '@/components/AuthModal';
-
-export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(null);
-  const [uiSettings, setUiSettings] = useState({});
-  const cartRef = useRef(null);
-  const { cartItems, totalItems, removeFromCart } = useCart();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
-        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
-    }
-    supabase.from('settings').select('*')
-      .then(({ data }) => {
-        if (data) {
-          const map = {};
-          data.forEach(s => { map[s.key] = s.value; });
-          setUiSettings(map);
-        }
-      });
-  }, []);
-
-  useEffect(() => {
-    if (darkMode === null) return;
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
-    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
-  }, [darkMode]);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id); else setProfile(null);
-    });
-    function handleAuthSuccess() {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (u) loadProfile(u.id);
-      });
-    }
-    window.addEventListener('inkora_auth_success', handleAuthSuccess);
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('inkora_auth_success', handleAuthSuccess);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (cartRef.current && !cartRef.current.contains(e.target)) {
-        setCartOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    setProfile(data || null);
-  }
-
-  return (
-    <>
-    <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white', fillRule: 'evenodd' }}>
-            <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
-          </svg>
-        </a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-
-          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
-            <div
-              onClick={() => setDarkMode(v => !v)}
-              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease, box-shadow 0.3s ease', flexShrink: 0 }}
-            >
-              <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-                {darkMode ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                    <circle cx="12" cy="12" r="5"/>
-                    <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                )}
-              </div>
-              <div style={{ position: 'absolute', left: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0.3 : 0, transition: 'opacity 0.3s' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
-                  <circle cx="12" cy="12" r="5"/>
-                  <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <div style={{ position: 'absolute', right: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0 : 0.3, transition: 'opacity 0.3s' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-              </div>
-            </div>
-          )}
-
-          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
-            <div ref={cartRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setCartOpen(v => !v)}
-                className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
-                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                  <line x1="3" y1="6" x2="21" y2="6"/>
-                  <path d="M16 10a4 4 0 01-8 0"/>
-                </svg>
-                {totalItems > 0 && (
-                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {totalItems}
-                  </span>
-                )}
-              </button>
-
-              {cartOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
-                  <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
-                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
-                  </div>
-                  <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
-                    {cartItems.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? 'rgba(27,47,94,0.45)' : 'rgba(255,255,255,0.45)', fontSize: 13 }}>
-                        Tu pedido está vacío
-                      </div>
-                    ) : (
-                      cartItems.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
-                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                            <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
-                          </div>
-                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: darkMode ? 'rgba(27,47,94,0.4)' : 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {cartItems.length > 0 && (
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
-                        Ver pedido completo
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
-            <div style={{ position: 'relative' }}>
-              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
-                {profile?.name || user.email?.split('@')[0]} {'▾'}
-              </button>
-              {userMenuOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
-                  <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
-                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
-                </div>
-              )}
-            </div>
-          ) : (
-            uiSettings[`${page}_show_account`] !== 'false' && (
-              uiSettings['login_method'] === 'google' ? (
-                <button className="header-btn" onClick={async () => {
-                  const next = window.location.pathname + window.location.search;
-                  await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` } });
-                }} style={{ background: 'white', color: '#2d3352', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                  Ingresar
-                </button>
-              ) : (
-                <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setAuthModalOpen(true)}>
-                  Ingresar
-                </button>
-              )
-            )
-          )}
-        </div>
-      </div>
-    </header>
-      {authModalOpen && (
-        <AuthModal
-          onClose={() => setAuthModalOpen(false)}
-          onSuccess={(u) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } }}
-        />
-      )}
-    </>
-  );
-}
-</file>
-
 <file path="app/catalogo/page.js">
 'use client';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -4044,9 +4370,9 @@ const SearchIconWhite = () => (
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
 function generateCode() {
-  const year = new Date().getFullYear();
-  const num = String(Math.floor(Math.random() * 9000) + 1000);
-  return 'INK-' + year + '-' + num;
+  const ts = Date.now().toString(36).toUpperCase().slice(-4);
+  const rand = Math.random().toString(36).toUpperCase().slice(2, 6);
+  return 'INK-' + ts + rand;
 }
 
 function useWindowWidth() {
@@ -4329,7 +4655,10 @@ export default function Home() {
   const cardWidth = isMobile
     ? (activeProduct?.card_width_mobile ?? 160)
     : (activeProduct?.card_width_desktop ?? 180);
-  const gridCols = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
+  const sidebarWidth = isMobile ? 0 : (sidebarCollapsed ? 48 : 388);
+  const availableWidth = width - sidebarWidth - (isMobile ? 32 : 48);
+  const colCount = Math.max(1, Math.floor(availableWidth / cardWidth));
+  const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design) {
@@ -4423,15 +4752,11 @@ export default function Home() {
         .qty-input::placeholder { color: #9aa3bc; }
         .qty-input:focus::placeholder { color: transparent; }
 
-        /* Eliminamos el borde y contorno negro al hacer clic */
-        *:focus {
-          outline: none !important;
-          box-shadow: none !important;
-        }
-        *:focus-visible {
-          outline: none !important;
-          box-shadow: none !important;
-        }
+        .prod-tab { transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, border-color 0.18s ease; will-change: transform; border: 2.5px solid transparent; box-shadow: 0 2px 6px rgba(27,47,94,0.12); opacity: 0.72; }
+        .prod-tab:hover { transform: scale(1.06); opacity: 1; }
+        .prod-tab-active { border-color: #2D6BE4 !important; box-shadow: 0 4px 14px rgba(45,107,228,0.35) !important; transform: scale(1.04); opacity: 1 !important; }
+        *:focus { outline: none !important; box-shadow: none !important; }
+        *:focus-visible { outline: none !important; box-shadow: none !important; }
       `}</style>
 
       <Header headerVisible={headerVisible} showCart={false} page="catalogo" />
@@ -4474,29 +4799,75 @@ export default function Home() {
 
           {products.length > 1 && (
             <div style={s.productTabs}>
-              {products.map(p => (
-                <button
-                  key={p.id}
-                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
-                  onClick={() => switchProduct(p.id)}
-                >
-                  {p.name}
-                </button>
-              ))}
+              {products.map(p => {
+                const isActive = activeProductId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => switchProduct(p.id)}
+                    className={isActive ? 'prod-tab prod-tab-active' : 'prod-tab'}
+                    style={{
+                      position: 'relative',
+                      width: 140,
+                      height: 56,
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                      padding: 0,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {p.landing_image
+                      ? <img src={p.landing_image} alt={p.name} style={{position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                      : <div style={{position:'absolute', inset:0, background:'linear-gradient(135deg, #1B2F5E 0%, #2D6BE4 100%)'}} />
+                    }
+                    <div style={{position:'absolute', inset:0, background:'linear-gradient(to top, rgba(10,20,50,0.82) 0%, rgba(10,20,50,0.2) 100%)'}} />
+                    <span style={{position:'absolute', bottom:7, left:9, right:9, color:'white', fontSize:12, fontWeight:700, textAlign:'left', lineHeight:1.2, textShadow:'0 1px 3px rgba(0,0,0,1), 0 2px 8px rgba(0,0,0,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                      {p.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
           <div style={s.filters}>
-            {categories.map(cat => (
-              <button key={cat} className="filter-btn" style={{...s.filterBtn, ...(filter === cat ? s.filterActive : {})}}
-                onClick={() => setFilter(cat)}>
-                {cat}
-              </button>
-            ))}
+            {categories.map(cat => {
+              const activeProd = products.find(p => p.id === activeProductId);
+              const savedColor = activeProd?.category_colors?.[cat];
+              const bg = savedColor || '#e8eef9';
+              let textColor = '#2D6BE4';
+              if (savedColor) {
+                const hex = savedColor.replace('#', '');
+                const r = parseInt(hex.slice(0, 2), 16);
+                const g = parseInt(hex.slice(2, 4), 16);
+                const b = parseInt(hex.slice(4, 6), 16);
+                textColor = (r * 299 + g * 587 + b * 114) / 1000 > 100 ? '#000000' : '#ffffff';
+              }
+              const isActive = filter === cat;
+              return (
+                <button
+                  key={cat}
+                  className="filter-btn"
+                  style={{
+                    ...s.filterBtn,
+                    background: isActive ? '#1B2F5E' : bg,
+                    color: isActive ? 'white' : textColor,
+                    transform: isActive ? 'scale(1.06)' : 'scale(1)',
+                    boxShadow: isActive ? '0 2px 8px rgba(27,47,94,0.35)' : 'none',
+                    transition: 'all 0.15s ease',
+                    opacity: isActive ? 1 : 0.85,
+                  }}
+                  onClick={() => setFilter(cat)}
+                >
+                  {cat}
+                </button>
+              );
+            })}
           </div>
 
           {!isMobile && (
-            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, transition:'top 0.3s ease'}}>
               <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
                 <span style={s.searchIcon}><SearchIconWhite /></span>
                 <input
@@ -4829,7 +5200,7 @@ export default function Home() {
                       <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                     </div>
                   </div>
-                  <div style={s.modalActions}>
+                  <div style={{...s.modalActions, position:'sticky', bottom:0, background:'white', paddingTop:12, marginTop:8, borderTop:'1.5px solid #eef0f6', marginLeft:-24, marginRight:-24, paddingLeft:24, paddingRight:24, paddingBottom:24}}>
                     <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
                     <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
                       {loading ? 'Enviando...' : 'Enviar pedido'}
@@ -4844,11 +5215,16 @@ export default function Home() {
                 <p>Codigo de tu pedido:</p>
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmacion a tu email.</p>
-                <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
-                  "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (showTotal ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
-                )} target="_blank" rel="noreferrer" style={s.btnWaConfirm} onClick={closeModal}>
-                  Confirmar por WhatsApp
-                </a>
+                <div style={{display:'flex', gap:10, marginTop:16, justifyContent:'center'}}>
+                  <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
+                    "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (confirmedOrder.total > 0 ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                  )} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, background:'rgba(37,211,102,0.15)', color:'#18a36a', border:'1.5px solid #25D366'}} onClick={closeModal}>
+                    Confirmar por WhatsApp
+                  </a>
+                  <button style={{background:'#1B2F5E', border:'none', color:'white', borderRadius:10, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}} onClick={closeModal}>
+                    Listo ✓
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -4908,14 +5284,14 @@ const styles = {
   catalogHeader: { marginBottom: 16 },
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
-  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
-  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTabs: { display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
+  productTab: { background: 'white', border: 'none', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
   productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
   searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
-  filterBtn: { background: '#e8eef9', border: '1.5px solid #b8c8e8', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  filterBtn: { background: '#e8eef9', border: 'none', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
   card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
@@ -4951,24 +5327,24 @@ const styles = {
   notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
   confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' },
-  modalHeader: { background: '#1B2F5E', color: 'white', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 18 },
-  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', fontSize: 16 },
-  modalBody: { padding: 24 },
-  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 10, padding: '12px 16px', textAlign: 'center', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 4 },
-  codeLabel: { fontSize: 11, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' },
-  codeValue: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
-  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 12, color: '#7a5800' },
-  formRow: { display: 'grid', gap: 12 },
-  formGroup: { marginBottom: 14 },
-  label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
-  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' },
-  orderSummary: { background: '#f7f8fc', borderRadius: 10, padding: 12, marginBottom: 16, maxHeight: 160, overflowY: 'auto' },
-  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0', borderBottom: '1px solid #eef0f6' },
-  modalActions: { display: 'flex', gap: 10 },
-  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
-  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 10, padding: 12, fontSize: 16, fontWeight: 700, color: 'white', cursor: 'pointer' },
-  successScreen: { textAlign: 'center', padding: '32px 24px' },
+  modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'hidden', overflowX: 'hidden', display: 'flex', flexDirection: 'column' },
+  modalHeader: { background: '#1B2F5E', color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16 },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  modalBody: { padding: '12px 16px', overflowY: 'auto', flex: 1 },
+  codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 12px', textAlign: 'center', marginBottom: 8, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  codeLabel: { fontSize: 10, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' },
+  codeValue: { fontSize: 18, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
+  notice: { background: '#fff8e1', border: '1.5px solid #f6c200', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontSize: 11, color: '#7a5800' },
+  formRow: { display: 'grid', gap: 8 },
+  formGroup: { marginBottom: 8 },
+  label: { display: 'block', fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  input: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', boxSizing: 'border-box' },
+  orderSummary: { background: '#f7f8fc', borderRadius: 8, padding: '6px 10px', marginBottom: 8, maxHeight: 120, overflowY: 'auto' },
+  summaryItem: { display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderBottom: '1px solid #eef0f6' },
+  modalActions: { display: 'flex', gap: 8 },
+  btnSecondary: { flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontWeight: 600, color: '#5a6380', cursor: 'pointer' },
+  btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' },
+  successScreen: { textAlign: 'center', padding: '32px 24px', overflowX: 'hidden' },
   successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
   successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
   successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },

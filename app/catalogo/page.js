@@ -156,7 +156,7 @@ export default function Home() {
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*, localities(*)').eq('id', userId).single();
+    const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
     setProfile(data);
     if (data?.locality_id) {
       const { data: tiers } = await supabase.from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
@@ -383,6 +383,9 @@ export default function Home() {
   }
 
   const s = styles;
+const DEFAULT_WA = process.env.NEXT_PUBLIC_WHATSAPP || '3765211017';
+const rawWA = profile?.sellers?.phone?.replace(/\D/g, '') || DEFAULT_WA;
+const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
   return (
     <div style={s.app}>
@@ -862,7 +865,7 @@ export default function Home() {
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmacion a tu email.</p>
                 <div style={{display:'flex', gap:10, marginTop:16, justifyContent:'center'}}>
-                  <a href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(
+                  <a href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent(
                     "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (confirmedOrder.total > 0 ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
                   )} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, background:'rgba(37,211,102,0.15)', color:'#18a36a', border:'1.5px solid #25D366'}} onClick={closeModal}>
                     Confirmar por WhatsApp
@@ -879,7 +882,7 @@ export default function Home() {
 
       {uiSettings['catalogo_show_whatsapp'] !== 'false' && (
         <a
-          href={"https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent('Hola! Vengo desde la pagina. ')}
+          href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent('Hola! Vengo desde la pagina. ')}
           target="_blank"
           rel="noreferrer"
           style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
