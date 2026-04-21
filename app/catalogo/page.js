@@ -64,6 +64,8 @@ export default function Home() {
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState({});
+  const sidebarRef = useRef(null);
+  const [sidebarWidth, setSidebarWidth] = useState(388);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -186,6 +188,17 @@ export default function Home() {
       }));
     }, 160);
   }
+
+  useEffect(() => {
+    if (isMobile || !sidebarRef.current) return;
+    const measure = () => {
+      const rect = sidebarRef.current?.getBoundingClientRect();
+      if (rect) setSidebarWidth(window.innerWidth - rect.left + 24);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isMobile, sidebarCollapsed]);
 
   useEffect(() => {
     const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
@@ -433,7 +446,7 @@ export default function Home() {
         minHeight: 'calc(100vh - 64px)',
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
-        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : 388),
+        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : sidebarWidth),
         paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
@@ -570,7 +583,7 @@ export default function Home() {
         </div>
 
         {!isMobile && (
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+          <div ref={sidebarRef} style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 10}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
