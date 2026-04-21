@@ -497,10 +497,10 @@ export default function Home() {
                   className="filter-btn"
                   style={{
                     ...s.filterBtn,
-                    background: isActive ? (savedColor || '#1B2F5E') : bg,
-                    color: isActive ? (savedColor ? textColor : 'white') : textColor,
+                    background: isActive ? '#1B2F5E' : bg,
+                    color: isActive ? 'white' : textColor,
                     transform: isActive ? 'scale(1.06)' : 'scale(1)',
-                    boxShadow: isActive ? `0 2px 8px ${bg}99` : 'none',
+                    boxShadow: isActive ? '0 2px 8px rgba(27,47,94,0.35)' : 'none',
                     transition: 'all 0.15s ease',
                     opacity: isActive ? 1 : 0.85,
                   }}
