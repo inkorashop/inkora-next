@@ -1840,6 +1840,222 @@ const styles = {
 };
 </file>
 
+<file path="app/page.js">
+'use client';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import Header from '@/components/Header';
+
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+export default function Landing() {
+  const [products, setProducts] = useState([]);
+  const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
+
+  useEffect(() => {
+    
+
+    supabase.from('products').select('*').eq('active', true).order('created_at')
+      .then(({ data }) => { if (data) setProducts(data); });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+
+    const handler = () => {
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
+    };
+    window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    }
+
+    let tabInterval;
+    let tabToggle = false;
+
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const onAway = cfg.tab_on_away === 'true';
+      const onActive = cfg.tab_on_active === 'true';
+      clearInterval(tabInterval);
+
+      if (!onAway && !onActive) return;
+
+      function animate() {
+        clearInterval(tabInterval);
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      function stop() {
+        clearInterval(tabInterval);
+        tabToggle = false;
+        document.title = 'INKORA';
+      }
+
+      if (onAway && onActive) {
+        animate();
+      } else {
+        function handleVisibility() {
+          if (document.hidden && onAway) { animate(); }
+          else if (!document.hidden && onActive) { animate(); }
+          else { stop(); }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
+        if (onActive && !document.hidden) animate();
+      }
+    }
+
+    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+      clearInterval(tabInterval);
+    };
+  }, []);
+
+  return (
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
+      <style>{`
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .product-card { animation: fadeUp 0.5s ease both; }
+        .product-card:hover .card-overlay { opacity: 1 !important; }
+        .product-card:hover .card-img { transform: scale(1.05); }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
+        .product-card:nth-child(1) { --card-index: 0.5; }
+        .product-card:nth-child(2) { --card-index: 1.5; }
+        .product-card:nth-child(3) { --card-index: 2.5; }
+        .product-card:nth-child(4) { --card-index: 3.5; }
+        .product-card:nth-child(5) { --card-index: 0.8; }
+        .product-card:nth-child(6) { --card-index: 1.8; }
+        .product-card:nth-child(7) { --card-index: 2.8; }
+        .product-card:nth-child(8) { --card-index: 3.8; }
+        .product-card:nth-child(9) { --card-index: 1.2; }
+        .product-card:nth-child(10) { --card-index: 2.2; }
+        .product-card:nth-child(11) { --card-index: 3.2; }
+        .product-card:nth-child(12) { --card-index: 0.3; }
+      `}</style>
+
+      <Header showCart={true} page="landing" />
+
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
+          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
+        </h1>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
+          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
+        </p>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px 60px', gap: 24, flexWrap: 'wrap' }}>
+        {products.map((p, i) => (
+          <a
+            key={p.id}
+            href={"/catalogo/" + toSlug(p.name)}
+            className="product-card"
+            onClick={e => {
+              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
+            style={{
+              animationDelay: (i * 0.1) + "s",
+              textDecoration: 'none',
+              borderRadius: 20,
+              overflow: 'hidden',
+              position: 'relative',
+              width: typeof window !== 'undefined' && window.innerWidth < 768
+                ? (p.landing_card_width_mobile ?? 280)
+                : (p.landing_card_width_desktop ?? 320),
+              height: typeof window !== 'undefined' && window.innerWidth < 768
+                ? (p.landing_card_width_mobile ?? 280) * 1.4
+                : (p.landing_card_width_desktop ?? 320) * 1.3,
+              display: 'block',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              transform: 'translateY(0)',
+              zIndex: hovered === p.id ? 0 : 1
+            }}
+            onMouseEnter={() => setHovered(p.id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div style={{ position: 'absolute', inset: 0, background: '#1B2F5E', overflow: 'hidden' }}>
+              {p.landing_image
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                : [...Array(4)].map((_, j) => (
+                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
+                  ))
+              }
+            </div>
+
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
+        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
+      </footer>
+    </div>
+  );
+}
+</file>
+
 <file path="app/admin/page.js">
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -3572,30 +3788,32 @@ const styles = {
 };
 </file>
 
-<file path="app/page.js">
+<file path="components/Header.js">
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import Header from '@/components/Header';
+import { useCart } from '@/contexts/CartContext';
+import AuthModal from '@/components/AuthModal';
 
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
-
-function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
-
-export default function Landing() {
-  const [products, setProducts] = useState([]);
-  const [hovered, setHovered] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
+export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(null);
   const [uiSettings, setUiSettings] = useState({});
+  const cartRef = useRef(null);
+  const { cartItems, totalItems, removeFromCart } = useCart();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    
-
-    supabase.from('products').select('*').eq('active', true).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
-
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
+        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
+    }
     supabase.from('settings').select('*')
       .then(({ data }) => {
         if (data) {
@@ -3604,186 +3822,205 @@ export default function Landing() {
           setUiSettings(map);
         }
       });
+  }, []);
 
-    const handler = () => {
-      const saved = localStorage.getItem('inkora_theme');
-      if (saved) setDarkMode(saved === 'dark');
-    };
-    window.addEventListener('storage', handler);
-    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+  useEffect(() => {
+    if (darkMode === null) return;
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
+    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
+  }, [darkMode]);
 
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('*').eq('key', 'landing_mode')
-        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
-    }
-
-    let tabInterval;
-    let tabToggle = false;
-
-    function startTabAnim(cfg) {
-      const text = cfg.tab_text || 'INKORA 🔷';
-      const interval = parseInt(cfg.tab_interval) || 1000;
-      const onAway = cfg.tab_on_away === 'true';
-      const onActive = cfg.tab_on_active === 'true';
-      clearInterval(tabInterval);
-
-      if (!onAway && !onActive) return;
-
-      function animate() {
-        clearInterval(tabInterval);
-        tabInterval = setInterval(() => {
-          document.title = tabToggle ? 'INKORA' : text;
-          tabToggle = !tabToggle;
-        }, interval);
-      }
-
-      function stop() {
-        clearInterval(tabInterval);
-        tabToggle = false;
-        document.title = 'INKORA';
-      }
-
-      if (onAway && onActive) {
-        animate();
-      } else {
-        function handleVisibility() {
-          if (document.hidden && onAway) { animate(); }
-          else if (!document.hidden && onActive) { animate(); }
-          else { stop(); }
-        }
-        document.addEventListener('visibilitychange', handleVisibility);
-        if (onActive && !document.hidden) animate();
-      }
-    }
-
-    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
-      .then(({ data }) => {
-        if (data) {
-          const cfg = {};
-          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
-          startTabAnim(cfg);
-        }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u.id); else setProfile(null);
+    });
+    function handleAuthSuccess() {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) loadProfile(u.id);
       });
-
+    }
+    window.addEventListener('inkora_auth_success', handleAuthSuccess);
     return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('inkora_theme_change', handler);
-      clearInterval(tabInterval);
+      subscription.unsubscribe();
+      window.removeEventListener('inkora_auth_success', handleAuthSuccess);
     };
   }, []);
 
+  useEffect(() => {
+    function handleClick(e) {
+      if (cartRef.current && !cartRef.current.contains(e.target)) {
+        setCartOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    setProfile(data || null);
+  }
+
   return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
-      <style>{`
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        .page-exit { animation: fadeOut 0.3s ease forwards; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        .product-card { animation: fadeUp 0.5s ease both; }
-        .product-card:hover .card-overlay { opacity: 1 !important; }
-        .product-card:hover .card-img { transform: scale(1.05); }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
-        .product-card:nth-child(1) { --card-index: 0.5; }
-        .product-card:nth-child(2) { --card-index: 1.5; }
-        .product-card:nth-child(3) { --card-index: 2.5; }
-        .product-card:nth-child(4) { --card-index: 3.5; }
-        .product-card:nth-child(5) { --card-index: 0.8; }
-        .product-card:nth-child(6) { --card-index: 1.8; }
-        .product-card:nth-child(7) { --card-index: 2.8; }
-        .product-card:nth-child(8) { --card-index: 3.8; }
-        .product-card:nth-child(9) { --card-index: 1.2; }
-        .product-card:nth-child(10) { --card-index: 2.2; }
-        .product-card:nth-child(11) { --card-index: 3.2; }
-        .product-card:nth-child(12) { --card-index: 0.3; }
-      `}</style>
-
-      <Header showCart={true} page="landing" />
-
-      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
-          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
-        </h1>
-        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
-          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
-        </p>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px 60px', gap: 24, flexWrap: 'wrap' }}>
-        {products.map((p, i) => (
-          <a
-            key={p.id}
-            href={"/catalogo/" + toSlug(p.name)}
-            className="product-card"
-            onClick={e => {
-              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-              e.preventDefault();
-              document.body.classList.add('page-exit');
-              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
-            }}
-            style={{
-              animationDelay: (i * 0.1) + "s",
-              textDecoration: 'none',
-              borderRadius: 20,
-              overflow: 'hidden',
-              position: 'relative',
-              width: typeof window !== 'undefined' && window.innerWidth < 768
-                ? (p.landing_card_width_mobile ?? 280)
-                : (p.landing_card_width_desktop ?? 320),
-              height: typeof window !== 'undefined' && window.innerWidth < 768
-                ? (p.landing_card_width_mobile ?? 280) * 1.4
-                : (p.landing_card_width_desktop ?? 320) * 1.3,
-              display: 'block',
-              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
-              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-              transform: 'translateY(0)',
-              zIndex: hovered === p.id ? 0 : 1
-            }}
-            onMouseEnter={() => setHovered(p.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{ position: 'absolute', inset: 0, background: '#1B2F5E', overflow: 'hidden' }}>
-              {p.landing_image
-                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
-                : [...Array(4)].map((_, j) => (
-                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
-                  ))
-              }
-            </div>
-
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
-
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
-                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-
-      {uiSettings['landing_show_whatsapp'] !== 'false' && (
-        <a
-          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
-          target="_blank"
-          rel="noreferrer"
-          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
-        >
-          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+    <>
+    <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
+        <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white', fillRule: 'evenodd' }}>
+            <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
           </svg>
         </a>
-      )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
-      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
-        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
-      </footer>
-    </div>
+          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
+            <div
+              onClick={() => setDarkMode(v => !v)}
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease, box-shadow 0.3s ease', flexShrink: 0 }}
+            >
+              <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                {darkMode ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </div>
+              <div style={{ position: 'absolute', left: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0.3 : 0, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div style={{ position: 'absolute', right: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0 : 0.3, transition: 'opacity 0.3s' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
+            <div ref={cartRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setCartOpen(v => !v)}
+                className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                  <line x1="3" y1="6" x2="21" y2="6"/>
+                  <path d="M16 10a4 4 0 01-8 0"/>
+                </svg>
+                {totalItems > 0 && (
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+
+              {cartOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
+                  <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
+                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
+                  </div>
+                  <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
+                    {cartItems.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? 'rgba(27,47,94,0.45)' : 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                        Tu pedido está vacío
+                      </div>
+                    ) : (
+                      cartItems.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
+                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                            <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
+                          </div>
+                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: darkMode ? 'rgba(27,47,94,0.4)' : 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {cartItems.length > 0 && (
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                        Ver pedido completo
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
+            <div style={{ position: 'relative' }}>
+              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
+                {profile?.name || user.email?.split('@')[0]} {'▾'}
+              </button>
+              {userMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
+                  <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
+                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            uiSettings[`${page}_show_account`] !== 'false' && (
+              uiSettings['login_method'] === 'google' ? (
+                <button className="header-btn" onClick={async () => {
+                  const next = window.location.pathname + window.location.search;
+                  await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` } });
+                }} style={{ background: 'white', color: '#2d3352', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                  Ingresar
+                </button>
+              ) : (
+                <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setAuthModalOpen(true)}>
+                  Ingresar
+                </button>
+              )
+            )
+          )}
+        </div>
+      </div>
+    </header>
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={(u) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } }}
+        />
+      )}
+    </>
   );
 }
 </file>
@@ -4753,243 +4990,6 @@ const styles = {
   cartPanelBody: { flex: 1, overflowY: 'auto', padding: '12px 16px' },
   cartPanelFooter: { padding: '12px 16px', borderTop: '1.5px solid #eef0f6', flexShrink: 0 },
 };
-</file>
-
-<file path="components/Header.js">
-'use client';
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useCart } from '@/contexts/CartContext';
-import AuthModal from '@/components/AuthModal';
-
-export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(null);
-  const [uiSettings, setUiSettings] = useState({});
-  const cartRef = useRef(null);
-  const { cartItems, totalItems, removeFromCart } = useCart();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('value').eq('key', 'landing_mode').single()
-        .then(({ data }) => { if (data) setDarkMode(data.value === 'dark'); });
-    }
-    supabase.from('settings').select('*')
-      .then(({ data }) => {
-        if (data) {
-          const map = {};
-          data.forEach(s => { map[s.key] = s.value; });
-          setUiSettings(map);
-        }
-      });
-  }, []);
-
-  useEffect(() => {
-    if (darkMode === null) return;
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    localStorage.setItem('inkora_theme', darkMode ? 'dark' : 'light');
-    window.dispatchEvent(new CustomEvent('inkora_theme_change', { detail: darkMode ? 'dark' : 'light' }));
-  }, [darkMode]);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id); else setProfile(null);
-    });
-    function handleAuthSuccess() {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (u) loadProfile(u.id);
-      });
-    }
-    window.addEventListener('inkora_auth_success', handleAuthSuccess);
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('inkora_auth_success', handleAuthSuccess);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (cartRef.current && !cartRef.current.contains(e.target)) {
-        setCartOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    setProfile(data || null);
-  }
-
-  return (
-    <>
-    <header style={{ background: '#1B2F5E', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 16px rgba(27,47,94,0.25)', transform: headerVisible ? 'translateY(0)' : 'translateY(-100%)', transition: 'transform 0.3s ease' }}>
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px' }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white', fillRule: 'evenodd' }}>
-            <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
-          </svg>
-        </a>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-
-          {darkMode !== null && uiSettings[`${page}_show_theme`] !== 'false' && (
-            <div
-              onClick={() => setDarkMode(v => !v)}
-              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-              className="header-btn" style={{ width: 64, height: 32, borderRadius: 16, background: darkMode ? '#0f1e3d' : 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.2)', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', transition: 'background 0.3s ease, box-shadow 0.3s ease', flexShrink: 0 }}
-            >
-              <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: '#2D6BE4', top: 2, left: darkMode ? 'calc(100% - 28px)' : 2, transition: 'left 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-                {darkMode ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                    <circle cx="12" cy="12" r="5"/>
-                    <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                )}
-              </div>
-              <div style={{ position: 'absolute', left: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0.3 : 0, transition: 'opacity 0.3s' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
-                  <circle cx="12" cy="12" r="5"/>
-                  <line x1="12" y1="1" x2="12" y2="3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="12" y1="21" x2="12" y2="23" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="1" y1="12" x2="3" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="21" y1="12" x2="23" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <div style={{ position: 'absolute', right: 7, display: 'flex', alignItems: 'center', opacity: darkMode ? 0 : 0.3, transition: 'opacity 0.3s' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-              </div>
-            </div>
-          )}
-
-          {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
-            <div ref={cartRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setCartOpen(v => !v)}
-                className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
-                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                  <line x1="3" y1="6" x2="21" y2="6"/>
-                  <path d="M16 10a4 4 0 01-8 0"/>
-                </svg>
-                {totalItems > 0 && (
-                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {totalItems}
-                  </span>
-                )}
-              </button>
-
-              {cartOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: darkMode ? 'rgba(240,244,255,0.95)' : 'rgba(27,47,94,0.92)', backdropFilter: 'blur(16px)', borderRadius: 14, border: darkMode ? '1.5px solid rgba(27,47,94,0.12)' : '1.5px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 300, animation: 'cartDropIn 0.2s ease' }}>
-                  <div style={{ padding: '14px 16px', borderBottom: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: darkMode ? '#1B2F5E' : 'white', fontWeight: 700, fontSize: 14 }}>Tu Pedido</span>
-                    <span style={{ background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
-                  </div>
-                  <div style={{ maxHeight: 280, overflowY: 'auto', padding: '8px 0' }}>
-                    {cartItems.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? 'rgba(27,47,94,0.45)' : 'rgba(255,255,255,0.45)', fontSize: 13 }}>
-                        Tu pedido está vacío
-                      </div>
-                    ) : (
-                      cartItems.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
-                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                            <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>
-                          </div>
-                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: darkMode ? 'rgba(27,47,94,0.4)' : 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>x</button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {cartItems.length > 0 && (
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
-                        Ver pedido completo
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {uiSettings[`${page}_show_account`] !== 'false' && user ? (
-            <div style={{ position: 'relative' }}>
-              <button className="header-btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setUserMenuOpen(v => !v)}>
-                {profile?.name || user.email?.split('@')[0]} {'▾'}
-              </button>
-              {userMenuOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
-                  <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
-                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
-                </div>
-              )}
-            </div>
-          ) : (
-            uiSettings[`${page}_show_account`] !== 'false' && (
-              uiSettings['login_method'] === 'google' ? (
-                <button className="header-btn" onClick={async () => {
-                  const next = window.location.pathname + window.location.search;
-                  await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` } });
-                }} style={{ background: 'white', color: '#2d3352', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                  Ingresar
-                </button>
-              ) : (
-                <button className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }} onClick={() => setAuthModalOpen(true)}>
-                  Ingresar
-                </button>
-              )
-            )
-          )}
-        </div>
-      </div>
-    </header>
-      {authModalOpen && (
-        <AuthModal
-          onClose={() => setAuthModalOpen(false)}
-          onSuccess={(u) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } }}
-        />
-      )}
-    </>
-  );
-}
 </file>
 
 </files>

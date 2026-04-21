@@ -301,7 +301,10 @@ export default function Home() {
   const cardWidth = isMobile
     ? (activeProduct?.card_width_mobile ?? 160)
     : (activeProduct?.card_width_desktop ?? 180);
-  const gridCols = `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`;
+  const sidebarWidth = isMobile ? 0 : (sidebarCollapsed ? 48 : 388);
+  const availableWidth = width - sidebarWidth - (isMobile ? 32 : 48);
+  const colCount = Math.max(1, Math.floor(availableWidth / cardWidth));
+  const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design) {
@@ -468,7 +471,7 @@ export default function Home() {
           </div>
 
           {!isMobile && (
-            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, marginRight: 364, transition:'top 0.3s ease'}}>
+            <div style={{position:'sticky', top: headerVisible ? 64 : 0, zIndex:90, marginBottom:16, transition:'top 0.3s ease'}}>
               <div style={{...s.sidebarSearchBox, position:'relative', top:'auto', right:'auto', width:'100%', boxSizing:'border-box'}}>
                 <span style={s.searchIcon}><SearchIconWhite /></span>
                 <input
@@ -880,7 +883,7 @@ const styles = {
   catalogHeader: { marginBottom: 16 },
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
-  productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
+  productTabs: { display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' },
   productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
   productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
