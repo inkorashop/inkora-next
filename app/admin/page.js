@@ -1606,11 +1606,7 @@ export default function Admin() {
                   <input style={s.input} value={newSeller.name} onChange={e => setNewSeller(v => ({...v, name: e.target.value}))} placeholder="Nombre completo" />
                 </div>
                 <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
-                  <label style={s.label}>Email</label>
-                  <input style={s.input} type="email" value={newSeller.email} onChange={e => setNewSeller(v => ({...v, email: e.target.value}))} placeholder="email@ejemplo.com" />
-                </div>
-                <div style={{...s.formGroup, flex:'1 1 130px', marginBottom:0}}>
-                  <label style={s.label}>Teléfono</label>
+                  <label style={s.label}>Teléfono INKORA</label>
                   <input style={s.input} value={newSeller.phone} onChange={e => setNewSeller(v => ({...v, phone: e.target.value}))} placeholder="+54 9 ..." />
                 </div>
                 <button style={{...s.btnPrimary, opacity: newSeller.name.trim() && !savingSeller ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newSeller.name.trim() || savingSeller} onClick={addSeller}>
@@ -1621,35 +1617,49 @@ export default function Admin() {
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Vendedores ({sellers.length})</h2>
               {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavía.</p>}
-              {sellers.map(sel => (
-                <div key={sel.id} style={{...s.productRow, alignItems:'flex-start', gap:10}}>
-                  <div style={{flex:1, minWidth:0}}>
-                    <input
-                      style={{...s.tblInput, fontWeight:700, marginBottom:4}}
-                      defaultValue={sel.name}
-                      onBlur={e => updateSellerField(sel.id, 'name', e.target.value)}
-                    />
-                    <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-                      <input
-                        style={{...s.tblInput, fontSize:12}}
-                        defaultValue={sel.email || ''}
-                        placeholder="Email"
-                        onBlur={e => updateSellerField(sel.id, 'email', e.target.value)}
-                      />
-                      <input
-                        style={{...s.tblInput, fontSize:12, maxWidth:160}}
-                        defaultValue={sel.phone || ''}
-                        placeholder="Teléfono"
-                        onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div style={{display:'flex', alignItems:'center', gap:4, paddingTop:4}}>
-                    <button style={s.iconBtn} onClick={() => toggleSeller(sel.id, sel.active)}>{sel.active ? <EyeOpen /> : <EyeOff />}</button>
-                    <TrashBtn onClick={() => deleteSeller(sel.id)} />
-                  </div>
+              {sellers.length > 0 && (
+                <div style={{overflowX:'auto'}}>
+                  <table style={s.tbl}>
+                    <thead>
+                      <tr>
+                        <th style={s.th}>Nombre</th>
+                        <th style={s.th}>Teléfono INKORA</th>
+                        <th style={s.th}>Visible</th>
+                        <th style={{...s.th, width:32}}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sellers.map(sel => (
+                        <tr key={sel.id} style={{opacity: sel.active ? 1 : 0.5}}>
+                          <td style={s.td}>
+                            <input
+                              style={s.tblInput}
+                              defaultValue={sel.name}
+                              onBlur={e => updateSellerField(sel.id, 'name', e.target.value)}
+                            />
+                          </td>
+                          <td style={s.td}>
+                            <input
+                              style={{...s.tblInput, maxWidth:180}}
+                              defaultValue={sel.phone || ''}
+                              placeholder="Teléfono"
+                              onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
+                            />
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button style={s.iconBtn} onClick={() => toggleSeller(sel.id, sel.active)}>
+                              {sel.active ? <EyeOpen /> : <EyeOff />}
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <TrashBtn onClick={() => deleteSeller(sel.id)} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              )}
             </div>
           </>
         )}
