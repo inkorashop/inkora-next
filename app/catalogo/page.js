@@ -64,8 +64,6 @@ export default function Home() {
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState({});
-  const sidebarRef = useRef(null);
-  const [sidebarWidth, setSidebarWidth] = useState(388);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -188,17 +186,6 @@ export default function Home() {
       }));
     }, 160);
   }
-
-  useEffect(() => {
-    if (isMobile || !sidebarRef.current) return;
-    const measure = () => {
-      const rect = sidebarRef.current?.getBoundingClientRect();
-      if (rect) setSidebarWidth(window.innerWidth - rect.left + 24);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [isMobile, sidebarCollapsed]);
 
   useEffect(() => {
     const getScrollY = () => document.documentElement.scrollTop || document.body.scrollTop;
@@ -444,16 +431,14 @@ export default function Home() {
         flex: 1,
         width: '100%',
         minHeight: 'calc(100vh - 64px)',
-        display: isMobile ? 'block' : 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? '1fr 48px' : '1fr 364px'),
-        gap: 24,
+        gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
+        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : 388),
         paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
-        boxSizing: 'border-box',
       }}>
-        <div style={{...s.catalogArea, position: 'relative', zIndex: 99}}>
+        <div style={s.catalogArea}>
           <div style={s.catalogHeader}>
             <h1 style={{...s.h1, fontSize: isMobile ? 22 : 28}}>Catalogo</h1>
             <p style={s.subtitle}>Selecciona los diseños y arma tu pedido</p>
@@ -585,7 +570,7 @@ export default function Home() {
         </div>
 
         {!isMobile && (
-          <div style={{...s.sidebar, position: 'sticky', top: headerVisible ? 88 : 24, maxHeight: 'calc(100vh - 112px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 10, alignSelf: 'start'}}>
+          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
@@ -896,14 +881,14 @@ const styles = {
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
   productTabs: { display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', flexWrap: 'nowrap' },
-  productTab: { background: '#e8eef9', border: 'none', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
-  productTabActive: { background: '#1B2F5E', color: 'white' },
+  productTab: { background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
+  productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
   searchClear: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 14, padding: 4, lineHeight: 1, display: 'flex', alignItems: 'center', flexShrink: 0 },
   sidebarSearchBox: { width: 340, background: 'rgba(27,47,94,0.85)', borderRadius: 10, padding: '8px 14px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' },
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
-  filterBtn: { background: '#e8eef9', border: 'none', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  filterActive: { background: '#1B2F5E', color: 'white' },
+  filterBtn: { background: '#e8eef9', border: '1.5px solid #b8c8e8', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   grid: { display: 'grid', gap: 14 },
   card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
   cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
