@@ -449,15 +449,39 @@ export default function Home() {
 
           {products.length > 1 && (
             <div style={s.productTabs}>
-              {products.map(p => (
-                <button
-                  key={p.id}
-                  style={{...s.productTab, ...(activeProductId === p.id ? s.productTabActive : {})}}
-                  onClick={() => switchProduct(p.id)}
-                >
-                  {p.name}
-                </button>
-              ))}
+              {products.map(p => {
+                const isActive = activeProductId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => switchProduct(p.id)}
+                    style={{
+                      position: 'relative',
+                      width: 140,
+                      height: 56,
+                      borderRadius: 10,
+                      overflow: 'hidden',
+                      border: isActive ? '2.5px solid #2D6BE4' : '2.5px solid transparent',
+                      padding: 0,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: isActive ? '0 4px 14px rgba(45,107,228,0.35)' : '0 2px 6px rgba(27,47,94,0.12)',
+                      transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                      transition: 'all 0.18s ease',
+                      opacity: isActive ? 1 : 0.72,
+                    }}
+                  >
+                    {p.landing_image
+                      ? <img src={p.landing_image} alt={p.name} style={{position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                      : <div style={{position:'absolute', inset:0, background:'linear-gradient(135deg, #1B2F5E 0%, #2D6BE4 100%)'}} />
+                    }
+                    <div style={{position:'absolute', inset:0, background:'linear-gradient(to top, rgba(10,20,50,0.82) 0%, rgba(10,20,50,0.2) 100%)'}} />
+                    <span style={{position:'absolute', bottom:7, left:9, right:9, color:'white', fontSize:12, fontWeight:700, textAlign:'left', lineHeight:1.2, textShadow:'0 1px 4px rgba(0,0,0,0.6)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                      {p.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -909,7 +933,7 @@ const styles = {
   catalogHeader: { marginBottom: 16 },
   h1: { fontWeight: 700, color: '#1B2F5E', marginBottom: 4 },
   subtitle: { color: '#5a6380', fontSize: 14 },
-  productTabs: { display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' },
+  productTabs: { display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
   productTab: { background: 'white', border: 'none', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 },
   productTabActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
   searchIcon: { display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'none' },
