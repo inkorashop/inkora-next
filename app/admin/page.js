@@ -1585,10 +1585,23 @@ export default function Admin() {
                   <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
                     {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
-                  <select style={{...s.input, width: 160, fontSize: 13, padding: '6px 10px'}} value={u.seller_id || ''} onChange={e => updateUserSeller(u.id, e.target.value)}>
-                    <option value="">Sin vendedor</option>
-                    {sellers.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                    <button
+                      onClick={() => updateUserSeller(u.id, null)}
+                      style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
+                    >
+                      Sin vendedor
+                    </button>
+                    {sellers.filter(sel => sel.active).map(sel => (
+                      <button
+                        key={sel.id}
+                        onClick={() => updateUserSeller(u.id, sel.id)}
+                        style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
+                      >
+                        {sel.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
