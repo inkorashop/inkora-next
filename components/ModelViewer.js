@@ -65,7 +65,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         // Péndulo
         let pendulumDir = 1;
         let pendulumAngle = 0;
-        const PENDULUM_MAX = Math.PI * 0.45;
+        const amplitude = modelConfig?.pendulum_amplitude ?? 5;
+        const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
         if (mode === 'pendulum') {
           controls.autoRotate = false;
           controls.enableRotate = false;

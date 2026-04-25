@@ -1017,22 +1017,43 @@ export default function Admin() {
                                   </div>
                                 </div>
                                 {(form.model_config?.mode === 'rotate' || form.model_config?.mode === 'pendulum') && (
-                                  <div>
-                                    <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Velocidad</div>
-                                    <div style={{display:'flex', alignItems:'center', gap:8}}>
-                                      <input type="range" min="1" max="10" value={form.model_config?.speed ?? 5}
-                                        onChange={e => {
-                                          const newConfig = { ...(form.model_config || {}), speed: Number(e.target.value) };
-                                          updateProductForm(p.id, 'model_config', newConfig);
-                                        }}
-                                        onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), speed: Number(e.target.value) } })}
-                                        style={{flex:1, accentColor:'#2D6BE4'}}
-                                      />
-                                      <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:16}}>{form.model_config?.speed ?? 5}</span>
+                                  <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                                    <div>
+                                      <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Velocidad</div>
+                                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                                        <input type="range" min="1" max="10" value={form.model_config?.speed ?? 5}
+                                          onChange={e => {
+                                            const newConfig = { ...(form.model_config || {}), speed: Number(e.target.value) };
+                                            updateProductForm(p.id, 'model_config', newConfig);
+                                          }}
+                                          onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), speed: Number(e.target.value) } })}
+                                          style={{flex:1, accentColor:'#2D6BE4'}}
+                                        />
+                                        <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:16}}>{form.model_config?.speed ?? 5}</span>
+                                      </div>
+                                      <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#9aa3bc', marginTop:2}}>
+                                        <span>Lento</span><span>Rápido</span>
+                                      </div>
                                     </div>
-                                    <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#9aa3bc', marginTop:2}}>
-                                      <span>Lento</span><span>Rápido</span>
-                                    </div>
+                                    {form.model_config?.mode === 'pendulum' && (
+                                      <div>
+                                        <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Amplitud</div>
+                                        <div style={{display:'flex', alignItems:'center', gap:8}}>
+                                          <input type="range" min="1" max="10" value={form.model_config?.pendulum_amplitude ?? 5}
+                                            onChange={e => {
+                                              const newConfig = { ...(form.model_config || {}), pendulum_amplitude: Number(e.target.value) };
+                                              updateProductForm(p.id, 'model_config', newConfig);
+                                            }}
+                                            onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), pendulum_amplitude: Number(e.target.value) } })}
+                                            style={{flex:1, accentColor:'#2D6BE4'}}
+                                          />
+                                          <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:16}}>{form.model_config?.pendulum_amplitude ?? 5}</span>
+                                        </div>
+                                        <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#9aa3bc', marginTop:2}}>
+                                          <span>Frontal</span><span>Lateral</span>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                                 <button onClick={e => { e.stopPropagation(); setModelConfigPopup(null); }} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
