@@ -1296,23 +1296,20 @@ export default function Admin() {
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
-                            {entry.sizeError && <div style={s.errorMsg}>⚠ Supera el máximo de {maxSizeKb}kb</div>}
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
+                            {(entry.file || entry.modelFile) && (() => {
+                              const f = entry.modelFile || entry.file;
+                              const kb = (f.size / 1024).toFixed(0);
+                              return entry.sizeError
+                                ? <div style={s.errorMsg}>⚠ {kb}kb — supera el máximo de {maxSizeKb}kb</div>
+                                : <div style={{fontSize:11, color:'#18a36a', marginTop:3, fontWeight:600}}>✓ {kb}kb</div>;
+                            })()}
                           </div>
                           <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
                             <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                          {selectedProduct?.allow_glb && entry.modelFile && (
-                            <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600, flexShrink: 0 }}>
-                              {entry.sizeError ? `⚠ ${(entry.modelFile.size / 1024).toFixed(0)}kb` : `✓ ${(entry.modelFile.size / 1024).toFixed(0)}kb`}
-                            </span>
-                          )}
-                          {!selectedProduct?.allow_glb && entry.file && (
-                            <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600, flexShrink: 0 }}>
-                              {entry.sizeError ? `⚠ ${(entry.file.size / 1024).toFixed(0)}kb` : `✓ ${(entry.file.size / 1024).toFixed(0)}kb`}
-                            </span>
-                          )}
+                          
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
