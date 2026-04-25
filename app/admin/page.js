@@ -999,42 +999,7 @@ export default function Admin() {
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
-                                {(() => {
-                                  const productModels = designs.filter(d => d.product_id === p.id && d.model_url);
-                                  const previewUrl = popupPreviewModel ?? productModels[0]?.model_url ?? null;
-                                  return (
-                                    <>
-                                      {productModels.length > 1 && (
-                                        <div style={{marginBottom:8}}>
-                                          <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modelo de vista previa</div>
-                                          <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
-                                            {productModels.map(d => (
-                                              <button
-                                                key={d.id}
-                                                onClick={() => setPopupPreviewModel(d.model_url)}
-                                                style={{fontSize:11, fontWeight:600, borderRadius:6, padding:'3px 8px', border:'1.5px solid #dde1ef', cursor:'pointer', background: (popupPreviewModel ?? productModels[0]?.model_url) === d.model_url ? '#1B2F5E' : 'white', color: (popupPreviewModel ?? productModels[0]?.model_url) === d.model_url ? 'white' : '#5a6380'}}
-                                              >
-                                                {d.name}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                      {previewUrl ? (
-                                        <div style={{width:'100%', height:200, borderRadius:8, overflow:'hidden', border:'1.5px solid #dde1ef', marginTop:10, background:'#f0f2f8'}}>
-                                          <ModelViewer
-                                            url={previewUrl}
-                                            autoRotate={false}
-                                            hideHint={true}
-                                            modelConfig={liveModelConfig || { mode: 'static', speed: 5 }}
-                                          />
-                                        </div>
-                                      ) : (
-                                        <div style={{marginTop:10, fontSize:11, color:'#9aa3bc', fontStyle:'italic'}}>No hay modelos GLB cargados para este producto.</div>
-                                      )}
-                                    </>
-                                  );
-                                })()}
+                                
                                 <div style={{marginBottom:10}}>
                                   <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
@@ -1099,6 +1064,45 @@ export default function Admin() {
                                     )}
                                   </div>
                                 )}
+                                {(() => {
+                                  const productModels = designs.filter(d => d.product_id === p.id && d.model_url);
+                                  const previewUrl = popupPreviewModel ?? productModels[0]?.model_url ?? null;
+                                  return (
+                                    <>
+                                      {productModels.length > 0 && (
+                                        <div style={{marginTop:12, marginBottom:8}}>
+                                          {productModels.length > 1 && (
+                                            <>
+                                              <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modelo de vista previa</div>
+                                              <select
+                                                value={popupPreviewModel ?? productModels[0]?.model_url ?? ''}
+                                                onChange={e => setPopupPreviewModel(e.target.value)}
+                                                style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', marginBottom:8}}
+                                              >
+                                                {productModels.map(d => (
+                                                  <option key={d.id} value={d.model_url}>{d.name}</option>
+                                                ))}
+                                              </select>
+                                            </>
+                                          )}
+                                          {previewUrl && (
+                                            <div style={{width:'100%', height:200, borderRadius:8, overflow:'hidden', border:'1.5px solid #dde1ef', background:'#f0f2f8'}}>
+                                              <ModelViewer
+                                                url={previewUrl}
+                                                autoRotate={false}
+                                                hideHint={true}
+                                                modelConfig={liveModelConfig || { mode: 'static', speed: 5 }}
+                                              />
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      {!previewUrl && (
+                                        <div style={{marginTop:10, marginBottom:8, fontSize:11, color:'#9aa3bc', fontStyle:'italic'}}>No hay modelos GLB cargados para este producto.</div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <button onClick={e => { e.stopPropagation(); setModelConfigPopup(null); }} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
                               </div>,
                               document.body
