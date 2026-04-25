@@ -229,8 +229,12 @@ export default function Admin() {
   }, [screen]);
 
 
+  const popupJustOpenedRef = useRef(false);
   useEffect(() => {
-    function handleClickOutside() { setModelConfigPopup(null); }
+    function handleClickOutside() {
+      if (popupJustOpenedRef.current) { popupJustOpenedRef.current = false; return; }
+      setModelConfigPopup(null);
+    }
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
@@ -913,7 +917,6 @@ export default function Admin() {
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
-                      <th style={s.th}>GLB</th>
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
@@ -966,18 +969,15 @@ export default function Admin() {
                               {form.show_price ? <EyeOpen /> : <EyeOff />}
                             </button>
                           </td>
-                          <td style={{...s.td, textAlign:'center'}}>
-                            <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4}}>
+                          <td style={{...s.td, textAlign:'center', position:'relative'}}>
+                            <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4, flexWrap:'nowrap'}}>
                               <div
                                 onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); if (p.id === selectedProductId) setPendingFiles([]); }}
                                 style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                                title="GLB"
                               >
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
-                            </div>
-                          </td>
-                          <td style={{...s.td, textAlign:'center'}}>
-                            <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4}}>
                               <div
                                 onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
                                 style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
@@ -985,7 +985,7 @@ export default function Admin() {
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
                               <button
-                                onClick={e => { e.stopPropagation(); form.allow_3d && setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); }}
+                                onClick={e => { e.stopPropagation(); if (form.allow_3d) { popupJustOpenedRef.current = true; setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); } }}
                                 style={{background:'none', border:'none', cursor: form.allow_3d ? 'pointer' : 'default', padding:2, borderRadius:4, display:'flex', alignItems:'center'}}
                                 title={form.allow_3d ? 'Configurar 3D' : '3D deshabilitado'}
                               >
@@ -1040,7 +1040,7 @@ export default function Admin() {
                                     </div>
                                   </div>
                                 )}
-                                <button onClick={() => setModelConfigPopup(null)} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
+                                <button onClick={e => { e.stopPropagation(); setModelConfigPopup(null); }} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
                               </div>
                             )}
                           </td>
