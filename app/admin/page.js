@@ -948,7 +948,7 @@ export default function Admin() {
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
                             <div
-                              onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); }}
+                              onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); if (p.id === selectedProductId) setPendingFiles([]); }}
                               style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                             >
                               <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
@@ -1260,7 +1260,7 @@ export default function Admin() {
                   ))}
                 </div>
               </div>
-              {selectedProductId && (
+              {selectedProductId && !selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
                   <label style={s.label}>Imágenes (máx. {maxSizeKb}kb c/u)</label>
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />

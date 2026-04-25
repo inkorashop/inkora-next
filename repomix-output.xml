@@ -624,77 +624,6 @@ export default function ModelViewer({ url, autoRotate = false }) {
 - "Sin localidad" es una localidad real en la tabla localities
 </file>
 
-<file path="contexts/CartContext.js">
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const CartContext = createContext(null);
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('inkora_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('inkora_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  function addToCart(design, product) {
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-      },
-    }));
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
-  function clearCart() {
-    setCart({});
-  }
-
-  function setCartItem(id, qty) {
-    setCart(prev => {
-      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...prev[id], qty } };
-    });
-  }
-
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  return (
-    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  return useContext(CartContext);
-}
-</file>
-
 <file path="jsconfig.json">
 {
   "compilerOptions": {
@@ -918,127 +847,6 @@ AS $$
 $$;
 </file>
 
-<file path="app/api/send-email/route.js">
-import { NextResponse } from 'next/server';
-
-function escapeCSV(value) {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-export async function POST(request) {
-  try {
-    const { orderCode, form, cartItems, total, notes, sellerName, sendConfirmation } = await request.json();
-    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-
-    const itemsHtml = cartItems
-      .map((i, idx) => `<tr><td style="padding:4px 8px;text-align:center">${idx + 1}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-      .join('');
-
-    const html = `
-      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
-      <p><strong>Código:</strong> ${orderCode}</p>
-      <p><strong>Cliente:</strong> ${form.name}</p>
-      <p><strong>Teléfono:</strong> ${form.phone}</p>
-      <p><strong>Email:</strong> ${form.email}</p>
-      ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
-      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">#</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-        <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-      </table>
-    `;
-
-    // CSV — una fila por item
-    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
-    const csvRows = cartItems.map((item, idx) => [
-      orderCode,
-      form.name,
-      form.email,
-      form.phone,
-      item.name,
-      item.qty,
-      item.pricePerUnit ?? '',
-      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
-      idx === 0 ? total : '',   // total solo en la primera fila
-      idx === 0 ? (notes || '') : '',
-      idx === 0 ? fecha : '',
-    ].map(escapeCSV).join(','));
-
-    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
-    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'INKORA <onboarding@resend.dev>',
-        to: [process.env.EMAIL],
-        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
-        html,
-        attachments: [
-          {
-            filename: `pedido-${orderCode}.csv`,
-            content: csvBase64,
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: err }, { status: 500 });
-    }
-
-    // Email de confirmación al cliente
-    if (form.email && sendConfirmation !== false) {
-      const clientItemsHtml = cartItems
-        .map((i, idx) => `<tr><td style="padding:4px 8px;text-align:center">${idx + 1}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-        .join('');
-
-      const clientHtml = `
-        <h2 style="color:#1B2F5E">¡Recibimos tu pedido!</h2>
-        <p>Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
-        <p><strong>Código de pedido:</strong> ${orderCode}</p>
-        ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">#</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-          <tbody>${clientItemsHtml}</tbody>
-          <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-        </table>
-        <p style="margin-top:16px;color:#5a6380;font-size:13px">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
-      `;
-
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'INKORA <onboarding@resend.dev>',
-          to: [form.email],
-          subject: `Tu pedido ${orderCode} — INKORA`,
-          html: clientHtml,
-        }),
-      });
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-</file>
-
 <file path="app/auth/reset-password/page.js">
 'use client';
 import { useState, useEffect } from 'react';
@@ -1123,6 +931,78 @@ export default function ResetPassword() {
 }
 </file>
 
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('inkora_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  function addToCart(design, product) {
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+        productName: product?.name ?? '',
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
+}
+</file>
+
 <file path="lib/auth.js">
 import { supabase } from '@/lib/supabase';
 
@@ -1161,6 +1041,127 @@ export async function getUserProfile(userId) {
     .eq('id', userId)
     .single();
   return data;
+}
+</file>
+
+<file path="app/api/send-email/route.js">
+import { NextResponse } from 'next/server';
+
+function escapeCSV(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export async function POST(request) {
+  try {
+    const { orderCode, form, cartItems, total, notes, sellerName, sendConfirmation } = await request.json();
+    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+
+    const itemsHtml = cartItems
+      .map((i, idx) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+      .join('');
+
+    const html = `
+      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
+      <p><strong>Código:</strong> ${orderCode}</p>
+      <p><strong>Cliente:</strong> ${form.name}</p>
+      <p><strong>Teléfono:</strong> ${form.phone}</p>
+      <p><strong>Email:</strong> ${form.email}</p>
+      ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
+      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
+        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+        <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
+      </table>
+    `;
+
+    // CSV — una fila por item
+    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
+    const csvRows = cartItems.map((item, idx) => [
+      orderCode,
+      form.name,
+      form.email,
+      form.phone,
+      item.name,
+      item.qty,
+      item.pricePerUnit ?? '',
+      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
+      idx === 0 ? total : '',   // total solo en la primera fila
+      idx === 0 ? (notes || '') : '',
+      idx === 0 ? fecha : '',
+    ].map(escapeCSV).join(','));
+
+    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
+    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'INKORA <onboarding@resend.dev>',
+        to: [process.env.EMAIL],
+        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
+        html,
+        attachments: [
+          {
+            filename: `pedido-${orderCode}.csv`,
+            content: csvBase64,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json({ error: err }, { status: 500 });
+    }
+
+    // Email de confirmación al cliente
+    if (form.email && sendConfirmation !== false) {
+      const clientItemsHtml = cartItems
+        .map((i) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+        .join('');
+
+      const clientHtml = `
+        <h2 style="color:#1B2F5E">¡Recibimos tu pedido!</h2>
+        <p>Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
+        <p><strong>Código de pedido:</strong> ${orderCode}</p>
+        ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
+        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
+          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+          <tbody>${clientItemsHtml}</tbody>
+          <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
+        </table>
+        <p style="margin-top:16px;color:#5a6380;font-size:13px">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
+      `;
+
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'INKORA <onboarding@resend.dev>',
+          to: [form.email],
+          subject: `Tu pedido ${orderCode} — INKORA`,
+          html: clientHtml,
+        }),
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }
 </file>
 
@@ -2785,7 +2786,7 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems, total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
+        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) ?? i.pricePerUnit })), total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
       });
 
       setConfirmedOrder({ items: cartItems, total, form });
@@ -3050,7 +3051,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   <span style={s.sidebarTitle}>Tu Pedido</span>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     {cartItems.length > 0 && <button onClick={() => setClearConfirmOpen(true)} style={{background:'rgba(255,255,255,0.15)', border:'none', color:'rgba(255,255,255,0.8)', borderRadius:6, padding:'3px 8px', fontSize:11, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>Limpiar</button>}
-                    <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}</span>
+                    <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'producto' : 'productos'}</span>
                   </div>
                 </div>
                 <div style={s.sidebarBody}>
@@ -3197,7 +3198,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           <div style={s.mobileBar}>
             <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' item' + (totalItems !== 1 ? 's' : '')}</span>
+              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
               <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
             </button>
             <button
