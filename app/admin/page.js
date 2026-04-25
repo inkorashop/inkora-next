@@ -1309,7 +1309,7 @@ export default function Admin() {
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <ModelViewer url={entry.modelPreview} autoRotate={false} />
+                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} />
                                 </div>
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }

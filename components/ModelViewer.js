@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url, autoRotate = false }) {
+export default function ModelViewer({ url, autoRotate = false, hideHint = false }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -194,7 +194,7 @@ export default function ModelViewer({ url, autoRotate = false }) {
         </div>
       )}
 
-      {status === 'ready' && (
+      {status === 'ready' && !hideHint && (
         <div style={{
           position: 'absolute', bottom: 5, right: 8,
           fontSize: 10, color: 'rgba(0,0,0,0.3)',
