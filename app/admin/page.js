@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import ModelViewer from '@/components/ModelViewer';
 
 const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
@@ -525,7 +526,11 @@ export default function Admin() {
   }, []);
 
   function removePending(index) {
-    setPendingFiles(prev => { URL.revokeObjectURL(prev[index].preview); return prev.filter((_, i) => i !== index); });
+    setPendingFiles(prev => {
+      URL.revokeObjectURL(prev[index].preview);
+      URL.revokeObjectURL(prev[index].modelPreview);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   async function addDesigns() {
@@ -1274,7 +1279,7 @@ export default function Admin() {
                     const files = Array.from(e.target.files);
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
-                      file: null, preview: null, name: file.name.replace(/\.[^.]+$/, ''),
+                      file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
                       category: 'Sin categoría', nameExists: false,
                       sizeError: file.size > maxSizeKb * 1024, modelFile: file,
                     }));
@@ -1302,10 +1307,9 @@ export default function Admin() {
                         <div key={i} style={s.fileRow}>
                           {entry.preview
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
-                            : entry.modelFile
-                              ? <div style={{...s.fileThumb, background: entry.sizeError ? '#fee2e2' : '#e8eef9', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <span style={{fontSize:9, fontWeight:800, color: entry.sizeError ? '#dc2626' : '#2D6BE4', letterSpacing:0.5}}>GLB</span>
-                                  <span style={{fontSize:8, color: entry.sizeError ? '#dc2626' : '#9aa3bc', fontWeight:600}}>{(entry.modelFile.size/1024).toFixed(0)}kb</span>
+                            : entry.modelPreview
+                              ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
+                                  <ModelViewer url={entry.modelPreview} autoRotate={false} />
                                 </div>
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }
