@@ -294,6 +294,7 @@ export default function Admin() {
     await supabase.from('products').update(data).eq('id', id);
     setSavedProductId(id);
     setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
+    loadProducts();
   }
 
   function handleProductKeyDown(e, rowIdx, colIdx) {
