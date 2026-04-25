@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 
@@ -143,6 +144,8 @@ export default function Admin() {
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
   const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
   const [popupPreviewModel, setPopupPreviewModel] = useState(null); // model_url seleccionado
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+  const [liveModelConfig, setLiveModelConfig] = useState(null);
   const cellRefs = useRef([]);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
@@ -981,7 +984,7 @@ export default function Admin() {
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
                               <button
-                                onClick={e => { e.stopPropagation(); if (form.allow_3d) { popupJustOpenedRef.current = true; setPopupPreviewModel(null); setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); } }}
+                                onClick={e => { e.stopPropagation(); if (form.allow_3d) { popupJustOpenedRef.current = true; setPopupPreviewModel(null); setLiveModelConfig(form.model_config || { mode: 'static', speed: 5 }); const rect = e.currentTarget.getBoundingClientRect(); setPopupPos({ top: rect.bottom + window.scrollY + 6, left: Math.min(rect.left + window.scrollX, window.innerWidth - 360) }); setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); } }}
                                 style={{background:'none', border:'none', cursor: form.allow_3d ? 'pointer' : 'default', padding:2, borderRadius:4, display:'flex', alignItems:'center'}}
                                 title={form.allow_3d ? 'Configurar 3D' : '3D deshabilitado'}
                               >
@@ -991,8 +994,8 @@ export default function Admin() {
                                 </svg>
                               </button>
                             </div>
-                            {modelConfigPopup === p.id && (
-                              <div data-model-popup style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:340, marginTop:6, textAlign:'left'}}
+                            {modelConfigPopup === p.id && createPortal(
+                              <div data-model-popup style={{position:'absolute', zIndex:9999, top: popupPos.top, left: popupPos.left, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', width:340, textAlign:'left'}}
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
@@ -1001,18 +1004,8 @@ export default function Admin() {
                                   const previewUrl = popupPreviewModel ?? productModels[0]?.model_url ?? null;
                                   return (
                                     <>
-                                      {previewUrl && (
-                                        <div style={{width:'100%', height:180, borderRadius:8, overflow:'hidden', border:'1.5px solid #dde1ef', marginBottom:10, background:'#f0f2f8'}}>
-                                          <ModelViewer
-                                            url={previewUrl}
-                                            autoRotate={false}
-                                            hideHint={true}
-                                            modelConfig={form.model_config || { mode: 'static', speed: 5 }}
-                                          />
-                                        </div>
-                                      )}
                                       {productModels.length > 1 && (
-                                        <div style={{marginBottom:10}}>
+                                        <div style={{marginBottom:8}}>
                                           <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modelo de vista previa</div>
                                           <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
                                             {productModels.map(d => (
@@ -1027,8 +1020,17 @@ export default function Admin() {
                                           </div>
                                         </div>
                                       )}
-                                      {!previewUrl && (
-                                        <div style={{marginBottom:10, fontSize:11, color:'#9aa3bc', fontStyle:'italic'}}>No hay modelos GLB cargados para este producto.</div>
+                                      {previewUrl ? (
+                                        <div style={{width:'100%', height:200, borderRadius:8, overflow:'hidden', border:'1.5px solid #dde1ef', marginTop:10, background:'#f0f2f8'}}>
+                                          <ModelViewer
+                                            url={previewUrl}
+                                            autoRotate={false}
+                                            hideHint={true}
+                                            modelConfig={liveModelConfig || { mode: 'static', speed: 5 }}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div style={{marginTop:10, fontSize:11, color:'#9aa3bc', fontStyle:'italic'}}>No hay modelos GLB cargados para este producto.</div>
                                       )}
                                     </>
                                   );
@@ -1042,6 +1044,7 @@ export default function Admin() {
                                           onChange={() => {
                                             const newConfig = { ...(form.model_config || {}), mode: opt.val };
                                             updateProductForm(p.id, 'model_config', newConfig);
+                                            setLiveModelConfig(newConfig);
                                             saveProduct(p.id, { model_config: newConfig });
                                           }}
                                           style={{accentColor:'#2D6BE4'}}
@@ -1063,6 +1066,7 @@ export default function Admin() {
                                           onChange={e => {
                                             const newConfig = { ...(form.model_config || {}), speed: Number(e.target.value) };
                                             updateProductForm(p.id, 'model_config', newConfig);
+                                            setLiveModelConfig(newConfig);
                                           }}
                                           onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), speed: Number(e.target.value) } })}
                                           style={{flex:1, accentColor:'#2D6BE4'}}
@@ -1081,6 +1085,7 @@ export default function Admin() {
                                             onChange={e => {
                                               const newConfig = { ...(form.model_config || {}), pendulum_amplitude: Number(e.target.value) };
                                               updateProductForm(p.id, 'model_config', newConfig);
+                                              setLiveModelConfig(newConfig);
                                             }}
                                             onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), pendulum_amplitude: Number(e.target.value) } })}
                                             style={{flex:1, accentColor:'#2D6BE4'}}
@@ -1095,7 +1100,8 @@ export default function Admin() {
                                   </div>
                                 )}
                                 <button onClick={e => { e.stopPropagation(); setModelConfigPopup(null); }} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
-                              </div>
+                              </div>,
+                              document.body
                             )}
                           </td>
                           <td style={s.td}>

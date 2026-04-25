@@ -175,7 +175,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [url]);
+  }, [url, modelConfig?.mode, modelConfig?.speed, modelConfig?.pendulum_amplitude]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
