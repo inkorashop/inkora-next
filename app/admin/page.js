@@ -879,7 +879,7 @@ export default function Admin() {
                 onDragStart={undefined}
                 onDragOver={undefined}
                 onDragEnd={undefined}
-                onClick={() => { setActiveTab(id); window.history.pushState(null, '', `/admin/${TAB_SLUGS[id]}`); }}
+                onClick={() => { setActiveTab(id); window.history.replaceState(null, '', `/admin/${TAB_SLUGS[id]}`); }}
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
@@ -914,7 +914,6 @@ export default function Admin() {
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
-                      <th style={s.th}>Rotación</th>
                       <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
                       <th style={{...s.th, width: 32}}></th>
@@ -967,11 +966,13 @@ export default function Admin() {
                             </button>
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
-                            <div
-                              onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); if (p.id === selectedProductId) setPendingFiles([]); }}
-                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                            >
-                              <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4}}>
+                              <div
+                                onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); if (p.id === selectedProductId) setPendingFiles([]); }}
+                                style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                              >
+                                <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                              </div>
                             </div>
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
@@ -983,7 +984,7 @@ export default function Admin() {
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
                               <button
-                                onClick={() => form.allow_3d && setModelConfigPopup(modelConfigPopup === p.id ? null : p.id)}
+                                onClick={e => { e.stopPropagation(); form.allow_3d && setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); }}
                                 style={{background:'none', border:'none', cursor: form.allow_3d ? 'pointer' : 'default', padding:2, borderRadius:4, display:'flex', alignItems:'center'}}
                                 title={form.allow_3d ? 'Configurar 3D' : '3D deshabilitado'}
                               >
@@ -1474,7 +1475,10 @@ export default function Admin() {
                   }}
                 >
                   <div style={s.designInfo}>
-                    {d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />}
+                    {d.model_url
+                      ? <div style={{...s.designThumb, overflow:'hidden'}}><ModelViewer url={d.model_url} autoRotate={false} hideHint={true} /></div>
+                      : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
+                    }
                     <div>
                       <input
                         style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
