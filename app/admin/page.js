@@ -913,6 +913,7 @@ export default function Admin() {
                       <th style={s.th}>Proporción</th>
                       <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
+                      <th style={s.th}>GLB</th>
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
