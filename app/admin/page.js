@@ -1277,7 +1277,7 @@ export default function Admin() {
                     setPendingFiles(prev => {
                       const existing = prev.find(p => !p.file && p.modelFile?.name === file.name);
                       if (existing) return prev;
-                      return [...prev, { file: null, preview: null, name, category: 'Sin categoría', nameExists: false, sizeError: false, modelFile: file }];
+                      return [...prev, { file: null, preview: null, name, category: 'Sin categoría', nameExists: false, sizeError: file.size > maxSizeKb * 1024, modelFile: file }];
                     });
                     e.target.value = '';
                   }} />
@@ -1296,28 +1296,23 @@ export default function Admin() {
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
-                            {entry.sizeError && <div style={s.errorMsg}>⚠ La imagen supera {maxSizeKb}kb</div>}
+                            {entry.sizeError && <div style={s.errorMsg}>⚠ El archivo supera {maxSizeKb}kb</div>}
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                           </div>
                           <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
                             <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                          {selectedProduct?.allow_glb && <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, minWidth: 110 }}>
-                            <label style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>3D (GLB)</label>
-                            <input
-                              type="file"
-                              accept=".glb"
-                              style={{ fontSize: 11 }}
-                              onChange={e => {
-                                const file = e.target.files[0] || null;
-                                setPendingFiles(prev => { const next = [...prev]; next[i] = { ...next[i], modelFile: file }; return next; });
-                              }}
-                            />
-                            {entry.modelFile && (
-                              <span style={{ fontSize: 10, color: '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
-                            )}
-                          </div>}
+                          {selectedProduct?.allow_glb && entry.modelFile && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
+                            </div>
+                          )}
+                          {!selectedProduct?.allow_glb && entry.file && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600 }}>✓ {(entry.file.size / 1024).toFixed(0)}kb</span>
+                            </div>
+                          )}
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
