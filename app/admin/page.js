@@ -108,7 +108,14 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('products');
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion' };
+  const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
+  const initialTab = () => {
+    if (typeof window === 'undefined') return 'products';
+    const slug = window.location.pathname.split('/admin/')[1] || '';
+    return SLUG_TABS[slug] || 'products';
+  };
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [tabOrder, setTabOrder] = useState(() => {
     try {
       const saved = localStorage.getItem('admin_tab_order');
@@ -865,7 +872,7 @@ export default function Admin() {
                 onDragStart={undefined}
                 onDragOver={undefined}
                 onDragEnd={undefined}
-                onClick={() => setActiveTab(id)}
+                onClick={() => { setActiveTab(id); window.history.pushState(null, '', `/admin/${TAB_SLUGS[id]}`); }}
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
