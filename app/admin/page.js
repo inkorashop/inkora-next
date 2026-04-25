@@ -142,6 +142,7 @@ export default function Admin() {
   const [savedProductId, setSavedProductId] = useState(null);
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
   const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
+  const [popupPreviewModel, setPopupPreviewModel] = useState(null); // model_url seleccionado
   const cellRefs = useRef([]);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
@@ -980,7 +981,7 @@ export default function Admin() {
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
                               <button
-                                onClick={e => { e.stopPropagation(); if (form.allow_3d) { popupJustOpenedRef.current = true; setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); } }}
+                                onClick={e => { e.stopPropagation(); if (form.allow_3d) { popupJustOpenedRef.current = true; setPopupPreviewModel(null); setModelConfigPopup(modelConfigPopup === p.id ? null : p.id); } }}
                                 style={{background:'none', border:'none', cursor: form.allow_3d ? 'pointer' : 'default', padding:2, borderRadius:4, display:'flex', alignItems:'center'}}
                                 title={form.allow_3d ? 'Configurar 3D' : '3D deshabilitado'}
                               >
@@ -991,10 +992,47 @@ export default function Admin() {
                               </button>
                             </div>
                             {modelConfigPopup === p.id && (
-                              <div data-model-popup style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:220, marginTop:6, textAlign:'left'}}
+                              <div data-model-popup style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:340, marginTop:6, textAlign:'left'}}
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
+                                {(() => {
+                                  const productModels = designs.filter(d => d.product_id === p.id && d.model_url);
+                                  const previewUrl = popupPreviewModel ?? productModels[0]?.model_url ?? null;
+                                  return (
+                                    <>
+                                      {previewUrl && (
+                                        <div style={{width:'100%', height:180, borderRadius:8, overflow:'hidden', border:'1.5px solid #dde1ef', marginBottom:10, background:'#f0f2f8'}}>
+                                          <ModelViewer
+                                            url={previewUrl}
+                                            autoRotate={false}
+                                            hideHint={true}
+                                            modelConfig={form.model_config || { mode: 'static', speed: 5 }}
+                                          />
+                                        </div>
+                                      )}
+                                      {productModels.length > 1 && (
+                                        <div style={{marginBottom:10}}>
+                                          <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modelo de vista previa</div>
+                                          <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                                            {productModels.map(d => (
+                                              <button
+                                                key={d.id}
+                                                onClick={() => setPopupPreviewModel(d.model_url)}
+                                                style={{fontSize:11, fontWeight:600, borderRadius:6, padding:'3px 8px', border:'1.5px solid #dde1ef', cursor:'pointer', background: (popupPreviewModel ?? productModels[0]?.model_url) === d.model_url ? '#1B2F5E' : 'white', color: (popupPreviewModel ?? productModels[0]?.model_url) === d.model_url ? 'white' : '#5a6380'}}
+                                              >
+                                                {d.name}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {!previewUrl && (
+                                        <div style={{marginBottom:10, fontSize:11, color:'#9aa3bc', fontStyle:'italic'}}>No hay modelos GLB cargados para este producto.</div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <div style={{marginBottom:10}}>
                                   <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
