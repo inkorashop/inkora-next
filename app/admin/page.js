@@ -1269,7 +1269,7 @@ export default function Admin() {
               )}
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>O subir solo GLB (sin imagen)</label>
+                  <label style={s.label}>GLB (máx. {maxSizeKb}kb c/u)</label>
                   <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => {
                     const file = e.target.files[0];
                     if (!file) return;
