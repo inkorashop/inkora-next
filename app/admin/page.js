@@ -231,8 +231,9 @@ export default function Admin() {
 
   const popupJustOpenedRef = useRef(false);
   useEffect(() => {
-    function handleClickOutside() {
+    function handleClickOutside(e) {
       if (popupJustOpenedRef.current) { popupJustOpenedRef.current = false; return; }
+      if (e.target.closest('[data-model-popup]')) return;
       setModelConfigPopup(null);
     }
     document.addEventListener('click', handleClickOutside);
@@ -972,15 +973,9 @@ export default function Admin() {
                           <td style={{...s.td, textAlign:'center', position:'relative'}}>
                             <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4, flexWrap:'nowrap'}}>
                               <div
-                                onClick={() => { const newVal = !form.allow_glb; updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_glb: newVal }); if (p.id === selectedProductId) setPendingFiles([]); }}
-                                style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                                title="GLB"
-                              >
-                                <div style={{ position: 'absolute', top: 2, left: form.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                              </div>
-                              <div
-                                onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
+                                onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); updateProductForm(p.id, 'allow_glb', newVal); saveProduct(p.id, { allow_3d: newVal, allow_glb: newVal }); if (!newVal && p.id === selectedProductId) setPendingFiles([]); }}
                                 style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                                title="3D / GLB"
                               >
                                 <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                               </div>
@@ -996,7 +991,7 @@ export default function Admin() {
                               </button>
                             </div>
                             {modelConfigPopup === p.id && (
-                              <div style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:220, marginTop:6, textAlign:'left'}}
+                              <div data-model-popup style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:220, marginTop:6, textAlign:'left'}}
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>

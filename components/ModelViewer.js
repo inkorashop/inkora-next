@@ -130,8 +130,9 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
             if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
             const dist = controls.getDistance ? controls.getDistance() : camera.position.length();
-            camera.position.x = Math.sin(pendulumAngle) * dist;
-            camera.position.z = Math.cos(pendulumAngle) * dist;
+            const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+            camera.position.x = Math.sin(easedAngle) * dist;
+            camera.position.z = Math.cos(easedAngle) * dist;
             camera.lookAt(0, 0, 0);
           }
           controls.update();
