@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url, autoRotate = false, hideHint = false }) {
+export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -57,8 +57,19 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = false;
-        controls.autoRotate = autoRotate === true;
-        controls.autoRotateSpeed = 10;
+        const mode = modelConfig?.mode || (autoRotate ? 'rotate' : 'static');
+        const speed = modelConfig?.speed ?? 5;
+        controls.autoRotate = mode === 'rotate';
+        controls.autoRotateSpeed = speed * 2;
+
+        // Péndulo
+        let pendulumDir = 1;
+        let pendulumAngle = 0;
+        const PENDULUM_MAX = Math.PI * 0.45;
+        if (mode === 'pendulum') {
+          controls.autoRotate = false;
+          controls.enableRotate = false;
+        }
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
@@ -114,6 +125,15 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false 
         let animId;
         const animate = () => {
           animId = requestAnimationFrame(animate);
+          if (mode === 'pendulum') {
+            pendulumAngle += pendulumDir * (speed * 0.002);
+            if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
+            if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
+            const dist = controls.getDistance ? controls.getDistance() : camera.position.length();
+            camera.position.x = Math.sin(pendulumAngle) * dist;
+            camera.position.z = Math.cos(pendulumAngle) * dist;
+            camera.lookAt(0, 0, 0);
+          }
           controls.update();
           renderer.render(scene, camera);
         };

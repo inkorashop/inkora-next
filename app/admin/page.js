@@ -141,6 +141,7 @@ export default function Admin() {
   const [productForms, setProductForms] = useState({});
   const [savedProductId, setSavedProductId] = useState(null);
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
+  const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
   const cellRefs = useRef([]);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
@@ -229,6 +230,12 @@ export default function Admin() {
 
 
   useEffect(() => {
+    function handleClickOutside() { setModelConfigPopup(null); }
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     function handleKeyDown(e) {
       if (e.key !== 'Escape') return;
       const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
@@ -259,7 +266,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '' };
+        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 } };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -968,12 +975,72 @@ export default function Admin() {
                             </div>
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
-                            <div
-                              onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
-                              style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                            >
-                              <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4}}>
+                              <div
+                                onClick={() => { const newVal = !form.allow_3d; updateProductForm(p.id, 'allow_3d', newVal); saveProduct(p.id, { allow_3d: newVal }); }}
+                                style={{ width: 36, height: 20, borderRadius: 10, background: form.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                              >
+                                <div style={{ position: 'absolute', top: 2, left: form.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                              </div>
+                              <button
+                                onClick={() => form.allow_3d && setModelConfigPopup(modelConfigPopup === p.id ? null : p.id)}
+                                style={{background:'none', border:'none', cursor: form.allow_3d ? 'pointer' : 'default', padding:2, borderRadius:4, display:'flex', alignItems:'center'}}
+                                title={form.allow_3d ? 'Configurar 3D' : '3D deshabilitado'}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={form.allow_3d ? '#2D6BE4' : '#c4c9d9'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="3"/>
+                                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                              </button>
                             </div>
+                            {modelConfigPopup === p.id && (
+                              <div style={{position:'absolute', zIndex:200, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', minWidth:220, marginTop:6, textAlign:'left'}}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
+                                <div style={{marginBottom:10}}>
+                                  <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
+                                  <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                                    {[{val:'static', label:'Estático', desc:'Sin movimiento'}, {val:'rotate', label:'Rotación 360°', desc:'Gira continuamente'}, {val:'pendulum', label:'Péndulo', desc:'Va y viene mostrando el frente'}].map(opt => (
+                                      <label key={opt.val} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'5px 8px', borderRadius:7, background: (form.model_config?.mode || 'static') === opt.val ? '#eef4ff' : 'transparent', border: (form.model_config?.mode || 'static') === opt.val ? '1.5px solid #2D6BE4' : '1.5px solid transparent'}}>
+                                        <input type="radio" name={`mode_${p.id}`} value={opt.val} checked={(form.model_config?.mode || 'static') === opt.val}
+                                          onChange={() => {
+                                            const newConfig = { ...(form.model_config || {}), mode: opt.val };
+                                            updateProductForm(p.id, 'model_config', newConfig);
+                                            saveProduct(p.id, { model_config: newConfig });
+                                          }}
+                                          style={{accentColor:'#2D6BE4'}}
+                                        />
+                                        <div>
+                                          <div style={{fontSize:12, fontWeight:600, color:'#2d3352'}}>{opt.label}</div>
+                                          <div style={{fontSize:10, color:'#9aa3bc'}}>{opt.desc}</div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                                {(form.model_config?.mode === 'rotate' || form.model_config?.mode === 'pendulum') && (
+                                  <div>
+                                    <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Velocidad</div>
+                                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                                      <input type="range" min="1" max="10" value={form.model_config?.speed ?? 5}
+                                        onChange={e => {
+                                          const newConfig = { ...(form.model_config || {}), speed: Number(e.target.value) };
+                                          updateProductForm(p.id, 'model_config', newConfig);
+                                        }}
+                                        onMouseUp={e => saveProduct(p.id, { model_config: { ...(form.model_config || {}), speed: Number(e.target.value) } })}
+                                        style={{flex:1, accentColor:'#2D6BE4'}}
+                                      />
+                                      <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:16}}>{form.model_config?.speed ?? 5}</span>
+                                    </div>
+                                    <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#9aa3bc', marginTop:2}}>
+                                      <span>Lento</span><span>Rápido</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <button onClick={() => setModelConfigPopup(null)} style={{marginTop:12, width:'100%', background:'#f0f2f8', border:'none', borderRadius:7, padding:'6px', fontSize:12, fontWeight:600, color:'#5a6380', cursor:'pointer'}}>Cerrar</button>
+                              </div>
+                            )}
                           </td>
                           <td style={s.td}>
                             <input ref={setRef(5)} style={{...s.tblInput, width: 70}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />

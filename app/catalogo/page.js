@@ -561,7 +561,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} />
+                        ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
