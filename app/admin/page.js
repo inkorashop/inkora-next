@@ -1270,16 +1270,24 @@ export default function Admin() {
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
                   <label style={s.label}>GLB (máx. {maxSizeKb}kb c/u)</label>
-                  <input type="file" accept=".glb" style={{...s.input, padding: 6}} onChange={e => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const name = file.name.replace(/\.[^.]+$/, '');
+                  <input type="file" accept=".glb" multiple style={{...s.input, padding: 6}} onChange={async e => {
+                    const files = Array.from(e.target.files);
+                    if (!files.length) return;
+                    const newEntries = files.map(file => ({
+                      file: null, preview: null, name: file.name.replace(/\.[^.]+$/, ''),
+                      category: 'Sin categoría', nameExists: false,
+                      sizeError: file.size > maxSizeKb * 1024, modelFile: file,
+                    }));
                     setPendingFiles(prev => {
-                      const existing = prev.find(p => !p.file && p.modelFile?.name === file.name);
-                      if (existing) return prev;
-                      return [...prev, { file: null, preview: null, name, category: 'Sin categoría', nameExists: false, sizeError: file.size > maxSizeKb * 1024, modelFile: file }];
+                      const existingNames = new Set(prev.map(p => p.modelFile?.name));
+                      return [...prev, ...newEntries.filter(e => !existingNames.has(e.modelFile.name))];
                     });
                     e.target.value = '';
+                    const { data } = await supabase.from('designs').select('name').eq('active', true);
+                    const existing = new Set((data || []).map(d => d.name.toLowerCase()));
+                    setPendingFiles(prev => prev.map(entry => ({
+                      ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+                    })));
                   }} />
                 </div>
               )}
@@ -1292,7 +1300,15 @@ export default function Admin() {
                       const hasError = entry.nameExists || dupInBatch || entry.sizeError;
                       return (
                         <div key={i} style={s.fileRow}>
-                          {entry.preview ? <img src={entry.preview} alt="" style={s.fileThumb} /> : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>GLB</div>}
+                          {entry.preview
+                            ? <img src={entry.preview} alt="" style={s.fileThumb} />
+                            : entry.modelFile
+                              ? <div style={{...s.fileThumb, background: entry.sizeError ? '#fee2e2' : '#e8eef9', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
+                                  <span style={{fontSize:9, fontWeight:800, color: entry.sizeError ? '#dc2626' : '#2D6BE4', letterSpacing:0.5}}>GLB</span>
+                                  <span style={{fontSize:8, color: entry.sizeError ? '#dc2626' : '#9aa3bc', fontWeight:600}}>{(entry.modelFile.size/1024).toFixed(0)}kb</span>
+                                </div>
+                              : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
+                          }
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
