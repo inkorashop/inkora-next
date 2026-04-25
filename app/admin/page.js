@@ -1296,7 +1296,7 @@ export default function Admin() {
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
-                            {entry.sizeError && <div style={s.errorMsg}>⚠ El archivo supera {maxSizeKb}kb</div>}
+                            {entry.sizeError && <div style={s.errorMsg}>⚠ Supera el máximo de {maxSizeKb}kb</div>}
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                           </div>
                           <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
@@ -1304,14 +1304,14 @@ export default function Admin() {
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                           {selectedProduct?.allow_glb && entry.modelFile && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
-                              <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600 }}>✓ {(entry.modelFile.size / 1024).toFixed(0)}kb</span>
-                            </div>
+                            <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600, flexShrink: 0 }}>
+                              {entry.sizeError ? `⚠ ${(entry.modelFile.size / 1024).toFixed(0)}kb` : `✓ ${(entry.modelFile.size / 1024).toFixed(0)}kb`}
+                            </span>
                           )}
                           {!selectedProduct?.allow_glb && entry.file && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
-                              <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600 }}>✓ {(entry.file.size / 1024).toFixed(0)}kb</span>
-                            </div>
+                            <span style={{ fontSize: 10, color: entry.sizeError ? '#dc2626' : '#18a36a', fontWeight: 600, flexShrink: 0 }}>
+                              {entry.sizeError ? `⚠ ${(entry.file.size / 1024).toFixed(0)}kb` : `✓ ${(entry.file.size / 1024).toFixed(0)}kb`}
+                            </span>
                           )}
                           <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
