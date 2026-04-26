@@ -19,7 +19,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
         const { ThreeMFLoader } = await import('three/examples/jsm/loaders/3MFLoader.js');
         const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
-        const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js');
 
         if (cancelled) return;
         const el = mountRef.current;
@@ -52,15 +51,21 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 10000);
 
-        // Environment map (reflejos)
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-        const envTexture = pmremGenerator.fromScene(new RoomEnvironment()).texture;
-        scene.environment = envTexture;
-        pmremGenerator.dispose();
+        // Environment map — en try/catch separado para que no rompa todo si falla
+        let envTexture = null;
+        try {
+          const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js');
+          const pmremGenerator = new THREE.PMREMGenerator(renderer);
+          pmremGenerator.compileEquirectangularShader();
+          envTexture = pmremGenerator.fromScene(new RoomEnvironment()).texture;
+          scene.environment = envTexture;
+          pmremGenerator.dispose();
+        } catch (envErr) {
+          console.warn('Environment map no disponible:', envErr);
+        }
 
         // Luces
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
         const dir = new THREE.DirectionalLight(0xffffff, 2.5);
         dir.position.set(5, 10, 7);
         dir.castShadow = true;
@@ -105,7 +110,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           });
           el.addEventListener('pointerup', () => {
             isDragging = false;
-            // Leer ángulo actual de la cámara para que el lerp arranque desde ahí sin salto
             const camAngle = Math.atan2(camera.position.x, camera.position.z);
             pendulumAngle = Math.max(-PENDULUM_MAX, Math.min(PENDULUM_MAX, camAngle));
             returnTimeout = setTimeout(() => {
@@ -130,7 +134,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
               if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-                if (child.material) {
+                if (child.material && envTexture) {
                   child.material.envMapIntensity = 0.6;
                   child.material.needsUpdate = true;
                 }
@@ -180,7 +184,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             controls.maxDistance = dist * 5;
             controls.update();
 
-            // Fijar distancia del péndulo una vez que el modelo cargó
             pendulumDist = dist;
 
             setStatus('ready');
@@ -243,7 +246,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           ro.disconnect();
           controls.dispose();
           renderer.dispose();
-          envTexture.dispose();
+          if (envTexture) envTexture.dispose();
           if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
 
