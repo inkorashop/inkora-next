@@ -58,11 +58,15 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
     fetch(url)
       .then(r => r.blob())
       .then(blob => {
-        const localUrl = URL.createObjectURL(blob);
-        setCachedUrl(localUrl);
+        const ext = url.split('?')[0].split('.').pop().toLowerCase();
+        const mimeType = ext === '3mf' ? 'application/octet-stream' : 'model/gltf-binary';
+        const namedBlob = new Blob([blob], { type: mimeType });
+        const localUrl = URL.createObjectURL(namedBlob);
+        // Guardamos la URL original para que Three.js detecte la extensión
+        setCachedUrl(url);
+        // Pre-fetch completado, el archivo ya está en caché del browser
       })
-      .catch(() => setCachedUrl(url));
-    return () => { if (cachedUrl) URL.revokeObjectURL(cachedUrl); };
+      .catch(() => {});
   }, [visible, url]);
 
   const showModel = displayMode === 'hover' ? isHovered : visible;
