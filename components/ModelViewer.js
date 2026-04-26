@@ -73,13 +73,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let pendulumAngle = 0;
         let pendulumDir = 1;
         let isDragging = false;
-        let isReturning = false;
         let returnTimeout = null;
-        let returnFromAngle = 0;
-        let returnProgress = 0;
 
-        // Sincroniza el estado interno de OrbitControls con un ángulo azimutal dado
-        // Esto evita el salto cuando OrbitControls retoma el control
         function syncControlsTheta(theta) {
           controls._spherical.theta = theta;
           controls._sphericalDelta.theta = 0;
@@ -91,20 +86,20 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           el.addEventListener('pointerdown', () => {
             isDragging = true;
-            isReturning = false;
             clearTimeout(returnTimeout);
           });
 
           el.addEventListener('pointerup', () => {
-            isDragging = false;
-            // Leer ángulo real de OrbitControls al soltar
-            returnFromAngle = controls._spherical.theta;
-            // Normalizar a [-PI, PI]
-            returnFromAngle = Math.atan2(Math.sin(returnFromAngle), Math.cos(returnFromAngle));
-            returnProgress = 0;
             returnTimeout = setTimeout(() => {
-              isReturning = true;
-            }, 500);
+              // Al retomar el péndulo, calcular pendulumAngle equivalente al ángulo actual
+              // para que el péndulo arranque desde donde está sin salto ni animación de retorno
+              const rawTheta = controls._spherical.theta;
+              const normalized = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
+              pendulumAngle = Math.max(-PENDULUM_MAX, Math.min(PENDULUM_MAX, normalized));
+              // Dirección: si está en positivo volver hacia negativo y viceversa
+              pendulumDir = pendulumAngle >= 0 ? -1 : 1;
+              isDragging = false;
+            }, 300);
           });
         }
 
@@ -160,31 +155,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             if (isDragging) {
               // OrbitControls maneja el drag normalmente
               controls.update();
-
-            } else if (isReturning) {
-              // Retorno suave con easing cúbico hacia 0
-              returnProgress = Math.min(1, returnProgress + 0.025);
-              const t = returnProgress;
-              const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-              const currentAngle = returnFromAngle * (1 - eased);
-
-              // Mover cámara directamente Y mantener OrbitControls sincronizado
-              syncControlsTheta(currentAngle);
-              camera.position.x = Math.sin(currentAngle) * pendulumDist;
-              camera.position.y = 0;
-              camera.position.z = Math.cos(currentAngle) * pendulumDist;
-              camera.lookAt(0, 0, 0);
-
-              if (returnProgress >= 1) {
-                // Al terminar: sincronizar todo a 0 y reanudar péndulo
-                pendulumAngle = 0;
-                pendulumDir = 1;
-                syncControlsTheta(0);
-                isReturning = false;
-              }
-
             } else {
-              // Oscilación automática — también sincronizamos OrbitControls
+              // Péndulo continuo — arranca desde donde quedó al soltar
               pendulumAngle += pendulumDir * (speed * 0.002);
               if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
@@ -217,6 +189,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
         cleanupRef.current = () => {
           cancelAnimationFrame(animId);
+          clearTimeout(returnTimeout);
           ro.disconnect();
           controls.dispose();
           renderer.dispose();
