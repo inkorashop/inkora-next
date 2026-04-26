@@ -36,9 +36,27 @@ function toSlug(name) {
 }
 
 function LazyModelViewer({ url, autoRotate, modelConfig, isHovered }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  const displayMode = modelConfig?.display_mode || 'hover';
+
+  useEffect(() => {
+    if (displayMode !== 'scroll') return;
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { setVisible(entry.isIntersecting); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [displayMode]);
+
+  const showModel = displayMode === 'hover' ? isHovered : visible;
+
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
-      {isHovered
+    <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
+      {showModel
         ? <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} />
         : <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>

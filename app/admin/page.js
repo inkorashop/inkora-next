@@ -1018,7 +1018,29 @@ export default function Admin() {
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
-                                
+
+                                <div style={{marginBottom:10}}>
+                                  <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Mostrar modelo en catálogo</div>
+                                  <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                                    {[{val:'hover', label:'Al hacer hover', desc:'Imagen estática, 3D al pasar el mouse'}, {val:'scroll', label:'Al hacer scroll', desc:'Se activa cuando la card es visible'}].map(opt => (
+                                      <label key={opt.val} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'5px 8px', borderRadius:7, background: (form.model_config?.display_mode || 'hover') === opt.val ? '#eef4ff' : 'transparent', border: (form.model_config?.display_mode || 'hover') === opt.val ? '1.5px solid #2D6BE4' : '1.5px solid transparent'}}>
+                                        <input type="radio" name={`display_mode_${p.id}`} value={opt.val} checked={(form.model_config?.display_mode || 'hover') === opt.val}
+                                          onChange={() => {
+                                            const newConfig = { ...(form.model_config || {}), display_mode: opt.val };
+                                            updateProductForm(p.id, 'model_config', newConfig);
+                                            saveProduct(p.id, { model_config: newConfig });
+                                          }}
+                                          style={{accentColor:'#2D6BE4'}}
+                                        />
+                                        <div>
+                                          <div style={{fontSize:12, fontWeight:600, color:'#2d3352'}}>{opt.label}</div>
+                                          <div style={{fontSize:10, color:'#9aa3bc'}}>{opt.desc}</div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+
                                 <div style={{marginBottom:10}}>
                                   <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
