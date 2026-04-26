@@ -54,62 +54,50 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         fill.position.set(-5, -5, -5);
         scene.add(fill);
 
-        const mode = modelConfig?.mode || (autoRotate ? 'rotate' : 'static');
-        const speed = modelConfig?.speed ?? 5;
-        const amplitude = modelConfig?.pendulum_amplitude ?? 5;
-        const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
-
-        // ── Péndulo: manejamos el drag manualmente, sin OrbitControls ──
-        let pendulumDist = null;
-        let pendulumAngle = 0;
-        let pendulumDir = 1;
-        let isReturning = false;
-        let returnTimeout = null;
-
-        // Estado del drag manual para péndulo
-        let dragActive = false;
-        let dragStartX = 0;
-        let dragStartAngle = 0;
-
-        const onPendulumPointerDown = (e) => {
-          dragActive = true;
-          isReturning = false;
-          clearTimeout(returnTimeout);
-          dragStartX = e.clientX;
-          dragStartAngle = pendulumAngle;
-        };
-        const onPendulumPointerMove = (e) => {
-          if (!dragActive || pendulumDist === null) return;
-          const dx = e.clientX - dragStartX;
-          // Sensibilidad: ancho del elemento = 180° de rotación
-          const newAngle = dragStartAngle + (dx / el.clientWidth) * Math.PI;
-          pendulumAngle = Math.max(-Math.PI, Math.min(Math.PI, newAngle));
-        };
-        const onPendulumPointerUp = () => {
-          if (!dragActive) return;
-          dragActive = false;
-          returnTimeout = setTimeout(() => {
-            isReturning = true;
-          }, 600);
-        };
-
-        // ── OrbitControls para modos static y rotate ──
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = false;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        if (mode === 'rotate') {
-          controls.autoRotate = true;
-          controls.autoRotateSpeed = speed * 2;
-        } else if (mode === 'pendulum') {
-          // Deshabilitar OrbitControls completamente en modo péndulo
-          controls.enabled = false;
-          el.addEventListener('pointerdown', onPendulumPointerDown);
-          el.addEventListener('pointermove', onPendulumPointerMove);
-          el.addEventListener('pointerup', onPendulumPointerUp);
-          el.addEventListener('pointerleave', onPendulumPointerUp);
+        const mode = modelConfig?.mode || (autoRotate ? 'rotate' : 'static');
+        const speed = modelConfig?.speed ?? 5;
+        const amplitude = modelConfig?.pendulum_amplitude ?? 5;
+        const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
+
+        controls.autoRotate = mode === 'rotate';
+        controls.autoRotateSpeed = speed * 2;
+
+        // Estado del péndulo
+        let pendulumDist = null;
+        let pendulumAngle = 0;   // ángulo que controla la oscilación automática
+        let pendulumDir = 1;
+        let isDragging = false;
+        let isReturning = false;
+        let returnTimeout = null;
+        // Ángulo azimutal de la cámara al soltar — punto de partida del retorno
+        let returnFromAngle = 0;
+        let returnProgress = 0;  // 0→1, controla el lerp de retorno
+
+        if (mode === 'pendulum') {
+          controls.autoRotate = false;
+          // OrbitControls habilitado normalmente — rotación libre durante drag
+          el.addEventListener('pointerdown', () => {
+            isDragging = true;
+            isReturning = false;
+            clearTimeout(returnTimeout);
+          });
+          el.addEventListener('pointerup', () => {
+            isDragging = false;
+            // Leer el ángulo azimutal REAL de la cámara según OrbitControls
+            returnFromAngle = controls.getAzimuthalAngle();
+            // Normalizar a [-PI, PI]
+            returnFromAngle = Math.atan2(Math.sin(returnFromAngle), Math.cos(returnFromAngle));
+            returnProgress = 0;
+            returnTimeout = setTimeout(() => {
+              isReturning = true;
+            }, 500);
+          });
         }
 
         const is3MF = url.toLowerCase().includes('.3mf') || modelConfig?._fileType === '3mf';
@@ -161,30 +149,40 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           animId = requestAnimationFrame(animate);
 
           if (mode === 'pendulum' && pendulumDist !== null) {
-            if (!dragActive) {
-              if (isReturning) {
-                // Lerp suave hacia 0
-                pendulumAngle += (0 - pendulumAngle) * 0.06;
-                if (Math.abs(pendulumAngle) < 0.002) {
-                  pendulumAngle = 0;
-                  pendulumDir = 1;
-                  isReturning = false;
-                }
-              } else {
-                // Oscilación normal
-                pendulumAngle += pendulumDir * (speed * 0.002);
-                if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
-                if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
+            if (isDragging) {
+              // Durante el drag: OrbitControls maneja todo normalmente
+              controls.update();
+            } else if (isReturning) {
+              // Retorno suave: interpolar desde returnFromAngle hacia 0
+              // Usamos easing cúbico para que sea fluido y no se trabe al final
+              returnProgress = Math.min(1, returnProgress + 0.02);
+              const t = returnProgress;
+              const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+              const currentAngle = returnFromAngle * (1 - eased);
+
+              camera.position.x = Math.sin(currentAngle) * pendulumDist;
+              camera.position.y = 0;
+              camera.position.z = Math.cos(currentAngle) * pendulumDist;
+              camera.lookAt(0, 0, 0);
+
+              if (returnProgress >= 1) {
+                // Retorno completo: sincronizar pendulumAngle con 0 y reanudar
+                pendulumAngle = 0;
+                pendulumDir = 1;
+                isReturning = false;
               }
+            } else {
+              // Oscilación automática del péndulo
+              pendulumAngle += pendulumDir * (speed * 0.002);
+              if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
+              if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
+
+              const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+              camera.position.x = Math.sin(easedAngle) * pendulumDist;
+              camera.position.y = 0;
+              camera.position.z = Math.cos(easedAngle) * pendulumDist;
+              camera.lookAt(0, 0, 0);
             }
-            // Siempre aplicar el ángulo actual a la cámara (drag o automático)
-            const easedAngle = isReturning || dragActive
-              ? pendulumAngle
-              : Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
-            camera.position.x = Math.sin(easedAngle) * pendulumDist;
-            camera.position.y = 0;
-            camera.position.z = Math.cos(easedAngle) * pendulumDist;
-            camera.lookAt(0, 0, 0);
           } else {
             controls.update();
           }
@@ -209,12 +207,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           ro.disconnect();
           controls.dispose();
           renderer.dispose();
-          if (mode === 'pendulum') {
-            el.removeEventListener('pointerdown', onPendulumPointerDown);
-            el.removeEventListener('pointermove', onPendulumPointerMove);
-            el.removeEventListener('pointerup', onPendulumPointerUp);
-            el.removeEventListener('pointerleave', onPendulumPointerUp);
-          }
           if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
 
