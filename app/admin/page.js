@@ -528,7 +528,7 @@ export default function Admin() {
     }));
     setPendingFiles(entries);
     e.target.value = '';
-    const { data } = await supabase.from('designs').select('name').eq('active', true);
+    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
     const existing = new Set((data || []).map(d => d.name.toLowerCase()));
     setPendingFiles(prev => prev.map(entry => ({
       ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
@@ -539,7 +539,7 @@ export default function Admin() {
     setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
     if (field === 'name') {
       if (value.length > 2) {
-        const { data } = await supabase.from('designs').select('name').eq('active', true);
+        const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
         const exists = Array.isArray(data) && data.some(d => d.name.toLowerCase() === value.toLowerCase());
         setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: exists }; return next; });
       } else {
@@ -1428,7 +1428,7 @@ export default function Admin() {
                       return [...prev, ...newEntries.filter(e => !existingNames.has(e.modelFile.name))];
                     });
                     e.target.value = '';
-                    const { data } = await supabase.from('designs').select('name').eq('active', true);
+                    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
                     const existing = new Set((data || []).map(d => d.name.toLowerCase()));
                     setPendingFiles(prev => prev.map(entry => ({
                       ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
