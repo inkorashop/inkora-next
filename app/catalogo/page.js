@@ -35,6 +35,20 @@ function toSlug(name) {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
+function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {!ready && imageUrl && (
+        <img src={imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 1 }} />
+      )}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
+        <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} hideHint={true} onReady={() => setReady(true)} />
+      </div>
+    </div>
+  );
+}
+
 function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -74,11 +88,13 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
 
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
-      {showModel
-        ? <ModelViewer url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} hideHint={false} />
-        : imageUrl
-          ? <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          : <span style={{ fontSize: 36 }}>🖨️</span>}
+      {imageUrl && !showModel && (
+        <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      )}
+      {showModel && (
+        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} imageUrl={imageUrl} />
+      )}
+      {!showModel && !imageUrl && <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>
   );
 }
