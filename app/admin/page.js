@@ -15,6 +15,14 @@ function fileToBase64(file) {
   });
 }
 
+function blobToBase64(blob) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function slugify(str) {
   return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
@@ -563,6 +571,17 @@ export default function Admin() {
       try {
         let imageUrl = null;
         let modelUrl = null;
+
+        // Capturar thumbnail del modelo si no hay imagen
+        if (!entry.file && entry.capturedThumb) {
+          const base64 = await blobToBase64(entry.capturedThumb);
+          const res = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: base64, fileName: entry.name + '-thumb.png', mimeType: 'image/png', folder: 'thumbnails' }),
+          });
+          const data = await res.json();
+          if (data.url) imageUrl = data.url;
+        }
 
         // Subir imagen si existe
         if (entry.file) {
@@ -1449,7 +1468,7 @@ export default function Admin() {
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} />
+                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} onCapture={blob => { if (!entry.capturedThumb) updateEntry(i, 'capturedThumb', blob); }} />
                                 </div>
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null }) {
+export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -147,6 +147,12 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             originalPhi = controls._spherical.phi;
 
             setStatus('ready');
+            if (onCapture) {
+              requestAnimationFrame(() => {
+                renderer.render(scene, camera);
+                renderer.domElement.toBlob(blob => { if (blob) onCapture(blob); }, 'image/png');
+              });
+            }
           },
           undefined,
           (err) => {
