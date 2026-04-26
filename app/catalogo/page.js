@@ -35,7 +35,7 @@ function toSlug(name) {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-function LazyModelViewer({ url, autoRotate, modelConfig, isHovered }) {
+function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
   const displayMode = modelConfig?.display_mode || 'hover';
@@ -58,7 +58,9 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered }) {
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
       {showModel
         ? <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} />
-        : <span style={{ fontSize: 36 }}>🖨️</span>}
+        : imageUrl
+          ? <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          : <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>
   );
 }
@@ -589,7 +591,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
