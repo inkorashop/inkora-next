@@ -20,7 +20,7 @@ export async function POST(request) {
     .toLowerCase();
 }
 const safeName = sanitizeFileName(fileName);
-const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
+const uniqueName = `${folder || 'thumbnails'}/${safeName}-${Date.now()}`;
 
     const { error } = await supabase.storage
       .from('assets')
