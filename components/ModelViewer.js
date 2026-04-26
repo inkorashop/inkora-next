@@ -70,27 +70,35 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
         // Estado del péndulo
         let pendulumDist = null;
-        let pendulumAngle = 0;   // ángulo que controla la oscilación automática
+        let pendulumAngle = 0;
         let pendulumDir = 1;
         let isDragging = false;
         let isReturning = false;
         let returnTimeout = null;
-        // Ángulo azimutal de la cámara al soltar — punto de partida del retorno
         let returnFromAngle = 0;
-        let returnProgress = 0;  // 0→1, controla el lerp de retorno
+        let returnProgress = 0;
+
+        // Sincroniza el estado interno de OrbitControls con un ángulo azimutal dado
+        // Esto evita el salto cuando OrbitControls retoma el control
+        function syncControlsTheta(theta) {
+          controls._spherical.theta = theta;
+          controls._sphericalDelta.theta = 0;
+          controls._sphericalDelta.phi = 0;
+        }
 
         if (mode === 'pendulum') {
           controls.autoRotate = false;
-          // OrbitControls habilitado normalmente — rotación libre durante drag
+
           el.addEventListener('pointerdown', () => {
             isDragging = true;
             isReturning = false;
             clearTimeout(returnTimeout);
           });
+
           el.addEventListener('pointerup', () => {
             isDragging = false;
-            // Leer el ángulo azimutal REAL de la cámara según OrbitControls
-            returnFromAngle = controls.getAzimuthalAngle();
+            // Leer ángulo real de OrbitControls al soltar
+            returnFromAngle = controls._spherical.theta;
             // Normalizar a [-PI, PI]
             returnFromAngle = Math.atan2(Math.sin(returnFromAngle), Math.cos(returnFromAngle));
             returnProgress = 0;
@@ -150,34 +158,39 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           if (mode === 'pendulum' && pendulumDist !== null) {
             if (isDragging) {
-              // Durante el drag: OrbitControls maneja todo normalmente
+              // OrbitControls maneja el drag normalmente
               controls.update();
+
             } else if (isReturning) {
-              // Retorno suave: interpolar desde returnFromAngle hacia 0
-              // Usamos easing cúbico para que sea fluido y no se trabe al final
-              returnProgress = Math.min(1, returnProgress + 0.02);
+              // Retorno suave con easing cúbico hacia 0
+              returnProgress = Math.min(1, returnProgress + 0.025);
               const t = returnProgress;
               const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
               const currentAngle = returnFromAngle * (1 - eased);
 
+              // Mover cámara directamente Y mantener OrbitControls sincronizado
+              syncControlsTheta(currentAngle);
               camera.position.x = Math.sin(currentAngle) * pendulumDist;
               camera.position.y = 0;
               camera.position.z = Math.cos(currentAngle) * pendulumDist;
               camera.lookAt(0, 0, 0);
 
               if (returnProgress >= 1) {
-                // Retorno completo: sincronizar pendulumAngle con 0 y reanudar
+                // Al terminar: sincronizar todo a 0 y reanudar péndulo
                 pendulumAngle = 0;
                 pendulumDir = 1;
+                syncControlsTheta(0);
                 isReturning = false;
               }
+
             } else {
-              // Oscilación automática del péndulo
+              // Oscilación automática — también sincronizamos OrbitControls
               pendulumAngle += pendulumDir * (speed * 0.002);
               if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
 
               const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+              syncControlsTheta(easedAngle);
               camera.position.x = Math.sin(easedAngle) * pendulumDist;
               camera.position.y = 0;
               camera.position.z = Math.cos(easedAngle) * pendulumDist;
