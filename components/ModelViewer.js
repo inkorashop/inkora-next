@@ -57,6 +57,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = false;
+        controls.zoomSpeed = 1.2;
+        controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
@@ -178,9 +180,10 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
               controls._sphericalDelta.phi = 0;
               const sinPhi = Math.sin(currentPhi);
               const cosPhi = Math.cos(currentPhi);
-              camera.position.x = Math.sin(currentAngle) * sinPhi * pendulumDist;
-              camera.position.y = cosPhi * pendulumDist;
-              camera.position.z = Math.cos(currentAngle) * sinPhi * pendulumDist;
+              const distNow = (controls._spherical.radius > 0.001) ? controls._spherical.radius : pendulumDist;
+              camera.position.x = Math.sin(currentAngle) * sinPhi * distNow;
+              camera.position.y = cosPhi * distNow;
+              camera.position.z = Math.cos(currentAngle) * sinPhi * distNow;
               camera.lookAt(0, 0, 0);
 
               if (blendProgress >= 1) isBlending = false;
@@ -193,9 +196,10 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
               syncControlsTheta(easedAngle);
               const sinPhi = Math.sin(originalPhi);
               const cosPhi = Math.cos(originalPhi);
-              camera.position.x = Math.sin(easedAngle) * sinPhi * pendulumDist;
-              camera.position.y = cosPhi * pendulumDist;
-              camera.position.z = Math.cos(easedAngle) * sinPhi * pendulumDist;
+              const distNow = (controls._spherical.radius > 0.001) ? controls._spherical.radius : pendulumDist;
+              camera.position.x = Math.sin(easedAngle) * sinPhi * distNow;
+              camera.position.y = cosPhi * distNow;
+              camera.position.z = Math.cos(easedAngle) * sinPhi * distNow;
               camera.lookAt(0, 0, 0);
             }
           } else {
