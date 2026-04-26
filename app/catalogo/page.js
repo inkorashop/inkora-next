@@ -38,26 +38,40 @@ function toSlug(name) {
 function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
+  const [cachedUrl, setCachedUrl] = useState(null);
   const displayMode = modelConfig?.display_mode || 'hover';
 
   useEffect(() => {
-    if (displayMode !== 'scroll') return;
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => { setVisible(entry.isIntersecting); },
-      { rootMargin: '200px' }
+      { rootMargin: '400px' }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [displayMode]);
+  }, []);
+
+  // Precargar el archivo en memoria cuando la card es visible
+  useEffect(() => {
+    if (!visible || !url || cachedUrl) return;
+    fetch(url)
+      .then(r => r.blob())
+      .then(blob => {
+        const localUrl = URL.createObjectURL(blob);
+        setCachedUrl(localUrl);
+      })
+      .catch(() => setCachedUrl(url));
+    return () => { if (cachedUrl) URL.revokeObjectURL(cachedUrl); };
+  }, [visible, url]);
 
   const showModel = displayMode === 'hover' ? isHovered : visible;
+  const modelUrl = cachedUrl || url;
 
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
       {showModel
-        ? <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} />
+        ? <ModelViewer url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} />
         : imageUrl
           ? <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           : <span style={{ fontSize: 36 }}>🖨️</span>}
