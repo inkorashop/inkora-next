@@ -75,9 +75,13 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let isDragging = false;
         let returnTimeout = null;
         // Para la interpolación al retomar
-        let isBlending = false;
-        let blendFromAngle = 0;
-        let blendProgress = 0;
+        blendFromAngle = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
+              // Resetear péndulo al frente para que el blend vaya hacia ahí
+              pendulumAngle = 0;
+              pendulumDir = 1;
+              blendProgress = 0;
+              isBlending = true;
+              isDragging = false;
 
         function syncControlsTheta(theta) {
           controls._spherical.theta = theta;
@@ -142,6 +146,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             controls.update();
 
             pendulumDist = dist;
+            originalPhi = controls._spherical.phi;
 
             setStatus('ready');
           },
@@ -172,12 +177,17 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
               const pendulumTarget = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
 
-              // Mezclar entre el ángulo inicial del blend y el péndulo
+              // Mezclar ángulo horizontal Y vertical (phi) hacia el original
               const currentAngle = blendFromAngle * (1 - eased) + pendulumTarget * eased;
+              const currentPhi = blendFromPhi * (1 - eased) + originalPhi * eased;
               syncControlsTheta(currentAngle);
-              camera.position.x = Math.sin(currentAngle) * pendulumDist;
-              camera.position.y = 0;
-              camera.position.z = Math.cos(currentAngle) * pendulumDist;
+              controls._spherical.phi = currentPhi;
+              controls._sphericalDelta.phi = 0;
+              const sinPhi = Math.sin(currentPhi);
+              const cosPhi = Math.cos(currentPhi);
+              camera.position.x = Math.sin(currentAngle) * sinPhi * pendulumDist;
+              camera.position.y = cosPhi * pendulumDist;
+              camera.position.z = Math.cos(currentAngle) * sinPhi * pendulumDist;
               camera.lookAt(0, 0, 0);
 
               if (blendProgress >= 1) isBlending = false;
