@@ -68,9 +68,21 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let pendulumAngle = 0;
         const amplitude = modelConfig?.pendulum_amplitude ?? 5;
         const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
+        let isDragging = false;
+        let returnTimeout = null;
         if (mode === 'pendulum') {
           controls.autoRotate = false;
-          controls.enableRotate = false;
+          controls.enableRotate = true;
+          el.addEventListener('pointerdown', () => {
+            isDragging = true;
+            clearTimeout(returnTimeout);
+          });
+          el.addEventListener('pointerup', () => {
+            isDragging = false;
+            returnTimeout = setTimeout(() => {
+              pendulumAngle = 0;
+            }, 800);
+          });
         }
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
@@ -128,7 +140,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let animId;
         const animate = () => {
           animId = requestAnimationFrame(animate);
-          if (mode === 'pendulum') {
+          if (mode === 'pendulum' && !isDragging) {
             pendulumAngle += pendulumDir * (speed * 0.002);
             if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
             if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
