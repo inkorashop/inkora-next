@@ -35,24 +35,12 @@ function toSlug(name) {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-function LazyModelViewer({ url, autoRotate, modelConfig }) {
-  const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { setVisible(entry.isIntersecting); },
-      { rootMargin: '200px' }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
+function LazyModelViewer({ url, autoRotate, modelConfig, isHovered }) {
   return (
-    <div ref={ref} style={{ width: '100%', height: '100%' }}>
-      {visible && <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} />}
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
+      {isHovered
+        ? <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} />
+        : <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>
   );
 }
@@ -583,7 +571,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
