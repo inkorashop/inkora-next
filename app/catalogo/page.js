@@ -228,7 +228,7 @@ export default function Home() {
   async function loadAllDesigns(productList) {
     const results = await Promise.all(
       productList.map(p =>
-        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order', { nullsFirst: false }).order('created_at').limit(10000)
       )
     );
     const map = {};

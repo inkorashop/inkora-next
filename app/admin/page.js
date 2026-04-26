@@ -365,7 +365,7 @@ export default function Admin() {
 
   // ── Designs ──
   async function loadDesigns() {
-    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order').order('created_at');
+    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order', { nullsFirst: false }).order('created_at').limit(10000);
     console.log('Diseños cargados:', data?.length, data);
     if (data) { setDesigns(data); setOrphanCount(data.filter(d => !d.product_id && d.active).length); }
   }
