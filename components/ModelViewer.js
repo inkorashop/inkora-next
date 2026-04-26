@@ -74,6 +74,10 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let pendulumDir = 1;
         let isDragging = false;
         let returnTimeout = null;
+        // Para la interpolación al retomar
+        let isBlending = false;
+        let blendFromAngle = 0;
+        let blendProgress = 0;
 
         function syncControlsTheta(theta) {
           controls._spherical.theta = theta;
@@ -86,20 +90,22 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           el.addEventListener('pointerdown', () => {
             isDragging = true;
+            isBlending = false;
             clearTimeout(returnTimeout);
           });
 
           el.addEventListener('pointerup', () => {
             returnTimeout = setTimeout(() => {
-              // Al retomar el péndulo, calcular pendulumAngle equivalente al ángulo actual
-              // para que el péndulo arranque desde donde está sin salto ni animación de retorno
+              // Leer dónde quedó la cámara
               const rawTheta = controls._spherical.theta;
-              const normalized = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
-              pendulumAngle = Math.max(-PENDULUM_MAX, Math.min(PENDULUM_MAX, normalized));
-              // Dirección: si está en positivo volver hacia negativo y viceversa
-              pendulumDir = pendulumAngle >= 0 ? -1 : 1;
+              blendFromAngle = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
+              // Resetear péndulo al frente para que el blend vaya hacia ahí
+              pendulumAngle = 0;
+              pendulumDir = 1;
+              blendProgress = 0;
+              isBlending = true;
               isDragging = false;
-            }, 300);
+            }, 200);
           });
         }
 
