@@ -66,11 +66,13 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         // Péndulo
         let pendulumDir = 1;
         let pendulumAngle = 0;
+        let pendulumDist = null; // se setea DESPUÉS de que carga el modelo
         const amplitude = modelConfig?.pendulum_amplitude ?? 5;
         const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
         let isDragging = false;
         let isReturning = false;
-        let pendulumDist = null;
+        let returnTimeout = null;
+
         if (mode === 'pendulum') {
           controls.autoRotate = false;
           controls.enableRotate = true;
@@ -86,6 +88,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             }, 600);
           });
         }
+
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
@@ -98,21 +101,15 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             const model = is3MF ? result : result.scene;
             scene.add(model);
 
-            // Calcular bounding box DESPUÉS de agregar a la escena
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
 
-            console.log('Model size:', size, 'maxDim:', maxDim, 'center:', center);
-
-            // Centrar el modelo en el origen
             model.position.set(-center.x, -center.y, -center.z);
 
-            // Posicionar cámara basada en el tamaño real del modelo
             const fov = camera.fov * (Math.PI / 180);
             const aspect = w / h;
-            // Distancia para que el modelo entre en pantalla con margen
             const distV = (maxDim / 2) / Math.tan(fov / 2);
             const distH = (maxDim / 2) / Math.tan((fov * aspect) / 2);
             const dist = Math.max(distV, distH) * 1.5;
@@ -127,7 +124,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             controls.maxDistance = dist * 5;
             controls.update();
 
-            console.log('Camera distance:', dist, 'near:', camera.near, 'far:', camera.far);
+            // Fijar la distancia del péndulo AQUÍ, una vez que el modelo cargó
+            pendulumDist = dist;
 
             setStatus('ready');
           },
@@ -142,9 +140,13 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let animId;
         const animate = () => {
           animId = requestAnimationFrame(animate);
-          if (mode === 'pendulum') {
-            if (!isDragging) {
-              if (pendulumDist === null) pendulumDist = controls.getDistance ? controls.getDistance() : camera.position.length();
+
+          if (mode === 'pendulum' && pendulumDist !== null) {
+            if (isDragging) {
+              // OrbitControls maneja la rotación libre, solo actualizamos
+              controls.update();
+            } else {
+              // Retomar control de la cámara para el péndulo
               if (isReturning) {
                 pendulumAngle += (0 - pendulumAngle) * 0.04;
                 if (Math.abs(pendulumAngle) < 0.001) { pendulumAngle = 0; isReturning = false; }
@@ -158,10 +160,11 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
               camera.position.y = 0;
               camera.position.z = Math.cos(easedAngle) * pendulumDist;
               camera.lookAt(0, 0, 0);
-              controls.update();
             }
+          } else {
+            controls.update();
           }
-          controls.update();
+
           renderer.render(scene, camera);
         };
         animate();
