@@ -266,7 +266,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
 
-      {status === 'loading' && (
+      {status === 'loading' && !hideHint && (
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', flexDirection: 'column',

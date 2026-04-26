@@ -75,12 +75,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
       {showModel
-        ? <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-            {imageUrl && <img src={imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 1 }} />}
-            <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
-              <ModelViewer url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} onReady={() => {}} />
-            </div>
-          </div>
+        ? <ModelViewer url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} hideHint={false} />
         : imageUrl
           ? <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           : <span style={{ fontSize: 36 }}>🖨️</span>}
