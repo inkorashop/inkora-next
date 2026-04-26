@@ -24,7 +24,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const el = mountRef.current;
         if (!el) return;
 
-        // Esperar dimensiones reales
         await new Promise(resolve => {
           if (el.clientWidth > 0 && el.clientHeight > 0) { resolve(); return; }
           const ro = new ResizeObserver(() => {
@@ -42,84 +41,76 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         renderer.setSize(w, h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.2;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         el.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 10000);
 
-        // Environment map — en try/catch separado para que no rompa todo si falla
-        let envTexture = null;
-        try {
-          const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js');
-          const pmremGenerator = new THREE.PMREMGenerator(renderer);
-          pmremGenerator.compileEquirectangularShader();
-          envTexture = pmremGenerator.fromScene(new RoomEnvironment()).texture;
-          scene.environment = envTexture;
-          pmremGenerator.dispose();
-        } catch (envErr) {
-          console.warn('Environment map no disponible:', envErr);
-        }
-
-        // Luces
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const dir = new THREE.DirectionalLight(0xffffff, 2.5);
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const dir = new THREE.DirectionalLight(0xffffff, 2);
         dir.position.set(5, 10, 7);
-        dir.castShadow = true;
-        dir.shadow.mapSize.width = 1024;
-        dir.shadow.mapSize.height = 1024;
-        dir.shadow.camera.near = 0.1;
-        dir.shadow.camera.far = 500;
-        dir.shadow.radius = 8;
-        dir.shadow.bias = -0.001;
         scene.add(dir);
+        const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+        fill.position.set(-5, -5, -5);
+        scene.add(fill);
 
-        // Rim light (borde trasero)
-        const rim = new THREE.DirectionalLight(0xffffff, 0.4);
-        rim.position.set(-4, 2, -6);
-        scene.add(rim);
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableZoom = true;
-        controls.enablePan = false;
         const mode = modelConfig?.mode || (autoRotate ? 'rotate' : 'static');
         const speed = modelConfig?.speed ?? 5;
-        controls.autoRotate = mode === 'rotate';
-        controls.autoRotateSpeed = speed * 2;
-
-        // Péndulo
-        let pendulumDir = 1;
-        let pendulumAngle = 0;
-        let pendulumDist = null;
         const amplitude = modelConfig?.pendulum_amplitude ?? 5;
         const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
-        let isDragging = false;
+
+        // ── Péndulo: manejamos el drag manualmente, sin OrbitControls ──
+        let pendulumDist = null;
+        let pendulumAngle = 0;
+        let pendulumDir = 1;
         let isReturning = false;
         let returnTimeout = null;
 
-        if (mode === 'pendulum') {
-          controls.autoRotate = false;
-          controls.enableRotate = true;
-          el.addEventListener('pointerdown', () => {
-            isDragging = true;
-            isReturning = false;
-            clearTimeout(returnTimeout);
-          });
-          el.addEventListener('pointerup', () => {
-            isDragging = false;
-            const camAngle = Math.atan2(camera.position.x, camera.position.z);
-            pendulumAngle = Math.max(-PENDULUM_MAX, Math.min(PENDULUM_MAX, camAngle));
-            returnTimeout = setTimeout(() => {
-              isReturning = true;
-            }, 600);
-          });
-        }
+        // Estado del drag manual para péndulo
+        let dragActive = false;
+        let dragStartX = 0;
+        let dragStartAngle = 0;
 
+        const onPendulumPointerDown = (e) => {
+          dragActive = true;
+          isReturning = false;
+          clearTimeout(returnTimeout);
+          dragStartX = e.clientX;
+          dragStartAngle = pendulumAngle;
+        };
+        const onPendulumPointerMove = (e) => {
+          if (!dragActive || pendulumDist === null) return;
+          const dx = e.clientX - dragStartX;
+          // Sensibilidad: ancho del elemento = 180° de rotación
+          const newAngle = dragStartAngle + (dx / el.clientWidth) * Math.PI;
+          pendulumAngle = Math.max(-Math.PI, Math.min(Math.PI, newAngle));
+        };
+        const onPendulumPointerUp = () => {
+          if (!dragActive) return;
+          dragActive = false;
+          returnTimeout = setTimeout(() => {
+            isReturning = true;
+          }, 600);
+        };
+
+        // ── OrbitControls para modos static y rotate ──
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableZoom = true;
+        controls.enablePan = false;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
+
+        if (mode === 'rotate') {
+          controls.autoRotate = true;
+          controls.autoRotateSpeed = speed * 2;
+        } else if (mode === 'pendulum') {
+          // Deshabilitar OrbitControls completamente en modo péndulo
+          controls.enabled = false;
+          el.addEventListener('pointerdown', onPendulumPointerDown);
+          el.addEventListener('pointermove', onPendulumPointerMove);
+          el.addEventListener('pointerup', onPendulumPointerUp);
+          el.addEventListener('pointerleave', onPendulumPointerUp);
+        }
 
         const is3MF = url.toLowerCase().includes('.3mf') || modelConfig?._fileType === '3mf';
         const loader = is3MF ? new ThreeMFLoader() : new GLTFLoader();
@@ -128,19 +119,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           (result) => {
             if (cancelled) return;
             const model = is3MF ? result : result.scene;
-
-            // Activar sombras y environment map en todos los meshes
-            model.traverse(child => {
-              if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                if (child.material && envTexture) {
-                  child.material.envMapIntensity = 0.6;
-                  child.material.needsUpdate = true;
-                }
-              }
-            });
-
             scene.add(model);
 
             const box = new THREE.Box3().setFromObject(model);
@@ -149,24 +127,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             const maxDim = Math.max(size.x, size.y, size.z);
 
             model.position.set(-center.x, -center.y, -center.z);
-
-            // Plano de sombra debajo del modelo
-            const shadowY = -size.y / 2 - center.y;
-            const planeGeo = new THREE.PlaneGeometry(maxDim * 4, maxDim * 4);
-            const planeMat = new THREE.ShadowMaterial({ opacity: 0.25, transparent: true });
-            const shadowPlane = new THREE.Mesh(planeGeo, planeMat);
-            shadowPlane.rotation.x = -Math.PI / 2;
-            shadowPlane.position.y = shadowY;
-            shadowPlane.receiveShadow = true;
-            scene.add(shadowPlane);
-
-            // Ajustar frustum de sombra al tamaño del modelo
-            const shadowCam = dir.shadow.camera;
-            shadowCam.left = -maxDim * 2;
-            shadowCam.right = maxDim * 2;
-            shadowCam.top = maxDim * 2;
-            shadowCam.bottom = -maxDim * 2;
-            shadowCam.updateProjectionMatrix();
 
             const fov = camera.fov * (Math.PI / 180);
             const aspect = w / h;
@@ -201,27 +161,30 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           animId = requestAnimationFrame(animate);
 
           if (mode === 'pendulum' && pendulumDist !== null) {
-            if (isDragging) {
-              controls.update();
-            } else {
+            if (!dragActive) {
               if (isReturning) {
-                pendulumAngle += (0 - pendulumAngle) * 0.08;
+                // Lerp suave hacia 0
+                pendulumAngle += (0 - pendulumAngle) * 0.06;
                 if (Math.abs(pendulumAngle) < 0.002) {
                   pendulumAngle = 0;
                   pendulumDir = 1;
                   isReturning = false;
                 }
               } else {
+                // Oscilación normal
                 pendulumAngle += pendulumDir * (speed * 0.002);
                 if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
                 if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
               }
-              const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
-              camera.position.x = Math.sin(easedAngle) * pendulumDist;
-              camera.position.y = 0;
-              camera.position.z = Math.cos(easedAngle) * pendulumDist;
-              camera.lookAt(0, 0, 0);
             }
+            // Siempre aplicar el ángulo actual a la cámara (drag o automático)
+            const easedAngle = isReturning || dragActive
+              ? pendulumAngle
+              : Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+            camera.position.x = Math.sin(easedAngle) * pendulumDist;
+            camera.position.y = 0;
+            camera.position.z = Math.cos(easedAngle) * pendulumDist;
+            camera.lookAt(0, 0, 0);
           } else {
             controls.update();
           }
@@ -246,7 +209,12 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           ro.disconnect();
           controls.dispose();
           renderer.dispose();
-          if (envTexture) envTexture.dispose();
+          if (mode === 'pendulum') {
+            el.removeEventListener('pointerdown', onPendulumPointerDown);
+            el.removeEventListener('pointermove', onPendulumPointerMove);
+            el.removeEventListener('pointerup', onPendulumPointerUp);
+            el.removeEventListener('pointerleave', onPendulumPointerUp);
+          }
           if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
 
