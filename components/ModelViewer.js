@@ -19,6 +19,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
         const { ThreeMFLoader } = await import('three/examples/jsm/loaders/3MFLoader.js');
         const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
+        const { RoomEnvironment } = await import('three/examples/jsm/environments/RoomEnvironment.js');
 
         if (cancelled) return;
         const el = mountRef.current;
@@ -42,18 +43,39 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         renderer.setSize(w, h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         el.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(50, w / h, 0.001, 10000);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-        const dir = new THREE.DirectionalLight(0xffffff, 2);
+        // Environment map (reflejos)
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        const envTexture = pmremGenerator.fromScene(new RoomEnvironment()).texture;
+        scene.environment = envTexture;
+        pmremGenerator.dispose();
+
+        // Luces
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dir = new THREE.DirectionalLight(0xffffff, 2.5);
         dir.position.set(5, 10, 7);
+        dir.castShadow = true;
+        dir.shadow.mapSize.width = 1024;
+        dir.shadow.mapSize.height = 1024;
+        dir.shadow.camera.near = 0.1;
+        dir.shadow.camera.far = 500;
+        dir.shadow.radius = 8;
+        dir.shadow.bias = -0.001;
         scene.add(dir);
-        const fill = new THREE.DirectionalLight(0xffffff, 0.5);
-        fill.position.set(-5, -5, -5);
-        scene.add(fill);
+
+        // Rim light (borde trasero)
+        const rim = new THREE.DirectionalLight(0xffffff, 0.4);
+        rim.position.set(-4, 2, -6);
+        scene.add(rim);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
@@ -66,7 +88,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         // Péndulo
         let pendulumDir = 1;
         let pendulumAngle = 0;
-        let pendulumDist = null; // se setea DESPUÉS de que carga el modelo
+        let pendulumDist = null;
         const amplitude = modelConfig?.pendulum_amplitude ?? 5;
         const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
         let isDragging = false;
@@ -83,9 +105,9 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           });
           el.addEventListener('pointerup', () => {
             isDragging = false;
-            // Capturar el ángulo actual de la cámara para que el lerp arranque desde ahí
+            // Leer ángulo actual de la cámara para que el lerp arranque desde ahí sin salto
             const camAngle = Math.atan2(camera.position.x, camera.position.z);
-            pendulumAngle = (camAngle / PENDULUM_MAX) * PENDULUM_MAX;
+            pendulumAngle = Math.max(-PENDULUM_MAX, Math.min(PENDULUM_MAX, camAngle));
             returnTimeout = setTimeout(() => {
               isReturning = true;
             }, 600);
@@ -102,6 +124,19 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           (result) => {
             if (cancelled) return;
             const model = is3MF ? result : result.scene;
+
+            // Activar sombras y environment map en todos los meshes
+            model.traverse(child => {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.material) {
+                  child.material.envMapIntensity = 0.6;
+                  child.material.needsUpdate = true;
+                }
+              }
+            });
+
             scene.add(model);
 
             const box = new THREE.Box3().setFromObject(model);
@@ -110,6 +145,24 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             const maxDim = Math.max(size.x, size.y, size.z);
 
             model.position.set(-center.x, -center.y, -center.z);
+
+            // Plano de sombra debajo del modelo
+            const shadowY = -size.y / 2 - center.y;
+            const planeGeo = new THREE.PlaneGeometry(maxDim * 4, maxDim * 4);
+            const planeMat = new THREE.ShadowMaterial({ opacity: 0.25, transparent: true });
+            const shadowPlane = new THREE.Mesh(planeGeo, planeMat);
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.position.y = shadowY;
+            shadowPlane.receiveShadow = true;
+            scene.add(shadowPlane);
+
+            // Ajustar frustum de sombra al tamaño del modelo
+            const shadowCam = dir.shadow.camera;
+            shadowCam.left = -maxDim * 2;
+            shadowCam.right = maxDim * 2;
+            shadowCam.top = maxDim * 2;
+            shadowCam.bottom = -maxDim * 2;
+            shadowCam.updateProjectionMatrix();
 
             const fov = camera.fov * (Math.PI / 180);
             const aspect = w / h;
@@ -127,7 +180,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             controls.maxDistance = dist * 5;
             controls.update();
 
-            // Fijar la distancia del péndulo AQUÍ, una vez que el modelo cargó
+            // Fijar distancia del péndulo una vez que el modelo cargó
             pendulumDist = dist;
 
             setStatus('ready');
@@ -135,7 +188,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           undefined,
           (err) => {
             if (cancelled) return;
-            console.error('GLB load error:', err);
+            console.error('Model load error:', err);
             setStatus('error');
           }
         );
@@ -146,10 +199,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           if (mode === 'pendulum' && pendulumDist !== null) {
             if (isDragging) {
-              // OrbitControls maneja la rotación libre, solo actualizamos
               controls.update();
             } else {
-              // Retomar control de la cámara para el péndulo
               if (isReturning) {
                 pendulumAngle += (0 - pendulumAngle) * 0.08;
                 if (Math.abs(pendulumAngle) < 0.002) {
@@ -192,6 +243,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           ro.disconnect();
           controls.dispose();
           renderer.dispose();
+          envTexture.dispose();
           if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
 
