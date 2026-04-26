@@ -83,6 +83,9 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           });
           el.addEventListener('pointerup', () => {
             isDragging = false;
+            // Capturar el ángulo actual de la cámara para que el lerp arranque desde ahí
+            const camAngle = Math.atan2(camera.position.x, camera.position.z);
+            pendulumAngle = (camAngle / PENDULUM_MAX) * PENDULUM_MAX;
             returnTimeout = setTimeout(() => {
               isReturning = true;
             }, 600);
@@ -148,8 +151,12 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             } else {
               // Retomar control de la cámara para el péndulo
               if (isReturning) {
-                pendulumAngle += (0 - pendulumAngle) * 0.04;
-                if (Math.abs(pendulumAngle) < 0.001) { pendulumAngle = 0; isReturning = false; }
+                pendulumAngle += (0 - pendulumAngle) * 0.08;
+                if (Math.abs(pendulumAngle) < 0.002) {
+                  pendulumAngle = 0;
+                  pendulumDir = 1;
+                  isReturning = false;
+                }
               } else {
                 pendulumAngle += pendulumDir * (speed * 0.002);
                 if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
