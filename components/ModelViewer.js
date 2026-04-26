@@ -149,8 +149,17 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             setStatus('ready');
             if (onCapture) {
               requestAnimationFrame(() => {
+                const captureSize = 600;
+                renderer.setSize(captureSize, captureSize);
+                camera.aspect = 1;
+                camera.updateProjectionMatrix();
                 renderer.render(scene, camera);
-                renderer.domElement.toBlob(blob => { if (blob) onCapture(blob); }, 'image/png');
+                renderer.domElement.toBlob(blob => {
+                  if (blob) onCapture(blob);
+                  renderer.setSize(w, h);
+                  camera.aspect = w / h;
+                  camera.updateProjectionMatrix();
+                }, 'image/png');
               });
             }
           },
