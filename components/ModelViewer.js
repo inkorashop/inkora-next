@@ -159,10 +159,30 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           if (mode === 'pendulum' && pendulumDist !== null) {
             if (isDragging) {
-              // OrbitControls maneja el drag normalmente
               controls.update();
+            } else if (isBlending) {
+              // Interpolación suave desde el ángulo donde quedó hasta el péndulo
+              blendProgress = Math.min(1, blendProgress + 0.018);
+              const t = blendProgress;
+              const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+              // Avanzar el péndulo en paralelo para que al terminar el blend esté en sync
+              pendulumAngle += pendulumDir * (speed * 0.002);
+              if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
+              if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
+              const pendulumTarget = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+
+              // Mezclar entre el ángulo inicial del blend y el péndulo
+              const currentAngle = blendFromAngle * (1 - eased) + pendulumTarget * eased;
+              syncControlsTheta(currentAngle);
+              camera.position.x = Math.sin(currentAngle) * pendulumDist;
+              camera.position.y = 0;
+              camera.position.z = Math.cos(currentAngle) * pendulumDist;
+              camera.lookAt(0, 0, 0);
+
+              if (blendProgress >= 1) isBlending = false;
             } else {
-              // Péndulo continuo — arranca desde donde quedó al soltar
+              // Péndulo normal
               pendulumAngle += pendulumDir * (speed * 0.002);
               if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
