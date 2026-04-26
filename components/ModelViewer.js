@@ -74,14 +74,11 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let pendulumDir = 1;
         let isDragging = false;
         let returnTimeout = null;
-        // Para la interpolación al retomar
-        blendFromAngle = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
-              // Resetear péndulo al frente para que el blend vaya hacia ahí
-              pendulumAngle = 0;
-              pendulumDir = 1;
-              blendProgress = 0;
-              isBlending = true;
-              isDragging = false;
+        let isBlending = false;
+        let blendFromAngle = 0;
+        let blendFromPhi = 0;
+        let blendProgress = 0;
+        let originalPhi = 0;
 
         function syncControlsTheta(theta) {
           controls._spherical.theta = theta;
@@ -100,10 +97,9 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
           el.addEventListener('pointerup', () => {
             returnTimeout = setTimeout(() => {
-              // Leer dónde quedó la cámara
               const rawTheta = controls._spherical.theta;
               blendFromAngle = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
-              // Resetear péndulo al frente para que el blend vaya hacia ahí
+              blendFromPhi = controls._spherical.phi;
               pendulumAngle = 0;
               pendulumDir = 1;
               blendProgress = 0;
@@ -166,18 +162,15 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             if (isDragging) {
               controls.update();
             } else if (isBlending) {
-              // Interpolación suave desde el ángulo donde quedó hasta el péndulo
               blendProgress = Math.min(1, blendProgress + 0.018);
               const t = blendProgress;
               const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-              // Avanzar el péndulo en paralelo para que al terminar el blend esté en sync
               pendulumAngle += pendulumDir * (speed * 0.002);
               if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
               const pendulumTarget = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
 
-              // Mezclar ángulo horizontal Y vertical (phi) hacia el original
               const currentAngle = blendFromAngle * (1 - eased) + pendulumTarget * eased;
               const currentPhi = blendFromPhi * (1 - eased) + originalPhi * eased;
               syncControlsTheta(currentAngle);
@@ -192,16 +185,17 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
               if (blendProgress >= 1) isBlending = false;
             } else {
-              // Péndulo normal
               pendulumAngle += pendulumDir * (speed * 0.002);
               if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
               if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
 
               const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
               syncControlsTheta(easedAngle);
-              camera.position.x = Math.sin(easedAngle) * pendulumDist;
-              camera.position.y = 0;
-              camera.position.z = Math.cos(easedAngle) * pendulumDist;
+              const sinPhi = Math.sin(originalPhi);
+              const cosPhi = Math.cos(originalPhi);
+              camera.position.x = Math.sin(easedAngle) * sinPhi * pendulumDist;
+              camera.position.y = cosPhi * pendulumDist;
+              camera.position.z = Math.cos(easedAngle) * sinPhi * pendulumDist;
               camera.lookAt(0, 0, 0);
             }
           } else {
