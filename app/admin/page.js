@@ -1415,7 +1415,7 @@ export default function Admin() {
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
                   <label style={s.label}>GLB (máx. {maxSizeKb}kb c/u)</label>
-                  <input type="file" accept=".glb" multiple style={{...s.input, padding: 6}} onChange={async e => {
+                  <input type="file" accept=".glb,.3mf" multiple style={{...s.input, padding: 6}} onChange={async e => {
                     const files = Array.from(e.target.files);
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
