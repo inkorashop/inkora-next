@@ -1541,7 +1541,7 @@ export default function Admin() {
                 >
                   <div style={s.designInfo}>
                     {d.model_url
-                      ? <div style={{...s.designThumb, overflow:'hidden'}}><ModelViewer url={d.model_url} autoRotate={false} hideHint={true} /></div>
+                      ? <img src={d.image_url} alt={d.name} style={s.designThumb} />
                       : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
                     }
                     <div>
