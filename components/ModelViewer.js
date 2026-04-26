@@ -69,19 +69,21 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const amplitude = modelConfig?.pendulum_amplitude ?? 5;
         const PENDULUM_MAX = Math.PI * (0.05 + (amplitude / 10) * 0.35);
         let isDragging = false;
-        let returnTimeout = null;
+        let isReturning = false;
+        let pendulumDist = null;
         if (mode === 'pendulum') {
           controls.autoRotate = false;
           controls.enableRotate = true;
           el.addEventListener('pointerdown', () => {
             isDragging = true;
+            isReturning = false;
             clearTimeout(returnTimeout);
           });
           el.addEventListener('pointerup', () => {
             isDragging = false;
             returnTimeout = setTimeout(() => {
-              pendulumAngle = 0;
-            }, 800);
+              isReturning = true;
+            }, 600);
           });
         }
         controls.enableDamping = true;
@@ -140,15 +142,24 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         let animId;
         const animate = () => {
           animId = requestAnimationFrame(animate);
-          if (mode === 'pendulum' && !isDragging) {
-            pendulumAngle += pendulumDir * (speed * 0.002);
-            if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
-            if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
-            const dist = controls.getDistance ? controls.getDistance() : camera.position.length();
-            const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
-            camera.position.x = Math.sin(easedAngle) * dist;
-            camera.position.z = Math.cos(easedAngle) * dist;
-            camera.lookAt(0, 0, 0);
+          if (mode === 'pendulum') {
+            if (!isDragging) {
+              if (pendulumDist === null) pendulumDist = controls.getDistance ? controls.getDistance() : camera.position.length();
+              if (isReturning) {
+                pendulumAngle += (0 - pendulumAngle) * 0.04;
+                if (Math.abs(pendulumAngle) < 0.001) { pendulumAngle = 0; isReturning = false; }
+              } else {
+                pendulumAngle += pendulumDir * (speed * 0.002);
+                if (pendulumAngle > PENDULUM_MAX) { pendulumAngle = PENDULUM_MAX; pendulumDir = -1; }
+                if (pendulumAngle < -PENDULUM_MAX) { pendulumAngle = -PENDULUM_MAX; pendulumDir = 1; }
+              }
+              const easedAngle = Math.sin((pendulumAngle / PENDULUM_MAX) * (Math.PI / 2)) * PENDULUM_MAX;
+              camera.position.x = Math.sin(easedAngle) * pendulumDist;
+              camera.position.y = 0;
+              camera.position.z = Math.cos(easedAngle) * pendulumDist;
+              camera.lookAt(0, 0, 0);
+              controls.update();
+            }
           }
           controls.update();
           renderer.render(scene, camera);
