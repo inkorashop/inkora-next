@@ -75,7 +75,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        const is3MF = url.toLowerCase().includes('.3mf');
+        const is3MF = url.toLowerCase().includes('.3mf') || modelConfig?._fileType === '3mf';
         const loader = is3MF ? new ThreeMFLoader() : new GLTFLoader();
         loader.load(
           url,

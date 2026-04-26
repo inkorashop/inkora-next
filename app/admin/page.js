@@ -1421,7 +1421,7 @@ export default function Admin() {
                     const newEntries = files.map(file => ({
                       file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
                       category: 'Sin categoría', nameExists: false,
-                      sizeError: file.size > maxSizeKb * 1024, modelFile: file,
+                      sizeError: file.size > maxSizeKb * 1024, modelFile: file, fileType: file.name.split('.').pop().toLowerCase(),
                     }));
                     setPendingFiles(prev => {
                       const existingNames = new Set(prev.map(p => p.modelFile?.name));
@@ -1449,7 +1449,7 @@ export default function Admin() {
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} />
+                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} />
                                 </div>
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }
