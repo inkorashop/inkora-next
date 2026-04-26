@@ -1455,9 +1455,10 @@ export default function Admin() {
               )}
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u)</label>
+                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u — máx. 10 archivos por vez)</label>
                   <input type="file" accept=".glb,.3mf" multiple style={{...s.input, padding: 6}} onChange={async e => {
                     const files = Array.from(e.target.files);
+                    if (files.length > 10) { alert('Podés subir hasta 10 archivos 3D por vez. Seleccioná menos archivos.'); e.target.value = ''; return; }
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
                       file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
