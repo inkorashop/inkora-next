@@ -17,6 +17,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
       try {
         const THREE = await import('three');
         const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+        const { ThreeMFLoader } = await import('three/examples/jsm/loaders/3MFLoader.js');
         const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
 
         if (cancelled) return;
@@ -74,12 +75,13 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        const loader = new GLTFLoader();
+        const is3MF = url.toLowerCase().includes('.3mf');
+        const loader = is3MF ? new ThreeMFLoader() : new GLTFLoader();
         loader.load(
           url,
-          (gltf) => {
+          (result) => {
             if (cancelled) return;
-            const model = gltf.scene;
+            const model = is3MF ? result : result.scene;
             scene.add(model);
 
             // Calcular bounding box DESPUÉS de agregar a la escena
