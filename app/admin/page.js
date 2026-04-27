@@ -2006,6 +2006,19 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:700, color:'#1B2F5E'}}>Pre-seleccionar cuenta Google</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Recuerda el último email usado y lo sugiere automáticamente</div>
+                </div>
+                <div onClick={() => saveSetting('google_login_hint', settings['google_login_hint'] === 'true' ? 'false' : 'true')}
+                  style={{ width: 36, height: 20, borderRadius: 10, background: settings['google_login_hint'] === 'true' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute', top: 2, left: settings['google_login_hint'] === 'true' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={s.card}>
               <h2 style={s.sectionTitle}>Orden de pestañas</h2>
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>

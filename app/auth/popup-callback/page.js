@@ -13,6 +13,11 @@ export default function PopupCallback() {
         if (session.user?.email) {
           localStorage.setItem('inkora_login_hint', session.user.email);
         }
+        // Sincronizar el setting desde Supabase
+        supabase.from('settings').select('value').eq('key', 'google_login_hint').single()
+          .then(({ data }) => {
+            localStorage.setItem('inkora_google_hint_enabled', data?.value === 'true' ? 'true' : 'false');
+          });
         if (window.opener) {
           window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, 'https://www.inkora.com.ar');
           window.close();
