@@ -72,6 +72,7 @@ lib/supabase.js
 middleware.js
 next.config.mjs
 package.json
+public/og-image.jpg
 README.md
 sql/setup.sql
 </directory_structure>
@@ -142,45 +143,139 @@ yarn-error.log*
 next-env.d.ts
 </file>
 
-<file path="app/api/upload-image/route.js">
+<file path="app/auth/callback/route.js">
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY
-);
+export async function GET(request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
+  const next = searchParams.get('next') || '/';
 
-export async function POST(request) {
-  try {
-    const { fileBase64, fileName, mimeType, folder } = await request.json();
-
-    const buffer = Buffer.from(fileBase64, 'base64');
-    function sanitizeFileName(name) {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9.\-_]/g, '-')
-    .replace(/-+/g, '-')
-    .toLowerCase();
-}
-const safeName = sanitizeFileName(fileName);
-const uniqueName = `${folder || 'thumbnails'}/${Date.now()}-${safeName}`;
-
-    const { error } = await supabase.storage
-      .from('assets')
-      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
-
+  if (code) {
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_KEY,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Auth callback error:', error.message);
+      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(error.message)}`);
     }
-
-    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
-
-    return NextResponse.json({ url: data.publicUrl });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
   }
+
+  return NextResponse.redirect(`${origin}${next}`);
+}
+</file>
+
+<file path="app/auth/reset-password/page.js">
+'use client';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+
+const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
+
+export default function ResetPassword() {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true);
+      else setError('El link es inválido o ya expiró. Pedí uno nuevo.');
+    });
+  }, []);
+
+  async function handleSubmit() {
+    setError('');
+    if (!password) { setError('Ingresá una contraseña.'); return; }
+    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (password !== confirm) { setError('Las contraseñas no coinciden.'); return; }
+    setLoading(true);
+    const { error: e } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+    if (e) { setError(e.message); return; }
+    setSuccess(true);
+    setTimeout(() => { window.location.href = '/'; }, 2500);
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: "'Barlow', sans-serif" }}>
+      <div style={{ background: 'white', borderRadius: 16, padding: 40, width: '100%', maxWidth: 400, boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <img src={LOGO} alt="INKORA" style={{ height: 48, marginBottom: 4 }} />
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Nueva contraseña</h2>
+
+        {success ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+            <p style={{ color: '#15803d', fontWeight: 600, fontSize: 15 }}>¡Contraseña actualizada!</p>
+            <p style={{ color: '#9aa3bc', fontSize: 13 }}>Redirigiendo...</p>
+          </div>
+        ) : !ready ? (
+          <p style={{ color: error ? '#dc2626' : '#9aa3bc', fontSize: 14, textAlign: 'center' }}>
+            {error || 'Verificando...'}
+          </p>
+        ) : (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <input
+              type="password"
+              placeholder="Nueva contraseña"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box', outline: 'none' }}
+            />
+            <input
+              type="password"
+              placeholder="Repetir contraseña"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
+              style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box', outline: 'none' }}
+            />
+            {error && <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>{error}</div>}
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? 'Guardando...' : 'Guardar contraseña'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/catalogo/[producto]/page.js">
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function ProductoPage({ params }) {
+  const router = useRouter();
+  useEffect(() => {
+    
+    router.replace(`/catalogo?producto=${params.producto}`);
+  }, [params.producto, router]);
+  return null;
 }
 </file>
 
@@ -271,31 +366,6 @@ button:focus-within {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-</file>
-
-<file path="app/layout.js">
-import { Barlow } from 'next/font/google';
-import './globals.css';
-import { CartProvider } from '@/contexts/CartContext';
-
-const barlow = Barlow({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
-
-export const metadata = {
-  title: 'INKORA',
-  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="es" className={barlow.className}>
-      <body><CartProvider>{children}</CartProvider></body>
-    </html>
-  );
 }
 </file>
 
@@ -467,6 +537,240 @@ a.secondary {
 }
 </file>
 
+<file path="components/AuthModal.js">
+'use client';
+
+import { useState } from 'react';
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+
+const supabase = createBrowserSupabaseClient();
+
+function translateError(msg) {
+  if (!msg) return 'Ocurrió un error. Intentá de nuevo.';
+  const m = msg.toLowerCase();
+  if (m.includes('email not confirmed'))            return 'Por favor confirmá tu email antes de ingresar.';
+  if (m.includes('invalid login credentials') ||
+      m.includes('invalid email or password') ||
+      m.includes('email and password') ||
+      m.includes('wrong password'))                 return 'Email o contraseña incorrectos.';
+  if (m.includes('user already registered') ||
+      m.includes('already been registered') ||
+      m.includes('already registered'))             return 'Ya existe una cuenta con ese email.';
+  if (m.includes('password should be at least') ||
+      m.includes('password must be at least') ||
+      m.includes('at least 6'))                     return 'La contraseña debe tener al menos 6 caracteres.';
+  if (m.includes('unable to validate email') ||
+      m.includes('invalid email'))                  return 'El email ingresado no es válido.';
+  if (m.includes('email rate limit') ||
+      m.includes('too many requests') ||
+      m.includes('rate limit'))                     return 'Demasiados intentos. Esperá unos minutos.';
+  if (m.includes('network') ||
+      m.includes('fetch'))                          return 'Error de conexión. Verificá tu internet.';
+  if (m.includes('signup') && m.includes('disabled')) return 'El registro está deshabilitado temporalmente.';
+  return msg;
+}
+
+export default function AuthModal({ onClose, onSuccess }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') === 'light' : false;
+
+  async function handleSubmit() {
+    setError('');
+    if (!form.email || !form.password) { setError('Completá todos los campos.'); return; }
+    setLoading(true);
+    try {
+      if (mode === 'login') {
+        const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        if (e) throw e;
+        if (!data.user) throw new Error('invalid login credentials');
+        onSuccess(data.user);
+      } else {
+        if (!form.name.trim()) { setError('Ingresá el nombre de tu comercio.'); setLoading(false); return; }
+        if (!form.phone.trim()) { setError('Ingresá tu teléfono.'); setLoading(false); return; }
+        const { data, error: e } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+          options: { data: { full_name: form.name, phone: form.phone } },
+        });
+        if (e) throw e;
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setError('Ya existe una cuenta con ese email.');
+          setLoading(false);
+          return;
+        }
+        if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
+        onSuccess(data.user);
+      }
+    } catch (e) {
+      setError(translateError(e.message));
+    }
+    setLoading(false);
+  }
+
+  async function handleReset() {
+    setError('');
+    if (!form.email) { setError('Ingresá tu email.'); return; }
+    setLoading(true);
+    const { error: e } = await supabase.auth.resetPasswordForEmail(form.email, {
+      redirectTo: 'https://www.inkora.com.ar/auth/reset-password',
+    });
+    setLoading(false);
+    if (e) { setError(translateError(e.message)); return; }
+    setResetSent(true);
+  }
+
+  async function handleGoogle() {
+    setError('');
+    const next = window.location.pathname + window.location.search;
+    const { error: e } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` },
+    });
+    if (e) setError(translateError(e.message));
+  }
+
+  const modalBg = isDark ? 'rgba(27,47,94,0.75)' : 'rgba(240,244,255,0.82)';
+  const headerBg = isDark ? 'rgba(15,30,61,0.6)' : 'rgba(200,215,255,0.5)';
+  const headerColor = isDark ? 'white' : '#1B2F5E';
+  const inputBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)';
+  const inputColor = isDark ? 'white' : '#1B2F5E';
+  const inputBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
+  const dividerColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
+  const dividerTextColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(27,47,94,0.4)';
+  const tabBg = isDark ? 'rgba(0,0,0,0.2)' : 'rgba(27,47,94,0.08)';
+  const tabColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.4)';
+  const tabActiveColor = isDark ? 'white' : '#1B2F5E';
+  const tabActiveBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.8)';
+  const btnEmailBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
+  const btnEmailColor = isDark ? 'white' : '#1B2F5E';
+  const btnEmailBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
+  const hintColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.5)';
+  const linkColor = isDark ? '#93c5fd' : '#2D6BE4';
+
+  const inputStyle = { ...styles.input, background: inputBg, color: inputColor, border: inputBorder };
+
+  return (
+    <div style={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{...styles.modal, background: modalBg}}>
+        <div style={{...styles.header, background: headerBg, color: headerColor}}>
+          <span>{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={styles.body}>
+
+          <div style={{...styles.tabs, background: tabBg}}>
+            <button style={{...styles.tab, color: mode === 'login' ? tabActiveColor : tabColor, background: mode === 'login' ? tabActiveBg : 'none', boxShadow: mode === 'login' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('login'); setError(''); }}>
+              Ingresar
+            </button>
+            <button style={{...styles.tab, color: mode === 'register' ? tabActiveColor : tabColor, background: mode === 'register' ? tabActiveBg : 'none', boxShadow: mode === 'register' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('register'); setError(''); }}>
+              Registrarse
+            </button>
+          </div>
+
+          {mode !== 'reset' && <button style={styles.btnGoogle} onClick={handleGoogle}>
+            <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continuar con Google
+          </button>}
+
+          {mode !== 'reset' && <div style={{...styles.divider, borderTopColor: dividerColor}}>
+            <span style={{padding:'0 10px', position:'relative', zIndex:1, color: dividerTextColor}}>o</span>
+          </div>}
+
+          {mode !== 'reset' && mode === 'register' && (
+            <div style={styles.formGroup}>
+              <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Nombre de tu comercio" />
+            </div>
+          )}
+
+          {mode === 'register' && (
+            <div style={styles.formGroup}>
+              <input style={inputStyle} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value.replace(/[^0-9]/g, '')}))} placeholder="Teléfono — ej: 3764000000" />
+            </div>
+          )}
+
+          <div style={styles.formGroup}>
+            <input style={inputStyle} type="email" value={form.email}
+              onChange={e => setForm(f => ({...f, email: e.target.value}))}
+              placeholder={mode === 'register' ? 'Email — ej: tu@email.com' : 'tu@email.com'} />
+          </div>
+
+          <div style={styles.formGroup}>
+            <input style={inputStyle} type="password" value={form.password}
+              onChange={e => setForm(f => ({...f, password: e.target.value}))}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
+              placeholder={mode === 'register' ? 'Contraseña — mínimo 6 caracteres' : '••••••'} />
+          </div>
+
+          {error && <div style={styles.errorBox}>{error}</div>}
+
+          {mode !== 'reset' && <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
+            {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
+          </button>}
+
+          {mode === 'login' && (
+            <p style={{...styles.hint, color: hintColor}}>¿No tenés cuenta? <button style={{...styles.linkBtn, color: linkColor}} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
+          )}
+          {mode === 'login' && (
+            <p style={{...styles.hint, color: hintColor, marginTop: 4}}>
+              <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('reset'); setError(''); setResetSent(false); }}>¿Olvidaste tu contraseña?</button>
+            </p>
+          )}
+          {mode === 'reset' && !resetSent && (
+            <div>
+              <p style={{...styles.hint, color: hintColor, marginBottom: 12, textAlign: 'left'}}>Ingresá tu email y te mandamos un link para resetear tu contraseña.</p>
+              <div style={styles.formGroup}>
+                <input style={inputStyle} type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="tu@email.com" onKeyDown={e => { if (e.key === 'Enter') handleReset(); }} />
+              </div>
+              {error && <div style={styles.errorBox}>{error}</div>}
+              <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleReset}>
+                {loading ? 'Enviando...' : 'Enviar link'}
+              </button>
+              <p style={{...styles.hint, color: hintColor, marginTop: 8}}>
+                <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('login'); setError(''); }}>Volver</button>
+              </p>
+            </div>
+          )}
+          {mode === 'reset' && resetSent && (
+            <div style={{textAlign: 'center', padding: '16px 0'}}>
+              <div style={{fontSize: 32, marginBottom: 12}}>📧</div>
+              <p style={{color: hintColor, fontSize: 14, lineHeight: 1.5}}>Te mandamos un email con el link para resetear tu contraseña. Revisá tu bandeja de entrada.</p>
+              <button style={{...styles.linkBtn, color: linkColor, marginTop: 16, display: 'block', margin: '16px auto 0'}} onClick={() => { setMode('login'); setError(''); setResetSent(false); }}>Volver al inicio</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' },
+  modal: { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' },
+  header: { padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' },
+  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
+  body: { padding: 24, display: 'flex', flexDirection: 'column' },
+  tabs: { display: 'flex', borderRadius: 10, padding: 4, marginBottom: 20 },
+  tab: { flex: 1, border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', transition: 'background 0.2s, color 0.2s' },
+  formGroup: { marginBottom: 12 },
+  input: { width: '100%', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, boxSizing: 'border-box', outline: 'none' },
+  errorBox: { background: 'rgba(220,38,38,0.2)', color: '#fca5a5', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 14, border: '1px solid rgba(220,38,38,0.3)' },
+  btnEmail: { width: '100%', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'Barlow, sans-serif' },
+  divider: { textAlign: 'center', fontSize: 12, marginBottom: 16, marginTop: 4, position: 'relative', borderTop: '1px solid' },
+  btnGoogle: { width: '100%', background: 'white', color: '#2d3352', border: 'none', borderRadius: 10, padding: '13px 16px', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', fontFamily: 'Barlow, sans-serif' },
+  hint: { textAlign: 'center', fontSize: 13 },
+  linkBtn: { background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'Barlow, sans-serif' },
+};
+</file>
+
 <file path="jsconfig.json">
 {
   "compilerOptions": {
@@ -474,6 +778,57 @@ a.secondary {
       "@/*": ["./*"]
     }
   }
+}
+</file>
+
+<file path="lib/auth.js">
+import { supabase } from '@/lib/supabase';
+
+export async function signUp({ email, password, name }) {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } },
+  });
+}
+
+export async function signIn({ email, password }) {
+  return supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
+  });
+}
+
+export async function signOut() {
+  return supabase.auth.signOut();
+}
+
+export async function getUser() {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('*, localities(*)')
+    .eq('id', userId)
+    .single();
+  return data;
+}
+</file>
+
+<file path="lib/supabase-browser.js">
+'use client';
+
+import { supabase } from '@/lib/supabase';
+
+export function createBrowserSupabaseClient() {
+  return supabase;
 }
 </file>
 
@@ -500,6 +855,68 @@ export function createSupabaseServerClient() {
     }
   );
 }
+</file>
+
+<file path="lib/supabase.js">
+import { createBrowserClient } from '@supabase/ssr';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
+
+export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
+</file>
+
+<file path="middleware.js">
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse } from 'next/server';
+
+export async function middleware(request) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  await supabase.auth.getUser();
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+};
+</file>
+
+<file path="next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
+};
+
+export default nextConfig;
 </file>
 
 <file path="package.json">
@@ -698,87 +1115,45 @@ export default function AdminTabRedirect() {
 }
 </file>
 
-<file path="app/auth/reset-password/page.js">
-'use client';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+<file path="app/api/upload-image/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+);
 
-export default function ResetPassword() {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [ready, setReady] = useState(false);
+export async function POST(request) {
+  try {
+    const { fileBase64, fileName, mimeType, folder } = await request.json();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true);
-      else setError('El link es inválido o ya expiró. Pedí uno nuevo.');
-    });
-  }, []);
+    const buffer = Buffer.from(fileBase64, 'base64');
+    function sanitizeFileName(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+}
+const safeName = sanitizeFileName(fileName);
+const uniqueName = `${folder || 'thumbnails'}/${safeName}-${Date.now()}`;
 
-  async function handleSubmit() {
-    setError('');
-    if (!password) { setError('Ingresá una contraseña.'); return; }
-    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
-    if (password !== confirm) { setError('Las contraseñas no coinciden.'); return; }
-    setLoading(true);
-    const { error: e } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    setSuccess(true);
-    setTimeout(() => { window.location.href = '/'; }, 2500);
+    const { error } = await supabase.storage
+      .from('assets')
+      .upload(uniqueName, buffer, { contentType: mimeType, upsert: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const { data } = supabase.storage.from('assets').getPublicUrl(uniqueName);
+
+    return NextResponse.json({ url: data.publicUrl });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: "'Barlow', sans-serif" }}>
-      <div style={{ background: 'white', borderRadius: 16, padding: 40, width: '100%', maxWidth: 400, boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <img src={LOGO} alt="INKORA" style={{ height: 48, marginBottom: 4 }} />
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Nueva contraseña</h2>
-
-        {success ? (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-            <p style={{ color: '#15803d', fontWeight: 600, fontSize: 15 }}>¡Contraseña actualizada!</p>
-            <p style={{ color: '#9aa3bc', fontSize: 13 }}>Redirigiendo...</p>
-          </div>
-        ) : !ready ? (
-          <p style={{ color: error ? '#dc2626' : '#9aa3bc', fontSize: 14, textAlign: 'center' }}>
-            {error || 'Verificando...'}
-          </p>
-        ) : (
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input
-              type="password"
-              placeholder="Nueva contraseña"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box', outline: 'none' }}
-            />
-            <input
-              type="password"
-              placeholder="Repetir contraseña"
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-              style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box', outline: 'none' }}
-            />
-            {error && <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>{error}</div>}
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.6 : 1 }}
-            >
-              {loading ? 'Guardando...' : 'Guardar contraseña'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 </file>
 
@@ -893,60 +1268,6 @@ export function CartProvider({ children }) {
 export function useCart() {
   return useContext(CartContext);
 }
-</file>
-
-<file path="lib/auth.js">
-import { supabase } from '@/lib/supabase';
-
-export async function signUp({ email, password, name }) {
-  return supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { full_name: name } },
-  });
-}
-
-export async function signIn({ email, password }) {
-  return supabase.auth.signInWithPassword({ email, password });
-}
-
-export async function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: 'https://www.inkora.com.ar/auth/callback' },
-  });
-}
-
-export async function signOut() {
-  return supabase.auth.signOut();
-}
-
-export async function getUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
-
-export async function getUserProfile(userId) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('*, localities(*)')
-    .eq('id', userId)
-    .single();
-  return data;
-}
-</file>
-
-<file path="next.config.mjs">
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '20mb',
-    },
-  },
-};
-
-export default nextConfig;
 </file>
 
 <file path="app/api/send-email/route.js">
@@ -1068,30 +1389,6 @@ export async function POST(request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-</file>
-
-<file path="app/catalogo/[producto]/page.js">
-'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-export default function ProductoPage({ params }) {
-  const router = useRouter();
-  useEffect(() => {
-    
-    router.replace(`/catalogo?producto=${params.producto}`);
-  }, [params.producto, router]);
-  return null;
-}
-</file>
-
-<file path="lib/supabase.js">
-import { createBrowserClient } from '@supabase/ssr';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
-
-export const supabase = createBrowserClient(supabaseUrl, supabaseKey);
 </file>
 
 <file path="app/dashboard/page.js">
@@ -1356,547 +1653,6 @@ const [savingProfile, setSavingProfile] = useState(false);
 
       <footer style={{ textAlign: 'center', padding: '20px', fontSize: 12, color: 'rgba(0,0,0,0.2)', letterSpacing: 1, marginTop: 20 }}>
         INKORA® Soluciones Gráficas
-      </footer>
-    </div>
-  );
-}
-</file>
-
-<file path="lib/supabase-browser.js">
-'use client';
-
-import { supabase } from '@/lib/supabase';
-
-export function createBrowserSupabaseClient() {
-  return supabase;
-}
-</file>
-
-<file path="middleware.js">
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse } from 'next/server';
-
-export async function middleware(request) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  await supabase.auth.getUser();
-
-  return response;
-}
-
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-};
-</file>
-
-<file path="app/auth/callback/route.js">
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-
-export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') || '/';
-
-  if (code) {
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_KEY,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      console.error('Auth callback error:', error.message);
-      return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(error.message)}`);
-    }
-  }
-
-  return NextResponse.redirect(`${origin}${next}`);
-}
-</file>
-
-<file path="components/AuthModal.js">
-'use client';
-
-import { useState } from 'react';
-import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
-
-const supabase = createBrowserSupabaseClient();
-
-function translateError(msg) {
-  if (!msg) return 'Ocurrió un error. Intentá de nuevo.';
-  const m = msg.toLowerCase();
-  if (m.includes('email not confirmed'))            return 'Por favor confirmá tu email antes de ingresar.';
-  if (m.includes('invalid login credentials') ||
-      m.includes('invalid email or password') ||
-      m.includes('email and password') ||
-      m.includes('wrong password'))                 return 'Email o contraseña incorrectos.';
-  if (m.includes('user already registered') ||
-      m.includes('already been registered') ||
-      m.includes('already registered'))             return 'Ya existe una cuenta con ese email.';
-  if (m.includes('password should be at least') ||
-      m.includes('password must be at least') ||
-      m.includes('at least 6'))                     return 'La contraseña debe tener al menos 6 caracteres.';
-  if (m.includes('unable to validate email') ||
-      m.includes('invalid email'))                  return 'El email ingresado no es válido.';
-  if (m.includes('email rate limit') ||
-      m.includes('too many requests') ||
-      m.includes('rate limit'))                     return 'Demasiados intentos. Esperá unos minutos.';
-  if (m.includes('network') ||
-      m.includes('fetch'))                          return 'Error de conexión. Verificá tu internet.';
-  if (m.includes('signup') && m.includes('disabled')) return 'El registro está deshabilitado temporalmente.';
-  return msg;
-}
-
-export default function AuthModal({ onClose, onSuccess }) {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [resetSent, setResetSent] = useState(false);
-  const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') === 'light' : false;
-
-  async function handleSubmit() {
-    setError('');
-    if (!form.email || !form.password) { setError('Completá todos los campos.'); return; }
-    setLoading(true);
-    try {
-      if (mode === 'login') {
-        const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-        if (e) throw e;
-        if (!data.user) throw new Error('invalid login credentials');
-        onSuccess(data.user);
-      } else {
-        if (!form.name.trim()) { setError('Ingresá el nombre de tu comercio.'); setLoading(false); return; }
-        if (!form.phone.trim()) { setError('Ingresá tu teléfono.'); setLoading(false); return; }
-        const { data, error: e } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: { data: { full_name: form.name, phone: form.phone } },
-        });
-        if (e) throw e;
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
-          setError('Ya existe una cuenta con ese email.');
-          setLoading(false);
-          return;
-        }
-        if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
-        onSuccess(data.user);
-      }
-    } catch (e) {
-      setError(translateError(e.message));
-    }
-    setLoading(false);
-  }
-
-  async function handleReset() {
-    setError('');
-    if (!form.email) { setError('Ingresá tu email.'); return; }
-    setLoading(true);
-    const { error: e } = await supabase.auth.resetPasswordForEmail(form.email, {
-      redirectTo: 'https://www.inkora.com.ar/auth/reset-password',
-    });
-    setLoading(false);
-    if (e) { setError(translateError(e.message)); return; }
-    setResetSent(true);
-  }
-
-  async function handleGoogle() {
-    setError('');
-    const next = window.location.pathname + window.location.search;
-    const { error: e } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `https://www.inkora.com.ar/auth/callback?next=${encodeURIComponent(next)}` },
-    });
-    if (e) setError(translateError(e.message));
-  }
-
-  const modalBg = isDark ? 'rgba(27,47,94,0.75)' : 'rgba(240,244,255,0.82)';
-  const headerBg = isDark ? 'rgba(15,30,61,0.6)' : 'rgba(200,215,255,0.5)';
-  const headerColor = isDark ? 'white' : '#1B2F5E';
-  const inputBg = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)';
-  const inputColor = isDark ? 'white' : '#1B2F5E';
-  const inputBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
-  const dividerColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
-  const dividerTextColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(27,47,94,0.4)';
-  const tabBg = isDark ? 'rgba(0,0,0,0.2)' : 'rgba(27,47,94,0.08)';
-  const tabColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.4)';
-  const tabActiveColor = isDark ? 'white' : '#1B2F5E';
-  const tabActiveBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.8)';
-  const btnEmailBg = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(27,47,94,0.15)';
-  const btnEmailColor = isDark ? 'white' : '#1B2F5E';
-  const btnEmailBorder = isDark ? '1.5px solid rgba(255,255,255,0.2)' : '1.5px solid rgba(27,47,94,0.2)';
-  const hintColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(27,47,94,0.5)';
-  const linkColor = isDark ? '#93c5fd' : '#2D6BE4';
-
-  const inputStyle = { ...styles.input, background: inputBg, color: inputColor, border: inputBorder };
-
-  return (
-    <div style={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{...styles.modal, background: modalBg}}>
-        <div style={{...styles.header, background: headerBg, color: headerColor}}>
-          <span>{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <div style={styles.body}>
-
-          <div style={{...styles.tabs, background: tabBg}}>
-            <button style={{...styles.tab, color: mode === 'login' ? tabActiveColor : tabColor, background: mode === 'login' ? tabActiveBg : 'none', boxShadow: mode === 'login' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('login'); setError(''); }}>
-              Ingresar
-            </button>
-            <button style={{...styles.tab, color: mode === 'register' ? tabActiveColor : tabColor, background: mode === 'register' ? tabActiveBg : 'none', boxShadow: mode === 'register' ? '0 1px 4px rgba(0,0,0,0.15)' : 'none'}} onClick={() => { setMode('register'); setError(''); }}>
-              Registrarse
-            </button>
-          </div>
-
-          {mode !== 'reset' && <button style={styles.btnGoogle} onClick={handleGoogle}>
-            <svg viewBox="0 0 24 24" width="20" height="20" style={{flexShrink:0}}>
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continuar con Google
-          </button>}
-
-          {mode !== 'reset' && <div style={{...styles.divider, borderTopColor: dividerColor}}>
-            <span style={{padding:'0 10px', position:'relative', zIndex:1, color: dividerTextColor}}>o</span>
-          </div>}
-
-          {mode !== 'reset' && mode === 'register' && (
-            <div style={styles.formGroup}>
-              <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Nombre de tu comercio" />
-            </div>
-          )}
-
-          {mode === 'register' && (
-            <div style={styles.formGroup}>
-              <input style={inputStyle} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value.replace(/[^0-9]/g, '')}))} placeholder="Teléfono — ej: 3764000000" />
-            </div>
-          )}
-
-          <div style={styles.formGroup}>
-            <input style={inputStyle} type="email" value={form.email}
-              onChange={e => setForm(f => ({...f, email: e.target.value}))}
-              placeholder={mode === 'register' ? 'Email — ej: tu@email.com' : 'tu@email.com'} />
-          </div>
-
-          <div style={styles.formGroup}>
-            <input style={inputStyle} type="password" value={form.password}
-              onChange={e => setForm(f => ({...f, password: e.target.value}))}
-              onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-              placeholder={mode === 'register' ? 'Contraseña — mínimo 6 caracteres' : '••••••'} />
-          </div>
-
-          {error && <div style={styles.errorBox}>{error}</div>}
-
-          {mode !== 'reset' && <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleSubmit}>
-            {loading ? 'Cargando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
-          </button>}
-
-          {mode === 'login' && (
-            <p style={{...styles.hint, color: hintColor}}>¿No tenés cuenta? <button style={{...styles.linkBtn, color: linkColor}} onClick={() => { setMode('register'); setError(''); }}>Registrate gratis</button></p>
-          )}
-          {mode === 'login' && (
-            <p style={{...styles.hint, color: hintColor, marginTop: 4}}>
-              <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('reset'); setError(''); setResetSent(false); }}>¿Olvidaste tu contraseña?</button>
-            </p>
-          )}
-          {mode === 'reset' && !resetSent && (
-            <div>
-              <p style={{...styles.hint, color: hintColor, marginBottom: 12, textAlign: 'left'}}>Ingresá tu email y te mandamos un link para resetear tu contraseña.</p>
-              <div style={styles.formGroup}>
-                <input style={inputStyle} type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="tu@email.com" onKeyDown={e => { if (e.key === 'Enter') handleReset(); }} />
-              </div>
-              {error && <div style={styles.errorBox}>{error}</div>}
-              <button style={{...styles.btnEmail, background: btnEmailBg, color: btnEmailColor, border: btnEmailBorder, opacity: loading ? 0.6 : 1}} disabled={loading} onClick={handleReset}>
-                {loading ? 'Enviando...' : 'Enviar link'}
-              </button>
-              <p style={{...styles.hint, color: hintColor, marginTop: 8}}>
-                <button style={{...styles.linkBtn, color: hintColor, textDecoration: 'underline'}} onClick={() => { setMode('login'); setError(''); }}>Volver</button>
-              </p>
-            </div>
-          )}
-          {mode === 'reset' && resetSent && (
-            <div style={{textAlign: 'center', padding: '16px 0'}}>
-              <div style={{fontSize: 32, marginBottom: 12}}>📧</div>
-              <p style={{color: hintColor, fontSize: 14, lineHeight: 1.5}}>Te mandamos un email con el link para resetear tu contraseña. Revisá tu bandeja de entrada.</p>
-              <button style={{...styles.linkBtn, color: linkColor, marginTop: 16, display: 'block', margin: '16px auto 0'}} onClick={() => { setMode('login'); setError(''); setResetSent(false); }}>Volver al inicio</button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const styles = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' },
-  modal: { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' },
-  header: { padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' },
-  closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
-  body: { padding: 24, display: 'flex', flexDirection: 'column' },
-  tabs: { display: 'flex', borderRadius: 10, padding: 4, marginBottom: 20 },
-  tab: { flex: 1, border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', transition: 'background 0.2s, color 0.2s' },
-  formGroup: { marginBottom: 12 },
-  input: { width: '100%', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, boxSizing: 'border-box', outline: 'none' },
-  errorBox: { background: 'rgba(220,38,38,0.2)', color: '#fca5a5', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 14, border: '1px solid rgba(220,38,38,0.3)' },
-  btnEmail: { width: '100%', borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'Barlow, sans-serif' },
-  divider: { textAlign: 'center', fontSize: 12, marginBottom: 16, marginTop: 4, position: 'relative', borderTop: '1px solid' },
-  btnGoogle: { width: '100%', background: 'white', color: '#2d3352', border: 'none', borderRadius: 10, padding: '13px 16px', fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', fontFamily: 'Barlow, sans-serif' },
-  hint: { textAlign: 'center', fontSize: 13 },
-  linkBtn: { background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'Barlow, sans-serif' },
-};
-</file>
-
-<file path="app/page.js">
-'use client';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import Header from '@/components/Header';
-
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
-
-function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
-
-export default function Landing() {
-  const [products, setProducts] = useState([]);
-  const [hovered, setHovered] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [uiSettings, setUiSettings] = useState({});
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  useEffect(() => {
-    
-
-    supabase.from('products').select('*').eq('active', true).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
-
-    supabase.from('settings').select('*')
-      .then(({ data }) => {
-        if (data) {
-          const map = {};
-          data.forEach(s => { map[s.key] = s.value; });
-          setUiSettings(map);
-        }
-      });
-
-    const handler = () => {
-      const saved = localStorage.getItem('inkora_theme');
-      if (saved) setDarkMode(saved === 'dark');
-    };
-    window.addEventListener('storage', handler);
-    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
-
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('*').eq('key', 'landing_mode')
-        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
-    }
-
-    let tabInterval;
-    let tabToggle = false;
-
-    function startTabAnim(cfg) {
-      const text = cfg.tab_text || 'INKORA 🔷';
-      const interval = parseInt(cfg.tab_interval) || 1000;
-      const onAway = cfg.tab_on_away === 'true';
-      const onActive = cfg.tab_on_active === 'true';
-      clearInterval(tabInterval);
-
-      if (!onAway && !onActive) return;
-
-      function animate() {
-        clearInterval(tabInterval);
-        tabInterval = setInterval(() => {
-          document.title = tabToggle ? 'INKORA' : text;
-          tabToggle = !tabToggle;
-        }, interval);
-      }
-
-      function stop() {
-        clearInterval(tabInterval);
-        tabToggle = false;
-        document.title = 'INKORA';
-      }
-
-      if (onAway && onActive) {
-        animate();
-      } else {
-        function handleVisibility() {
-          if (document.hidden && onAway) { animate(); }
-          else if (!document.hidden && onActive) { animate(); }
-          else { stop(); }
-        }
-        document.addEventListener('visibilitychange', handleVisibility);
-        if (onActive && !document.hidden) animate();
-      }
-    }
-
-    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
-      .then(({ data }) => {
-        if (data) {
-          const cfg = {};
-          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
-          startTabAnim(cfg);
-        }
-      });
-
-    return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('inkora_theme_change', handler);
-      clearInterval(tabInterval);
-    };
-  }, []);
-
-  return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
-      <style>{`
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        .page-exit { animation: fadeOut 0.3s ease forwards; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        .product-card { animation: fadeUp 0.5s ease both; }
-        .product-card:hover .card-overlay { opacity: 1 !important; }
-        .product-card:hover .card-img { transform: scale(1.05); }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
-        .product-card:nth-child(1) { --card-index: 0.5; }
-        .product-card:nth-child(2) { --card-index: 1.5; }
-        .product-card:nth-child(3) { --card-index: 2.5; }
-        .product-card:nth-child(4) { --card-index: 3.5; }
-        .product-card:nth-child(5) { --card-index: 0.8; }
-        .product-card:nth-child(6) { --card-index: 1.8; }
-        .product-card:nth-child(7) { --card-index: 2.8; }
-        .product-card:nth-child(8) { --card-index: 3.8; }
-        .product-card:nth-child(9) { --card-index: 1.2; }
-        .product-card:nth-child(10) { --card-index: 2.2; }
-        .product-card:nth-child(11) { --card-index: 3.2; }
-        .product-card:nth-child(12) { --card-index: 0.3; }
-      `}</style>
-
-      <Header showCart={true} page="landing" />
-
-      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
-          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
-        </h1>
-        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
-          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
-        </p>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
-        {products.map((p, i) => (
-          <a
-            key={p.id}
-            href={"/catalogo/" + toSlug(p.name)}
-            className="product-card"
-            onClick={e => {
-              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-              e.preventDefault();
-              document.body.classList.add('page-exit');
-              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
-            }}
-            style={{
-              animationDelay: (i * 0.1) + "s",
-              textDecoration: 'none',
-              borderRadius: 20,
-              overflow: 'hidden',
-              position: 'relative',
-              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
-              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
-              display: 'block',
-              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
-              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-              transform: 'translateY(0)',
-              zIndex: hovered === p.id ? 0 : 1
-            }}
-            onMouseEnter={() => setHovered(p.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
-              {p.landing_image
-                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
-                : [...Array(4)].map((_, j) => (
-                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
-                  ))
-              }
-            </div>
-
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
-
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
-                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-
-      {uiSettings['landing_show_whatsapp'] !== 'false' && (
-        <a
-          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
-          target="_blank"
-          rel="noreferrer"
-          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
-        >
-          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-          </svg>
-        </a>
-      )}
-
-      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
-        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
       </footer>
     </div>
   );
@@ -2216,12 +1972,269 @@ export default function Header({ headerVisible = true, showCart = false, page = 
 }
 </file>
 
+<file path="app/layout.js">
+import { Barlow } from 'next/font/google';
+import './globals.css';
+import { CartProvider } from '@/contexts/CartContext';
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'INKORA',
+  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
+  openGraph: {
+    title: 'INKORA - Catálogo de diseños',
+    description: 'Seleccioná tus diseños y armá tu pedido.',
+    url: 'https://www.inkora.com.ar',
+    images: [
+      {
+        url: 'https://www.inkora.com.ar/og-image.jpg',
+        width: 1200,
+        height: 630,
+      }
+    ],
+  },
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" className={barlow.className}>
+      <body><CartProvider>{children}</CartProvider></body>
+    </html>
+  );
+}
+</file>
+
+<file path="app/page.js">
+'use client';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import Header from '@/components/Header';
+
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+export default function Landing() {
+  const [products, setProducts] = useState([]);
+  const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    
+
+    supabase.from('products').select('*').eq('active', true).order('created_at')
+      .then(({ data }) => { if (data) setProducts(data); });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+        }
+      });
+
+    const handler = () => {
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
+    };
+    window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    }
+
+    let tabInterval;
+    let tabToggle = false;
+
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const onAway = cfg.tab_on_away === 'true';
+      const onActive = cfg.tab_on_active === 'true';
+      clearInterval(tabInterval);
+
+      if (!onAway && !onActive) return;
+
+      function animate() {
+        clearInterval(tabInterval);
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      function stop() {
+        clearInterval(tabInterval);
+        tabToggle = false;
+        document.title = 'INKORA';
+      }
+
+      if (onAway && onActive) {
+        animate();
+      } else {
+        function handleVisibility() {
+          if (document.hidden && onAway) { animate(); }
+          else if (!document.hidden && onActive) { animate(); }
+          else { stop(); }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
+        if (onActive && !document.hidden) animate();
+      }
+    }
+
+    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+      clearInterval(tabInterval);
+    };
+  }, []);
+
+  return (
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
+      <style>{`
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .product-card { animation: fadeUp 0.5s ease both; }
+        .product-card:hover .card-overlay { opacity: 1 !important; }
+        .product-card:hover .card-img { transform: scale(1.05); }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
+        .product-card:nth-child(1) { --card-index: 0.5; }
+        .product-card:nth-child(2) { --card-index: 1.5; }
+        .product-card:nth-child(3) { --card-index: 2.5; }
+        .product-card:nth-child(4) { --card-index: 3.5; }
+        .product-card:nth-child(5) { --card-index: 0.8; }
+        .product-card:nth-child(6) { --card-index: 1.8; }
+        .product-card:nth-child(7) { --card-index: 2.8; }
+        .product-card:nth-child(8) { --card-index: 3.8; }
+        .product-card:nth-child(9) { --card-index: 1.2; }
+        .product-card:nth-child(10) { --card-index: 2.2; }
+        .product-card:nth-child(11) { --card-index: 3.2; }
+        .product-card:nth-child(12) { --card-index: 0.3; }
+      `}</style>
+
+      <Header showCart={true} page="landing" />
+
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
+          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
+        </h1>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
+          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
+        </p>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
+        {products.map((p, i) => (
+          <a
+            key={p.id}
+            href={"/catalogo/" + toSlug(p.name)}
+            className="product-card"
+            onClick={e => {
+              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
+            style={{
+              animationDelay: (i * 0.1) + "s",
+              textDecoration: 'none',
+              borderRadius: 20,
+              overflow: 'hidden',
+              position: 'relative',
+              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
+              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
+              display: 'block',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              transform: 'translateY(0)',
+              zIndex: hovered === p.id ? 0 : 1
+            }}
+            onMouseEnter={() => setHovered(p.id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
+              {p.landing_image
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                : [...Array(4)].map((_, j) => (
+                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
+                  ))
+              }
+            </div>
+
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
+        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
+      </footer>
+    </div>
+  );
+}
+</file>
+
 <file path="components/ModelViewer.js">
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null }) {
+export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -2366,6 +2379,22 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             originalPhi = controls._spherical.phi;
 
             setStatus('ready');
+            if (onReady) onReady();
+            if (onCapture) {
+              requestAnimationFrame(() => {
+                const captureSize = 600;
+                renderer.setSize(captureSize, captureSize);
+                camera.aspect = 1;
+                camera.updateProjectionMatrix();
+                renderer.render(scene, camera);
+                renderer.domElement.toBlob(blob => {
+                  if (blob) onCapture(blob);
+                  renderer.setSize(w, h);
+                  camera.aspect = w / h;
+                  camera.updateProjectionMatrix();
+                }, 'image/png');
+              });
+            }
           },
           undefined,
           (err) => {
@@ -2470,7 +2499,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
 
-      {status === 'loading' && (
+      {status === 'loading' && !hideHint && (
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', flexDirection: 'column',
@@ -2555,6 +2584,70 @@ function useWindowWidth() {
 
 function toSlug(name) {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {!ready && imageUrl && (
+        <img src={imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 1 }} />
+      )}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
+        <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} hideHint={true} onReady={() => setReady(true)} />
+      </div>
+    </div>
+  );
+}
+
+function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  const [cachedUrl, setCachedUrl] = useState(null);
+  const displayMode = modelConfig?.display_mode || 'hover';
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { setVisible(entry.isIntersecting); },
+      { rootMargin: '400px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Precargar el archivo en memoria cuando la card es visible
+  useEffect(() => {
+    if (!visible || !url || cachedUrl) return;
+    fetch(url)
+      .then(r => r.blob())
+      .then(blob => {
+        const ext = url.split('?')[0].split('.').pop().toLowerCase();
+        const mimeType = ext === '3mf' ? 'application/octet-stream' : 'model/gltf-binary';
+        const namedBlob = new Blob([blob], { type: mimeType });
+        const localUrl = URL.createObjectURL(namedBlob);
+        // Guardamos la URL original para que Three.js detecte la extensión
+        setCachedUrl(url);
+        // Pre-fetch completado, el archivo ya está en caché del browser
+      })
+      .catch(() => {});
+  }, [visible, url]);
+
+  const showModel = displayMode === 'hover' ? isHovered : visible;
+  const modelUrl = cachedUrl || url;
+
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
+      {imageUrl && !showModel && (
+        <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      )}
+      {showModel && (
+        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} imageUrl={imageUrl} />
+      )}
+      {!showModel && !imageUrl && <span style={{ fontSize: 36 }}>🖨️</span>}
+    </div>
+  );
 }
 
 export default function Home() {
@@ -2750,7 +2843,7 @@ export default function Home() {
   async function loadAllDesigns(productList) {
     const results = await Promise.all(
       productList.map(p =>
-        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order').order('created_at')
+        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order', { nullsFirst: false }).order('created_at').limit(10000)
       )
     );
     const map = {};
@@ -3083,7 +3176,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <ModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
@@ -3557,6 +3650,14 @@ function fileToBase64(file) {
   });
 }
 
+function blobToBase64(blob) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function slugify(str) {
   return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
@@ -3907,7 +4008,7 @@ export default function Admin() {
 
   // ── Designs ──
   async function loadDesigns() {
-    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order').order('created_at');
+    const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order', { nullsFirst: false }).order('created_at').limit(10000);
     console.log('Diseños cargados:', data?.length, data);
     if (data) { setDesigns(data); setOrphanCount(data.filter(d => !d.product_id && d.active).length); }
   }
@@ -4105,6 +4206,17 @@ export default function Admin() {
       try {
         let imageUrl = null;
         let modelUrl = null;
+
+        // Capturar thumbnail del modelo si no hay imagen
+        if (!entry.file && entry.capturedThumb) {
+          const base64 = await blobToBase64(entry.capturedThumb);
+          const res = await fetch('/api/upload-image', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: base64, fileName: entry.name + '-thumb.png', mimeType: 'image/png', folder: 'thumbnails' }),
+          });
+          const data = await res.json();
+          if (data.url) imageUrl = data.url;
+        }
 
         // Subir imagen si existe
         if (entry.file) {
@@ -4541,7 +4653,29 @@ export default function Admin() {
                                 onClick={e => e.stopPropagation()}
                               >
                                 <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
-                                
+
+                                <div style={{marginBottom:10}}>
+                                  <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Mostrar modelo en catálogo</div>
+                                  <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                                    {[{val:'hover', label:'Al hacer hover', desc:'Imagen estática, 3D al pasar el mouse'}, {val:'scroll', label:'Al hacer scroll', desc:'Se activa cuando la card es visible'}].map(opt => (
+                                      <label key={opt.val} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'5px 8px', borderRadius:7, background: (form.model_config?.display_mode || 'hover') === opt.val ? '#eef4ff' : 'transparent', border: (form.model_config?.display_mode || 'hover') === opt.val ? '1.5px solid #2D6BE4' : '1.5px solid transparent'}}>
+                                        <input type="radio" name={`display_mode_${p.id}`} value={opt.val} checked={(form.model_config?.display_mode || 'hover') === opt.val}
+                                          onChange={() => {
+                                            const newConfig = { ...(form.model_config || {}), display_mode: opt.val };
+                                            updateProductForm(p.id, 'model_config', newConfig);
+                                            saveProduct(p.id, { model_config: newConfig });
+                                          }}
+                                          style={{accentColor:'#2D6BE4'}}
+                                        />
+                                        <div>
+                                          <div style={{fontSize:12, fontWeight:600, color:'#2d3352'}}>{opt.label}</div>
+                                          <div style={{fontSize:10, color:'#9aa3bc'}}>{opt.desc}</div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+
                                 <div style={{marginBottom:10}}>
                                   <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
@@ -4956,9 +5090,10 @@ export default function Admin() {
               )}
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u)</label>
+                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u — máx. 10 archivos por vez)</label>
                   <input type="file" accept=".glb,.3mf" multiple style={{...s.input, padding: 6}} onChange={async e => {
                     const files = Array.from(e.target.files);
+                    if (files.length > 10) { alert('Podés subir hasta 10 archivos 3D por vez. Seleccioná menos archivos.'); e.target.value = ''; return; }
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
                       file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
@@ -4991,7 +5126,7 @@ export default function Admin() {
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} />
+                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} onCapture={blob => { if (!entry.capturedThumb) updateEntry(i, 'capturedThumb', blob); }} />
                                 </div>
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }
@@ -5083,7 +5218,7 @@ export default function Admin() {
                 >
                   <div style={s.designInfo}>
                     {d.model_url
-                      ? <div style={{...s.designThumb, overflow:'hidden'}}><ModelViewer url={d.model_url} autoRotate={false} hideHint={true} /></div>
+                      ? <img src={d.image_url} alt={d.name} style={s.designThumb} />
                       : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
                     }
                     <div>
