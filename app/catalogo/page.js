@@ -315,7 +315,10 @@ export default function Home() {
     return fuse.search(searchQuery.trim()).map(r => r.item);
   }, [searchQuery, fuse, designs]);
 
-  const categories = ['Todos', ...new Set(designs.map(d => d.category).filter(c => c !== 'Sin categoria'))];
+  
+  const categories = ['Todos', ...(Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
+    ? activeProduct.categories
+    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))])];
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {

@@ -174,6 +174,8 @@ export default function Admin() {
   const [dragOverProductId, setDragOverProductId] = useState(null);
   const [draggingProductId, setDraggingProductId] = useState(null);
   const dragSrcProductIdRef = useRef(null);
+  const [dragOverCat, setDragOverCat] = useState(null);
+  const dragSrcCatRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
@@ -302,9 +304,22 @@ export default function Admin() {
   }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: 'https://www.inkora.com.ar/auth/callback?next=/admin' },
+      options: {
+        redirectTo: 'https://www.inkora.com.ar/auth/popup-callback',
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error || !data?.url) return;
+    const popup = window.open(data.url, 'google-auth', 'width=500,height=600,top=100,left=100');
+    window.addEventListener('message', function handler(e) {
+      if (e.origin !== 'https://www.inkora.com.ar') return;
+      if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        window.removeEventListener('message', handler);
+        popup?.close();
+        loadCurrentUser();
+      }
     });
   }
 
@@ -482,6 +497,19 @@ export default function Admin() {
     const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
     await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ category }).eq('id', did)));
     setDesigns(prev => prev.map(d => idsToUpdate.includes(d.id) ? { ...d, category } : d));
+  }
+
+  async function reorderProductCategory(productId, srcCat, tgtCat) {
+    if (srcCat === tgtCat) return;
+    const current = getProductCategories(productId);
+    const srcIdx = current.indexOf(srcCat);
+    const tgtIdx = current.indexOf(tgtCat);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const reordered = [...current];
+    reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, srcCat);
+    await supabase.from('products').update({ categories: reordered }).eq('id', productId);
+    loadProducts();
   }
 
   async function addProductCategory(productId, cat) {
@@ -1318,7 +1346,13 @@ export default function Admin() {
                             const pickerKey = `${product.id}:${cat}`;
                             const pickerOpen = catColorPicker[pickerKey];
                             return (
-                              <span key={cat} style={{display:'inline-flex', alignItems:'center', gap:3, background:'#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative'}}>
+                              <span key={cat}
+                                draggable
+                                onDragStart={() => { dragSrcCatRef.current = cat; setDragOverCat(null); }}
+                                onDragOver={e => { e.preventDefault(); setDragOverCat(cat); }}
+                                onDrop={() => { reorderProductCategory(product.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
+                                onDragEnd={() => { dragSrcCatRef.current = null; setDragOverCat(null); }}
+                                style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor:'grab'}}>
                                 {cat}
                                 <span
                                   title="Color de la categoría"
