@@ -33,6 +33,9 @@ export default function Header({ headerVisible = true, showCart = false, page = 
           const map = {};
           data.forEach(s => { map[s.key] = s.value; });
           setUiSettings(map);
+          // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
+          const hintEnabled = map['google_login_hint'] === 'true';
+          localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
         }
       });
   }, []);
