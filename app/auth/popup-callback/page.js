@@ -26,9 +26,12 @@ export default function PopupCallback() {
     });
   }, []);
 
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const errorParam = searchParams?.get('error');
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#1B2F5E' }}>
-      Iniciando sesión...
+      {errorParam ? `Error: ${errorParam}` : 'Iniciando sesión...'}
     </div>
   );
 }
