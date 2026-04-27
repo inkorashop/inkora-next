@@ -278,7 +278,7 @@ export default function Home() {
   }, [isMobile]);
 
   async function loadProducts() {
-    const { data } = await supabase.from('products').select('*').eq('active', true).order('created_at');
+    const { data } = await supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at');
     if (data && data.length > 0) {
       setProducts(data);
       const params = new URLSearchParams(window.location.search);

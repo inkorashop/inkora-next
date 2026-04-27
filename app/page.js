@@ -26,7 +26,7 @@ export default function Landing() {
   useEffect(() => {
     
 
-    supabase.from('products').select('*').eq('active', true).order('created_at')
+    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
       .then(({ data }) => { if (data) setProducts(data); });
 
     supabase.from('settings').select('*')

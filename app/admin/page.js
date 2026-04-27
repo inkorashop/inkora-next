@@ -171,6 +171,9 @@ export default function Admin() {
   const [dragOverId, setDragOverId] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const dragSrcIdRef = useRef(null);
+  const [dragOverProductId, setDragOverProductId] = useState(null);
+  const [draggingProductId, setDraggingProductId] = useState(null);
+  const dragSrcProductIdRef = useRef(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
@@ -312,8 +315,24 @@ export default function Admin() {
   }
 
   // ── Products ──
+  async function handleProductDrop(targetId) {
+    const srcId = dragSrcProductIdRef.current;
+    dragSrcProductIdRef.current = null;
+    setDraggingProductId(null);
+    setDragOverProductId(null);
+    if (!srcId || srcId === targetId) return;
+    const srcIdx = products.findIndex(p => p.id === srcId);
+    const tgtIdx = products.findIndex(p => p.id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const reordered = [...products];
+    const [removed] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, removed);
+    setProducts(reordered);
+    await Promise.all(reordered.map((p, i) => supabase.from('products').update({ sort_order: i }).eq('id', p.id)));
+  }
+
   async function loadProducts() {
-    const { data } = await supabase.from('products').select('*').order('created_at');
+    const { data } = await supabase.from('products').select('*').order('sort_order', { nullsFirst: false }).order('created_at');
     if (data) setProducts(data);
   }
 
@@ -956,7 +975,13 @@ export default function Admin() {
                         cellRefs.current[rowIdx][colIdx] = el;
                       };
                       return (
-                        <tr key={p.id} style={{opacity: p.active ? 1 : 0.5}}>
+                        <tr key={p.id}
+                          draggable
+                          onDragStart={() => { dragSrcProductIdRef.current = p.id; setDraggingProductId(p.id); }}
+                          onDragOver={e => { e.preventDefault(); setDragOverProductId(p.id); }}
+                          onDrop={() => handleProductDrop(p.id)}
+                          onDragEnd={() => { setDraggingProductId(null); setDragOverProductId(null); dragSrcProductIdRef.current = null; }}
+                          style={{opacity: p.active ? 1 : 0.5, cursor: 'grab', background: dragOverProductId === p.id ? '#eef4ff' : 'transparent', outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none'}}>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
