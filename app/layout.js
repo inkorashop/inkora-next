@@ -25,7 +25,7 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({ children }) {
+export default functin RootLayout({ children }) {
   return (
     <html lang="es" className={barlow.className}>
       <body><CartProvider>{children}</CartProvider></body>
