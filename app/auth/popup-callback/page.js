@@ -10,6 +10,9 @@ export default function PopupCallback() {
     );
     supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        if (session.user?.email) {
+          localStorage.setItem('inkora_login_hint', session.user.email);
+        }
         if (window.opener) {
           window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, 'https://www.inkora.com.ar');
           window.close();
