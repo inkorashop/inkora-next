@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
+import { signInWithGoogle } from '@/lib/auth';
 
 const supabase = createBrowserSupabaseClient();
 
@@ -85,10 +86,9 @@ export default function AuthModal({ onClose, onSuccess }) {
 
   async function handleGoogle() {
     setError('');
-    const next = window.location.pathname + window.location.search;
     const { error: e } = await signInWithGoogle();
     if (e) setError(translateError(e.message));
-    else { setAuthModalOpen(false); }
+    else { onSuccess?.(); }
   }
 
   const modalBg = isDark ? 'rgba(27,47,94,0.75)' : 'rgba(240,244,255,0.82)';
