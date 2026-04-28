@@ -2222,12 +2222,6 @@ function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
-  const [iframeReady, setIframeReady] = React.useState(false);
-  const [iframeScrollY, setIframeScrollY] = React.useState(0);
-  const overlayRef = React.useRef(null);
-  const iframeRef = React.useRef(null);
-  const heatmapInstanceRef = React.useRef(null);
-  const IFRAME_H = 700;
 
   React.useEffect(() => {
     async function load() {
@@ -2239,144 +2233,73 @@ function HeatmapTab({ supabase, products }) {
     load();
   }, []);
 
-  // Escuchar scroll del iframe via postMessage
-  React.useEffect(() => {
-    function onMessage(e) {
-      if (e.data?.type === 'INKORA_SCROLL') {
-        setIframeScrollY(e.data.scrollY);
-      }
-    }
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
-
-  // Inyectar script de scroll reporting en el iframe cuando carga
-  const handleIframeLoad = React.useCallback(() => {
-    setIframeReady(true);
-    try {
-      const iframeDoc = iframeRef.current?.contentDocument;
-      if (!iframeDoc || !iframeDoc.body) return;
-      // Evitar inyectar el script más de una vez
-      if (iframeDoc.getElementById('inkora-scroll-reporter')) return;
-      const script = iframeDoc.createElement('script');
-      script.id = 'inkora-scroll-reporter';
-      script.textContent = `
-        window.addEventListener('scroll', function() {
-          window.parent.postMessage({ type: 'INKORA_SCROLL', scrollY: window.scrollY }, '*');
-        }, { passive: true });
-      `;
-      iframeDoc.body.appendChild(script);
-    } catch(e) {}
-  }, []);
-
-  // Redibujar heatmap cuando cambian eventos, filtro o scroll del iframe
-  React.useEffect(() => {
-    async function draw() {
-      const overlay = overlayRef.current;
-      if (!overlay || events.length === 0) return;
-      const h337 = (await import('heatmap.js')).default;
-
-      if (!heatmapInstanceRef.current) {
-        heatmapInstanceRef.current = h337.create({
-          container: overlay,
-          maxOpacity: 0.75,
-          minOpacity: 0,
-          blur: 0.75,
-          radius: 30,
-        });
-      }
-
-      const filtered = filterProduct === 'all'
-        ? events
-        : events.filter(e => e.producto_activo === filterProduct);
-
-      const W = overlay.offsetWidth;
-      // y_percent es % del viewport (0-100), ajustamos con el scroll actual del iframe
-      const points = filtered.map(ev => ({
-        x: Math.round((ev.x_percent / 100) * W),
-        y: Math.round((ev.y_percent / 100) * IFRAME_H) - iframeScrollY,
-        value: 1,
-      })).filter(p => p.y >= -30 && p.y <= IFRAME_H + 30);
-
-      heatmapInstanceRef.current.setData({ max: 5, data: points });
-    }
-    draw();
-  }, [events, filterProduct, iframeScrollY]);
-
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
 
-  // Construir URL del iframe — memorizada para evitar recargas en loop
-  const iframeUrl = React.useMemo(() => {
-    const base = typeof window !== 'undefined' ? window.location.origin : '';
-    if (filterProduct === 'all') return `${base}/catalogo?preview=1`;
-    const p = products.find(pr => pr.id === filterProduct);
-    if (!p) return `${base}/catalogo?preview=1`;
-    const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return `${base}/catalogo?producto=${slug}&preview=1`;
-  }, [filterProduct]);
+  function openHeatmap() {
+    const base = window.location.origin;
+    if (filterProduct === 'all') {
+      window.open(`${base}/catalogo?heatmap=1`, '_blank');
+    } else {
+      const p = products.find(pr => pr.id === filterProduct);
+      if (!p) return;
+      const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      window.open(`${base}/catalogo?producto=${slug}&heatmap=1`, '_blank');
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Mapa de calor — Catálogo</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: '#9aa3bc' }}>{filteredCount} clicks</span>
-            <select
-              value={filterProduct}
-              onChange={e => setFilterProduct(e.target.value)}
-              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
-            >
-              {productOptions.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={async () => {
-                setLoading(true);
-                const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-                setEvents(data || []);
-                setLoading(false);
-              }}
-              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
-            >
-              ↻ Actualizar
-            </button>
-          </div>
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Mapa de calor — Catálogo</h2>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+          <select
+            value={filterProduct}
+            onChange={e => setFilterProduct(e.target.value)}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
+          >
+            {productOptions.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              setLoading(true);
+              const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+              setEvents(data || []);
+              setLoading(false);
+            }}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
+          >
+            ↻ Actualizar
+          </button>
         </div>
 
-        {loading && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
-        )}
-        <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef', display: loading ? 'none' : 'block' }}>
-            <iframe
-              key={iframeUrl}
-              ref={iframeRef}
-              src={iframeUrl}
-              onLoad={handleIframeLoad}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
-              title="Catálogo preview"
-            />
-            <div
-              ref={overlayRef}
-              style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}
-            />
-            {!iframeReady && (
-              <div style={{ position: 'absolute', inset: 0, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 14, zIndex: 20 }}>
-                Cargando catálogo...
-              </div>
-            )}
-          </div>
-
-        {events.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', padding: 20, color: '#9aa3bc', fontSize: 13 }}>
-            Todavía no hay clicks registrados.
+        {loading ? (
+          <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ background: '#f0f4ff', borderRadius: 10, padding: '16px 24px', minWidth: 140 }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{filteredCount}</div>
+              <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>clicks registrados</div>
+            </div>
+            <div style={{ background: '#f0f4ff', borderRadius: 10, padding: '16px 24px', minWidth: 140 }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{new Set(events.map(e => e.producto_activo)).size}</div>
+              <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>productos con clicks</div>
+            </div>
           </div>
         )}
 
-        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10, lineHeight: 1.5 }}>
-          Scrolleá dentro del catálogo para ver el mapa en cada sección. Los puntos se actualizan automáticamente con el scroll.
+        <button
+          onClick={openHeatmap}
+          disabled={loading || events.length === 0}
+          style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          🔥 Ver mapa de calor en el catálogo
+        </button>
+        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
+          Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
       </div>
     </div>

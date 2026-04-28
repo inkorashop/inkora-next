@@ -228,6 +228,83 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Heatmap overlay — solo si ?heatmap=1 y es admin
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('heatmap') !== '1') return;
+
+    let overlay = null;
+    let heatmapInstance = null;
+    let destroyed = false;
+
+    async function initHeatmap() {
+      const { data: adminData } = await supabase.auth.getSession();
+      const email = adminData?.session?.user?.email;
+      if (!email) return;
+      const { data: adminRow } = await supabase.from('admins').select('email').eq('email', email).single();
+      if (!adminRow) return;
+
+      const productParam = params.get('producto');
+      let query = supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+      if (productParam) {
+        const { data: prods } = await supabase.from('products').select('id, name');
+        const match = prods?.find(p => p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam);
+        if (match) query = query.eq('producto_activo', match.id);
+      }
+      const { data: events } = await query;
+      if (!events || destroyed) return;
+
+      overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;';
+      document.body.appendChild(overlay);
+
+      const h337 = (await import('heatmap.js')).default;
+      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30 });
+
+      function draw() {
+        if (!heatmapInstance || destroyed) return;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const scrollY = window.scrollY;
+
+        const points = events.map(ev => ({
+          x: Math.round((ev.x_percent / 100) * W),
+          y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
+          value: 1,
+        })).filter(p => p.y >= -30 && p.y <= H + 30);
+
+        heatmapInstance.setData({ max: 5, data: points });
+      }
+
+      draw();
+      window.addEventListener('scroll', draw, { passive: true });
+      window.addEventListener('resize', draw, { passive: true });
+
+      // Badge de control
+      const badge = document.createElement('div');
+      badge.innerHTML = `<span style="font-size:13px;font-weight:700;color:white">🔥 Heatmap — ${events.length} clicks</span>`;
+      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕ Cerrar';
+      closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;';
+      closeBtn.onclick = () => { window.removeEventListener('scroll', draw); window.removeEventListener('resize', draw); overlay?.remove(); badge?.remove(); };
+      badge.appendChild(closeBtn);
+      document.body.appendChild(badge);
+
+      return () => {
+        destroyed = true;
+        window.removeEventListener('scroll', draw);
+        window.removeEventListener('resize', draw);
+        overlay?.remove();
+        badge?.remove();
+      };
+    }
+
+    const cleanup = initHeatmap();
+    return () => { destroyed = true; cleanup?.then?.(fn => fn?.()); };
+  }, []);
+
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
     setProfile(data);
@@ -280,8 +357,11 @@ export default function Home() {
   useEffect(() => {
     if (window.self !== window.top) return;
     function handleClick(e) {
+      if (window.self !== window.top) return;
       const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
-      const yPercent = parseFloat(((e.clientY / window.innerHeight) * 100).toFixed(3));
+      const pageY = e.clientY + window.scrollY;
+      const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      const yPercent = parseFloat(((pageY / totalHeight) * 100).toFixed(3));
       const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
       supabase.from('click_events').insert({
         x_percent: xPercent,
