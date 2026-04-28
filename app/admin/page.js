@@ -2303,15 +2303,14 @@ function HeatmapTab({ supabase, products }) {
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
 
-  // Construir URL del iframe con producto seleccionado
-  const iframeUrl = filterProduct === 'all'
-    ? '/catalogo'
-    : (() => {
-        const p = products.find(pr => pr.id === filterProduct);
-        if (!p) return '/catalogo';
-        const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        return `/catalogo?producto=${slug}`;
-      })();
+  // Construir URL del iframe — memorizada para evitar recargas en loop
+  const iframeUrl = React.useMemo(() => {
+    if (filterProduct === 'all') return '/catalogo';
+    const p = products.find(pr => pr.id === filterProduct);
+    if (!p) return '/catalogo';
+    const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    return `/catalogo?producto=${slug}`;
+  }, [filterProduct]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
