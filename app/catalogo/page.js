@@ -325,27 +325,37 @@ export default function Home() {
         .subscribe();
 
       // Panel de filtro por usuario
-      const allUsers = [...new Set(events.map(ev => ev.user_id))];
+      const allUserIds = [...new Set(events.map(ev => ev.user_id))];
+
+      // Buscar nombres en profiles
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .in('id', allUserIds.filter(Boolean));
+      const profilesMap = {};
+      (profilesData || []).forEach(p => { profilesMap[p.id] = p.name || p.email || p.id.slice(0, 8); });
+
       const panel = document.createElement('div');
-      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10000;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:200px;max-height:60vh;overflow-y:auto;';
+      panel.setAttribute('data-heatmap-ui', '1');
+      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10000;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;max-height:60vh;overflow-y:auto;';
 
       const panelTitle = document.createElement('div');
       panelTitle.textContent = '👤 Filtrar usuarios';
       panelTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;';
       panel.appendChild(panelTitle);
 
-      allUsers.forEach(userId => {
+      allUserIds.forEach(userId => {
         const label = document.createElement('label');
         label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;';
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = false;
-        checkbox.style.cssText = 'cursor:pointer;width:14px;height:14px;';
+        checkbox.checked = true; // tildado = visible
+        checkbox.style.cssText = 'cursor:pointer;width:14px;height:14px;flex-shrink:0;';
 
         const text = document.createElement('span');
-        text.style.cssText = 'font-size:11px;color:white;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;';
-        text.textContent = userId ? userId.slice(0, 8) + '...' : 'Sin usuario';
+        text.style.cssText = 'font-size:11px;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;';
+        text.textContent = userId ? (profilesMap[userId] || userId.slice(0, 8) + '...') : 'Sin usuario';
 
         const count = events.filter(ev => ev.user_id === userId).length;
         const countSpan = document.createElement('span');
@@ -353,7 +363,7 @@ export default function Home() {
         countSpan.textContent = `(${count})`;
 
         checkbox.addEventListener('change', () => {
-          if (checkbox.checked) {
+          if (!checkbox.checked) {
             heatmapExcludedUsersRef.current.add(userId);
           } else {
             heatmapExcludedUsersRef.current.delete(userId);
@@ -371,6 +381,7 @@ export default function Home() {
 
       const badge = document.createElement('div');
       badge.appendChild(badgeSpan);
+      badge.setAttribute('data-heatmap-ui', '1');
       badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕ Cerrar';
@@ -467,7 +478,10 @@ export default function Home() {
         timestamp: new Date().toISOString(),
       }).then(() => {});
     }
-    document.addEventListener('click', handleClick, { passive: true });
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('[data-heatmap-ui]')) return;
+      handleClick(e);
+    }, { passive: true });
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
