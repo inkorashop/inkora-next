@@ -232,6 +232,7 @@ export default function Home() {
   const heatmapEventsRef = useRef([]);
   const heatmapDrawRef = useRef(null);
   const heatmapActiveProductRef = useRef(activeProductId);
+  const heatmapExcludedUsersRef = useRef(new Set());
 
   useEffect(() => {
     heatmapActiveProductRef.current = activeProductId;
@@ -253,7 +254,6 @@ export default function Home() {
       const { data: adminRow } = await supabase.from('admins').select('email').eq('email', email).single();
       if (!adminRow) return;
 
-      // Cargar TODOS los eventos una sola vez
       const { data: events } = await supabase
         .from('click_events')
         .select('*')
@@ -279,16 +279,16 @@ export default function Home() {
         const scrollY = window.scrollY;
         const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
         const currentProductId = heatmapActiveProductRef.current;
+        const excluded = heatmapExcludedUsersRef.current;
 
         canvas.width = W;
         canvas.height = H;
         ctx.clearRect(0, 0, W, H);
 
-        // Filtrar en memoria según producto activo
         const allEvents = heatmapEventsRef.current;
-        const filtered = currentProductId
-          ? allEvents.filter(ev => ev.producto_activo === currentProductId)
-          : allEvents;
+        const filtered = allEvents
+          .filter(ev => currentProductId ? ev.producto_activo === currentProductId : true)
+          .filter(ev => !excluded.has(ev.user_id));
 
         const points = filtered.map(ev => ({
           x: Math.round((ev.x_percent / 100) * W),
@@ -316,7 +316,6 @@ export default function Home() {
       window.addEventListener('scroll', drawHeatmap, { passive: true });
       window.addEventListener('resize', drawHeatmap, { passive: true });
 
-      // Realtime: agregar nuevos clicks sin refetchear todo
       realtimeChannel = supabase
         .channel('heatmap-realtime')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'click_events' }, (payload) => {
@@ -324,6 +323,51 @@ export default function Home() {
           drawHeatmap();
         })
         .subscribe();
+
+      // Panel de filtro por usuario
+      const allUsers = [...new Set(events.map(ev => ev.user_id))];
+      const panel = document.createElement('div');
+      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10000;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:200px;max-height:60vh;overflow-y:auto;';
+
+      const panelTitle = document.createElement('div');
+      panelTitle.textContent = '👤 Filtrar usuarios';
+      panelTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;';
+      panel.appendChild(panelTitle);
+
+      allUsers.forEach(userId => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = false;
+        checkbox.style.cssText = 'cursor:pointer;width:14px;height:14px;';
+
+        const text = document.createElement('span');
+        text.style.cssText = 'font-size:11px;color:white;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;';
+        text.textContent = userId ? userId.slice(0, 8) + '...' : 'Sin usuario';
+
+        const count = events.filter(ev => ev.user_id === userId).length;
+        const countSpan = document.createElement('span');
+        countSpan.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-left:auto;flex-shrink:0;';
+        countSpan.textContent = `(${count})`;
+
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            heatmapExcludedUsersRef.current.add(userId);
+          } else {
+            heatmapExcludedUsersRef.current.delete(userId);
+          }
+          drawHeatmap();
+        });
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        label.appendChild(countSpan);
+        panel.appendChild(label);
+      });
+
+      document.body.appendChild(panel);
 
       const badge = document.createElement('div');
       badge.appendChild(badgeSpan);
@@ -337,6 +381,7 @@ export default function Home() {
         realtimeChannel?.unsubscribe();
         canvas?.remove();
         badge?.remove();
+        panel?.remove();
       };
       badge.appendChild(closeBtn);
       document.body.appendChild(badge);
@@ -347,8 +392,6 @@ export default function Home() {
     return () => {
       destroyed = true;
       heatmapDrawRef.current = null;
-      window.removeEventListener('scroll', heatmapDrawRef.current);
-      window.removeEventListener('resize', heatmapDrawRef.current);
       realtimeChannel?.unsubscribe();
       canvas?.remove();
     };
@@ -403,6 +446,9 @@ export default function Home() {
   const activeProductIdRef = useRef(activeProductId);
   useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
 
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user?.id || null; }, [user]);
+
   useEffect(() => {
     if (window.self !== window.top) return;
     function handleClick(e) {
@@ -417,6 +463,7 @@ export default function Home() {
         y_percent: yPercent,
         elemento: elemento.slice(0, 200),
         producto_activo: activeProductIdRef.current || null,
+        user_id: userRef.current || null,
         timestamp: new Date().toISOString(),
       }).then(() => {});
     }
