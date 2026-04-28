@@ -283,6 +283,274 @@ export default function ProductoPage({ params }) {
 }
 </file>
 
+<file path="app/dashboard/page.js">
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function statusLabel(status) {
+  const map = { pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', cancelled: 'Cancelado' };
+  return map[status] || status;
+}
+
+function statusColor(status) {
+  const map = { pending: '#f6a800', confirmed: '#2D6BE4', completed: '#18a36a', cancelled: '#e53e3e' };
+  return map[status] || '#9aa3bc';
+}
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('perfil');
+
+  // Profile form
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
+
+  // Password
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState('');
+
+  // Orders
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [showOrderStatus, setShowOrderStatus] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      if (!u) { router.replace('/'); return; }
+      setUser(u);
+      loadProfile(u.id, u.email);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadProfile(userId, email) {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (data) {
+      setName(data.name || '');
+      setPhone(data.phone || '');
+    }
+    setLoading(false);
+    loadOrders(email);
+    supabase.from('settings').select('value').eq('key', 'show_order_status').single()
+      .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
+  }
+
+  async function loadOrders(email) {
+    setLoadingOrders(true);
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('customer_email', email)
+      .order('created_at', { ascending: false });
+    if (data) setOrders(data);
+    setLoadingOrders(false);
+  }
+
+  async function saveProfile() {
+    if (!user) return;
+    setSavingProfile(true);
+    await supabase.from('profiles').update({ name, phone }).eq('id', user.id);
+    setSavingProfile(false);
+    setSavedProfile(true);
+    setTimeout(() => setSavedProfile(false), 2000);
+  }
+
+  async function changePassword() {
+    setPasswordMsg('');
+    if (!newPassword || !confirmPassword) { setPasswordMsg('Completá ambos campos.'); return; }
+    if (newPassword !== confirmPassword) { setPasswordMsg('Las contraseñas no coinciden.'); return; }
+    if (newPassword.length < 6) { setPasswordMsg('Mínimo 6 caracteres.'); return; }
+    setSavingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setSavingPassword(false);
+    if (error) {
+      setPasswordMsg('Error: ' + error.message);
+    } else {
+      setPasswordMsg('¡Contraseña actualizada!');
+      setNewPassword(''); setConfirmPassword('');
+      setTimeout(() => setPasswordMsg(''), 3000);
+    }
+  }
+
+  const inp = { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' };
+  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 };
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Barlow, sans-serif' }}>
+      <div style={{ color: '#9aa3bc', fontSize: 16 }}>Cargando...</div>
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc' }}>
+
+      {/* Header */}
+      <header style={{ background: '#1B2F5E', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 16px rgba(27,47,94,0.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center' }}>
+            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{ height: 36, filter: 'brightness(0) invert(1)' }} />
+          </a>
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>|</span>
+          <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>Mi Cuenta</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{name || user?.email?.split('@')[0]}</span>
+          <button
+            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
+            onClick={async () => { await supabase.auth.signOut(); router.replace('/'); }}
+          >Cerrar sesión</button>
+        </div>
+      </header>
+
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '28px 20px' }}>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', marginBottom: 20, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
+          {[['perfil', 'Mi Perfil'], ['pedidos', 'Mis Pedidos']].map(([key, label]) => (
+            <button key={key}
+              style={{ flex: 1, padding: '13px 20px', border: 'none', background: activeTab === key ? '#1B2F5E' : 'white', color: activeTab === key ? 'white' : '#5a6380', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s, color 0.2s' }}
+              onClick={() => setActiveTab(key)}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* ── PERFIL ── */}
+        {activeTab === 'perfil' && (
+          <>
+            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24, marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 22 }}>Información de perfil</h2>
+
+<div style={{ display: 'grid', gap: 16 }}>
+                <div>
+                  <label style={lbl}>Nombre de tu comercio</label>
+                  <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" />
+                </div>
+                <div>
+                  <label style={lbl}>Email</label>
+                  <input style={{ ...inp, background: '#f7f8fc', color: '#9aa3bc', cursor: 'not-allowed' }}
+                    value={user?.email || ''} readOnly />
+                </div>
+                <div>
+                  <label style={lbl}>Teléfono</label>
+                  <input style={inp} type="tel" inputMode="numeric" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))} placeholder="3764000000" />
+                </div>
+              </div>
+
+              <button
+                style={{ marginTop: 22, background: savedProfile ? '#18a36a' : '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '11px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingProfile ? 0.6 : 1, transition: 'background 0.3s' }}
+                onClick={saveProfile} disabled={savingProfile}
+              >
+                {savingProfile ? 'Guardando...' : savedProfile ? '✓ Guardado' : 'Guardar cambios'}
+              </button>
+            </div>
+
+            {/* Cambiar contraseña */}
+            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>Cambiar contraseña</h2>
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div>
+                  <label style={lbl}>Nueva contraseña</label>
+                  <input type="password" style={inp} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                </div>
+                <div>
+                  <label style={lbl}>Confirmar contraseña</label>
+                  <input type="password" style={inp} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repetí la contraseña" />
+                </div>
+              </div>
+              {passwordMsg && (
+                <div style={{ marginTop: 10, fontSize: 13, color: passwordMsg.startsWith('¡') ? '#18a36a' : '#e53e3e', fontWeight: 600 }}>
+                  {passwordMsg}
+                </div>
+              )}
+              <button
+                style={{ marginTop: 18, background: 'white', color: '#1B2F5E', border: '1.5px solid #1B2F5E', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingPassword ? 0.6 : 1 }}
+                onClick={changePassword} disabled={savingPassword}
+              >
+                {savingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── PEDIDOS ── */}
+        {activeTab === 'pedidos' && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>
+              Historial de pedidos {orders.length > 0 && <span style={{ fontSize: 13, color: '#9aa3bc', fontWeight: 400 }}>({orders.length})</span>}
+            </h2>
+            {loadingOrders ? (
+              <p style={{ color: '#9aa3bc', fontSize: 13 }}>Cargando pedidos...</p>
+            ) : orders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9aa3bc' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
+                <p style={{ fontSize: 14 }}>Todavía no tenés pedidos.</p>
+                <a href="/" style={{ display: 'inline-block', marginTop: 12, background: '#1B2F5E', color: 'white', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>Ver catálogo →</a>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {['Código', 'Fecha', 'Items', 'Total', ...(showOrderStatus ? ['Estado'] : [])].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(order => (
+                      <tr key={order.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#1B2F5E', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>{order.order_code}</td>
+                        <td style={{ padding: '11px 10px', color: '#5a6380', whiteSpace: 'nowrap' }}>{formatDate(order.created_at)}</td>
+                        <td style={{ padding: '11px 10px', color: '#2d3352', maxWidth: 220 }}>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {Array.isArray(order.items) ? order.items.map(i => `${i.name} ×${i.qty}`).join(', ') : '—'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#2d3352', whiteSpace: 'nowrap' }}>
+                          {order.total ? `$${Number(order.total).toLocaleString()}` : '—'}
+                        </td>
+                        {showOrderStatus && (
+                          <td style={{ padding: '11px 10px' }}>
+                            <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              {statusLabel(order.status)}
+                            </span>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      <footer style={{ textAlign: 'center', padding: '20px', fontSize: 12, color: 'rgba(0,0,0,0.2)', letterSpacing: 1, marginTop: 20 }}>
+        INKORA® Soluciones Gráficas
+      </footer>
+    </div>
+  );
+}
+</file>
+
 <file path="app/globals.css">
 * {
   box-sizing: border-box;
@@ -991,78 +1259,6 @@ const uniqueName = `${folder || 'thumbnails'}/${safeName}-${Date.now()}`;
 - Emails via Resend: al confirmar pedido se envían dos emails automáticos (confirmación al cliente + notificación a INKORA con CSV adjunto)
 </file>
 
-<file path="contexts/CartContext.js">
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const CartContext = createContext(null);
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('inkora_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('inkora_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  function addToCart(design, product) {
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-        productName: product?.name ?? '',
-      },
-    }));
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
-  function clearCart() {
-    setCart({});
-  }
-
-  function setCartItem(id, qty) {
-    setCart(prev => {
-      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...prev[id], qty } };
-    });
-  }
-
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  return (
-    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  return useContext(CartContext);
-}
-</file>
-
 <file path="package.json">
 {
   "name": "inkora-next",
@@ -1212,268 +1408,223 @@ export async function POST(request) {
 }
 </file>
 
-<file path="app/dashboard/page.js">
+<file path="app/page.js">
 'use client';
-
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import Header from '@/components/Header';
 
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-function statusLabel(status) {
-  const map = { pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', cancelled: 'Cancelado' };
-  return map[status] || status;
-}
-
-function statusColor(status) {
-  const map = { pending: '#f6a800', confirmed: '#2D6BE4', completed: '#18a36a', cancelled: '#e53e3e' };
-  return map[status] || '#9aa3bc';
-}
-
-export default function Dashboard() {
-  const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('perfil');
-
-  // Profile form
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-const [savingProfile, setSavingProfile] = useState(false);
-  const [savedProfile, setSavedProfile] = useState(false);
-
-  // Password
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [passwordMsg, setPasswordMsg] = useState('');
-
-  // Orders
-  const [orders, setOrders] = useState([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [showOrderStatus, setShowOrderStatus] = useState(true);
+export default function Landing() {
+  const [products, setProducts] = useState([]);
+  const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      if (!u) { router.replace('/'); return; }
-      setUser(u);
-      loadProfile(u.id, u.email);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
-  async function loadProfile(userId, email) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (data) {
-      setName(data.name || '');
-      setPhone(data.phone || '');
-    }
-    setLoading(false);
-    loadOrders(email);
-    supabase.from('settings').select('value').eq('key', 'show_order_status').single()
-      .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
-  }
+  useEffect(() => {
+    
 
-  async function loadOrders(email) {
-    setLoadingOrders(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('customer_email', email)
-      .order('created_at', { ascending: false });
-    if (data) setOrders(data);
-    setLoadingOrders(false);
-  }
+    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
+      .then(({ data }) => { if (data) setProducts(data); });
 
-  async function saveProfile() {
-    if (!user) return;
-    setSavingProfile(true);
-    await supabase.from('profiles').update({ name, phone }).eq('id', user.id);
-    setSavingProfile(false);
-    setSavedProfile(true);
-    setTimeout(() => setSavedProfile(false), 2000);
-  }
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+          // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
+          const hintEnabled = map['google_login_hint'] === 'true';
+          localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
+        }
+      });
 
-  async function changePassword() {
-    setPasswordMsg('');
-    if (!newPassword || !confirmPassword) { setPasswordMsg('Completá ambos campos.'); return; }
-    if (newPassword !== confirmPassword) { setPasswordMsg('Las contraseñas no coinciden.'); return; }
-    if (newPassword.length < 6) { setPasswordMsg('Mínimo 6 caracteres.'); return; }
-    setSavingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setSavingPassword(false);
-    if (error) {
-      setPasswordMsg('Error: ' + error.message);
+    const handler = () => {
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
+    };
+    window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
     } else {
-      setPasswordMsg('¡Contraseña actualizada!');
-      setNewPassword(''); setConfirmPassword('');
-      setTimeout(() => setPasswordMsg(''), 3000);
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
     }
-  }
 
-  const inp = { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 14, color: '#2d3352', boxSizing: 'border-box' };
-  const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 };
+    let tabInterval;
+    let tabToggle = false;
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Barlow, sans-serif' }}>
-      <div style={{ color: '#9aa3bc', fontSize: 16 }}>Cargando...</div>
-    </div>
-  );
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const onAway = cfg.tab_on_away === 'true';
+      const onActive = cfg.tab_on_active === 'true';
+      clearInterval(tabInterval);
+
+      if (!onAway && !onActive) return;
+
+      function animate() {
+        clearInterval(tabInterval);
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      function stop() {
+        clearInterval(tabInterval);
+        tabToggle = false;
+        document.title = 'INKORA';
+      }
+
+      if (onAway && onActive) {
+        animate();
+      } else {
+        function handleVisibility() {
+          if (document.hidden && onAway) { animate(); }
+          else if (!document.hidden && onActive) { animate(); }
+          else { stop(); }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
+        if (onActive && !document.hidden) animate();
+      }
+    }
+
+    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+      clearInterval(tabInterval);
+    };
+  }, []);
 
   return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: '#f7f8fc' }}>
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
+      <style>{`
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .product-card { animation: fadeUp 0.5s ease both; }
+        .product-card:hover .card-overlay { opacity: 1 !important; }
+        .product-card:hover .card-img { transform: scale(1.05); }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
+        .product-card:nth-child(1) { --card-index: 0.5; }
+        .product-card:nth-child(2) { --card-index: 1.5; }
+        .product-card:nth-child(3) { --card-index: 2.5; }
+        .product-card:nth-child(4) { --card-index: 3.5; }
+        .product-card:nth-child(5) { --card-index: 0.8; }
+        .product-card:nth-child(6) { --card-index: 1.8; }
+        .product-card:nth-child(7) { --card-index: 2.8; }
+        .product-card:nth-child(8) { --card-index: 3.8; }
+        .product-card:nth-child(9) { --card-index: 1.2; }
+        .product-card:nth-child(10) { --card-index: 2.2; }
+        .product-card:nth-child(11) { --card-index: 3.2; }
+        .product-card:nth-child(12) { --card-index: 0.3; }
+      `}</style>
 
-      {/* Header */}
-      <header style={{ background: '#1B2F5E', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 16px rgba(27,47,94,0.25)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <a href="/" style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{ height: 36, filter: 'brightness(0) invert(1)' }} />
-          </a>
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>|</span>
-          <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>Mi Cuenta</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{name || user?.email?.split('@')[0]}</span>
-          <button
-            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginLeft: 4 }}
-            onClick={async () => { await supabase.auth.signOut(); router.replace('/'); }}
-          >Cerrar sesión</button>
-        </div>
-      </header>
+      <Header showCart={true} page="landing" />
 
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '28px 20px' }}>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', marginBottom: 20, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-          {[['perfil', 'Mi Perfil'], ['pedidos', 'Mis Pedidos']].map(([key, label]) => (
-            <button key={key}
-              style={{ flex: 1, padding: '13px 20px', border: 'none', background: activeTab === key ? '#1B2F5E' : 'white', color: activeTab === key ? 'white' : '#5a6380', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s, color 0.2s' }}
-              onClick={() => setActiveTab(key)}
-            >{label}</button>
-          ))}
-        </div>
-
-        {/* ── PERFIL ── */}
-        {activeTab === 'perfil' && (
-          <>
-            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24, marginBottom: 16 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 22 }}>Información de perfil</h2>
-
-<div style={{ display: 'grid', gap: 16 }}>
-                <div>
-                  <label style={lbl}>Nombre de tu comercio</label>
-                  <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" />
-                </div>
-                <div>
-                  <label style={lbl}>Email</label>
-                  <input style={{ ...inp, background: '#f7f8fc', color: '#9aa3bc', cursor: 'not-allowed' }}
-                    value={user?.email || ''} readOnly />
-                </div>
-                <div>
-                  <label style={lbl}>Teléfono</label>
-                  <input style={inp} type="tel" inputMode="numeric" value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))} placeholder="3764000000" />
-                </div>
-              </div>
-
-              <button
-                style={{ marginTop: 22, background: savedProfile ? '#18a36a' : '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '11px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingProfile ? 0.6 : 1, transition: 'background 0.3s' }}
-                onClick={saveProfile} disabled={savingProfile}
-              >
-                {savingProfile ? 'Guardando...' : savedProfile ? '✓ Guardado' : 'Guardar cambios'}
-              </button>
-            </div>
-
-            {/* Cambiar contraseña */}
-            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>Cambiar contraseña</h2>
-              <div style={{ display: 'grid', gap: 14 }}>
-                <div>
-                  <label style={lbl}>Nueva contraseña</label>
-                  <input type="password" style={inp} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
-                </div>
-                <div>
-                  <label style={lbl}>Confirmar contraseña</label>
-                  <input type="password" style={inp} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repetí la contraseña" />
-                </div>
-              </div>
-              {passwordMsg && (
-                <div style={{ marginTop: 10, fontSize: 13, color: passwordMsg.startsWith('¡') ? '#18a36a' : '#e53e3e', fontWeight: 600 }}>
-                  {passwordMsg}
-                </div>
-              )}
-              <button
-                style={{ marginTop: 18, background: 'white', color: '#1B2F5E', border: '1.5px solid #1B2F5E', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: savingPassword ? 0.6 : 1 }}
-                onClick={changePassword} disabled={savingPassword}
-              >
-                {savingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ── PEDIDOS ── */}
-        {activeTab === 'pedidos' && (
-          <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 20 }}>
-              Historial de pedidos {orders.length > 0 && <span style={{ fontSize: 13, color: '#9aa3bc', fontWeight: 400 }}>({orders.length})</span>}
-            </h2>
-            {loadingOrders ? (
-              <p style={{ color: '#9aa3bc', fontSize: 13 }}>Cargando pedidos...</p>
-            ) : orders.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9aa3bc' }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
-                <p style={{ fontSize: 14 }}>Todavía no tenés pedidos.</p>
-                <a href="/" style={{ display: 'inline-block', marginTop: 12, background: '#1B2F5E', color: 'white', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>Ver catálogo →</a>
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      {['Código', 'Fecha', 'Items', 'Total', ...(showOrderStatus ? ['Estado'] : [])].map(h => (
-                        <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(order => (
-                      <tr key={order.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#1B2F5E', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>{order.order_code}</td>
-                        <td style={{ padding: '11px 10px', color: '#5a6380', whiteSpace: 'nowrap' }}>{formatDate(order.created_at)}</td>
-                        <td style={{ padding: '11px 10px', color: '#2d3352', maxWidth: 220 }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {Array.isArray(order.items) ? order.items.map(i => `${i.name} ×${i.qty}`).join(', ') : '—'}
-                          </div>
-                        </td>
-                        <td style={{ padding: '11px 10px', fontWeight: 700, color: '#2d3352', whiteSpace: 'nowrap' }}>
-                          {order.total ? `$${Number(order.total).toLocaleString()}` : '—'}
-                        </td>
-                        {showOrderStatus && (
-                          <td style={{ padding: '11px 10px' }}>
-                            <span style={{ background: `${statusColor(order.status)}20`, color: statusColor(order.status), borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                              {statusLabel(order.status)}
-                            </span>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
+          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
+        </h1>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
+          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
+        </p>
       </div>
 
-      <footer style={{ textAlign: 'center', padding: '20px', fontSize: 12, color: 'rgba(0,0,0,0.2)', letterSpacing: 1, marginTop: 20 }}>
-        INKORA® Soluciones Gráficas
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
+        {products.map((p, i) => (
+          <a
+            key={p.id}
+            href={"/catalogo/" + toSlug(p.name)}
+            className="product-card"
+            onClick={e => {
+              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
+            style={{
+              animationDelay: (i * 0.1) + "s",
+              textDecoration: 'none',
+              borderRadius: 20,
+              overflow: 'hidden',
+              position: 'relative',
+              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
+              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
+              display: 'block',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              transform: 'translateY(0)',
+              zIndex: hovered === p.id ? 0 : 1
+            }}
+            onMouseEnter={() => setHovered(p.id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
+              {p.landing_image
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                : [...Array(4)].map((_, j) => (
+                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
+                  ))
+              }
+            </div>
+
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
+        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
       </footer>
     </div>
   );
@@ -1746,6 +1897,88 @@ export default function RootLayout({ children }) {
       <body><CartProvider>{children}</CartProvider></body>
     </html>
   );
+}
+</file>
+
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('inkora_cart', JSON.stringify(cart));
+    } catch { }
+  }, [cart]);
+
+  // Bloquear sincronización de auth de Supabase dentro del iframe
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.self !== window.top) return;
+    } catch { return; }
+  }, []);
+
+  function addToCart(design, product) {
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+        productName: product?.name ?? '',
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
 }
 </file>
 
@@ -2154,229 +2387,6 @@ export async function getUserProfile(userId) {
     .eq('id', userId)
     .single();
   return data;
-}
-</file>
-
-<file path="app/page.js">
-'use client';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import Header from '@/components/Header';
-
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
-
-function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
-
-export default function Landing() {
-  const [products, setProducts] = useState([]);
-  const [hovered, setHovered] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [uiSettings, setUiSettings] = useState({});
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  useEffect(() => {
-    
-
-    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
-
-    supabase.from('settings').select('*')
-      .then(({ data }) => {
-        if (data) {
-          const map = {};
-          data.forEach(s => { map[s.key] = s.value; });
-          setUiSettings(map);
-          // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
-          const hintEnabled = map['google_login_hint'] === 'true';
-          localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
-        }
-      });
-
-    const handler = () => {
-      const saved = localStorage.getItem('inkora_theme');
-      if (saved) setDarkMode(saved === 'dark');
-    };
-    window.addEventListener('storage', handler);
-    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
-
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('*').eq('key', 'landing_mode')
-        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
-    }
-
-    let tabInterval;
-    let tabToggle = false;
-
-    function startTabAnim(cfg) {
-      const text = cfg.tab_text || 'INKORA 🔷';
-      const interval = parseInt(cfg.tab_interval) || 1000;
-      const onAway = cfg.tab_on_away === 'true';
-      const onActive = cfg.tab_on_active === 'true';
-      clearInterval(tabInterval);
-
-      if (!onAway && !onActive) return;
-
-      function animate() {
-        clearInterval(tabInterval);
-        tabInterval = setInterval(() => {
-          document.title = tabToggle ? 'INKORA' : text;
-          tabToggle = !tabToggle;
-        }, interval);
-      }
-
-      function stop() {
-        clearInterval(tabInterval);
-        tabToggle = false;
-        document.title = 'INKORA';
-      }
-
-      if (onAway && onActive) {
-        animate();
-      } else {
-        function handleVisibility() {
-          if (document.hidden && onAway) { animate(); }
-          else if (!document.hidden && onActive) { animate(); }
-          else { stop(); }
-        }
-        document.addEventListener('visibilitychange', handleVisibility);
-        if (onActive && !document.hidden) animate();
-      }
-    }
-
-    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
-      .then(({ data }) => {
-        if (data) {
-          const cfg = {};
-          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
-          startTabAnim(cfg);
-        }
-      });
-
-    return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('inkora_theme_change', handler);
-      clearInterval(tabInterval);
-    };
-  }, []);
-
-  return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
-      <style>{`
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        .page-exit { animation: fadeOut 0.3s ease forwards; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        .product-card { animation: fadeUp 0.5s ease both; }
-        .product-card:hover .card-overlay { opacity: 1 !important; }
-        .product-card:hover .card-img { transform: scale(1.05); }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
-        .product-card:nth-child(1) { --card-index: 0.5; }
-        .product-card:nth-child(2) { --card-index: 1.5; }
-        .product-card:nth-child(3) { --card-index: 2.5; }
-        .product-card:nth-child(4) { --card-index: 3.5; }
-        .product-card:nth-child(5) { --card-index: 0.8; }
-        .product-card:nth-child(6) { --card-index: 1.8; }
-        .product-card:nth-child(7) { --card-index: 2.8; }
-        .product-card:nth-child(8) { --card-index: 3.8; }
-        .product-card:nth-child(9) { --card-index: 1.2; }
-        .product-card:nth-child(10) { --card-index: 2.2; }
-        .product-card:nth-child(11) { --card-index: 3.2; }
-        .product-card:nth-child(12) { --card-index: 0.3; }
-      `}</style>
-
-      <Header showCart={true} page="landing" />
-
-      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
-          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
-        </h1>
-        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
-          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
-        </p>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
-        {products.map((p, i) => (
-          <a
-            key={p.id}
-            href={"/catalogo/" + toSlug(p.name)}
-            className="product-card"
-            onClick={e => {
-              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-              e.preventDefault();
-              document.body.classList.add('page-exit');
-              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
-            }}
-            style={{
-              animationDelay: (i * 0.1) + "s",
-              textDecoration: 'none',
-              borderRadius: 20,
-              overflow: 'hidden',
-              position: 'relative',
-              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
-              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
-              display: 'block',
-              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
-              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-              transform: 'translateY(0)',
-              zIndex: hovered === p.id ? 0 : 1
-            }}
-            onMouseEnter={() => setHovered(p.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
-              {p.landing_image
-                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
-                : [...Array(4)].map((_, j) => (
-                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
-                  ))
-              }
-            </div>
-
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
-
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
-                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-
-      {uiSettings['landing_show_whatsapp'] !== 'false' && (
-        <a
-          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
-          target="_blank"
-          rel="noreferrer"
-          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
-        >
-          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-          </svg>
-        </a>
-      )}
-
-      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
-        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
-      </footer>
-    </div>
-  );
 }
 </file>
 
@@ -2843,17 +2853,23 @@ export default function Home() {
     document.body.style.paddingBottom = '1px';
     loadProducts();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id);
-    });
+    const isIframe = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
-    });
+    if (!isIframe) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) loadProfile(u.id);
+      });
+    }
+
+    const { data: { subscription } } = isIframe
+      ? { data: { subscription: { unsubscribe: () => {} } } }
+      : supabase.auth.onAuthStateChange((event, session) => {
+          const u = session?.user ?? null;
+          setUser(u);
+          if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
+        });
 
     supabase.from('settings').select('*')
       .then(({ data }) => {
@@ -2924,6 +2940,87 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Heatmap overlay — solo si ?heatmap=1 y es admin
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('heatmap') !== '1') return;
+
+    let overlay = null;
+    let heatmapInstance = null;
+    let destroyed = false;
+
+    async function initHeatmap() {
+      const { data: adminData } = await supabase.auth.getSession();
+      const email = adminData?.session?.user?.email;
+      if (!email) return;
+      const { data: adminRow } = await supabase.from('admins').select('email').eq('email', email).single();
+      if (!adminRow) return;
+
+      const productParam = params.get('producto');
+      let query = supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+      if (productParam) {
+        const { data: prods } = await supabase.from('products').select('id, name');
+        const match = prods?.find(p => p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam);
+        if (match) query = query.eq('producto_activo', match.id);
+      }
+      const { data: events } = await query;
+      if (!events || destroyed) return;
+
+      overlay = document.createElement('div');
+      overlay.style.cssText = `position:fixed;top:0;left:0;width:${window.innerWidth}px;height:${window.innerHeight}px;pointer-events:none;z-index:9999;`;
+      document.body.appendChild(overlay);
+
+      const h337 = (await import('heatmap.js')).default;
+      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30, width: window.innerWidth, height: window.innerHeight });
+
+      function draw() {
+        if (!heatmapInstance || destroyed) return;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const scrollY = window.scrollY;
+
+        const points = events.map(ev => ({
+          x: Math.round((ev.x_percent / 100) * W),
+          y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
+          value: 1,
+        })).filter(p => p.y >= 0 && p.y <= H);
+
+        heatmapInstance.setData({ max: 5, data: points });
+      }
+
+      draw();
+      window.addEventListener('scroll', draw, { passive: true });
+      window.addEventListener('resize', () => {
+        overlay.style.width = window.innerWidth + 'px';
+        overlay.style.height = window.innerHeight + 'px';
+        draw();
+      }, { passive: true });
+
+      // Badge de control
+      const badge = document.createElement('div');
+      badge.innerHTML = `<span style="font-size:13px;font-weight:700;color:white">🔥 Heatmap — ${events.length} clicks</span>`;
+      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕ Cerrar';
+      closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;';
+      closeBtn.onclick = () => { window.removeEventListener('scroll', draw); window.removeEventListener('resize', draw); overlay?.remove(); badge?.remove(); };
+      badge.appendChild(closeBtn);
+      document.body.appendChild(badge);
+
+      return () => {
+        destroyed = true;
+        window.removeEventListener('scroll', draw);
+        window.removeEventListener('resize', draw);
+        overlay?.remove();
+        badge?.remove();
+      };
+    }
+
+    const cleanup = initHeatmap();
+    return () => { destroyed = true; cleanup?.then?.(fn => fn?.()); };
+  }, []);
+
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
     setProfile(data);
@@ -2974,9 +3071,13 @@ export default function Home() {
   useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
 
   useEffect(() => {
+    if (window.self !== window.top) return;
     function handleClick(e) {
+      if (window.self !== window.top) return;
       const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
-      const yPercent = parseFloat(((e.clientY / window.innerHeight) * 100).toFixed(3));
+      const pageY = e.clientY + window.scrollY;
+      const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      const yPercent = parseFloat(((pageY / totalHeight) * 100).toFixed(3));
       const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
       supabase.from('click_events').insert({
         x_percent: xPercent,
@@ -6034,12 +6135,6 @@ function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
-  const [iframeReady, setIframeReady] = React.useState(false);
-  const [iframeScrollY, setIframeScrollY] = React.useState(0);
-  const overlayRef = React.useRef(null);
-  const iframeRef = React.useRef(null);
-  const heatmapInstanceRef = React.useRef(null);
-  const IFRAME_H = 700;
 
   React.useEffect(() => {
     async function load() {
@@ -6051,141 +6146,73 @@ function HeatmapTab({ supabase, products }) {
     load();
   }, []);
 
-  // Escuchar scroll del iframe via postMessage
-  React.useEffect(() => {
-    function onMessage(e) {
-      if (e.data?.type === 'INKORA_SCROLL') {
-        setIframeScrollY(e.data.scrollY);
-      }
-    }
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
-
-  // Inyectar script de scroll reporting en el iframe cuando carga
-  function handleIframeLoad() {
-    setIframeReady(true);
-    try {
-      const iframeWin = iframeRef.current?.contentWindow;
-      if (!iframeWin) return;
-      const script = iframeRef.current.contentDocument.createElement('script');
-      script.textContent = `
-        window.addEventListener('scroll', function() {
-          window.parent.postMessage({ type: 'INKORA_SCROLL', scrollY: window.scrollY }, '*');
-        }, { passive: true });
-      `;
-      iframeRef.current.contentDocument.body.appendChild(script);
-    } catch(e) {}
-  }
-
-  // Redibujar heatmap cuando cambian eventos, filtro o scroll del iframe
-  React.useEffect(() => {
-    async function draw() {
-      const overlay = overlayRef.current;
-      if (!overlay || events.length === 0) return;
-      const h337 = (await import('heatmap.js')).default;
-
-      if (!heatmapInstanceRef.current) {
-        heatmapInstanceRef.current = h337.create({
-          container: overlay,
-          maxOpacity: 0.75,
-          minOpacity: 0,
-          blur: 0.75,
-          radius: 30,
-        });
-      }
-
-      const filtered = filterProduct === 'all'
-        ? events
-        : events.filter(e => e.producto_activo === filterProduct);
-
-      const W = overlay.offsetWidth;
-      // y_percent es % del viewport (0-100), ajustamos con el scroll actual del iframe
-      const points = filtered.map(ev => ({
-        x: Math.round((ev.x_percent / 100) * W),
-        y: Math.round((ev.y_percent / 100) * IFRAME_H) - iframeScrollY,
-        value: 1,
-      })).filter(p => p.y >= -30 && p.y <= IFRAME_H + 30);
-
-      heatmapInstanceRef.current.setData({ max: 5, data: points });
-    }
-    draw();
-  }, [events, filterProduct, iframeScrollY]);
-
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
 
-  // Construir URL del iframe — memorizada para evitar recargas en loop
-  const iframeUrl = React.useMemo(() => {
-    if (filterProduct === 'all') return '/catalogo';
-    const p = products.find(pr => pr.id === filterProduct);
-    if (!p) return '/catalogo';
-    const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return `/catalogo?producto=${slug}`;
-  }, [filterProduct]);
+  function openHeatmap() {
+    const base = window.location.origin;
+    if (filterProduct === 'all') {
+      window.open(`${base}/catalogo?heatmap=1`, '_blank');
+    } else {
+      const p = products.find(pr => pr.id === filterProduct);
+      if (!p) return;
+      const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      window.open(`${base}/catalogo?producto=${slug}&heatmap=1`, '_blank');
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Mapa de calor — Catálogo</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: '#9aa3bc' }}>{filteredCount} clicks</span>
-            <select
-              value={filterProduct}
-              onChange={e => setFilterProduct(e.target.value)}
-              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
-            >
-              {productOptions.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={async () => {
-                setLoading(true);
-                const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-                setEvents(data || []);
-                setLoading(false);
-              }}
-              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
-            >
-              ↻ Actualizar
-            </button>
-          </div>
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Mapa de calor — Catálogo</h2>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+          <select
+            value={filterProduct}
+            onChange={e => setFilterProduct(e.target.value)}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
+          >
+            {productOptions.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={async () => {
+              setLoading(true);
+              const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+              setEvents(data || []);
+              setLoading(false);
+            }}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
+          >
+            ↻ Actualizar
+          </button>
         </div>
 
-        {loading && (
-          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
-        )}
-        <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef', display: loading ? 'none' : 'block' }}>
-            {/* Iframe con la página real */}
-            <iframe
-              ref={iframeRef}
-              src={iframeUrl}
-              onLoad={handleIframeLoad}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
-              title="Catálogo preview"
-            />
-            {/* Overlay del heatmap (no bloquea clicks del iframe) */}
-            <div
-              ref={overlayRef}
-              style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}
-            />
-            {!iframeReady && (
-              <div style={{ position: 'absolute', inset: 0, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 14, zIndex: 20 }}>
-                Cargando catálogo...
-              </div>
-            )}
-          </div>
-
-        {events.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', padding: 20, color: '#9aa3bc', fontSize: 13 }}>
-            Todavía no hay clicks registrados.
+        {loading ? (
+          <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ background: '#f0f4ff', borderRadius: 10, padding: '16px 24px', minWidth: 140 }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{filteredCount}</div>
+              <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>clicks registrados</div>
+            </div>
+            <div style={{ background: '#f0f4ff', borderRadius: 10, padding: '16px 24px', minWidth: 140 }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{new Set(events.map(e => e.producto_activo)).size}</div>
+              <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>productos con clicks</div>
+            </div>
           </div>
         )}
 
-        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10, lineHeight: 1.5 }}>
-          Scrolleá dentro del catálogo para ver el mapa en cada sección. Los puntos se actualizan automáticamente con el scroll.
+        <button
+          onClick={openHeatmap}
+          disabled={loading || events.length === 0}
+          style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          🔥 Ver mapa de calor en el catálogo
+        </button>
+        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
+          Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
       </div>
     </div>

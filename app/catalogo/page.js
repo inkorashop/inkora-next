@@ -233,8 +233,7 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('heatmap') !== '1') return;
 
-    let overlay = null;
-    let heatmapInstance = null;
+    let canvas = null;
     let destroyed = false;
 
     async function initHeatmap() {
@@ -248,59 +247,74 @@ export default function Home() {
       let query = supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
       if (productParam) {
         const { data: prods } = await supabase.from('products').select('id, name');
-        const match = prods?.find(p => p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam);
+        const match = prods?.find(p =>
+          p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam
+        );
         if (match) query = query.eq('producto_activo', match.id);
       }
       const { data: events } = await query;
       if (!events || destroyed) return;
 
-      overlay = document.createElement('div');
-      overlay.style.cssText = `position:fixed;top:0;left:0;width:${window.innerWidth}px;height:${window.innerHeight}px;pointer-events:none;z-index:9999;`;
-      document.body.appendChild(overlay);
+      canvas = document.createElement('canvas');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:9999;';
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
 
-      const h337 = (await import('heatmap.js')).default;
-      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30, width: window.innerWidth, height: window.innerHeight });
-
-      function draw() {
-        if (!heatmapInstance || destroyed) return;
-        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      function drawHeatmap() {
+        if (!ctx || destroyed) return;
         const W = window.innerWidth;
         const H = window.innerHeight;
         const scrollY = window.scrollY;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+
+        canvas.width = W;
+        canvas.height = H;
+        ctx.clearRect(0, 0, W, H);
 
         const points = events.map(ev => ({
           x: Math.round((ev.x_percent / 100) * W),
           y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
-          value: 1,
-        })).filter(p => p.y >= 0 && p.y <= H);
+        })).filter(p => p.y >= -30 && p.y <= H + 30);
 
-        heatmapInstance.setData({ max: 5, data: points });
+        points.forEach(({ x, y }) => {
+          const radius = 28;
+          const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+          gradient.addColorStop(0, 'rgba(255, 0, 0, 0.25)');
+          gradient.addColorStop(0.4, 'rgba(255, 120, 0, 0.12)');
+          gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
+          ctx.fill();
+        });
       }
 
-      draw();
-      window.addEventListener('scroll', draw, { passive: true });
-      window.addEventListener('resize', () => {
-        overlay.style.width = window.innerWidth + 'px';
-        overlay.style.height = window.innerHeight + 'px';
-        draw();
-      }, { passive: true });
+      drawHeatmap();
+      window.addEventListener('scroll', drawHeatmap, { passive: true });
+      window.addEventListener('resize', drawHeatmap, { passive: true });
 
-      // Badge de control
       const badge = document.createElement('div');
       badge.innerHTML = `<span style="font-size:13px;font-weight:700;color:white">🔥 Heatmap — ${events.length} clicks</span>`;
       badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕ Cerrar';
       closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;';
-      closeBtn.onclick = () => { window.removeEventListener('scroll', draw); window.removeEventListener('resize', draw); overlay?.remove(); badge?.remove(); };
+      closeBtn.onclick = () => {
+        window.removeEventListener('scroll', drawHeatmap);
+        window.removeEventListener('resize', drawHeatmap);
+        canvas?.remove();
+        badge?.remove();
+      };
       badge.appendChild(closeBtn);
       document.body.appendChild(badge);
 
       return () => {
         destroyed = true;
-        window.removeEventListener('scroll', draw);
-        window.removeEventListener('resize', draw);
-        overlay?.remove();
+        window.removeEventListener('scroll', drawHeatmap);
+        window.removeEventListener('resize', drawHeatmap);
+        canvas?.remove();
         badge?.remove();
       };
     }
