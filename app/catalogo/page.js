@@ -229,12 +229,22 @@ export default function Home() {
   }, []);
 
   // Heatmap overlay — solo si ?heatmap=1 y es admin
+  const heatmapEventsRef = useRef([]);
+  const heatmapDrawRef = useRef(null);
+  const heatmapActiveProductRef = useRef(activeProductId);
+
+  useEffect(() => {
+    heatmapActiveProductRef.current = activeProductId;
+    if (heatmapDrawRef.current) heatmapDrawRef.current();
+  }, [activeProductId]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('heatmap') !== '1') return;
 
     let canvas = null;
     let destroyed = false;
+    let realtimeChannel = null;
 
     async function initHeatmap() {
       const { data: adminData } = await supabase.auth.getSession();
@@ -243,17 +253,14 @@ export default function Home() {
       const { data: adminRow } = await supabase.from('admins').select('email').eq('email', email).single();
       if (!adminRow) return;
 
-      const productParam = params.get('producto');
-      let query = supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-      if (productParam) {
-        const { data: prods } = await supabase.from('products').select('id, name');
-        const match = prods?.find(p =>
-          p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam
-        );
-        if (match) query = query.eq('producto_activo', match.id);
-      }
-      const { data: events } = await query;
+      // Cargar TODOS los eventos una sola vez
+      const { data: events } = await supabase
+        .from('click_events')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(5000);
       if (!events || destroyed) return;
+      heatmapEventsRef.current = events;
 
       canvas = document.createElement('canvas');
       canvas.width = window.innerWidth;
@@ -262,18 +269,28 @@ export default function Home() {
       document.body.appendChild(canvas);
       const ctx = canvas.getContext('2d');
 
+      const badgeSpan = document.createElement('span');
+      badgeSpan.style.cssText = 'font-size:13px;font-weight:700;color:white;';
+
       function drawHeatmap() {
         if (!ctx || destroyed) return;
         const W = window.innerWidth;
         const H = window.innerHeight;
         const scrollY = window.scrollY;
         const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        const currentProductId = heatmapActiveProductRef.current;
 
         canvas.width = W;
         canvas.height = H;
         ctx.clearRect(0, 0, W, H);
 
-        const points = events.map(ev => ({
+        // Filtrar en memoria según producto activo
+        const allEvents = heatmapEventsRef.current;
+        const filtered = currentProductId
+          ? allEvents.filter(ev => ev.producto_activo === currentProductId)
+          : allEvents;
+
+        const points = filtered.map(ev => ({
           x: Math.round((ev.x_percent / 100) * W),
           y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
         })).filter(p => p.y >= -30 && p.y <= H + 30);
@@ -289,14 +306,27 @@ export default function Home() {
           ctx.fillStyle = gradient;
           ctx.fill();
         });
+
+        badgeSpan.textContent = `🔥 Heatmap — ${filtered.length} clicks`;
       }
 
+      heatmapDrawRef.current = drawHeatmap;
       drawHeatmap();
+
       window.addEventListener('scroll', drawHeatmap, { passive: true });
       window.addEventListener('resize', drawHeatmap, { passive: true });
 
+      // Realtime: agregar nuevos clicks sin refetchear todo
+      realtimeChannel = supabase
+        .channel('heatmap-realtime')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'click_events' }, (payload) => {
+          heatmapEventsRef.current = [payload.new, ...heatmapEventsRef.current];
+          drawHeatmap();
+        })
+        .subscribe();
+
       const badge = document.createElement('div');
-      badge.innerHTML = `<span style="font-size:13px;font-weight:700;color:white">🔥 Heatmap — ${events.length} clicks</span>`;
+      badge.appendChild(badgeSpan);
       badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕ Cerrar';
@@ -304,23 +334,24 @@ export default function Home() {
       closeBtn.onclick = () => {
         window.removeEventListener('scroll', drawHeatmap);
         window.removeEventListener('resize', drawHeatmap);
+        realtimeChannel?.unsubscribe();
         canvas?.remove();
         badge?.remove();
       };
       badge.appendChild(closeBtn);
       document.body.appendChild(badge);
-
-      return () => {
-        destroyed = true;
-        window.removeEventListener('scroll', drawHeatmap);
-        window.removeEventListener('resize', drawHeatmap);
-        canvas?.remove();
-        badge?.remove();
-      };
     }
 
-    const cleanup = initHeatmap();
-    return () => { destroyed = true; cleanup?.then?.(fn => fn?.()); };
+    initHeatmap();
+
+    return () => {
+      destroyed = true;
+      heatmapDrawRef.current = null;
+      window.removeEventListener('scroll', heatmapDrawRef.current);
+      window.removeEventListener('resize', heatmapDrawRef.current);
+      realtimeChannel?.unsubscribe();
+      canvas?.remove();
+    };
   }, []);
 
   async function loadProfile(userId) {
