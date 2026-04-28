@@ -255,11 +255,11 @@ export default function Home() {
       if (!events || destroyed) return;
 
       overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;';
+      overlay.style.cssText = `position:fixed;top:0;left:0;width:${window.innerWidth}px;height:${window.innerHeight}px;pointer-events:none;z-index:9999;`;
       document.body.appendChild(overlay);
 
       const h337 = (await import('heatmap.js')).default;
-      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30 });
+      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30, width: window.innerWidth, height: window.innerHeight });
 
       function draw() {
         if (!heatmapInstance || destroyed) return;
@@ -279,7 +279,11 @@ export default function Home() {
 
       draw();
       window.addEventListener('scroll', draw, { passive: true });
-      window.addEventListener('resize', draw, { passive: true });
+      window.addEventListener('resize', () => {
+        overlay.style.width = window.innerWidth + 'px';
+        overlay.style.height = window.innerHeight + 'px';
+        draw();
+      }, { passive: true });
 
       // Badge de control
       const badge = document.createElement('div');
