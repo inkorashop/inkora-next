@@ -2357,7 +2357,7 @@ function HeatmapTab({ supabase, products }) {
               onLoad={handleIframeLoad}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
               title="Catálogo preview"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             />
             {/* Overlay del heatmap (no bloquea clicks del iframe) */}
             <div

@@ -18,6 +18,14 @@ export function CartProvider({ children }) {
     } catch { }
   }, [cart]);
 
+  // Bloquear sincronización de auth de Supabase dentro del iframe
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.self !== window.top) return;
+    } catch { return; }
+  }, []);
+
   function addToCart(design, product) {
     setCart(prev => ({
       ...prev,

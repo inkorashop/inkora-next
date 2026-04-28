@@ -141,17 +141,23 @@ export default function Home() {
     document.body.style.paddingBottom = '1px';
     loadProducts();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id);
-    });
+    const isIframe = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
-    });
+    if (!isIframe) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) loadProfile(u.id);
+      });
+    }
+
+    const { data: { subscription } } = isIframe
+      ? { data: { subscription: { unsubscribe: () => {} } } }
+      : supabase.auth.onAuthStateChange((event, session) => {
+          const u = session?.user ?? null;
+          setUser(u);
+          if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
+        });
 
     supabase.from('settings').select('*')
       .then(({ data }) => {
