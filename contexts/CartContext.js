@@ -13,7 +13,9 @@ export function CartProvider({ children }) {
   });
 
   useEffect(() => {
-    localStorage.setItem('inkora_cart', JSON.stringify(cart));
+    try {
+      localStorage.setItem('inkora_cart', JSON.stringify(cart));
+    } catch { }
   }, [cart]);
 
   function addToCart(design, product) {
