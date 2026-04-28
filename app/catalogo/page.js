@@ -272,6 +272,7 @@ export default function Home() {
   useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
 
   useEffect(() => {
+    if (window.self !== window.top) return;
     function handleClick(e) {
       const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
       const yPercent = parseFloat(((e.clientY / window.innerHeight) * 100).toFixed(3));
