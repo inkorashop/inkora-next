@@ -268,6 +268,26 @@ export default function Home() {
     return () => document.removeEventListener('scroll', handler);
   }, []);
 
+  const activeProductIdRef = useRef(activeProductId);
+  useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
+      const yPercent = parseFloat((((e.clientY + window.scrollY) / document.documentElement.scrollHeight) * 100).toFixed(3));
+      const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
+      supabase.from('click_events').insert({
+        x_percent: xPercent,
+        y_percent: yPercent,
+        elemento: elemento.slice(0, 200),
+        producto_activo: activeProductIdRef.current || null,
+        timestamp: new Date().toISOString(),
+      }).then(() => {});
+    }
+    document.addEventListener('click', handleClick, { passive: true });
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
+
   useEffect(() => {
     if (isMobile) return;
     const el = inlineSearchRef.current;

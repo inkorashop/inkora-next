@@ -117,7 +117,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'heatmap' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -130,11 +130,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config'];
+    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -946,7 +946,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -2023,7 +2023,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -2178,6 +2178,11 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ══ HEATMAP ══ */}
+        {activeTab === 'heatmap' && (
+          <HeatmapTab supabase={supabase} products={products} />
+        )}
+
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
@@ -2209,6 +2214,112 @@ export default function Admin() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function HeatmapTab({ supabase, products }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filterProduct, setFilterProduct] = React.useState('all');
+  const [heatmapReady, setHeatmapReady] = React.useState(false);
+  const containerRef = React.useRef(null);
+  const heatmapInstanceRef = React.useRef(null);
+
+  React.useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+      setEvents(data || []);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function initHeatmap() {
+      if (!containerRef.current || events.length === 0) return;
+      const h337 = (await import('heatmap.js')).default;
+      if (cancelled) return;
+      if (heatmapInstanceRef.current) {
+        heatmapInstanceRef.current.setData({ max: 5, data: [] });
+      } else {
+        heatmapInstanceRef.current = h337.create({
+          container: containerRef.current,
+          maxOpacity: 0.7,
+          minOpacity: 0,
+          blur: 0.75,
+          radius: 28,
+        });
+      }
+      const filtered = filterProduct === 'all' ? events : events.filter(e => e.producto_activo === filterProduct);
+      const W = containerRef.current.offsetWidth;
+      const H = containerRef.current.offsetHeight;
+      const points = filtered.map(e => ({
+        x: Math.round((e.x_percent / 100) * W),
+        y: Math.round((e.y_percent / 100) * H),
+        value: 1,
+      }));
+      heatmapInstanceRef.current.setData({ max: 5, data: points });
+      setHeatmapReady(true);
+    }
+    initHeatmap();
+    return () => { cancelled = true; };
+  }, [events, filterProduct]);
+
+  const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
+  const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Mapa de calor — Catálogo</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, color: '#9aa3bc' }}>{filteredCount} clicks</span>
+            <select
+              value={filterProduct}
+              onChange={e => setFilterProduct(e.target.value)}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
+            >
+              {productOptions.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
+        ) : events.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Todavía no hay clicks registrados.</div>
+        ) : (
+          <div
+            ref={containerRef}
+            style={{
+              position: 'relative',
+              width: '100%',
+              aspectRatio: '16/9',
+              background: 'linear-gradient(145deg, #f0f4ff 0%, #e8eef9 100%)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: '1.5px solid #dde1ef',
+            }}
+          >
+            {!heatmapReady && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 13 }}>
+                Renderizando mapa...
+              </div>
+            )}
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: 0.08 }}>
+              <span style={{ fontSize: 72, color: '#1B2F5E', fontWeight: 900, letterSpacing: 4 }}>CATÁLOGO</span>
+            </div>
+          </div>
+        )}
+        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10, lineHeight: 1.5 }}>
+          Las coordenadas se guardan como porcentajes de la pantalla del usuario. El mapa se escala proporcionalmente al contenedor de previsualización.
+        </p>
+      </div>
     </div>
   );
 }
