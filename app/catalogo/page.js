@@ -268,7 +268,7 @@ export default function Home() {
         const H = window.innerHeight;
         const scrollY = window.scrollY;
 
-        const points= events.map(ev => ({
+        const points = events.map(ev => ({
           x: Math.round((ev.x_percent / 100) * W),
           y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
           value: 1,
