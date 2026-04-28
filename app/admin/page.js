@@ -2350,25 +2350,20 @@ function HeatmapTab({ supabase, products }) {
           <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
         )}
         <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef', display: loading ? 'none' : 'block' }}>
-            {/* Iframe con la página real */}
-            <iframe
-              ref={iframeRef}
-              src={iframeUrl}
-              onLoad={handleIframeLoad}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
-              title="Catálogo preview"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-            />
-            {/* Overlay del heatmap (no bloquea clicks del iframe) */}
+            {/* Fondo con screenshot de la página */}
+            <div style={{ position: 'absolute', inset: 0, background: '#f7f8fc', overflow: 'hidden' }}>
+              <img
+                src={iframeUrl.includes('producto=') ? `/api/screenshot?url=${encodeURIComponent(iframeUrl)}` : '/catalogo-screenshot.png'}
+                alt=""
+                style={{ width: '100%', height: 'auto', display: 'block', opacity: 0.35 }}
+                onError={e => { e.target.style.display = 'none'; }}
+              />
+            </div>
+            {/* Overlay del heatmap */}
             <div
               ref={overlayRef}
               style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}
             />
-            {!iframeReady && (
-              <div style={{ position: 'absolute', inset: 0, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 14, zIndex: 20 }}>
-                Cargando catálogo...
-              </div>
-            )}
           </div>
 
         {events.length === 0 && !loading && (
