@@ -2222,9 +2222,12 @@ function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
-  const [heatmapReady, setHeatmapReady] = React.useState(false);
-  const containerRef = React.useRef(null);
+  const [iframeReady, setIframeReady] = React.useState(false);
+  const [iframeScrollY, setIframeScrollY] = React.useState(0);
+  const overlayRef = React.useRef(null);
+  const iframeRef = React.useRef(null);
   const heatmapInstanceRef = React.useRef(null);
+  const IFRAME_H = 700;
 
   React.useEffect(() => {
     async function load() {
@@ -2236,40 +2239,79 @@ function HeatmapTab({ supabase, products }) {
     load();
   }, []);
 
+  // Escuchar scroll del iframe via postMessage
   React.useEffect(() => {
-    let cancelled = false;
-    async function initHeatmap() {
-      if (!containerRef.current || events.length === 0) return;
+    function onMessage(e) {
+      if (e.data?.type === 'INKORA_SCROLL') {
+        setIframeScrollY(e.data.scrollY);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Inyectar script de scroll reporting en el iframe cuando carga
+  function handleIframeLoad() {
+    setIframeReady(true);
+    try {
+      const iframeWin = iframeRef.current?.contentWindow;
+      if (!iframeWin) return;
+      const script = iframeRef.current.contentDocument.createElement('script');
+      script.textContent = `
+        window.addEventListener('scroll', function() {
+          window.parent.postMessage({ type: 'INKORA_SCROLL', scrollY: window.scrollY }, '*');
+        }, { passive: true });
+      `;
+      iframeRef.current.contentDocument.body.appendChild(script);
+    } catch(e) {}
+  }
+
+  // Redibujar heatmap cuando cambian eventos, filtro o scroll del iframe
+  React.useEffect(() => {
+    async function draw() {
+      const overlay = overlayRef.current;
+      if (!overlay || events.length === 0) return;
       const h337 = (await import('heatmap.js')).default;
-      if (cancelled) return;
-      if (heatmapInstanceRef.current) {
-        heatmapInstanceRef.current.setData({ max: 5, data: [] });
-      } else {
+
+      if (!heatmapInstanceRef.current) {
         heatmapInstanceRef.current = h337.create({
-          container: containerRef.current,
-          maxOpacity: 0.7,
+          container: overlay,
+          maxOpacity: 0.75,
           minOpacity: 0,
           blur: 0.75,
-          radius: 28,
+          radius: 30,
         });
       }
-      const filtered = filterProduct === 'all' ? events : events.filter(e => e.producto_activo === filterProduct);
-      const W = containerRef.current.offsetWidth;
-      const H = containerRef.current.offsetHeight;
-      const points = filtered.map(e => ({
-        x: Math.round((e.x_percent / 100) * W),
-        y: Math.round((e.y_percent / 100) * H),
+
+      const filtered = filterProduct === 'all'
+        ? events
+        : events.filter(e => e.producto_activo === filterProduct);
+
+      const W = overlay.offsetWidth;
+      // y_percent es % del viewport (0-100), ajustamos con el scroll actual del iframe
+      const points = filtered.map(ev => ({
+        x: Math.round((ev.x_percent / 100) * W),
+        y: Math.round((ev.y_percent / 100) * IFRAME_H) - iframeScrollY,
         value: 1,
-      }));
+      })).filter(p => p.y >= -30 && p.y <= IFRAME_H + 30);
+
       heatmapInstanceRef.current.setData({ max: 5, data: points });
-      setHeatmapReady(true);
     }
-    initHeatmap();
-    return () => { cancelled = true; };
-  }, [events, filterProduct]);
+    draw();
+  }, [events, filterProduct, iframeScrollY]);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
+
+  // Construir URL del iframe con producto seleccionado
+  const iframeUrl = filterProduct === 'all'
+    ? '/catalogo'
+    : (() => {
+        const p = products.find(pr => pr.id === filterProduct);
+        if (!p) return '/catalogo';
+        const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        return `/catalogo?producto=${slug}`;
+      })();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2287,42 +2329,59 @@ function HeatmapTab({ supabase, products }) {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+            <button
+              onClick={async () => {
+                setLoading(true);
+                const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+                setEvents(data || []);
+                setLoading(false);
+              }}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
+            >
+              ↻ Actualizar
+            </button>
           </div>
         </div>
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
-        ) : events.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Todavía no hay clicks registrados.</div>
         ) : (
-          <div
-            ref={containerRef}
-            style={{
-              position: 'relative',
-              width: '100%',
-              aspectRatio: '16/9',
-              background: 'linear-gradient(145deg, #f0f4ff 0%, #e8eef9 100%)',
-              borderRadius: 10,
-              overflow: 'hidden',
-              border: '1.5px solid #dde1ef',
-            }}
-          >
-            {!heatmapReady && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 13 }}>
-                Renderizando mapa...
+          <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef' }}>
+            {/* Iframe con la página real */}
+            <iframe
+              ref={iframeRef}
+              src={iframeUrl}
+              onLoad={handleIframeLoad}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
+              title="Catálogo preview"
+            />
+            {/* Overlay del heatmap (no bloquea clicks del iframe) */}
+            <div
+              ref={overlayRef}
+              style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}
+            />
+            {!iframeReady && (
+              <div style={{ position: 'absolute', inset: 0, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 14, zIndex: 20 }}>
+                Cargando catálogo...
               </div>
             )}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: 0.08 }}>
-              <span style={{ fontSize: 72, color: '#1B2F5E', fontWeight: 900, letterSpacing: 4 }}>CATÁLOGO</span>
-            </div>
           </div>
         )}
+
+        {events.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: 20, color: '#9aa3bc', fontSize: 13 }}>
+            Todavía no hay clicks registrados.
+          </div>
+        )}
+
         <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10, lineHeight: 1.5 }}>
-          Las coordenadas se guardan como porcentajes de la pantalla del usuario. El mapa se escala proporcionalmente al contenedor de previsualización.
+          Scrolleá dentro del catálogo para ver el mapa en cada sección. Los puntos se actualizan automáticamente con el scroll.
         </p>
       </div>
     </div>
   );
 }
+  
 
 const styles = {
   loginWrap: { minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center' },

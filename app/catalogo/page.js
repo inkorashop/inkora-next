@@ -274,7 +274,7 @@ export default function Home() {
   useEffect(() => {
     function handleClick(e) {
       const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
-      const yPercent = parseFloat((((e.clientY + window.scrollY) / document.documentElement.scrollHeight) * 100).toFixed(3));
+      const yPercent = parseFloat(((e.clientY / window.innerHeight) * 100).toFixed(3));
       const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
       supabase.from('click_events').insert({
         x_percent: xPercent,
