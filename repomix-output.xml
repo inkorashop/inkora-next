@@ -648,33 +648,6 @@ const nextConfig = {
 export default nextConfig;
 </file>
 
-<file path="package.json">
-{
-  "name": "inkora-next",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.0",
-    "fuse.js": "^7.3.0",
-    "next": "14.2.35",
-    "react": "^18",
-    "react-dom": "^18",
-    "three": "^0.184.0"
-  },
-  "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
-  }
-}
-</file>
-
 <file path="README.md">
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
@@ -1087,6 +1060,34 @@ export function CartProvider({ children }) {
 
 export function useCart() {
   return useContext(CartContext);
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "inkora-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.0",
+    "fuse.js": "^7.3.0",
+    "heatmap.js": "^2.0.5",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35"
+  }
 }
 </file>
 
@@ -2969,6 +2970,26 @@ export default function Home() {
     return () => document.removeEventListener('scroll', handler);
   }, []);
 
+  const activeProductIdRef = useRef(activeProductId);
+  useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
+      const yPercent = parseFloat(((e.clientY / window.innerHeight) * 100).toFixed(3));
+      const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
+      supabase.from('click_events').insert({
+        x_percent: xPercent,
+        y_percent: yPercent,
+        elemento: elemento.slice(0, 200),
+        producto_activo: activeProductIdRef.current || null,
+        timestamp: new Date().toISOString(),
+      }).then(() => {});
+    }
+    document.addEventListener('click', handleClick, { passive: true });
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
+
   useEffect(() => {
     if (isMobile) return;
     const el = inlineSearchRef.current;
@@ -3908,7 +3929,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'heatmap' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -3921,11 +3942,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config'];
+    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -4737,7 +4758,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -5814,7 +5835,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -5969,6 +5990,11 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ══ HEATMAP ══ */}
+        {activeTab === 'heatmap' && (
+          <HeatmapTab supabase={supabase} products={products} />
+        )}
+
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
@@ -6003,6 +6029,169 @@ export default function Admin() {
     </div>
   );
 }
+
+function HeatmapTab({ supabase, products }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filterProduct, setFilterProduct] = React.useState('all');
+  const [iframeReady, setIframeReady] = React.useState(false);
+  const [iframeScrollY, setIframeScrollY] = React.useState(0);
+  const overlayRef = React.useRef(null);
+  const iframeRef = React.useRef(null);
+  const heatmapInstanceRef = React.useRef(null);
+  const IFRAME_H = 700;
+
+  React.useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+      setEvents(data || []);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // Escuchar scroll del iframe via postMessage
+  React.useEffect(() => {
+    function onMessage(e) {
+      if (e.data?.type === 'INKORA_SCROLL') {
+        setIframeScrollY(e.data.scrollY);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Inyectar script de scroll reporting en el iframe cuando carga
+  function handleIframeLoad() {
+    setIframeReady(true);
+    try {
+      const iframeWin = iframeRef.current?.contentWindow;
+      if (!iframeWin) return;
+      const script = iframeRef.current.contentDocument.createElement('script');
+      script.textContent = `
+        window.addEventListener('scroll', function() {
+          window.parent.postMessage({ type: 'INKORA_SCROLL', scrollY: window.scrollY }, '*');
+        }, { passive: true });
+      `;
+      iframeRef.current.contentDocument.body.appendChild(script);
+    } catch(e) {}
+  }
+
+  // Redibujar heatmap cuando cambian eventos, filtro o scroll del iframe
+  React.useEffect(() => {
+    async function draw() {
+      const overlay = overlayRef.current;
+      if (!overlay || events.length === 0) return;
+      const h337 = (await import('heatmap.js')).default;
+
+      if (!heatmapInstanceRef.current) {
+        heatmapInstanceRef.current = h337.create({
+          container: overlay,
+          maxOpacity: 0.75,
+          minOpacity: 0,
+          blur: 0.75,
+          radius: 30,
+        });
+      }
+
+      const filtered = filterProduct === 'all'
+        ? events
+        : events.filter(e => e.producto_activo === filterProduct);
+
+      const W = overlay.offsetWidth;
+      // y_percent es % del viewport (0-100), ajustamos con el scroll actual del iframe
+      const points = filtered.map(ev => ({
+        x: Math.round((ev.x_percent / 100) * W),
+        y: Math.round((ev.y_percent / 100) * IFRAME_H) - iframeScrollY,
+        value: 1,
+      })).filter(p => p.y >= -30 && p.y <= IFRAME_H + 30);
+
+      heatmapInstanceRef.current.setData({ max: 5, data: points });
+    }
+    draw();
+  }, [events, filterProduct, iframeScrollY]);
+
+  const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
+  const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
+
+  // Construir URL del iframe — memorizada para evitar recargas en loop
+  const iframeUrl = React.useMemo(() => {
+    if (filterProduct === 'all') return '/catalogo';
+    const p = products.find(pr => pr.id === filterProduct);
+    if (!p) return '/catalogo';
+    const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    return `/catalogo?producto=${slug}`;
+  }, [filterProduct]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Mapa de calor — Catálogo</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, color: '#9aa3bc' }}>{filteredCount} clicks</span>
+            <select
+              value={filterProduct}
+              onChange={e => setFilterProduct(e.target.value)}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
+            >
+              {productOptions.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={async () => {
+                setLoading(true);
+                const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+                setEvents(data || []);
+                setLoading(false);
+              }}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 10px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
+            >
+              ↻ Actualizar
+            </button>
+          </div>
+        </div>
+
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
+        )}
+        <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef', display: loading ? 'none' : 'block' }}>
+            {/* Iframe con la página real */}
+            <iframe
+              ref={iframeRef}
+              src={iframeUrl}
+              onLoad={handleIframeLoad}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
+              title="Catálogo preview"
+            />
+            {/* Overlay del heatmap (no bloquea clicks del iframe) */}
+            <div
+              ref={overlayRef}
+              style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}
+            />
+            {!iframeReady && (
+              <div style={{ position: 'absolute', inset: 0, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa3bc', fontSize: 14, zIndex: 20 }}>
+                Cargando catálogo...
+              </div>
+            )}
+          </div>
+
+        {events.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: 20, color: '#9aa3bc', fontSize: 13 }}>
+            Todavía no hay clicks registrados.
+          </div>
+        )}
+
+        <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10, lineHeight: 1.5 }}>
+          Scrolleá dentro del catálogo para ver el mapa en cada sección. Los puntos se actualizan automáticamente con el scroll.
+        </p>
+      </div>
+    </div>
+  );
+}
+  
 
 const styles = {
   loginWrap: { minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center' },

@@ -2251,20 +2251,23 @@ function HeatmapTab({ supabase, products }) {
   }, []);
 
   // Inyectar script de scroll reporting en el iframe cuando carga
-  function handleIframeLoad() {
+  const handleIframeLoad = React.useCallback(() => {
     setIframeReady(true);
     try {
-      const iframeWin = iframeRef.current?.contentWindow;
-      if (!iframeWin) return;
-      const script = iframeRef.current.contentDocument.createElement('script');
+      const iframeDoc = iframeRef.current?.contentDocument;
+      if (!iframeDoc || !iframeDoc.body) return;
+      // Evitar inyectar el script más de una vez
+      if (iframeDoc.getElementById('inkora-scroll-reporter')) return;
+      const script = iframeDoc.createElement('script');
+      script.id = 'inkora-scroll-reporter';
       script.textContent = `
         window.addEventListener('scroll', function() {
           window.parent.postMessage({ type: 'INKORA_SCROLL', scrollY: window.scrollY }, '*');
         }, { passive: true });
       `;
-      iframeRef.current.contentDocument.body.appendChild(script);
+      iframeDoc.body.appendChild(script);
     } catch(e) {}
-  }
+  }, []);
 
   // Redibujar heatmap cuando cambian eventos, filtro o scroll del iframe
   React.useEffect(() => {
@@ -2353,6 +2356,7 @@ function HeatmapTab({ supabase, products }) {
               onLoad={handleIframeLoad}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'auto' }}
               title="Catálogo preview"
+              sandbox="allow-scripts allow-same-origin allow-forms"
             />
             {/* Overlay del heatmap (no bloquea clicks del iframe) */}
             <div
