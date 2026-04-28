@@ -272,7 +272,7 @@ export default function Home() {
           x: Math.round((ev.x_percent / 100) * W),
           y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
           value: 1,
-        })).filter(p => p.y >= -30 && p.y <= H + 30);
+        })).filter(p => p.y >= 0 && p.y <= H);
 
         heatmapInstance.setData({ max: 5, data: points });
       }
