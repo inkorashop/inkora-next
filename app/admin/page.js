@@ -2342,10 +2342,10 @@ function HeatmapTab({ supabase, products }) {
           </div>
         </div>
 
-        {loading ? (
+        {loading && (
           <div style={{ textAlign: 'center', padding: 40, color: '#9aa3bc', fontSize: 14 }}>Cargando eventos...</div>
-        ) : (
-          <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef' }}>
+        )}
+        <div style={{ position: 'relative', width: '100%', height: IFRAME_H, borderRadius: 10, overflow: 'hidden', border: '1.5px solid #dde1ef', display: loading ? 'none' : 'block' }}>
             {/* Iframe con la página real */}
             <iframe
               ref={iframeRef}
@@ -2365,7 +2365,6 @@ function HeatmapTab({ supabase, products }) {
               </div>
             )}
           </div>
-        )}
 
         {events.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: 20, color: '#9aa3bc', fontSize: 13 }}>
