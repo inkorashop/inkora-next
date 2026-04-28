@@ -2308,11 +2308,12 @@ function HeatmapTab({ supabase, products }) {
 
   // Construir URL del iframe — memorizada para evitar recargas en loop
   const iframeUrl = React.useMemo(() => {
-    if (filterProduct === 'all') return '/catalogo';
+    const base = typeof window !== 'undefined' ? window.location.origin : '';
+    if (filterProduct === 'all') return `${base}/catalogo?preview=1`;
     const p = products.find(pr => pr.id === filterProduct);
-    if (!p) return '/catalogo';
+    if (!p) return `${base}/catalogo?preview=1`;
     const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return `/catalogo?producto=${slug}`;
+    return `${base}/catalogo?producto=${slug}&preview=1`;
   }, [filterProduct]);
 
   return (
