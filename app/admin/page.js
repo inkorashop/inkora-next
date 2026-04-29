@@ -2244,17 +2244,18 @@ function usePresence(supabase) {
 
   React.useEffect(() => {
     supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
-      .then(({ data }) => setPresence(data || []));
+      .then(({ data }) => setPresence((data || []).map(u => ({ ...u, _lastSeen: Date.now() }))));
 
     const ch = supabase.channel('shared-presence-watch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
         } else {
+          const newEntry = { ...payload.new, _lastSeen: Date.now() };
           setPresence(prev => {
-            const exists = prev.find(u => u.user_id === payload.new.user_id);
-            if (exists) return prev.map(u => u.user_id === payload.new.user_id ? payload.new : u);
-            return [payload.new, ...prev];
+            const exists = prev.find(u => u.user_id === newEntry.user_id);
+            if (exists) return prev.map(u => u.user_id === newEntry.user_id ? newEntry : u);
+            return [newEntry, ...prev];
           });
         }
       })
@@ -2267,7 +2268,7 @@ function usePresence(supabase) {
   const getStatus = (userId) => {
     const u = presence.find(p => p.user_id === userId);
     if (!u) return null;
-    const isActive = Date.now() - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD;
+    const isActive = u._lastSeen && (Date.now() - u._lastSeen < ACTIVE_THRESHOLD);
     const pageLabel = u.page === 'landing' ? '🏠' : '🛍️';
     return { isActive, pageLabel, updated_at: u.updated_at };
   };
