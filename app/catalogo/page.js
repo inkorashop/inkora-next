@@ -540,7 +540,7 @@ export default function Home() {
         });
         heatmapPresenceRef.current = users;
         drawPresence();
-      }, 3000);
+      }, 2000);
 
       // Badge
       const badge = document.createElement('div');
@@ -659,7 +659,7 @@ export default function Home() {
       // Heartbeat cada 8 segundos para mantener presencia activa
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
-      }, 3000);
+      }, 2000);
 
       const trackMove = (e) => {
         const now = Date.now();

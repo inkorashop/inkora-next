@@ -196,6 +196,7 @@ export default function Admin() {
   // Users
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const { getStatus } = usePresence(supabase);
 
   // Admins
   const [admins, setAdmins] = useState([]);
@@ -1832,8 +1833,14 @@ export default function Admin() {
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
             {loadingUsers && <p style={s.emptyMsg}>Cargando...</p>}
             {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
-            {users.map(u => (
+            {users.map(u => {
+              const status = getStatus(u.id);
+              return (
               <div key={u.id} style={s.userRow}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 32 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: status?.isActive ? '#22c55e' : '#e5e7eb' }} />
+                  {status && <span style={{ fontSize: 12 }}>{status.pageLabel}</span>}
+                </div>
                 <div style={s.userInfo}>
                   <div style={s.productName}>{u.name || '—'}</div>
                   <div style={s.productMeta}>{u.email}</div>
@@ -1874,7 +1881,7 @@ export default function Admin() {
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         )}
 
@@ -2218,51 +2225,59 @@ export default function Admin() {
   );
 }
 
-function HeatmapTab({ supabase, products }) {
-  const [events, setEvents] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [filterProduct, setFilterProduct] = React.useState('all');
-  const [confirmReset, setConfirmReset] = React.useState(false);
+function usePresence(supabase) {
   const [presence, setPresence] = React.useState([]);
   const [tick, setTick] = React.useState(0);
-  const ACTIVE_THRESHOLD = 6000;
+  const ACTIVE_THRESHOLD = 4000;
 
   React.useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 2000);
-    return () => clearInterval(interval);
-  }, []);
+    supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
+      .then(({ data }) => setPresence(data || []));
 
-  React.useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const [{ data: clickData }, { data: presenceData }] = await Promise.all([
-        supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000),
-        supabase.from('user_presence').select('*').order('updated_at', { ascending: false }),
-      ]);
-      setEvents(clickData || []);
-      setPresence(presenceData || []);
-      setLoading(false);
-    }
-    load();
-
-    // Realtime para presencia
-    const ch = supabase.channel('admin-presence-watch')
+    const ch = supabase.channel('shared-presence-watch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
         } else {
           setPresence(prev => {
             const exists = prev.find(u => u.user_id === payload.new.user_id);
-            if (exists) {
-              return prev.map(u => u.user_id === payload.new.user_id ? payload.new : u);
-            }
+            if (exists) return prev.map(u => u.user_id === payload.new.user_id ? payload.new : u);
             return [payload.new, ...prev];
           });
         }
       })
       .subscribe();
 
-    return () => ch.unsubscribe();
+    const ticker = setInterval(() => setTick(t => t + 1), 2000);
+    return () => { ch.unsubscribe(); clearInterval(ticker); };
+  }, []);
+
+  const getStatus = (userId) => {
+    const u = presence.find(p => p.user_id === userId);
+    if (!u) return null;
+    const isActive = Date.now() - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD;
+    const pageLabel = u.page === 'landing' ? '🏠' : '🛍️';
+    return { isActive, pageLabel, updated_at: u.updated_at };
+  };
+
+  return { presence, getStatus, ACTIVE_THRESHOLD, tick };
+}
+
+function HeatmapTab({ supabase, products }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filterProduct, setFilterProduct] = React.useState('all');
+  const [confirmReset, setConfirmReset] = React.useState(false);
+  const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
+
+  React.useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data: clickData } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+      setEvents(clickData || []);
+      setLoading(false);
+    }
+    load();
   }, []);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
