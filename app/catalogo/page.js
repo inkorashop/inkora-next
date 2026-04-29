@@ -309,9 +309,11 @@ export default function Home() {
           .filter(ev => currentProductId ? ev.producto_activo === currentProductId : true)
           .filter(ev => !excluded.has(ev.user_id));
 
+        const docW = document.documentElement.scrollWidth;
+        const docH = document.documentElement.scrollHeight;
         const points = filtered.map(ev => ({
-          x: Math.round((ev.x_percent / 100) * totalWidth) - window.scrollX,
-          y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
+          x: Math.round((ev.x_percent / 100) * docW) - window.scrollX,
+          y: Math.round((ev.y_percent / 100) * docH) - window.scrollY,
         })).filter(p => p.y >= -30 && p.y <= H + 30);
 
         points.forEach(({ x, y }) => {
@@ -345,9 +347,8 @@ export default function Home() {
         const users = Object.values(heatmapPresenceRef.current);
         users.forEach(u => {
           if (u.x_percent == null || u.y_percent == null) return;
-          const totalWidth = Math.max(document.body.scrollWidth, document.documentElement.scrollWidth);
-          const x = Math.round((u.x_percent / 100) * totalWidth) - window.scrollX;
-          const y = Math.round((u.y_percent / 100) * totalHeight) - scrollY;
+          const x = Math.round((u.x_percent / 100) * document.documentElement.scrollWidth) - window.scrollX;
+          const y = Math.round((u.y_percent / 100) * document.documentElement.scrollHeight) - window.scrollY;
           if (y < -20 || y > H + 20) return;
 
           // Punto del cursor
@@ -648,7 +649,8 @@ export default function Home() {
           user_id: u.id,
           email: u.email,
           name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
-          x_percent: parseFloat((((e.clientX + window.scrollX) / Math.max(document.body.scrollWidth, document.documentElement.scrollWidth)) * 100).toFixed(2)),
+          x_percent: parseFloat((((e.clientX + window.scrollX) / document.documentElement.scrollWidth) * 100).toFixed(2)),
+          y_percent: parseFloat(((e.clientY + window.scrollY) / document.documentElement.scrollHeight * 100).toFixed(2)),
           y_percent: parseFloat(((pageY / totalHeight) * 100).toFixed(2)),
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' }).then(() => {});
@@ -676,12 +678,10 @@ export default function Home() {
 
     function handleClick(e) {
       if (window.self !== window.top) return;
-      const totalWidth = Math.max(document.body.scrollWidth, document.documentElement.scrollWidth);
       const pageX = e.clientX + window.scrollX;
-      const xPercent = parseFloat(((pageX / totalWidth) * 100).toFixed(3));
       const pageY = e.clientY + window.scrollY;
-      const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-      const yPercent = parseFloat(((pageY / totalHeight) * 100).toFixed(3));
+      const xPercent = parseFloat(((pageX / document.documentElement.scrollWidth) * 100).toFixed(3));
+      const yPercent = parseFloat(((pageY / document.documentElement.scrollHeight) * 100).toFixed(3));
       const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
       supabase.from('click_events').insert({
         x_percent: xPercent,
