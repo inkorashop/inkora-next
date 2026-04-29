@@ -117,7 +117,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -130,11 +130,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap'];
+    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -947,7 +947,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -2042,7 +2042,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -2202,6 +2202,11 @@ export default function Admin() {
           <HeatmapTab supabase={supabase} products={products} />
         )}
 
+      {/* ══ ESTADÍSTICAS ══ */}
+        {activeTab === 'stats' && (
+          <StatsTab supabase={supabase} sellers={sellers} />
+        )}
+
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
@@ -2233,6 +2238,218 @@ export default function Admin() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatsTab({ supabase, sellers }) {
+  const [orders, setOrders] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [sellerFilter, setSellerFilter] = React.useState('all');
+  const [datePreset, setDatePreset] = React.useState('all');
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo] = React.useState('');
+
+  React.useEffect(() => {
+    supabase.from('orders').select('*').order('created_at', { ascending: true })
+      .then(({ data }) => { setOrders(data || []); setLoading(false); });
+  }, []);
+
+  function getDateRange() {
+    const now = new Date();
+    if (datePreset === '7d') { const d = new Date(); d.setDate(d.getDate() - 7); return [d, now]; }
+    if (datePreset === '30d') { const d = new Date(); d.setDate(d.getDate() - 30); return [d, now]; }
+    if (datePreset === '90d') { const d = new Date(); d.setDate(d.getDate() - 90); return [d, now]; }
+    if (datePreset === 'year') { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return [d, now]; }
+    if (datePreset === 'custom' && dateFrom) {
+      return [new Date(dateFrom), dateTo ? new Date(dateTo + 'T23:59:59') : now];
+    }
+    return [null, null];
+  }
+
+  const [from, to] = getDateRange();
+
+  const filtered = orders.filter(o => {
+    if (sellerFilter !== 'all' && (o.seller_id || null) !== (sellerFilter === 'none' ? null : sellerFilter)) return false;
+    if (from && new Date(o.created_at) < from) return false;
+    if (to && new Date(o.created_at) > to) return false;
+    return true;
+  });
+
+  const totalOrders = filtered.length;
+  const totalRevenue = filtered.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const allItems = filtered.flatMap(o => Array.isArray(o.items) ? o.items : []);
+  const totalUnits = allItems.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const avgUnitsPerOrder = totalOrders > 0 ? totalUnits / totalOrders : 0;
+
+  const byStatus = { pending: 0, confirmed: 0, in_production: 0, ready: 0, cancelled: 0 };
+  filtered.forEach(o => { if (byStatus[o.status] !== undefined) byStatus[o.status]++; });
+  const STATUS_LABELS = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
+  const STATUS_COLORS = { pending: '#f59e0b', confirmed: '#3b82f6', in_production: '#8b5cf6', ready: '#22c55e', cancelled: '#ef4444' };
+
+  const designMap = {};
+  allItems.forEach(i => {
+    if (!i.name) return;
+    if (!designMap[i.name]) designMap[i.name] = { name: i.name, qty: 0, revenue: 0 };
+    designMap[i.name].qty += Number(i.qty) || 0;
+    designMap[i.name].revenue += (Number(i.qty) || 0) * (Number(i.pricePerUnit) || 0);
+  });
+  const topDesigns = Object.values(designMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+
+  const productMap = {};
+  allItems.forEach(i => {
+    const name = i.productName || 'Sin producto';
+    if (!productMap[name]) productMap[name] = { name, qty: 0 };
+    productMap[name].qty += Number(i.qty) || 0;
+  });
+  const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty);
+
+  const dayMap = {};
+  filtered.forEach(o => {
+    const day = new Date(o.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+    if (!dayMap[day]) dayMap[day] = { day, orders: 0, revenue: 0 };
+    dayMap[day].orders++;
+    dayMap[day].revenue += Number(o.total) || 0;
+  });
+  const dayData = Object.values(dayMap).slice(-30);
+  const maxOrders = Math.max(...dayData.map(d => d.orders), 1);
+
+  const uniqueEmails = new Set(filtered.map(o => o.customer_email).filter(Boolean));
+  const recurringEmails = [...uniqueEmails].filter(e => filtered.filter(o => o.customer_email === e).length > 1);
+
+  const card = { background: 'white', borderRadius: 10, padding: 20, border: '1.5px solid #dde1ef' };
+  const metricCard = { ...card, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flex: '1 1 140px' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ ...card, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Vendedor</div>
+          <select value={sellerFilter} onChange={e => setSellerFilter(e.target.value)}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+            <option value="all">Todos</option>
+            <option value="none">Sin vendedor</option>
+            {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Período</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[['all','Todo'], ['7d','7 días'], ['30d','30 días'], ['90d','90 días'], ['year','1 año'], ['custom','Personalizado']].map(([val, label]) => (
+              <button key={val} onClick={() => setDatePreset(val)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: datePreset === val ? '#1B2F5E' : 'white', color: datePreset === val ? 'white' : '#5a6380' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {datePreset === 'custom' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Desde</div>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Hasta</div>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {loading ? <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando...</div> : <>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Pedidos', value: totalOrders },
+          { label: 'Facturación total', value: '$' + totalRevenue.toLocaleString('es-AR') },
+          { label: 'Ticket promedio', value: '$' + Math.round(avgTicket).toLocaleString('es-AR') },
+          { label: 'Unidades totales', value: totalUnits.toLocaleString('es-AR') },
+          { label: 'Prom. unidades/pedido', value: avgUnitsPerOrder.toFixed(1) },
+          { label: 'Clientes únicos', value: uniqueEmails.size },
+          { label: 'Clientes recurrentes', value: recurringEmails.length },
+        ].map(({ label, value }) => (
+          <div key={label} style={metricCard}>
+            <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#1B2F5E' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={card}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Pedidos por estado</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {Object.entries(byStatus).map(([status, count]) => (
+            <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f7f8fc', borderRadius: 8, padding: '8px 14px', border: '1.5px solid #eef0f6' }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: STATUS_COLORS[status] }} />
+              <span style={{ fontSize: 12, color: '#5a6380', fontWeight: 600 }}>{STATUS_LABELS[status]}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#1B2F5E' }}>{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {dayData.length > 0 && (
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Pedidos por día</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120, overflowX: 'auto' }}>
+            {dayData.map(d => (
+              <div key={d.day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 32 }}>
+                <div style={{ fontSize: 9, color: '#9aa3bc', fontWeight: 600 }}>{d.orders}</div>
+                <div style={{ width: 24, background: '#2D6BE4', borderRadius: '3px 3px 0 0', height: Math.max(4, (d.orders / maxOrders) * 90) }} />
+                <div style={{ fontSize: 9, color: '#c4c9d9', whiteSpace: 'nowrap' }}>{d.day}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ ...card, flex: '1 1 300px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Top 10 diseños más pedidos</div>
+          {topDesigns.length === 0 ? <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {topDesigns.map((d, i) => (
+                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c4c9d9', minWidth: 18, textAlign: 'right' }}>#{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#2d3352', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                    <div style={{ height: 4, background: '#f0f2f8', borderRadius: 2, marginTop: 3 }}>
+                      <div style={{ height: 4, background: '#2D6BE4', borderRadius: 2, width: `${(d.qty / topDesigns[0].qty) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E', minWidth: 30, textAlign: 'right' }}>{d.qty}u</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ ...card, flex: '1 1 220px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Productos</div>
+          {topProducts.length === 0 ? <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {topProducts.map((p, i) => (
+                <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c4c9d9', minWidth: 18, textAlign: 'right' }}>#{i + 1}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#2d3352' }}>{p.name}</div>
+                    <div style={{ height: 4, background: '#f0f2f8', borderRadius: 2, marginTop: 3 }}>
+                      <div style={{ height: 4, background: '#8b5cf6', borderRadius: 2, width: `${(p.qty / topProducts[0].qty) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E', minWidth: 30, textAlign: 'right' }}>{p.qty}u</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      </>}
     </div>
   );
 }

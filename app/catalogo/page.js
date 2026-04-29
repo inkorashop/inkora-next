@@ -880,7 +880,8 @@ export default function Home() {
         items: cartItems,
         total,
         notes,
-        status: 'pending'
+        status: 'pending',
+        seller_id: profile?.sellers?.id || null,
       });
 
       await fetch('/api/send-email', {
