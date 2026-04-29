@@ -126,7 +126,7 @@ export default function Landing() {
 
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
-      }, 2000);
+      }, 1500);
 
       presenceCh = { heartbeat };
     });

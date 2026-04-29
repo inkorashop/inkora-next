@@ -659,7 +659,7 @@ export default function Home() {
       // Heartbeat cada 8 segundos para mantener presencia activa
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
-      }, 2000);
+      }, 1500);
 
       const trackMove = (e) => {
         const now = Date.now();

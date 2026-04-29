@@ -2260,7 +2260,7 @@ function usePresence(supabase) {
       })
       .subscribe();
 
-    const ticker = setInterval(() => setTick(t => t + 1), 2000);
+    const ticker = setInterval(() => setTick(t => t + 1), 500);
     return () => { ch.unsubscribe(); clearInterval(ticker); };
   }, []);
 
