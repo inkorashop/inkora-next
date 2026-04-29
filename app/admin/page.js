@@ -2224,7 +2224,7 @@ function HeatmapTab({ supabase, products }) {
   const [filterProduct, setFilterProduct] = React.useState('all');
   const [confirmReset, setConfirmReset] = React.useState(false);
   const [presence, setPresence] = React.useState([]);
-  const ACTIVE_THRESHOLD = 30000; // 30 segundos
+  const ACTIVE_THRESHOLD = 6000; // 6 segundos
 
   React.useEffect(() => {
     async function load() {
@@ -2241,9 +2241,18 @@ function HeatmapTab({ supabase, products }) {
 
     // Realtime para presencia
     const ch = supabase.channel('admin-presence-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, () => {
-        supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
-          .then(({ data }) => setPresence(data || []));
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
+        } else {
+          setPresence(prev => {
+            const exists = prev.find(u => u.user_id === payload.new.user_id);
+            if (exists) {
+              return prev.map(u => u.user_id === payload.new.user_id ? payload.new : u);
+            }
+            return [payload.new, ...prev];
+          });
+        }
       })
       .subscribe();
 
