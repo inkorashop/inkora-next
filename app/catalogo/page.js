@@ -459,11 +459,15 @@ export default function Home() {
 
   const userRef = useRef(null);
   useEffect(() => { userRef.current = user?.id || null; }, [user]);
+  // Debug temporal — borrarlo después
+  useEffect(() => { console.log('userRef actualizado:', user?.id); }, [user]);
 
   useEffect(() => {
     if (window.self !== window.top) return;
     function handleClick(e) {
       if (window.self !== window.top) return;
+      // Ignorar clicks en elementos del heatmap UI
+      if (e.target.closest && e.target.closest('[data-heatmap-ui]')) return;
       const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
       const pageY = e.clientY + window.scrollY;
       const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
@@ -478,10 +482,7 @@ export default function Home() {
         timestamp: new Date().toISOString(),
       }).then(() => {});
     }
-    document.addEventListener('click', (e) => {
-      if (e.target.closest && e.target.closest('[data-heatmap-ui]')) return;
-      handleClick(e);
-    }, { passive: true });
+    document.addEventListener('click', handleClick, { passive: true });
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
