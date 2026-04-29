@@ -2222,6 +2222,7 @@ function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
+  const [confirmReset, setConfirmReset] = React.useState(false);
 
   React.useEffect(() => {
     async function load() {
@@ -2291,16 +2292,49 @@ function HeatmapTab({ supabase, products }) {
           </div>
         )}
 
-        <button
-          onClick={openHeatmap}
-          disabled={loading || events.length === 0}
-          style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          🔥 Ver mapa de calor en el catálogo
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={openHeatmap}
+            disabled={loading || events.length === 0}
+            style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            🔥 Ver mapa de calor en el catálogo
+          </button>
+          <button
+            onClick={() => setConfirmReset(true)}
+            disabled={loading || events.length === 0}
+            style={{ background: 'white', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1 }}
+          >
+            🗑️ Resetear clicks
+          </button>
+        </div>
         <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
           Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
+
+        {confirmReset && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
+              <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button style={{ background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => setConfirmReset(false)}>Cancelar</button>
+                <button
+                  style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
+                  onClick={async () => {
+                    setLoading(true);
+                    await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    setEvents([]);
+                    setConfirmReset(false);
+                    setLoading(false);
+                  }}
+                >
+                  Sí, eliminar todo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
