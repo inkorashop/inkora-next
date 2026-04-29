@@ -663,15 +663,37 @@ export default function Home() {
       };
 
       window.addEventListener('mousemove', trackMove, { passive: true });
-      presenceCh = { _trackMove: trackMove, unsubscribe: () => {
-        // Limpiar presencia al salir
+
+      const cleanup = () => {
         supabase.from('user_presence').delete().eq('user_id', u.id).then(() => {});
-      }};
+      };
+
+      const handleVisibility = () => {
+        if (document.hidden) {
+          cleanup();
+        }
+      };
+
+      const handleBeforeUnload = () => {
+        cleanup();
+      };
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      presenceCh = {
+        _trackMove: trackMove,
+        _handleVisibility: handleVisibility,
+        _handleBeforeUnload: handleBeforeUnload,
+        unsubscribe: cleanup,
+      };
     });
 
     return () => {
       if (presenceCh) {
         if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
+        if (presenceCh._handleVisibility) document.removeEventListener('visibilitychange', presenceCh._handleVisibility);
+        if (presenceCh._handleBeforeUnload) window.removeEventListener('beforeunload', presenceCh._handleBeforeUnload);
         presenceCh.unsubscribe();
       }
     };
