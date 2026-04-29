@@ -1837,9 +1837,21 @@ export default function Admin() {
               const status = getStatus(u.id);
               return (
               <div key={u.id} style={s.userRow}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, minWidth: 32 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: status?.isActive ? '#22c55e' : '#e5e7eb' }} />
-                  {status && <span style={{ fontSize: 12 }}>{status.pageLabel}</span>}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
+                    <span style={{ fontSize: 10, fontWeight: 600, color: status?.isActive ? '#15803d' : '#9aa3bc' }}>
+                      {status?.isActive ? 'En línea' : status ? 'Inactivo' : '—'}
+                    </span>
+                  </div>
+                  {status && (
+                    <>
+                      <span style={{ fontSize: 10, color: '#9aa3bc' }}>{status.pageLabel === '🏠' ? '🏠 Landing' : '🛍️ Catálogo'}</span>
+                      <span style={{ fontSize: 10, color: '#c4c9d9' }}>
+                        {new Date(status.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div style={s.userInfo}>
                   <div style={s.productName}>{u.name || '—'}</div>
