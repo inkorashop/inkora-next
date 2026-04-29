@@ -665,18 +665,16 @@ export default function Home() {
       window.addEventListener('mousemove', trackMove, { passive: true });
 
       const cleanup = () => {
-        supabase.from('user_presence').delete().eq('user_id', u.id).then(() => {});
+        // sendBeacon garantiza que el request llega aunque se cierre el browser
+        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
+        navigator.sendBeacon('/api/presence', blob);
       };
 
       const handleVisibility = () => {
-        if (document.hidden) {
-          cleanup();
-        }
+        if (document.hidden) cleanup();
       };
 
-      const handleBeforeUnload = () => {
-        cleanup();
-      };
+      const handleBeforeUnload = () => cleanup();
 
       document.addEventListener('visibilitychange', handleVisibility);
       window.addEventListener('beforeunload', handleBeforeUnload);
