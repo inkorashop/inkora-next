@@ -695,7 +695,6 @@ export default function Home() {
 
       presenceCh = {
         _trackMove: trackMove,
-        _handleVisibility: handleVisibility,
         _handleBeforeUnload: handleBeforeUnload,
         _heartbeat: heartbeat,
         unsubscribe: cleanup,
@@ -705,7 +704,6 @@ export default function Home() {
     return () => {
       if (presenceCh) {
         if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
-        if (presenceCh._handleVisibility) document.removeEventListener('visibilitychange', presenceCh._handleVisibility);
         if (presenceCh._handleBeforeUnload) window.removeEventListener('beforeunload', presenceCh._handleBeforeUnload);
         if (presenceCh._heartbeat) clearInterval(presenceCh._heartbeat);
         presenceCh.unsubscribe();

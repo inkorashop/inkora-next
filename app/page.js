@@ -132,13 +132,10 @@ export default function Landing() {
         navigator.sendBeacon('/api/presence', blob);
       };
 
-      const handleVisibility = () => { if (document.hidden) cleanup(); };
       const handleBeforeUnload = () => cleanup();
-
-      document.addEventListener('visibilitychange', handleVisibility);
       window.addEventListener('beforeunload', handleBeforeUnload);
 
-      presenceCh = { heartbeat, handleVisibility, handleBeforeUnload, cleanup };
+      presenceCh = { heartbeat, handleBeforeUnload, cleanup };
     });
 
     return () => {
@@ -147,7 +144,6 @@ export default function Landing() {
       clearInterval(tabInterval);
       if (presenceCh) {
         clearInterval(presenceCh.heartbeat);
-        document.removeEventListener('visibilitychange', presenceCh.handleVisibility);
         window.removeEventListener('beforeunload', presenceCh.handleBeforeUnload);
         presenceCh.cleanup();
       }
