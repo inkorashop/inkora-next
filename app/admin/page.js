@@ -211,6 +211,11 @@ export default function Admin() {
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const lastSelectedOrderIdRef = useRef(null);
+  const [orderFilterStatus, setOrderFilterStatus] = useState('all');
+  const [orderFilterSeller, setOrderFilterSeller] = useState('all');
+  const [orderFilterProduct, setOrderFilterProduct] = useState('all');
+  const [orderFilterDateFrom, setOrderFilterDateFrom] = useState('');
+  const [orderFilterDateTo, setOrderFilterDateTo] = useState('');
 
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
@@ -830,12 +835,30 @@ export default function Admin() {
 
   function summarizeItems(items) {
     if (!Array.isArray(items) || items.length === 0) return '—';
-    return items.slice(0, 3).map(i => `${i.name} ×${i.qty}`).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '');
+    const byProduct = {};
+    items.forEach(i => {
+      const p = i.productName || 'Sin producto';
+      if (!byProduct[p]) byProduct[p] = [];
+      byProduct[p].push(`${i.name} x${i.qty}`);
+    });
+    return Object.entries(byProduct).map(([product, designs]) => `${product} — ${designs.join(', ')}`).join(' | ');
   }
 
   const filteredOrders = orders.filter(o => {
     const q = orderSearch.toLowerCase();
-    return !q || (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_email || '').toLowerCase().includes(q);
+    if (q && !(o.order_code || '').toLowerCase().includes(q) && !(o.customer_name || '').toLowerCase().includes(q) && !(o.customer_email || '').toLowerCase().includes(q)) return false;
+    if (orderFilterStatus !== 'all' && o.status !== orderFilterStatus) return false;
+    if (orderFilterSeller !== 'all') {
+      if (orderFilterSeller === 'none' && o.seller_id) return false;
+      if (orderFilterSeller !== 'none' && o.seller_id !== orderFilterSeller) return false;
+    }
+    if (orderFilterProduct !== 'all') {
+      const items = Array.isArray(o.items) ? o.items : [];
+      if (!items.some(i => i.product_id === orderFilterProduct)) return false;
+    }
+    if (orderFilterDateFrom && new Date(o.created_at) < new Date(orderFilterDateFrom)) return false;
+    if (orderFilterDateTo && new Date(o.created_at) > new Date(orderFilterDateTo + 'T23:59:59')) return false;
+    return true;
   });
 
   // ── Sellers ──
@@ -1741,13 +1764,42 @@ export default function Admin() {
                 </div>
               )}
             </div>
-            <div style={{marginBottom: 12}}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
               <input
-                style={{...s.input, maxWidth: 320}}
-                placeholder="Buscar por código, nombre o email..."
+                style={{ ...s.input, maxWidth: 220 }}
+                placeholder="Código, nombre o email..."
                 value={orderSearch}
                 onChange={e => setOrderSearch(e.target.value)}
               />
+              <select value={orderFilterStatus} onChange={e => setOrderFilterStatus(e.target.value)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+                <option value="all">Todos los estados</option>
+                {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+              </select>
+              <select value={orderFilterSeller} onChange={e => setOrderFilterSeller(e.target.value)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+                <option value="all">Todos los vendedores</option>
+                <option value="none">Sin vendedor</option>
+                {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <select value={orderFilterProduct} onChange={e => setOrderFilterProduct(e.target.value)}
+                style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+                <option value="all">Todos los productos</option>
+                {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input type="date" value={orderFilterDateFrom} onChange={e => setOrderFilterDateFrom(e.target.value)}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
+                <span style={{ fontSize: 12, color: '#9aa3bc' }}>→</span>
+                <input type="date" value={orderFilterDateTo} onChange={e => setOrderFilterDateTo(e.target.value)}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
+              </div>
+              {(orderSearch || orderFilterStatus !== 'all' || orderFilterSeller !== 'all' || orderFilterProduct !== 'all' || orderFilterDateFrom || orderFilterDateTo) && (
+                <button onClick={() => { setOrderSearch(''); setOrderFilterStatus('all'); setOrderFilterSeller('all'); setOrderFilterProduct('all'); setOrderFilterDateFrom(''); setOrderFilterDateTo(''); }}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'white', color: '#9aa3bc' }}>
+                  ✕ Limpiar filtros
+                </button>
+              )}
             </div>
             {filteredOrders.length === 0 && <p style={s.emptyMsg}>No hay pedidos.</p>}
             {filteredOrders.length > 0 && (
