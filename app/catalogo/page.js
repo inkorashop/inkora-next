@@ -233,6 +233,8 @@ export default function Home() {
   const heatmapDrawRef = useRef(null);
   const heatmapActiveProductRef = useRef(activeProductId);
   const heatmapExcludedUsersRef = useRef(new Set());
+  const heatmapLayersRef = useRef({ clicks: true, presence: true });
+  const heatmapPresenceRef = useRef({});
 
   useEffect(() => {
     heatmapActiveProductRef.current = activeProductId;
@@ -244,8 +246,10 @@ export default function Home() {
     if (params.get('heatmap') !== '1') return;
 
     let canvas = null;
+    let presenceCanvas = null;
     let destroyed = false;
     let realtimeChannel = null;
+    let presenceChannel = null;
 
     async function initHeatmap() {
       const { data: adminData } = await supabase.auth.getSession();
@@ -262,6 +266,7 @@ export default function Home() {
       if (!events || destroyed) return;
       heatmapEventsRef.current = events;
 
+      // Canvas de clicks
       canvas = document.createElement('canvas');
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -269,10 +274,18 @@ export default function Home() {
       document.body.appendChild(canvas);
       const ctx = canvas.getContext('2d');
 
+      // Canvas de presencia (encima del de clicks)
+      presenceCanvas = document.createElement('canvas');
+      presenceCanvas.width = window.innerWidth;
+      presenceCanvas.height = window.innerHeight;
+      presenceCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:10000;';
+      document.body.appendChild(presenceCanvas);
+      const presenceCtx = presenceCanvas.getContext('2d');
+
       const badgeSpan = document.createElement('span');
       badgeSpan.style.cssText = 'font-size:13px;font-weight:700;color:white;';
 
-      function drawHeatmap() {
+      function drawClicks() {
         if (!ctx || destroyed) return;
         const W = window.innerWidth;
         const H = window.innerHeight;
@@ -284,6 +297,11 @@ export default function Home() {
         canvas.width = W;
         canvas.height = H;
         ctx.clearRect(0, 0, W, H);
+
+        if (!heatmapLayersRef.current.clicks) {
+          badgeSpan.textContent = `🔥 Heatmap — oculto`;
+          return;
+        }
 
         const allEvents = heatmapEventsRef.current;
         const filtered = allEvents
@@ -310,24 +328,68 @@ export default function Home() {
         badgeSpan.textContent = `🔥 Heatmap — ${filtered.length} clicks`;
       }
 
+      function drawPresence() {
+        if (!presenceCtx || destroyed) return;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const scrollY = window.scrollY;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+
+        presenceCanvas.width = W;
+        presenceCanvas.height = H;
+        presenceCtx.clearRect(0, 0, W, H);
+
+        if (!heatmapLayersRef.current.presence) return;
+
+        const users = Object.values(heatmapPresenceRef.current);
+        users.forEach(u => {
+          if (u.x_percent == null || u.y_percent == null) return;
+          const x = Math.round((u.x_percent / 100) * W);
+          const y = Math.round((u.y_percent / 100) * totalHeight) - scrollY;
+          if (y < -20 || y > H + 20) return;
+
+          // Punto del cursor
+          presenceCtx.beginPath();
+          presenceCtx.arc(x, y, 8, 0, Math.PI * 2);
+          presenceCtx.fillStyle = 'rgba(45, 107, 228, 0.85)';
+          presenceCtx.fill();
+          presenceCtx.strokeStyle = 'white';
+          presenceCtx.lineWidth = 2;
+          presenceCtx.stroke();
+
+          // Nombre
+          const name = u.name || 'Usuario';
+          presenceCtx.font = 'bold 11px Barlow, sans-serif';
+          presenceCtx.fillStyle = 'white';
+          presenceCtx.strokeStyle = 'rgba(27,47,94,0.8)';
+          presenceCtx.lineWidth = 3;
+          presenceCtx.strokeText(name, x + 12, y + 4);
+          presenceCtx.fillText(name, x + 12, y + 4);
+        });
+      }
+
+      function drawHeatmap() {
+        drawClicks();
+        drawPresence();
+      }
+
       heatmapDrawRef.current = drawHeatmap;
       drawHeatmap();
 
       window.addEventListener('scroll', drawHeatmap, { passive: true });
       window.addEventListener('resize', drawHeatmap, { passive: true });
 
+      // Realtime clicks
       realtimeChannel = supabase
         .channel('heatmap-realtime')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'click_events' }, (payload) => {
           heatmapEventsRef.current = [payload.new, ...heatmapEventsRef.current];
-          drawHeatmap();
+          drawClicks();
         })
         .subscribe();
 
-      // Panel de filtro por usuario
-      const allUserIds = [...new Set(events.map(ev => ev.user_id))];
-
       // Buscar nombres en profiles
+      const allUserIds = [...new Set(events.map(ev => ev.user_id))];
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('id, name, email')
@@ -335,14 +397,68 @@ export default function Home() {
       const profilesMap = {};
       (profilesData || []).forEach(p => { profilesMap[p.id] = p.name || p.email || p.id.slice(0, 8); });
 
+      // Panel de control
       const panel = document.createElement('div');
       panel.setAttribute('data-heatmap-ui', '1');
-      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10000;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;max-height:60vh;overflow-y:auto;';
+      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10001;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;max-height:70vh;overflow-y:auto;';
 
-      const panelTitle = document.createElement('div');
-      panelTitle.textContent = '👤 Filtrar usuarios';
-      panelTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;';
-      panel.appendChild(panelTitle);
+      // Sección CAPAS
+      const layersTitle = document.createElement('div');
+      layersTitle.textContent = '🎛️ CAPAS';
+      layersTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;';
+      panel.appendChild(layersTitle);
+
+      [
+        { key: 'clicks', label: '🔥 Historial de clicks' },
+        { key: 'presence', label: '🟢 Presencia en vivo' },
+      ].forEach(({ key, label }) => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.style.cssText = 'cursor:pointer;width:14px;height:14px;flex-shrink:0;';
+
+        const txt = document.createElement('span');
+        txt.style.cssText = 'font-size:12px;color:white;font-weight:600;';
+        txt.textContent = label;
+
+        cb.addEventListener('change', () => {
+          heatmapLayersRef.current[key] = cb.checked;
+          drawHeatmap();
+        });
+
+        row.appendChild(cb);
+        row.appendChild(txt);
+        panel.appendChild(row);
+      });
+
+      // Separador
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-top:1px solid rgba(255,255,255,0.15);margin:10px 0;';
+      panel.appendChild(sep);
+
+      // Sección USUARIOS
+      const usersTitle = document.createElement('div');
+      usersTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+      const usersTitleText = document.createElement('span');
+      usersTitleText.textContent = '👤 USUARIOS';
+      const usersChevron = document.createElement('span');
+      usersChevron.textContent = '▼';
+      usersChevron.style.cssText = 'font-size:9px;transition:transform 0.2s;';
+      usersTitle.appendChild(usersTitleText);
+      usersTitle.appendChild(usersChevron);
+      panel.appendChild(usersTitle);
+
+      const usersBody = document.createElement('div');
+      let usersOpen = true;
+
+      usersTitle.addEventListener('click', () => {
+        usersOpen = !usersOpen;
+        usersBody.style.display = usersOpen ? 'block' : 'none';
+        usersChevron.style.transform = usersOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+      });
 
       allUserIds.forEach(userId => {
         const label = document.createElement('label');
@@ -350,11 +466,11 @@ export default function Home() {
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.checked = true; // tildado = visible
+        checkbox.checked = true;
         checkbox.style.cssText = 'cursor:pointer;width:14px;height:14px;flex-shrink:0;';
 
         const text = document.createElement('span');
-        text.style.cssText = 'font-size:11px;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;';
+        text.style.cssText = 'font-size:11px;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;';
         text.textContent = userId ? (profilesMap[userId] || userId.slice(0, 8) + '...') : 'Sin usuario';
 
         const count = events.filter(ev => ev.user_id === userId).length;
@@ -363,26 +479,37 @@ export default function Home() {
         countSpan.textContent = `(${count})`;
 
         checkbox.addEventListener('change', () => {
-          if (!checkbox.checked) {
-            heatmapExcludedUsersRef.current.add(userId);
-          } else {
-            heatmapExcludedUsersRef.current.delete(userId);
-          }
-          drawHeatmap();
+          if (!checkbox.checked) heatmapExcludedUsersRef.current.add(userId);
+          else heatmapExcludedUsersRef.current.delete(userId);
+          drawClicks();
         });
 
         label.appendChild(checkbox);
         label.appendChild(text);
         label.appendChild(countSpan);
-        panel.appendChild(label);
+        usersBody.appendChild(label);
       });
 
+      panel.appendChild(usersBody);
       document.body.appendChild(panel);
 
+      // Presence channel — muestra cursores en vivo
+      presenceChannel = supabase.channel('heatmap-presence', { config: { presence: { key: email } } });
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          const state = presenceChannel.presenceState();
+          const users = {};
+          Object.values(state).forEach(arr => arr.forEach(u => { users[u.user_id || u.email] = u; }));
+          heatmapPresenceRef.current = users;
+          drawPresence();
+        })
+        .subscribe();
+
+      // Badge
       const badge = document.createElement('div');
       badge.appendChild(badgeSpan);
       badge.setAttribute('data-heatmap-ui', '1');
-      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10002;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕ Cerrar';
       closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;';
@@ -390,7 +517,9 @@ export default function Home() {
         window.removeEventListener('scroll', drawHeatmap);
         window.removeEventListener('resize', drawHeatmap);
         realtimeChannel?.unsubscribe();
+        presenceChannel?.unsubscribe();
         canvas?.remove();
+        presenceCanvas?.remove();
         badge?.remove();
         panel?.remove();
       };
@@ -404,7 +533,9 @@ export default function Home() {
       destroyed = true;
       heatmapDrawRef.current = null;
       realtimeChannel?.unsubscribe();
+      presenceChannel?.unsubscribe();
       canvas?.remove();
+      presenceCanvas?.remove();
     };
   }, []);
 
@@ -462,7 +593,43 @@ export default function Home() {
 
   useEffect(() => {
     if (window.self !== window.top) return;
-    // Si es modo heatmap, no registrar clicks
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('heatmap') === '1') return;
+
+    // Presence — transmitir posición del cursor en vivo
+    let presenceCh = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user;
+      if (!u) return;
+      presenceCh = supabase.channel('heatmap-presence', { config: { presence: { key: u.email } } });
+      presenceCh.subscribe(async (status) => {
+        if (status !== 'SUBSCRIBED') return;
+        const trackMove = (e) => {
+          const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+          const pageY = e.clientY + window.scrollY;
+          presenceCh.track({
+            user_id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+            x_percent: parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(2)),
+            y_percent: parseFloat(((pageY / totalHeight) * 100).toFixed(2)),
+          });
+        };
+        window.addEventListener('mousemove', trackMove, { passive: true });
+        presenceCh._trackMove = trackMove;
+      });
+    });
+
+    return () => {
+      if (presenceCh) {
+        if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
+        presenceCh.unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (window.self !== window.top) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('heatmap') === '1') return;
 
