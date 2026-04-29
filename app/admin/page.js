@@ -286,6 +286,7 @@ export default function Admin() {
         catColorPickerRef.current = {};
       } else {
         setSelectedIds(new Set());
+        setSelectedOrderIds(new Set());
       }
     }
     document.addEventListener('keydown', handleKeyDown);
@@ -1754,7 +1755,7 @@ export default function Admin() {
 
         {/* ══ PEDIDOS ══ */}
         {activeTab === 'orders' && (
-          <div style={s.card}>
+          <div style={s.card} onClick={() => setSelectedOrderIds(new Set())}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h2 style={{ ...s.sectionTitle, marginBottom: 0 }}>Pedidos ({filteredOrders.length})</h2>
               {selectedOrderIds.size > 0 && (
@@ -1824,6 +1825,7 @@ export default function Admin() {
                       return (
                         <tr key={o.id}
                           onClick={e => {
+                            e.stopPropagation();
                             if (e.shiftKey && lastSelectedOrderIdRef.current) {
                               const ids = filteredOrders.map(x => x.id);
                               const lastIdx = ids.indexOf(lastSelectedOrderIdRef.current);
