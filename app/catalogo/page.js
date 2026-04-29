@@ -494,28 +494,49 @@ export default function Home() {
       document.body.appendChild(panel);
 
       // Presence channel — muestra cursores en vivo
-      presenceChannel = supabase.channel('heatmap-presence', { config: { presence: { key: email } } });
-      presenceChannel
-        .on('presence', { event: 'sync' }, () => {
-          const state = presenceChannel.presenceState();
-          const users = {};
-          Object.values(state).forEach(arr => arr.forEach(u => { users[u.user_id || u.email] = u; }));
-          heatmapPresenceRef.current = users;
-          drawPresence();
-        })
-        .on('presence', { event: 'join' }, ({ newPresences }) => {
-          newPresences.forEach(u => {
-            heatmapPresenceRef.current[u.user_id || u.email] = u;
-          });
-          drawPresence();
-        })
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-          leftPresences.forEach(u => {
-            delete heatmapPresenceRef.current[u.user_id || u.email];
-          });
+      // Cargar presencia inicial
+      async function loadPresence() {
+        const cutoff = new Date(Date.now() - 30000).toISOString();
+        const { data } = await supabase
+          .from('user_presence')
+          .select('*')
+          .gte('updated_at', cutoff);
+        const users = {};
+        (data || []).forEach(u => { users[u.user_id] = u; });
+        heatmapPresenceRef.current = users;
+        drawPresence();
+      }
+      loadPresence();
+
+      // Escuchar cambios en tiempo real
+      presenceChannel = supabase
+        .channel('user-presence-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            delete heatmapPresenceRef.current[payload.old.user_id];
+          } else {
+            const u = payload.new;
+            const cutoff = Date.now() - 30000;
+            if (new Date(u.updated_at).getTime() > cutoff) {
+              heatmapPresenceRef.current[u.user_id] = u;
+            }
+          }
           drawPresence();
         })
         .subscribe();
+
+      // Limpiar posiciones viejas cada 10 segundos
+      const presenceInterval = setInterval(async () => {
+        const cutoff = new Date(Date.now() - 30000).toISOString();
+        const users = { ...heatmapPresenceRef.current };
+        Object.keys(users).forEach(id => {
+          if (new Date(users[id].updated_at).getTime() < Date.now() - 30000) {
+            delete users[id];
+          }
+        });
+        heatmapPresenceRef.current = users;
+        drawPresence();
+      }, 10000);
 
       // Badge
       const badge = document.createElement('div');
@@ -546,6 +567,7 @@ export default function Home() {
       heatmapDrawRef.current = null;
       realtimeChannel?.unsubscribe();
       presenceChannel?.unsubscribe();
+      clearInterval(presenceInterval);
       canvas?.remove();
       presenceCanvas?.remove();
     };
@@ -613,42 +635,28 @@ export default function Home() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user;
       if (!u) return;
-      presenceCh = supabase.channel('heatmap-presence', { config: { presence: { key: u.email } } });
-
-      let subscribed = false;
-      const pendingPositions = [];
-
+      let lastTrack = 0;
       const trackMove = (e) => {
+        const now = Date.now();
+        if (now - lastTrack < 500) return;
+        lastTrack = now;
         const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
         const pageY = e.clientY + window.scrollY;
-        const payload = {
+        supabase.from('user_presence').upsert({
           user_id: u.id,
           email: u.email,
           name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
           x_percent: parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(2)),
           y_percent: parseFloat(((pageY / totalHeight) * 100).toFixed(2)),
-        };
-        if (subscribed) {
-          presenceCh.track(payload);
-        }
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' }).then(() => {});
       };
 
-      presenceCh.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          subscribed = true;
-          // Track posición inicial para que el admin lo vea de inmediato
-          presenceCh.track({
-            user_id: u.id,
-            email: u.email,
-            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
-            x_percent: 50,
-            y_percent: 0,
-          });
-        }
-      });
-
       window.addEventListener('mousemove', trackMove, { passive: true });
-      presenceCh._trackMove = trackMove;
+      presenceCh = { _trackMove: trackMove, unsubscribe: () => {
+        // Limpiar presencia al salir
+        supabase.from('user_presence').delete().eq('user_id', u.id).then(() => {});
+      }};
     });
 
     return () => {
