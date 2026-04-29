@@ -503,6 +503,18 @@ export default function Home() {
           heatmapPresenceRef.current = users;
           drawPresence();
         })
+        .on('presence', { event: 'join' }, ({ newPresences }) => {
+          newPresences.forEach(u => {
+            heatmapPresenceRef.current[u.user_id || u.email] = u;
+          });
+          drawPresence();
+        })
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+          leftPresences.forEach(u => {
+            delete heatmapPresenceRef.current[u.user_id || u.email];
+          });
+          drawPresence();
+        })
         .subscribe();
 
       // Badge
@@ -602,22 +614,41 @@ export default function Home() {
       const u = session?.user;
       if (!u) return;
       presenceCh = supabase.channel('heatmap-presence', { config: { presence: { key: u.email } } });
-      presenceCh.subscribe(async (status) => {
-        if (status !== 'SUBSCRIBED') return;
-        const trackMove = (e) => {
-          const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-          const pageY = e.clientY + window.scrollY;
+
+      let subscribed = false;
+      const pendingPositions = [];
+
+      const trackMove = (e) => {
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        const pageY = e.clientY + window.scrollY;
+        const payload = {
+          user_id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+          x_percent: parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(2)),
+          y_percent: parseFloat(((pageY / totalHeight) * 100).toFixed(2)),
+        };
+        if (subscribed) {
+          presenceCh.track(payload);
+        }
+      };
+
+      presenceCh.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          subscribed = true;
+          // Track posición inicial para que el admin lo vea de inmediato
           presenceCh.track({
             user_id: u.id,
             email: u.email,
             name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
-            x_percent: parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(2)),
-            y_percent: parseFloat(((pageY / totalHeight) * 100).toFixed(2)),
+            x_percent: 50,
+            y_percent: 0,
           });
-        };
-        window.addEventListener('mousemove', trackMove, { passive: true });
-        presenceCh._trackMove = trackMove;
+        }
       });
+
+      window.addEventListener('mousemove', trackMove, { passive: true });
+      presenceCh._trackMove = trackMove;
     });
 
     return () => {
