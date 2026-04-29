@@ -675,35 +675,16 @@ export default function Home() {
 
       window.addEventListener('mousemove', trackMove, { passive: true });
 
-      const cleanup = () => {
-        // sendBeacon garantiza que el request llega aunque se cierre el browser
-        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
-        navigator.sendBeacon('/api/presence', blob);
-      };
-
-      const handleVisibility = () => {
-        if (document.hidden) cleanup();
-      };
-
-      const handleBeforeUnload = () => cleanup();
-
-      document.addEventListener('visibilitychange', handleVisibility);
-      window.addEventListener('beforeunload', handleBeforeUnload);
-
       presenceCh = {
         _trackMove: trackMove,
-        _handleBeforeUnload: handleBeforeUnload,
         _heartbeat: heartbeat,
-        unsubscribe: cleanup,
       };
     });
 
     return () => {
       if (presenceCh) {
         if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
-        if (presenceCh._handleBeforeUnload) window.removeEventListener('beforeunload', presenceCh._handleBeforeUnload);
         if (presenceCh._heartbeat) clearInterval(presenceCh._heartbeat);
-        presenceCh.unsubscribe();
       }
     };
   }, []);

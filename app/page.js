@@ -104,7 +104,7 @@ export default function Landing() {
         }
       });
 
-    // Presence — transmitir que el usuario está en la landing
+    // Presence
     let presenceCh = null;
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user;
@@ -123,30 +123,19 @@ export default function Landing() {
       };
 
       upsertPresence();
+
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
       }, 3000);
 
-      const cleanup = () => {
-        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
-        navigator.sendBeacon('/api/presence', blob);
-      };
-
-      const handleBeforeUnload = () => cleanup();
-      window.addEventListener('beforeunload', handleBeforeUnload);
-
-      presenceCh = { heartbeat, handleBeforeUnload, cleanup };
+      presenceCh = { heartbeat };
     });
 
     return () => {
       window.removeEventListener('storage', handler);
       window.removeEventListener('inkora_theme_change', handler);
       clearInterval(tabInterval);
-      if (presenceCh) {
-        clearInterval(presenceCh.heartbeat);
-        window.removeEventListener('beforeunload', presenceCh.handleBeforeUnload);
-        presenceCh.cleanup();
-      }
+      if (presenceCh) clearInterval(presenceCh.heartbeat);
     };
   }, []);
 

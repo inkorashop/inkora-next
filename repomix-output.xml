@@ -48,6 +48,7 @@ app/admin/[tab]/robots.txt
 app/admin/page.js
 app/api/auth/google/callback/route.js
 app/api/auth/google/route.js
+app/api/presence/route.js
 app/api/send-email/route.js
 app/api/upload-image/route.js
 app/auth/callback/route.js
@@ -145,6 +146,127 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+</file>
+
+<file path="app/api/send-email/route.js">
+import { NextResponse } from 'next/server';
+
+function escapeCSV(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export async function POST(request) {
+  try {
+    const { orderCode, form, cartItems, total, notes, sellerName, sendConfirmation } = await request.json();
+    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+
+    const itemsHtml = cartItems
+      .map((i, idx) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+      .join('');
+
+    const html = `
+      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
+      <p><strong>Código:</strong> ${orderCode}</p>
+      <p><strong>Cliente:</strong> ${form.name}</p>
+      <p><strong>Teléfono:</strong> ${form.phone}</p>
+      <p><strong>Email:</strong> ${form.email}</p>
+      ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
+      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
+      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
+        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+        <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
+      </table>
+    `;
+
+    // CSV — una fila por item
+    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
+    const csvRows = cartItems.map((item, idx) => [
+      orderCode,
+      form.name,
+      form.email,
+      form.phone,
+      item.name,
+      item.qty,
+      item.pricePerUnit ?? '',
+      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
+      idx === 0 ? total : '',   // total solo en la primera fila
+      idx === 0 ? (notes || '') : '',
+      idx === 0 ? fecha : '',
+    ].map(escapeCSV).join(','));
+
+    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
+    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'INKORA <onboarding@resend.dev>',
+        to: [process.env.EMAIL],
+        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
+        html,
+        attachments: [
+          {
+            filename: `pedido-${orderCode}.csv`,
+            content: csvBase64,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return NextResponse.json({ error: err }, { status: 500 });
+    }
+
+    // Email de confirmación al cliente
+    if (form.email && sendConfirmation !== false) {
+      const clientItemsHtml = cartItems
+        .map((i) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
+        .join('');
+
+      const clientHtml = `
+        <h2 style="color:#1B2F5E">¡Recibimos tu pedido!</h2>
+        <p>Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
+        <p><strong>Código de pedido:</strong> ${orderCode}</p>
+        ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
+        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
+          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
+          <tbody>${clientItemsHtml}</tbody>
+          <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
+        </table>
+        <p style="margin-top:16px;color:#5a6380;font-size:13px">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
+      `;
+
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'INKORA <onboarding@resend.dev>',
+          to: [form.email],
+          subject: `Tu pedido ${orderCode} — INKORA`,
+          html: clientHtml,
+        }),
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
 </file>
 
 <file path="app/auth/callback/route.js">
@@ -1176,6 +1298,27 @@ export async function GET(request) {
 }
 </file>
 
+<file path="app/api/presence/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+);
+
+export async function POST(request) {
+  try {
+    const { user_id } = await request.json();
+    if (!user_id) return NextResponse.json({ ok: false });
+    await supabase.from('user_presence').delete().eq('user_id', user_id);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false });
+  }
+}
+</file>
+
 <file path="app/api/upload-image/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -1284,350 +1427,6 @@ const uniqueName = `${folder || 'thumbnails'}/${safeName}-${Date.now()}`;
     "eslint": "^8",
     "eslint-config-next": "14.2.35"
   }
-}
-</file>
-
-<file path="app/api/send-email/route.js">
-import { NextResponse } from 'next/server';
-
-function escapeCSV(value) {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-export async function POST(request) {
-  try {
-    const { orderCode, form, cartItems, total, notes, sellerName, sendConfirmation } = await request.json();
-    const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-
-    const itemsHtml = cartItems
-      .map((i, idx) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-      .join('');
-
-    const html = `
-      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
-      <p><strong>Código:</strong> ${orderCode}</p>
-      <p><strong>Cliente:</strong> ${form.name}</p>
-      <p><strong>Teléfono:</strong> ${form.phone}</p>
-      <p><strong>Email:</strong> ${form.email}</p>
-      ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
-      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-        <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-      </table>
-    `;
-
-    // CSV — una fila por item
-    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
-    const csvRows = cartItems.map((item, idx) => [
-      orderCode,
-      form.name,
-      form.email,
-      form.phone,
-      item.name,
-      item.qty,
-      item.pricePerUnit ?? '',
-      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
-      idx === 0 ? total : '',   // total solo en la primera fila
-      idx === 0 ? (notes || '') : '',
-      idx === 0 ? fecha : '',
-    ].map(escapeCSV).join(','));
-
-    const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
-    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'INKORA <onboarding@resend.dev>',
-        to: [process.env.EMAIL],
-        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
-        html,
-        attachments: [
-          {
-            filename: `pedido-${orderCode}.csv`,
-            content: csvBase64,
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: err }, { status: 500 });
-    }
-
-    // Email de confirmación al cliente
-    if (form.email && sendConfirmation !== false) {
-      const clientItemsHtml = cartItems
-        .map((i) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-        .join('');
-
-      const clientHtml = `
-        <h2 style="color:#1B2F5E">¡Recibimos tu pedido!</h2>
-        <p>Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
-        <p><strong>Código de pedido:</strong> ${orderCode}</p>
-        ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-          <tbody>${clientItemsHtml}</tbody>
-          <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-        </table>
-        <p style="margin-top:16px;color:#5a6380;font-size:13px">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
-      `;
-
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'INKORA <onboarding@resend.dev>',
-          to: [form.email],
-          subject: `Tu pedido ${orderCode} — INKORA`,
-          html: clientHtml,
-        }),
-      });
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-</file>
-
-<file path="app/page.js">
-'use client';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import Header from '@/components/Header';
-
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
-
-function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
-
-export default function Landing() {
-  const [products, setProducts] = useState([]);
-  const [hovered, setHovered] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [uiSettings, setUiSettings] = useState({});
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
-  useEffect(() => {
-    
-
-    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
-
-    supabase.from('settings').select('*')
-      .then(({ data }) => {
-        if (data) {
-          const map = {};
-          data.forEach(s => { map[s.key] = s.value; });
-          setUiSettings(map);
-          // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
-          const hintEnabled = map['google_login_hint'] === 'true';
-          localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
-        }
-      });
-
-    const handler = () => {
-      const saved = localStorage.getItem('inkora_theme');
-      if (saved) setDarkMode(saved === 'dark');
-    };
-    window.addEventListener('storage', handler);
-    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
-
-    const saved = localStorage.getItem('inkora_theme');
-    if (saved) {
-      setDarkMode(saved === 'dark');
-    } else {
-      supabase.from('settings').select('*').eq('key', 'landing_mode')
-        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
-    }
-
-    let tabInterval;
-    let tabToggle = false;
-
-    function startTabAnim(cfg) {
-      const text = cfg.tab_text || 'INKORA 🔷';
-      const interval = parseInt(cfg.tab_interval) || 1000;
-      const onAway = cfg.tab_on_away === 'true';
-      const onActive = cfg.tab_on_active === 'true';
-      clearInterval(tabInterval);
-
-      if (!onAway && !onActive) return;
-
-      function animate() {
-        clearInterval(tabInterval);
-        tabInterval = setInterval(() => {
-          document.title = tabToggle ? 'INKORA' : text;
-          tabToggle = !tabToggle;
-        }, interval);
-      }
-
-      function stop() {
-        clearInterval(tabInterval);
-        tabToggle = false;
-        document.title = 'INKORA';
-      }
-
-      if (onAway && onActive) {
-        animate();
-      } else {
-        function handleVisibility() {
-          if (document.hidden && onAway) { animate(); }
-          else if (!document.hidden && onActive) { animate(); }
-          else { stop(); }
-        }
-        document.addEventListener('visibilitychange', handleVisibility);
-        if (onActive && !document.hidden) animate();
-      }
-    }
-
-    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
-      .then(({ data }) => {
-        if (data) {
-          const cfg = {};
-          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
-          startTabAnim(cfg);
-        }
-      });
-
-    return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('inkora_theme_change', handler);
-      clearInterval(tabInterval);
-    };
-  }, []);
-
-  return (
-    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
-      <style>{`
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-        .page-exit { animation: fadeOut 0.3s ease forwards; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        .product-card { animation: fadeUp 0.5s ease both; }
-        .product-card:hover .card-overlay { opacity: 1 !important; }
-        .product-card:hover .card-img { transform: scale(1.05); }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
-        .product-card:nth-child(1) { --card-index: 0.5; }
-        .product-card:nth-child(2) { --card-index: 1.5; }
-        .product-card:nth-child(3) { --card-index: 2.5; }
-        .product-card:nth-child(4) { --card-index: 3.5; }
-        .product-card:nth-child(5) { --card-index: 0.8; }
-        .product-card:nth-child(6) { --card-index: 1.8; }
-        .product-card:nth-child(7) { --card-index: 2.8; }
-        .product-card:nth-child(8) { --card-index: 3.8; }
-        .product-card:nth-child(9) { --card-index: 1.2; }
-        .product-card:nth-child(10) { --card-index: 2.2; }
-        .product-card:nth-child(11) { --card-index: 3.2; }
-        .product-card:nth-child(12) { --card-index: 0.3; }
-      `}</style>
-
-      <Header showCart={true} page="landing" />
-
-      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
-        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
-          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
-        </h1>
-        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
-          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
-        </p>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
-        {products.map((p, i) => (
-          <a
-            key={p.id}
-            href={"/catalogo/" + toSlug(p.name)}
-            className="product-card"
-            onClick={e => {
-              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-              e.preventDefault();
-              document.body.classList.add('page-exit');
-              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
-            }}
-            style={{
-              animationDelay: (i * 0.1) + "s",
-              textDecoration: 'none',
-              borderRadius: 20,
-              overflow: 'hidden',
-              position: 'relative',
-              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
-              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
-              display: 'block',
-              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
-              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-              transform: 'translateY(0)',
-              zIndex: hovered === p.id ? 0 : 1
-            }}
-            onMouseEnter={() => setHovered(p.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
-              {p.landing_image
-                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
-                : [...Array(4)].map((_, j) => (
-                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
-                  ))
-              }
-            </div>
-
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
-
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
-              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
-                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-
-      {uiSettings['landing_show_whatsapp'] !== 'false' && (
-        <a
-          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
-          target="_blank"
-          rel="noreferrer"
-          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
-        >
-          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
-          </svg>
-        </a>
-      )}
-
-      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
-        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
-      </footer>
-    </div>
-  );
 }
 </file>
 
@@ -1861,165 +1660,6 @@ const styles = {
   hint: { textAlign: 'center', fontSize: 13 },
   linkBtn: { background: 'none', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 0, fontFamily: 'Barlow, sans-serif' },
 };
-</file>
-
-<file path="app/layout.js">
-import { Barlow } from 'next/font/google';
-import './globals.css';
-import { CartProvider } from '@/contexts/CartContext';
-
-const barlow = Barlow({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-});
-
-export const metadata = {
-  title: 'INKORA',
-  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
-  openGraph: {
-    title: 'INKORA - Catálogo de diseños',
-    description: 'Seleccioná tus diseños y armá tu pedido.',
-    url: 'https://www.inkora.com.ar',
-    images: [
-      {
-        url: 'https://www.inkora.com.ar/og-image.jpg',
-        width: 1200,
-        height: 630,
-      }
-    ],
-  },
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="es" className={barlow.className}>
-      <body><CartProvider>{children}</CartProvider></body>
-    </html>
-  );
-}
-</file>
-
-<file path="contexts/CartContext.js">
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const CartContext = createContext(null);
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('inkora_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('inkora_cart', JSON.stringify(cart));
-    } catch { }
-  }, [cart]);
-
-  // Bloquear sincronización de auth de Supabase dentro del iframe
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      if (window.self !== window.top) return;
-    } catch { return; }
-  }, []);
-
-  function addToCart(design, product) {
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-        productName: product?.name ?? '',
-      },
-    }));
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
-  }
-
-  function clearCart() {
-    setCart({});
-  }
-
-  function setCartItem(id, qty) {
-    setCart(prev => {
-      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...prev[id], qty } };
-    });
-  }
-
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  return (
-    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  return useContext(CartContext);
-}
-</file>
-
-<file path="app/auth/popup-callback/page.js">
-'use client';
-import { useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
-
-export default function PopupCallback() {
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_KEY
-    );
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        if (session.user?.email) {
-          localStorage.setItem('inkora_login_hint', session.user.email);
-        }
-        // Sincronizar el setting desde Supabase
-        supabase.from('settings').select('value').eq('key', 'google_login_hint').single()
-          .then(({ data }) => {
-            localStorage.setItem('inkora_google_hint_enabled', data?.value === 'true' ? 'true' : 'false');
-          });
-        if (window.opener) {
-          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, 'https://www.inkora.com.ar');
-          window.close();
-        }
-      }
-    });
-  }, []);
-
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const errorParam = searchParams?.get('error');
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#1B2F5E' }}>
-      {errorParam ? `Error: ${errorParam}` : 'Iniciando sesión...'}
-    </div>
-  );
-}
 </file>
 
 <file path="components/Header.js">
@@ -2338,6 +1978,165 @@ export default function Header({ headerVisible = true, showCart = false, page = 
 }
 </file>
 
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('inkora_cart', JSON.stringify(cart));
+    } catch { }
+  }, [cart]);
+
+  // Bloquear sincronización de auth de Supabase dentro del iframe
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.self !== window.top) return;
+    } catch { return; }
+  }, []);
+
+  function addToCart(design, product) {
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: 1,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+        productName: product?.name ?? '',
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
+}
+</file>
+
+<file path="app/layout.js">
+import { Barlow } from 'next/font/google';
+import './globals.css';
+import { CartProvider } from '@/contexts/CartContext';
+
+const barlow = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+export const metadata = {
+  title: 'INKORA',
+  description: 'Catálogo de diseños INKORA. Seleccioná tus diseños y armá tu pedido.',
+  openGraph: {
+    title: 'INKORA - Catálogo de diseños',
+    description: 'Seleccioná tus diseños y armá tu pedido.',
+    url: 'https://www.inkora.com.ar',
+    images: [
+      {
+        url: 'https://www.inkora.com.ar/og-image.jpg',
+        width: 1200,
+        height: 630,
+      }
+    ],
+  },
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" className={barlow.className}>
+      <body><CartProvider>{children}</CartProvider></body>
+    </html>
+  );
+}
+</file>
+
+<file path="app/auth/popup-callback/page.js">
+'use client';
+import { useEffect } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+
+export default function PopupCallback() {
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_KEY
+    );
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        if (session.user?.email) {
+          localStorage.setItem('inkora_login_hint', session.user.email);
+        }
+        // Sincronizar el setting desde Supabase
+        supabase.from('settings').select('value').eq('key', 'google_login_hint').single()
+          .then(({ data }) => {
+            localStorage.setItem('inkora_google_hint_enabled', data?.value === 'true' ? 'true' : 'false');
+          });
+        if (window.opener) {
+          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, 'https://www.inkora.com.ar');
+          window.close();
+        }
+      }
+    });
+  }, []);
+
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const errorParam = searchParams?.get('error');
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#1B2F5E' }}>
+      {errorParam ? `Error: ${errorParam}` : 'Iniciando sesión...'}
+    </div>
+  );
+}
+</file>
+
 <file path="lib/auth.js">
 import { supabase } from '@/lib/supabase';
 
@@ -2387,6 +2186,268 @@ export async function getUserProfile(userId) {
     .eq('id', userId)
     .single();
   return data;
+}
+</file>
+
+<file path="app/page.js">
+'use client';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import Header from '@/components/Header';
+
+const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+
+function toSlug(name) {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+export default function Landing() {
+  const [products, setProducts] = useState([]);
+  const [hovered, setHovered] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [uiSettings, setUiSettings] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    
+
+    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
+      .then(({ data }) => { if (data) setProducts(data); });
+
+    supabase.from('settings').select('*')
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(s => { map[s.key] = s.value; });
+          setUiSettings(map);
+          // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
+          const hintEnabled = map['google_login_hint'] === 'true';
+          localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
+        }
+      });
+
+    const handler = () => {
+      const saved = localStorage.getItem('inkora_theme');
+      if (saved) setDarkMode(saved === 'dark');
+    };
+    window.addEventListener('storage', handler);
+    window.addEventListener('inkora_theme_change', e => setDarkMode(e.detail === 'dark'));
+
+    const saved = localStorage.getItem('inkora_theme');
+    if (saved) {
+      setDarkMode(saved === 'dark');
+    } else {
+      supabase.from('settings').select('*').eq('key', 'landing_mode')
+        .then(({ data }) => { if (data?.[0]) setDarkMode(data[0].value === 'dark'); });
+    }
+
+    let tabInterval;
+    let tabToggle = false;
+
+    function startTabAnim(cfg) {
+      const text = cfg.tab_text || 'INKORA 🔷';
+      const interval = parseInt(cfg.tab_interval) || 1000;
+      const onAway = cfg.tab_on_away === 'true';
+      const onActive = cfg.tab_on_active === 'true';
+      clearInterval(tabInterval);
+
+      if (!onAway && !onActive) return;
+
+      function animate() {
+        clearInterval(tabInterval);
+        tabInterval = setInterval(() => {
+          document.title = tabToggle ? 'INKORA' : text;
+          tabToggle = !tabToggle;
+        }, interval);
+      }
+
+      function stop() {
+        clearInterval(tabInterval);
+        tabToggle = false;
+        document.title = 'INKORA';
+      }
+
+      if (onAway && onActive) {
+        animate();
+      } else {
+        function handleVisibility() {
+          if (document.hidden && onAway) { animate(); }
+          else if (!document.hidden && onActive) { animate(); }
+          else { stop(); }
+        }
+        document.addEventListener('visibilitychange', handleVisibility);
+        if (onActive && !document.hidden) animate();
+      }
+    }
+
+    supabase.from('settings').select('*').in('key', ['landing_tab_text', 'landing_tab_interval', 'landing_tab_on_away', 'landing_tab_on_active'])
+      .then(({ data }) => {
+        if (data) {
+          const cfg = {};
+          data.forEach(s => { cfg[s.key.replace('landing_', '')] = s.value; });
+          startTabAnim(cfg);
+        }
+      });
+
+    // Presence — transmitir que el usuario está en la landing
+    let presenceCh = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user;
+      if (!u) return;
+
+      const upsertPresence = () => {
+        supabase.from('user_presence').upsert({
+          user_id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+          x_percent: null,
+          y_percent: null,
+          page: 'landing',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' }).then(() => {});
+      };
+
+      upsertPresence();
+      const heartbeat = setInterval(() => {
+        if (!document.hidden) upsertPresence();
+      }, 3000);
+
+      const cleanup = () => {
+        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
+        navigator.sendBeacon('/api/presence', blob);
+      };
+
+      const handleBeforeUnload = () => cleanup();
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      presenceCh = { heartbeat, handleBeforeUnload, cleanup };
+    });
+
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('inkora_theme_change', handler);
+      clearInterval(tabInterval);
+      if (presenceCh) {
+        clearInterval(presenceCh.heartbeat);
+        window.removeEventListener('beforeunload', presenceCh.handleBeforeUnload);
+        presenceCh.cleanup();
+      }
+    };
+  }, []);
+
+  return (
+    <div style={{ fontFamily: "'Barlow', sans-serif", minHeight: '100vh', background: darkMode ? '#0f1e3d' : '#f0f4ff', display: 'flex', flexDirection: 'column', transition: 'background 0.3s ease' }}>
+      <style>{`
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .page-exit { animation: fadeOut 0.3s ease forwards; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .product-card { animation: fadeUp 0.5s ease both; }
+        .product-card:hover .card-overlay { opacity: 1 !important; }
+        .product-card:hover .card-img { transform: scale(1.05); }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .product-card { will-change: transform; animation: fadeUp 0.5s ease both, float 4s ease-in-out calc(var(--card-index, 0) * 1s) infinite; }
+        .product-card:nth-child(1) { --card-index: 0.5; }
+        .product-card:nth-child(2) { --card-index: 1.5; }
+        .product-card:nth-child(3) { --card-index: 2.5; }
+        .product-card:nth-child(4) { --card-index: 3.5; }
+        .product-card:nth-child(5) { --card-index: 0.8; }
+        .product-card:nth-child(6) { --card-index: 1.8; }
+        .product-card:nth-child(7) { --card-index: 2.8; }
+        .product-card:nth-child(8) { --card-index: 3.8; }
+        .product-card:nth-child(9) { --card-index: 1.2; }
+        .product-card:nth-child(10) { --card-index: 2.2; }
+        .product-card:nth-child(11) { --card-index: 3.2; }
+        .product-card:nth-child(12) { --card-index: 0.3; }
+      `}</style>
+
+      <Header showCart={true} page="landing" />
+
+      <div style={{ textAlign: 'center', padding: '24px 24px 20px' }}>
+        <h1 style={{ fontSize: 36, fontWeight: 800, color: darkMode ? 'white' : '#1B2F5E', margin: 0, letterSpacing: -1 }}>
+          {'\u00bfQu\u00e9 est\u00e1s buscando?'}
+        </h1>
+        <p style={{ color: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(27,47,94,0.55)', fontSize: 15, marginTop: 8 }}>
+          {'Eleg\u00ed un producto para ver el cat\u00e1logo completo'}
+        </p>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0 16px 60px' : '0 40px 60px', gap: 20, flexWrap: 'wrap' }}>
+        {products.map((p, i) => (
+          <a
+            key={p.id}
+            href={"/catalogo/" + toSlug(p.name)}
+            className="product-card"
+            onClick={e => {
+              if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+              e.preventDefault();
+              document.body.classList.add('page-exit');
+              setTimeout(() => { window.location.href = "/catalogo/" + toSlug(p.name); }, 280);
+            }}
+            style={{
+              animationDelay: (i * 0.1) + "s",
+              textDecoration: 'none',
+              borderRadius: 20,
+              overflow: 'hidden',
+              position: 'relative',
+              width: isMobile ? '100%' : (p.landing_card_width_desktop ?? 320),
+              height: isMobile ? 200 : (p.landing_card_width_desktop ?? 320) * 1.3,
+              display: 'block',
+              boxShadow: hovered === p.id ? '0 24px 60px rgba(45,107,228,0.5)' : '0 8px 32px rgba(0,0,0,0.3)',
+              transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+              transform: 'translateY(0)',
+              zIndex: hovered === p.id ? 0 : 1
+            }}
+            onMouseEnter={() => setHovered(p.id)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div style={{ position: 'absolute', inset: 0, background: darkMode ? '#e8eaed' : '#1B2F5E', overflow: 'hidden' }}>
+              {p.landing_image
+                ? <img src={p.landing_image} alt={p.name} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                : [...Array(4)].map((_, j) => (
+                    <div key={j} style={{position:'absolute', width:'50%', height:'50%', top: j < 2 ? 0 : '50%', left: j % 2 === 0 ? 0 : '50%', background: 'rgba(45,107,228,' + (0.15 + j * 0.08) + ')'}} />
+                  ))
+              }
+            </div>
+
+            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
+              <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>{'Ver cat\u00e1logo'}</span>
+                <span style={{ color: '#2D6BE4', fontSize: 18 }}>{'\u2192'}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {uiSettings['landing_show_whatsapp'] !== 'false' && (
+        <a
+          href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
+          target="_blank"
+          rel="noreferrer"
+          style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
+        >
+          <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.507 3.934 1.395 5.604L0 24l6.532-1.372A11.955 11.955 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.368l-.36-.214-3.724.782.795-3.632-.235-.374A9.818 9.818 0 012.182 12C2.182 6.578 6.578 2.182 12 2.182S21.818 6.578 21.818 12 17.422 21.818 12 21.818z"/>
+          </svg>
+        </a>
+      )}
+
+      <footer style={{ textAlign: 'center', padding: '20px', color: darkMode ? 'rgba(255,255,255,0.25)' : 'rgba(27,47,94,0.25)', fontSize: 12 }}>
+        <strong>INKORA</strong> Soluciones Graficas — Todos los derechos reservados 2026
+      </footer>
+    </div>
+  );
 }
 </file>
 
@@ -2941,13 +3002,27 @@ export default function Home() {
   }, []);
 
   // Heatmap overlay — solo si ?heatmap=1 y es admin
+  const heatmapEventsRef = useRef([]);
+  const heatmapDrawRef = useRef(null);
+  const heatmapActiveProductRef = useRef(activeProductId);
+  const heatmapExcludedUsersRef = useRef(new Set());
+  const heatmapLayersRef = useRef({ clicks: true, presence: true });
+  const heatmapPresenceRef = useRef({});
+
+  useEffect(() => {
+    heatmapActiveProductRef.current = activeProductId;
+    if (heatmapDrawRef.current) heatmapDrawRef.current();
+  }, [activeProductId]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('heatmap') !== '1') return;
 
-    let overlay = null;
-    let heatmapInstance = null;
+    let canvas = null;
+    let presenceCanvas = null;
     let destroyed = false;
+    let realtimeChannel = null;
+    let presenceChannel = null;
 
     async function initHeatmap() {
       const { data: adminData } = await supabase.auth.getSession();
@@ -2956,69 +3031,323 @@ export default function Home() {
       const { data: adminRow } = await supabase.from('admins').select('email').eq('email', email).single();
       if (!adminRow) return;
 
-      const productParam = params.get('producto');
-      let query = supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-      if (productParam) {
-        const { data: prods } = await supabase.from('products').select('id, name');
-        const match = prods?.find(p => p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === productParam);
-        if (match) query = query.eq('producto_activo', match.id);
-      }
-      const { data: events } = await query;
+      const { data: events } = await supabase
+        .from('click_events')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(5000);
       if (!events || destroyed) return;
+      heatmapEventsRef.current = events;
 
-      overlay = document.createElement('div');
-      overlay.style.cssText = `position:fixed;top:0;left:0;width:${window.innerWidth}px;height:${window.innerHeight}px;pointer-events:none;z-index:9999;`;
-      document.body.appendChild(overlay);
+      // Canvas de clicks
+      canvas = document.createElement('canvas');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      canvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:9999;';
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
 
-      const h337 = (await import('heatmap.js')).default;
-      heatmapInstance = h337.create({ container: overlay, maxOpacity: 0.75, minOpacity: 0, blur: 0.75, radius: 30, width: window.innerWidth, height: window.innerHeight });
+      // Canvas de presencia (encima del de clicks)
+      presenceCanvas = document.createElement('canvas');
+      presenceCanvas.width = window.innerWidth;
+      presenceCanvas.height = window.innerHeight;
+      presenceCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:10000;';
+      document.body.appendChild(presenceCanvas);
+      const presenceCtx = presenceCanvas.getContext('2d');
 
-      function draw() {
-        if (!heatmapInstance || destroyed) return;
-        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      const badgeSpan = document.createElement('span');
+      badgeSpan.style.cssText = 'font-size:13px;font-weight:700;color:white;';
+
+      function drawClicks() {
+        if (!ctx || destroyed) return;
         const W = window.innerWidth;
         const H = window.innerHeight;
         const scrollY = window.scrollY;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+        const totalWidth = Math.max(document.body.scrollWidth, document.documentElement.scrollWidth);
+        const currentProductId = heatmapActiveProductRef.current;
+        const excluded = heatmapExcludedUsersRef.current;
 
-        const points = events.map(ev => ({
-          x: Math.round((ev.x_percent / 100) * W),
-          y: Math.round((ev.y_percent / 100) * totalHeight) - scrollY,
-          value: 1,
-        })).filter(p => p.y >= 0 && p.y <= H);
+        canvas.width = W;
+        canvas.height = H;
+        ctx.clearRect(0, 0, W, H);
 
-        heatmapInstance.setData({ max: 5, data: points });
+        if (!heatmapLayersRef.current.clicks) {
+          badgeSpan.textContent = `🔥 Heatmap — oculto`;
+          return;
+        }
+
+        const allEvents = heatmapEventsRef.current;
+        const filtered = allEvents
+          .filter(ev => currentProductId ? ev.producto_activo === currentProductId : true)
+          .filter(ev => !excluded.has(ev.user_id));
+
+        const container = document.getElementById('catalogo-root');
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const points = filtered.map(ev => ({
+          x: Math.round((ev.x_percent / 100) * rect.width + rect.left),
+          y: Math.round((ev.y_percent / 100) * container.scrollHeight + rect.top - window.scrollY),
+        })).filter(p => p.y >= -30 && p.y <= H + 30);
+
+        points.forEach(({ x, y }) => {
+          const radius = 28;
+          const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+          gradient.addColorStop(0, 'rgba(255, 0, 0, 0.25)');
+          gradient.addColorStop(0.4, 'rgba(255, 120, 0, 0.12)');
+          gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
+          ctx.fill();
+        });
+
+        badgeSpan.textContent = `🔥 Heatmap — ${filtered.length} clicks`;
       }
 
-      draw();
-      window.addEventListener('scroll', draw, { passive: true });
-      window.addEventListener('resize', () => {
-        overlay.style.width = window.innerWidth + 'px';
-        overlay.style.height = window.innerHeight + 'px';
-        draw();
-      }, { passive: true });
+      function drawPresence() {
+        if (!presenceCtx || destroyed) return;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const scrollY = window.scrollY;
+        const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
 
-      // Badge de control
+        presenceCanvas.width = W;
+        presenceCanvas.height = H;
+        presenceCtx.clearRect(0, 0, W, H);
+
+        if (!heatmapLayersRef.current.presence) return;
+
+        const users = Object.values(heatmapPresenceRef.current);
+        users.forEach(u => {
+          if (u.x_percent == null || u.y_percent == null) return;
+          const container = document.getElementById('catalogo-root');
+          if (!container) return;
+          const rect = container.getBoundingClientRect();
+          const x = Math.round((u.x_percent / 100) * rect.width + rect.left);
+          const y = Math.round((u.y_percent / 100) * container.scrollHeight + rect.top - window.scrollY);
+          if (y < -20 || y > H + 20) return;
+
+          // Punto del cursor
+          presenceCtx.beginPath();
+          presenceCtx.arc(x, y, 8, 0, Math.PI * 2);
+          presenceCtx.fillStyle = 'rgba(45, 107, 228, 0.85)';
+          presenceCtx.fill();
+          presenceCtx.strokeStyle = 'white';
+          presenceCtx.lineWidth = 2;
+          presenceCtx.stroke();
+
+          // Nombre
+          const name = u.name || 'Usuario';
+          presenceCtx.font = 'bold 11px Barlow, sans-serif';
+          presenceCtx.fillStyle = 'white';
+          presenceCtx.strokeStyle = 'rgba(27,47,94,0.8)';
+          presenceCtx.lineWidth = 3;
+          presenceCtx.strokeText(name, x + 12, y + 4);
+          presenceCtx.fillText(name, x + 12, y + 4);
+        });
+      }
+
+      function drawHeatmap() {
+        drawClicks();
+        drawPresence();
+      }
+
+      heatmapDrawRef.current = drawHeatmap;
+      drawHeatmap();
+
+      window.addEventListener('scroll', drawHeatmap, { passive: true });
+      window.addEventListener('resize', drawHeatmap, { passive: true });
+
+      // Realtime clicks
+      realtimeChannel = supabase
+        .channel('heatmap-realtime')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'click_events' }, (payload) => {
+          heatmapEventsRef.current = [payload.new, ...heatmapEventsRef.current];
+          drawClicks();
+        })
+        .subscribe();
+
+      // Buscar nombres en profiles
+      const allUserIds = [...new Set(events.map(ev => ev.user_id))];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .in('id', allUserIds.filter(Boolean));
+      const profilesMap = {};
+      (profilesData || []).forEach(p => { profilesMap[p.id] = p.name || p.email || p.id.slice(0, 8); });
+
+      // Panel de control
+      const panel = document.createElement('div');
+      panel.setAttribute('data-heatmap-ui', '1');
+      panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10001;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;max-height:70vh;overflow-y:auto;';
+
+      // Sección CAPAS
+      const layersTitle = document.createElement('div');
+      layersTitle.textContent = '🎛️ CAPAS';
+      layersTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;';
+      panel.appendChild(layersTitle);
+
+      [
+        { key: 'clicks', label: '🔥 Historial de clicks' },
+        { key: 'presence', label: '🟢 Presencia en vivo' },
+      ].forEach(({ key, label }) => {
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.style.cssText = 'cursor:pointer;width:14px;height:14px;flex-shrink:0;';
+
+        const txt = document.createElement('span');
+        txt.style.cssText = 'font-size:12px;color:white;font-weight:600;';
+        txt.textContent = label;
+
+        cb.addEventListener('change', () => {
+          heatmapLayersRef.current[key] = cb.checked;
+          drawHeatmap();
+        });
+
+        row.appendChild(cb);
+        row.appendChild(txt);
+        panel.appendChild(row);
+      });
+
+      // Separador
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-top:1px solid rgba(255,255,255,0.15);margin:10px 0;';
+      panel.appendChild(sep);
+
+      // Sección USUARIOS
+      const usersTitle = document.createElement('div');
+      usersTitle.style.cssText = 'font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+      const usersTitleText = document.createElement('span');
+      usersTitleText.textContent = '👤 USUARIOS';
+      const usersChevron = document.createElement('span');
+      usersChevron.textContent = '▼';
+      usersChevron.style.cssText = 'font-size:9px;transition:transform 0.2s;';
+      usersTitle.appendChild(usersTitleText);
+      usersTitle.appendChild(usersChevron);
+      panel.appendChild(usersTitle);
+
+      const usersBody = document.createElement('div');
+      let usersOpen = true;
+
+      usersTitle.addEventListener('click', () => {
+        usersOpen = !usersOpen;
+        usersBody.style.display = usersOpen ? 'block' : 'none';
+        usersChevron.style.transform = usersOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+      });
+
+      allUserIds.forEach(userId => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.style.cssText = 'cursor:pointer;width:14px;height:14px;flex-shrink:0;';
+
+        const text = document.createElement('span');
+        text.style.cssText = 'font-size:11px;color:white;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;';
+        text.textContent = userId ? (profilesMap[userId] || userId.slice(0, 8) + '...') : 'Sin usuario';
+
+        const count = events.filter(ev => ev.user_id === userId).length;
+        const countSpan = document.createElement('span');
+        countSpan.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.5);margin-left:auto;flex-shrink:0;';
+        countSpan.textContent = `(${count})`;
+
+        checkbox.addEventListener('change', () => {
+          if (!checkbox.checked) heatmapExcludedUsersRef.current.add(userId);
+          else heatmapExcludedUsersRef.current.delete(userId);
+          drawClicks();
+        });
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+        label.appendChild(countSpan);
+        usersBody.appendChild(label);
+      });
+
+      panel.appendChild(usersBody);
+      document.body.appendChild(panel);
+
+      // Presence channel — muestra cursores en vivo
+      // Cargar presencia inicial
+      async function loadPresence() {
+        const { data } = await supabase
+          .from('user_presence')
+          .select('*');
+        const users = {};
+        (data || []).forEach(u => { users[u.user_id] = u; });
+        heatmapPresenceRef.current = users;
+        drawPresence();
+      }
+      loadPresence();
+
+      // Escuchar cambios en tiempo real
+      presenceChannel = supabase
+        .channel('user-presence-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            delete heatmapPresenceRef.current[payload.old.user_id];
+          } else {
+            const u = payload.new;
+            const cutoff = Date.now() - 6000;
+            if (new Date(u.updated_at).getTime() > cutoff) {
+              heatmapPresenceRef.current[u.user_id] = u;
+            }
+          }
+          drawPresence();
+        })
+        .subscribe();
+
+      // Limpiar posiciones viejas cada 10 segundos
+      const presenceInterval = setInterval(() => {
+        const users = { ...heatmapPresenceRef.current };
+        Object.keys(users).forEach(id => {
+          if (new Date(users[id].updated_at).getTime() < Date.now() - 6000) {
+            delete users[id];
+          }
+        });
+        heatmapPresenceRef.current = users;
+        drawPresence();
+      }, 3000);
+
+      // Badge
       const badge = document.createElement('div');
-      badge.innerHTML = `<span style="font-size:13px;font-weight:700;color:white">🔥 Heatmap — ${events.length} clicks</span>`;
-      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10000;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+      badge.appendChild(badgeSpan);
+      badge.setAttribute('data-heatmap-ui', '1');
+      badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10002;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
       const closeBtn = document.createElement('button');
       closeBtn.textContent = '✕ Cerrar';
       closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:Barlow,sans-serif;font-weight:600;';
-      closeBtn.onclick = () => { window.removeEventListener('scroll', draw); window.removeEventListener('resize', draw); overlay?.remove(); badge?.remove(); };
+      closeBtn.onclick = () => {
+        window.removeEventListener('scroll', drawHeatmap);
+        window.removeEventListener('resize', drawHeatmap);
+        realtimeChannel?.unsubscribe();
+        presenceChannel?.unsubscribe();
+        canvas?.remove();
+        presenceCanvas?.remove();
+        badge?.remove();
+        panel?.remove();
+      };
       badge.appendChild(closeBtn);
       document.body.appendChild(badge);
-
-      return () => {
-        destroyed = true;
-        window.removeEventListener('scroll', draw);
-        window.removeEventListener('resize', draw);
-        overlay?.remove();
-        badge?.remove();
-      };
     }
 
-    const cleanup = initHeatmap();
-    return () => { destroyed = true; cleanup?.then?.(fn => fn?.()); };
+    initHeatmap();
+
+    return () => {
+      destroyed = true;
+      heatmapDrawRef.current = null;
+      realtimeChannel?.unsubscribe();
+      presenceChannel?.unsubscribe();
+      clearInterval(presenceInterval);
+      canvas?.remove();
+      presenceCanvas?.remove();
+    };
   }, []);
 
   async function loadProfile(userId) {
@@ -3070,20 +3399,107 @@ export default function Home() {
   const activeProductIdRef = useRef(activeProductId);
   useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
 
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user?.id || null; }, [user]);
+
   useEffect(() => {
     if (window.self !== window.top) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('heatmap') === '1') return;
+
+    // Presence — transmitir posición del cursor en vivo
+    let presenceCh = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user;
+      if (!u) return;
+      let lastTrack = 0;
+
+      const upsertPresence = (xPct = null, yPct = null) => {
+        supabase.from('user_presence').upsert({
+          user_id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+          x_percent: xPct,
+          y_percent: yPct,
+          page: 'catalogo',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' }).then(() => {});
+      };
+
+      // Registrar presencia al entrar aunque no mueva el mouse
+      upsertPresence();
+
+      // Heartbeat cada 8 segundos para mantener presencia activa
+      const heartbeat = setInterval(() => {
+        if (!document.hidden) upsertPresence();
+      }, 3000);
+
+      const trackMove = (e) => {
+        const now = Date.now();
+        if (now - lastTrack < 500) return;
+        lastTrack = now;
+        const container = document.getElementById('catalogo-root');
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const xPct = parseFloat((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
+        const yPct = parseFloat((((e.clientY - rect.top + window.scrollY) / container.scrollHeight) * 100).toFixed(2));
+        upsertPresence(xPct, yPct);
+      };
+
+      window.addEventListener('mousemove', trackMove, { passive: true });
+
+      const cleanup = () => {
+        // sendBeacon garantiza que el request llega aunque se cierre el browser
+        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
+        navigator.sendBeacon('/api/presence', blob);
+      };
+
+      const handleVisibility = () => {
+        if (document.hidden) cleanup();
+      };
+
+      const handleBeforeUnload = () => cleanup();
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      presenceCh = {
+        _trackMove: trackMove,
+        _handleBeforeUnload: handleBeforeUnload,
+        _heartbeat: heartbeat,
+        unsubscribe: cleanup,
+      };
+    });
+
+    return () => {
+      if (presenceCh) {
+        if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
+        if (presenceCh._handleBeforeUnload) window.removeEventListener('beforeunload', presenceCh._handleBeforeUnload);
+        if (presenceCh._heartbeat) clearInterval(presenceCh._heartbeat);
+        presenceCh.unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (window.self !== window.top) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('heatmap') === '1') return;
+
     function handleClick(e) {
       if (window.self !== window.top) return;
-      const xPercent = parseFloat(((e.clientX / window.innerWidth) * 100).toFixed(3));
-      const pageY = e.clientY + window.scrollY;
-      const totalHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-      const yPercent = parseFloat(((pageY / totalHeight) * 100).toFixed(3));
+      const container = document.getElementById('catalogo-root');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const xPercent = parseFloat((((e.clientX - rect.left) / rect.width) * 100).toFixed(3));
+      const yPercent = parseFloat((((e.clientY - rect.top + window.scrollY) / container.scrollHeight) * 100).toFixed(3));
       const elemento = (e.target?.tagName?.toLowerCase() || '') + (e.target?.className ? '.' + String(e.target.className).split(' ').filter(Boolean).slice(0, 3).join('.') : '');
       supabase.from('click_events').insert({
         x_percent: xPercent,
         y_percent: yPercent,
         elemento: elemento.slice(0, 200),
         producto_activo: activeProductIdRef.current || null,
+        user_id: userRef.current || null,
         timestamp: new Date().toISOString(),
       }).then(() => {});
     }
@@ -3281,7 +3697,7 @@ const rawWA = profile?.sellers?.phone?.replace(/\D/g, '') || DEFAULT_WA;
 const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
   return (
-    <div style={s.app}>
+    <div id="catalogo-root" style={s.app}>
       <style>{`
         @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
         @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
@@ -4030,7 +4446,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'heatmap' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -4859,7 +5275,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -5936,7 +6352,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -6135,15 +6551,41 @@ function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
+  const [confirmReset, setConfirmReset] = React.useState(false);
+  const [presence, setPresence] = React.useState([]);
+  const ACTIVE_THRESHOLD = 6000; // 6 segundos
 
   React.useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-      setEvents(data || []);
+      const [{ data: clickData }, { data: presenceData }] = await Promise.all([
+        supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000),
+        supabase.from('user_presence').select('*').order('updated_at', { ascending: false }),
+      ]);
+      setEvents(clickData || []);
+      setPresence(presenceData || []);
       setLoading(false);
     }
     load();
+
+    // Realtime para presencia
+    const ch = supabase.channel('admin-presence-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
+        } else {
+          setPresence(prev => {
+            const exists = prev.find(u => u.user_id === payload.new.user_id);
+            if (exists) {
+              return prev.map(u => u.user_id === payload.new.user_id ? payload.new : u);
+            }
+            return [payload.new, ...prev];
+          });
+        }
+      })
+      .subscribe();
+
+    return () => ch.unsubscribe();
   }, []);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
@@ -6204,17 +6646,127 @@ function HeatmapTab({ supabase, products }) {
           </div>
         )}
 
-        <button
-          onClick={openHeatmap}
-          disabled={loading || events.length === 0}
-          style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          🔥 Ver mapa de calor en el catálogo
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={openHeatmap}
+            disabled={loading || events.length === 0}
+            style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            🔥 Ver mapa de calor en el catálogo
+          </button>
+          <button
+            onClick={() => setConfirmReset(true)}
+            disabled={loading || events.length === 0}
+            style={{ background: 'white', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1 }}
+          >
+            🗑️ Resetear clicks
+          </button>
+        </div>
         <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
           Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
       </div>
+
+      {/* Lista de usuarios activos/inactivos */}
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Usuarios en el catálogo</h2>
+        {loading ? (
+          <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando...</div>
+        ) : presence.length === 0 ? (
+          <div style={{ color: '#9aa3bc', fontSize: 13 }}>No hay actividad registrada.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(() => {
+              const now = Date.now();
+              const active = presence.filter(u => now - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD);
+              const inactive = presence.filter(u => now - new Date(u.updated_at).getTime() >= ACTIVE_THRESHOLD);
+
+              const pageLabel = (page) => page === 'landing' ? '🏠 Landing' : '🛍️ Catálogo';
+              const pageOrder = (page) => page === 'landing' ? 0 : 1;
+
+              const sortedActive = [...active].sort((a, b) => pageOrder(a.page) - pageOrder(b.page));
+              const sortedInactive = [...inactive].sort((a, b) => pageOrder(a.page) - pageOrder(b.page));
+
+              const timeAgo = (updated_at) => {
+                const diff = Date.now() - new Date(updated_at).getTime();
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                const days = Math.floor(hrs / 24);
+                return days > 0 ? `hace ${days}d` : hrs > 0 ? `hace ${hrs}h` : mins > 0 ? `hace ${mins}min` : 'hace un momento';
+              };
+
+              const fecha = (updated_at) => new Date(updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+              return (
+                <>
+                  {sortedActive.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🟢 Activos ahora ({sortedActive.length})</div>
+                      {sortedActive.map(u => (
+                        <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
+                            <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                            <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>En línea</div>
+                            <div style={{ fontSize: 10, color: '#9aa3bc', background: '#e8eef9', borderRadius: 4, padding: '1px 6px' }}>{pageLabel(u.page)}</div>
+                            <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha(u.updated_at)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {sortedInactive.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: sortedActive.length > 0 ? 12 : 0, marginBottom: 4 }}>⚫ Inactivos ({sortedInactive.length})</div>
+                      {sortedInactive.map(u => (
+                        <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f7f8fc', border: '1px solid #eef0f6' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
+                            <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                            <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600 }}>{timeAgo(u.updated_at)}</div>
+                            <div style={{ fontSize: 10, color: '#9aa3bc', background: '#f0f2f8', borderRadius: 4, padding: '1px 6px' }}>{pageLabel(u.page)}</div>
+                            <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha(u.updated_at)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {confirmReset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
+            <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button style={{ background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => setConfirmReset(false)}>Cancelar</button>
+              <button
+                style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
+                onClick={async () => {
+                  setLoading(true);
+                  await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                  setEvents([]);
+                  setConfirmReset(false);
+                  setLoading(false);
+                }}
+              >
+                Sí, eliminar todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2224,7 +2224,13 @@ function HeatmapTab({ supabase, products }) {
   const [filterProduct, setFilterProduct] = React.useState('all');
   const [confirmReset, setConfirmReset] = React.useState(false);
   const [presence, setPresence] = React.useState([]);
-  const ACTIVE_THRESHOLD = 6000; // 6 segundos
+  const [tick, setTick] = React.useState(0);
+  const ACTIVE_THRESHOLD = 6000;
+
+  React.useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   React.useEffect(() => {
     async function load() {
