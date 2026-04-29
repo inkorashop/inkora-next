@@ -897,6 +897,7 @@ export default function Admin() {
   async function updateUserSeller(userId, sellerId) {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: sellerId || null } : u));
     await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    loadUsers();
   }
 
   // ── Admins ──
@@ -1957,7 +1958,7 @@ export default function Admin() {
                     {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                   <div style={{display:'flex', alignItems:'center', gap:6}}>
-                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Email confirm.</span>
+                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
                     <div
                       onClick={() => {
                         const newVal = u.send_confirmation_email === false ? true : false;
