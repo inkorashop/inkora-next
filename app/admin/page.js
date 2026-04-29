@@ -117,7 +117,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'heatmap' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -946,7 +946,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -2023,7 +2023,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Mapa de calor' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -2223,15 +2223,31 @@ function HeatmapTab({ supabase, products }) {
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
   const [confirmReset, setConfirmReset] = React.useState(false);
+  const [presence, setPresence] = React.useState([]);
+  const ACTIVE_THRESHOLD = 30000; // 30 segundos
 
   React.useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-      setEvents(data || []);
+      const [{ data: clickData }, { data: presenceData }] = await Promise.all([
+        supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000),
+        supabase.from('user_presence').select('*').order('updated_at', { ascending: false }),
+      ]);
+      setEvents(clickData || []);
+      setPresence(presenceData || []);
       setLoading(false);
     }
     load();
+
+    // Realtime para presencia
+    const ch = supabase.channel('admin-presence-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, () => {
+        supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
+          .then(({ data }) => setPresence(data || []));
+      })
+      .subscribe();
+
+    return () => ch.unsubscribe();
   }, []);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
@@ -2311,31 +2327,94 @@ function HeatmapTab({ supabase, products }) {
         <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
           Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
+      </div>
 
-        {confirmReset && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
-              <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                <button style={{ background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => setConfirmReset(false)}>Cancelar</button>
-                <button
-                  style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
-                  onClick={async () => {
-                    setLoading(true);
-                    await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                    setEvents([]);
-                    setConfirmReset(false);
-                    setLoading(false);
-                  }}
-                >
-                  Sí, eliminar todo
-                </button>
-              </div>
-            </div>
+      {/* Lista de usuarios activos/inactivos */}
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Usuarios en el catálogo</h2>
+        {loading ? (
+          <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando...</div>
+        ) : presence.length === 0 ? (
+          <div style={{ color: '#9aa3bc', fontSize: 13 }}>No hay actividad registrada.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(() => {
+              const now = Date.now();
+              const active = presence.filter(u => now - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD);
+              const inactive = presence.filter(u => now - new Date(u.updated_at).getTime() >= ACTIVE_THRESHOLD);
+              return (
+                <>
+                  {active.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🟢 Activos ahora ({active.length})</div>
+                      {active.map(u => (
+                        <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
+                            <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600, whiteSpace: 'nowrap' }}>En línea</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {inactive.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: active.length > 0 ? 12 : 0, marginBottom: 4 }}>⚫ Inactivos ({inactive.length})</div>
+                      {inactive.map(u => {
+                        const diff = Date.now() - new Date(u.updated_at).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        const hrs = Math.floor(mins / 60);
+                        const days = Math.floor(hrs / 24);
+                        const timeAgo = days > 0 ? `hace ${days}d` : hrs > 0 ? `hace ${hrs}h` : mins > 0 ? `hace ${mins}min` : 'hace un momento';
+                        const fecha = new Date(u.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        return (
+                          <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f7f8fc', border: '1px solid #eef0f6' }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
+                              <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600 }}>{timeAgo}</div>
+                              <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
+
+      {confirmReset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
+            <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button style={{ background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => setConfirmReset(false)}>Cancelar</button>
+              <button
+                style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
+                onClick={async () => {
+                  setLoading(true);
+                  await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                  setEvents([]);
+                  setConfirmReset(false);
+                  setLoading(false);
+                }}
+              >
+                Sí, eliminar todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
