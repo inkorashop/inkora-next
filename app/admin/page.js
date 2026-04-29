@@ -209,6 +209,8 @@ export default function Admin() {
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const lastSelectedOrderIdRef = useRef(null);
 
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
@@ -801,6 +803,12 @@ export default function Admin() {
   async function loadOrders() {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (data) setOrders(data);
+  }
+
+  async function deleteOrders(ids) {
+    await Promise.all([...ids].map(id => supabase.from('orders').delete().eq('id', id)));
+    setOrders(prev => prev.filter(o => !ids.has(o.id)));
+    setSelectedOrderIds(new Set());
   }
 
   async function updateOrderStatus(id, status) {
@@ -1724,7 +1732,15 @@ export default function Admin() {
         {/* ══ PEDIDOS ══ */}
         {activeTab === 'orders' && (
           <div style={s.card}>
-            <h2 style={s.sectionTitle}>Pedidos ({filteredOrders.length})</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ ...s.sectionTitle, marginBottom: 0 }}>Pedidos ({filteredOrders.length})</h2>
+              {selectedOrderIds.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ background: '#2D6BE4', color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>{selectedOrderIds.size} seleccionados</span>
+                  <HoldButton onConfirm={() => deleteOrders(selectedOrderIds)} />
+                </div>
+              )}
+            </div>
             <div style={{marginBottom: 12}}>
               <input
                 style={{...s.input, maxWidth: 320}}
@@ -1739,6 +1755,7 @@ export default function Admin() {
                 <table style={s.tbl}>
                   <thead>
                     <tr>
+                      <th style={{...s.th, width: 20}}></th>
                       <th style={s.th}>Código</th>
                       <th style={s.th}>Fecha</th>
                       <th style={s.th}>Cliente</th>
@@ -1753,7 +1770,31 @@ export default function Admin() {
                     {filteredOrders.map(o => {
                       const sc = getStatusCfg(o.status);
                       return (
-                        <tr key={o.id}>
+                        <tr key={o.id}
+                          onClick={e => {
+                            if (e.shiftKey && lastSelectedOrderIdRef.current) {
+                              const ids = filteredOrders.map(x => x.id);
+                              const lastIdx = ids.indexOf(lastSelectedOrderIdRef.current);
+                              const currIdx = ids.indexOf(o.id);
+                              const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
+                              setSelectedOrderIds(new Set(ids.slice(start, end + 1)));
+                            } else if (e.ctrlKey || e.metaKey) {
+                              setSelectedOrderIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+                                return next;
+                              });
+                              lastSelectedOrderIdRef.current = o.id;
+                            } else {
+                              setSelectedOrderIds(new Set([o.id]));
+                              lastSelectedOrderIdRef.current = o.id;
+                            }
+                          }}
+                          style={{ cursor: 'pointer', background: selectedOrderIds.has(o.id) ? '#f0f5ff' : undefined, borderLeft: selectedOrderIds.has(o.id) ? '3px solid #2D6BE4' : '3px solid transparent' }}
+                        >
+                          <td style={s.td}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedOrderIds.has(o.id) ? '#2D6BE4' : '#eef0f6', margin: '0 auto' }} />
+                          </td>
                           <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
