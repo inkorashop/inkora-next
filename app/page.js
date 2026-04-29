@@ -104,10 +104,53 @@ export default function Landing() {
         }
       });
 
+    // Presence — transmitir que el usuario está en la landing
+    let presenceCh = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user;
+      if (!u) return;
+
+      const upsertPresence = () => {
+        supabase.from('user_presence').upsert({
+          user_id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+          x_percent: null,
+          y_percent: null,
+          page: 'landing',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' }).then(() => {});
+      };
+
+      upsertPresence();
+      const heartbeat = setInterval(() => {
+        if (!document.hidden) upsertPresence();
+      }, 8000);
+
+      const cleanup = () => {
+        const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
+        navigator.sendBeacon('/api/presence', blob);
+      };
+
+      const handleVisibility = () => { if (document.hidden) cleanup(); };
+      const handleBeforeUnload = () => cleanup();
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      presenceCh = { heartbeat, handleVisibility, handleBeforeUnload, cleanup };
+    });
+
     return () => {
       window.removeEventListener('storage', handler);
       window.removeEventListener('inkora_theme_change', handler);
       clearInterval(tabInterval);
+      if (presenceCh) {
+        clearInterval(presenceCh.heartbeat);
+        document.removeEventListener('visibilitychange', presenceCh.handleVisibility);
+        window.removeEventListener('beforeunload', presenceCh.handleBeforeUnload);
+        presenceCh.cleanup();
+      }
     };
   }, []);
 

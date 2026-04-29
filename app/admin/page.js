@@ -2342,47 +2342,61 @@ function HeatmapTab({ supabase, products }) {
               const now = Date.now();
               const active = presence.filter(u => now - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD);
               const inactive = presence.filter(u => now - new Date(u.updated_at).getTime() >= ACTIVE_THRESHOLD);
+
+              const pageLabel = (page) => page === 'landing' ? '🏠 Landing' : '🛍️ Catálogo';
+              const pageOrder = (page) => page === 'landing' ? 0 : 1;
+
+              const sortedActive = [...active].sort((a, b) => pageOrder(a.page) - pageOrder(b.page));
+              const sortedInactive = [...inactive].sort((a, b) => pageOrder(a.page) - pageOrder(b.page));
+
+              const timeAgo = (updated_at) => {
+                const diff = Date.now() - new Date(updated_at).getTime();
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                const days = Math.floor(hrs / 24);
+                return days > 0 ? `hace ${days}d` : hrs > 0 ? `hace ${hrs}h` : mins > 0 ? `hace ${mins}min` : 'hace un momento';
+              };
+
+              const fecha = (updated_at) => new Date(updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
               return (
                 <>
-                  {active.length > 0 && (
+                  {sortedActive.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🟢 Activos ahora ({active.length})</div>
-                      {active.map(u => (
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🟢 Activos ahora ({sortedActive.length})</div>
+                      {sortedActive.map(u => (
                         <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
                             <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
                           </div>
-                          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600, whiteSpace: 'nowrap' }}>En línea</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                            <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>En línea</div>
+                            <div style={{ fontSize: 10, color: '#9aa3bc', background: '#e8eef9', borderRadius: 4, padding: '1px 6px' }}>{pageLabel(u.page)}</div>
+                            <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha(u.updated_at)}</div>
+                          </div>
                         </div>
                       ))}
                     </>
                   )}
-                  {inactive.length > 0 && (
+                  {sortedInactive.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: active.length > 0 ? 12 : 0, marginBottom: 4 }}>⚫ Inactivos ({inactive.length})</div>
-                      {inactive.map(u => {
-                        const diff = Date.now() - new Date(u.updated_at).getTime();
-                        const mins = Math.floor(diff / 60000);
-                        const hrs = Math.floor(mins / 60);
-                        const days = Math.floor(hrs / 24);
-                        const timeAgo = days > 0 ? `hace ${days}d` : hrs > 0 ? `hace ${hrs}h` : mins > 0 ? `hace ${mins}min` : 'hace un momento';
-                        const fecha = new Date(u.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-                        return (
-                          <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f7f8fc', border: '1px solid #eef0f6' }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
-                              <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
-                            </div>
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                              <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600 }}>{timeAgo}</div>
-                              <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha}</div>
-                            </div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: sortedActive.length > 0 ? 12 : 0, marginBottom: 4 }}>⚫ Inactivos ({sortedInactive.length})</div>
+                      {sortedInactive.map(u => (
+                        <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f7f8fc', border: '1px solid #eef0f6' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
+                            <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
                           </div>
-                        );
-                      })}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                            <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600 }}>{timeAgo(u.updated_at)}</div>
+                            <div style={{ fontSize: 10, color: '#9aa3bc', background: '#f0f2f8', borderRadius: 4, padding: '1px 6px' }}>{pageLabel(u.page)}</div>
+                            <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha(u.updated_at)}</div>
+                          </div>
+                        </div>
+                      ))}
                     </>
                   )}
                 </>

@@ -643,6 +643,27 @@ export default function Home() {
       const u = session?.user;
       if (!u) return;
       let lastTrack = 0;
+
+      const upsertPresence = (xPct = null, yPct = null) => {
+        supabase.from('user_presence').upsert({
+          user_id: u.id,
+          email: u.email,
+          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
+          x_percent: xPct,
+          y_percent: yPct,
+          page: 'catalogo',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' }).then(() => {});
+      };
+
+      // Registrar presencia al entrar aunque no mueva el mouse
+      upsertPresence();
+
+      // Heartbeat cada 8 segundos para mantener presencia activa
+      const heartbeat = setInterval(() => {
+        if (!document.hidden) upsertPresence();
+      }, 8000);
+
       const trackMove = (e) => {
         const now = Date.now();
         if (now - lastTrack < 500) return;
@@ -652,14 +673,7 @@ export default function Home() {
         const rect = container.getBoundingClientRect();
         const xPct = parseFloat((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
         const yPct = parseFloat((((e.clientY - rect.top + window.scrollY) / container.scrollHeight) * 100).toFixed(2));
-        supabase.from('user_presence').upsert({
-          user_id: u.id,
-          email: u.email,
-          name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Usuario',
-          x_percent: xPct,
-          y_percent: yPct,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' }).then(() => {});
+        upsertPresence(xPct, yPct);
       };
 
       window.addEventListener('mousemove', trackMove, { passive: true });
@@ -683,6 +697,7 @@ export default function Home() {
         _trackMove: trackMove,
         _handleVisibility: handleVisibility,
         _handleBeforeUnload: handleBeforeUnload,
+        _heartbeat: heartbeat,
         unsubscribe: cleanup,
       };
     });
@@ -692,6 +707,7 @@ export default function Home() {
         if (presenceCh._trackMove) window.removeEventListener('mousemove', presenceCh._trackMove);
         if (presenceCh._handleVisibility) document.removeEventListener('visibilitychange', presenceCh._handleVisibility);
         if (presenceCh._handleBeforeUnload) window.removeEventListener('beforeunload', presenceCh._handleBeforeUnload);
+        if (presenceCh._heartbeat) clearInterval(presenceCh._heartbeat);
         presenceCh.unsubscribe();
       }
     };
