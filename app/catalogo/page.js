@@ -503,11 +503,9 @@ export default function Home() {
       // Presence channel — muestra cursores en vivo
       // Cargar presencia inicial
       async function loadPresence() {
-        const cutoff = new Date(Date.now() - 30000).toISOString();
         const { data } = await supabase
           .from('user_presence')
-          .select('*')
-          .gte('updated_at', cutoff);
+          .select('*');
         const users = {};
         (data || []).forEach(u => { users[u.user_id] = u; });
         heatmapPresenceRef.current = users;
@@ -523,7 +521,7 @@ export default function Home() {
             delete heatmapPresenceRef.current[payload.old.user_id];
           } else {
             const u = payload.new;
-            const cutoff = Date.now() - 30000;
+            const cutoff = Date.now() - 6000;
             if (new Date(u.updated_at).getTime() > cutoff) {
               heatmapPresenceRef.current[u.user_id] = u;
             }
@@ -533,17 +531,16 @@ export default function Home() {
         .subscribe();
 
       // Limpiar posiciones viejas cada 10 segundos
-      const presenceInterval = setInterval(async () => {
-        const cutoff = new Date(Date.now() - 30000).toISOString();
+      const presenceInterval = setInterval(() => {
         const users = { ...heatmapPresenceRef.current };
         Object.keys(users).forEach(id => {
-          if (new Date(users[id].updated_at).getTime() < Date.now() - 30000) {
+          if (new Date(users[id].updated_at).getTime() < Date.now() - 6000) {
             delete users[id];
           }
         });
         heatmapPresenceRef.current = users;
         drawPresence();
-      }, 10000);
+      }, 3000);
 
       // Badge
       const badge = document.createElement('div');
@@ -662,7 +659,7 @@ export default function Home() {
       // Heartbeat cada 8 segundos para mantener presencia activa
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
-      }, 8000);
+      }, 3000);
 
       const trackMove = (e) => {
         const now = Date.now();

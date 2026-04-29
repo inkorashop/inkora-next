@@ -125,7 +125,7 @@ export default function Landing() {
       upsertPresence();
       const heartbeat = setInterval(() => {
         if (!document.hidden) upsertPresence();
-      }, 8000);
+      }, 3000);
 
       const cleanup = () => {
         const blob = new Blob([JSON.stringify({ user_id: u.id })], { type: 'application/json' });
