@@ -247,8 +247,10 @@ export default function Admin() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const panelLoadedRef = useRef(false);
   useEffect(() => {
-    if (screen === 'panel') {
+    if (screen === 'panel' && !panelLoadedRef.current) {
+      panelLoadedRef.current = true;
       loadProducts(); loadDesigns(); loadLocalities(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
       loadUsers();
     }
