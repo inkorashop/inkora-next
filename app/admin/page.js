@@ -2576,7 +2576,7 @@ function usePresence(supabase) {
     supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
       .then(({ data }) => setPresence((data || []).map(u => ({ ...u, _lastSeen: Date.now() }))));
 
-    const ch = supabase.channel('shared-presence-watch')
+    const ch = supabase.channel('shared-presence-watch-' + math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
