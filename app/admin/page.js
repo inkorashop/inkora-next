@@ -895,8 +895,8 @@ export default function Admin() {
   }
 
   async function updateUserSeller(userId, sellerId) {
-    await supabase.rpc('admin_update_user_seller', { p_user_id: userid, p_seller_id: sellerid || null });
-    setusers(prev => prev.map(u => u.id === userid ? { ...u, seller_id: sellerId || null } : u));
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: sellerId || null } : u));
+    supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
   }
 
   // ── Admins ──
