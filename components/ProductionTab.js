@@ -276,7 +276,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
             <p style={{ fontSize: 14 }}>No hay diseños en la cola con los filtros actuales.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
+          <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 {/* Barra de filtros externos sticky */}
@@ -321,25 +321,27 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                       style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }} />
                   } active={!!filterSearch} />
                   <ColHeader label="Producto" filter={
-                    <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }}>
-                      <option value="all">Todos</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {[{ id: 'all', name: 'Todos' }, ...products].map(p => (
+                        <div key={p.id} onClick={() => setFilterProduct(p.id)}
+                          style={{ padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 12, fontWeight: filterProduct === p.id ? 700 : 400, background: filterProduct === p.id ? '#eef4ff' : 'transparent', color: filterProduct === p.id ? '#2D6BE4' : '#2d3352' }}>
+                          {p.name}
+                        </div>
+                      ))}
+                    </div>
                   } active={filterProduct !== 'all'} />
                   <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Demanda</th>
                   <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Stock</th>
                   <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Falta</th>
                   <ColHeader label="Estado" filter={
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }}>
-                      <option value="all">Todos</option>
-                      <option value="pending">Pendiente</option>
-                      <option value="confirmed">Confirmado</option>
-                      <option value="in_production">En producción</option>
-                      <option value="ready">Listo</option>
-                      <option value="cancelled">Cancelado</option>
-                    </select>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {[['all','Todos'],['pending','Pendiente'],['confirmed','Confirmado'],['in_production','En producción'],['ready','Listo'],['cancelled','Cancelado']].map(([val, label]) => (
+                        <div key={val} onClick={() => setFilterStatus(val)}
+                          style={{ padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 12, fontWeight: filterStatus === val ? 700 : 400, background: filterStatus === val ? '#eef4ff' : 'transparent', color: filterStatus === val ? '#2D6BE4' : '#2d3352' }}>
+                          {label}
+                        </div>
+                      ))}
+                    </div>
                   } active={filterStatus !== 'all'} />
                   <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Nota</th>
                   <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Pedidos</th>
