@@ -211,12 +211,24 @@ export default function Admin() {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
   const lastSelectedOrderIdRef = useRef(null);
   const [orderFilterStatus, setOrderFilterStatus] = useState('all');
   const [orderFilterSeller, setOrderFilterSeller] = useState('all');
   const [orderFilterProduct, setOrderFilterProduct] = useState('all');
   const [orderFilterDateFrom, setOrderFilterDateFrom] = useState('');
   const [orderFilterDateTo, setOrderFilterDateTo] = useState('');
+
+  useEffect(() => {
+    function handleOutsideOrderClick(e) {
+      if (!e.target.closest('[data-orders-table]')) {
+        setSelectedOrderIds(new Set());
+        lastSelectedOrderIdRef.current = null;
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideOrderClick);
+    return () => document.removeEventListener('mousedown', handleOutsideOrderClick);
+  }, []);
 
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
@@ -1016,8 +1028,8 @@ export default function Admin() {
           <>
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Productos</h2>
-              <div style={{overflowX: 'auto'}}>
-                <table style={s.tbl}>
+              <div style={{overflowX: 'auto'}} data-orders-table>
+                <table style={{ ...s.tbl, minWidth: 1080 }}>
                   <thead>
                     <tr>
                       <th style={s.th}>Mostrar</th>
@@ -1822,6 +1834,7 @@ export default function Admin() {
                       <th style={s.th}>Cliente</th>
                       <th style={s.th}>Email</th>
                       <th style={s.th}>Items</th>
+                      <th style={{...s.th, minWidth: 160}}>Notas</th>
                       <th style={s.th}>Total</th>
                       <th style={s.th}>Estado</th>
                       <th style={s.th}></th>
@@ -1830,6 +1843,9 @@ export default function Admin() {
                   <tbody>
                     {filteredOrders.map(o => {
                       const sc = getStatusCfg(o.status);
+                      const notes = String(o.notes || '').trim();
+                      const notesExpanded = expandedOrderNotes.has(o.id);
+                      const longNotes = notes.length > 70;
                       return (
                         <tr key={o.id}
                           onClick={e => {
@@ -1847,6 +1863,9 @@ export default function Admin() {
                                 return next;
                               });
                               lastSelectedOrderIdRef.current = o.id;
+                            } else if (selectedOrderIds.has(o.id) && selectedOrderIds.size === 1) {
+                              setSelectedOrderIds(new Set());
+                              lastSelectedOrderIdRef.current = null;
                             } else {
                               setSelectedOrderIds(new Set([o.id]));
                               lastSelectedOrderIdRef.current = o.id;
@@ -1862,18 +1881,58 @@ export default function Admin() {
                           <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
+                          <td style={s.td}>
+                            {notes ? (
+                              <div style={{display:'flex', alignItems: notesExpanded ? 'flex-start' : 'center', gap:6, maxWidth:220}}>
+                                <span
+                                  title={notes}
+                                  style={{
+                                    fontSize:12,
+                                    color:'#5a6380',
+                                    lineHeight:1.35,
+                                    display:'block',
+                                    maxWidth: longNotes ? 170 : 210,
+                                    whiteSpace: notesExpanded ? 'normal' : 'nowrap',
+                                    overflow: notesExpanded ? 'visible' : 'hidden',
+                                    textOverflow: notesExpanded ? 'clip' : 'ellipsis',
+                                  }}
+                                >
+                                  {notes}
+                                </span>
+                                {longNotes && (
+                                  <button
+                                    type="button"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setExpandedOrderNotes(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+                                        return next;
+                                      });
+                                    }}
+                                    style={{border:'1.5px solid #dde1ef', background:'white', color:'#2D6BE4', borderRadius:5, padding:'2px 6px', fontSize:11, fontWeight:700, cursor:'pointer', flexShrink:0}}
+                                  >
+                                    {notesExpanded ? 'Menos' : 'Más'}
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{fontSize:12, color:'#c4c9d9'}}>—</span>
+                            )}
+                          </td>
                           <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
                           <td style={s.td}>
                             <select
                               value={o.status || 'pending'}
                               onChange={e => updateOrderStatus(o.id, e.target.value)}
+                              onClick={e => e.stopPropagation()}
                               style={{border:`1.5px solid ${sc.color}`, background:sc.bg, color:sc.color, borderRadius:6, padding:'3px 7px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
                             >
                               {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
                             </select>
                           </td>
                           <td style={s.td}>
-                            <button style={s.editBtn} onClick={() => setOrderDetail(o)}>Ver</button>
+                            <button style={s.editBtn} onClick={e => { e.stopPropagation(); setOrderDetail(o); }}>Ver</button>
                           </td>
                         </tr>
                       );

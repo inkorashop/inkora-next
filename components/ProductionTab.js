@@ -173,7 +173,7 @@ function StockCell({ qtyProduced, onSave }) {
         style={{ display: 'inline-block', width: 58, textAlign: 'center', fontWeight: 600, color: '#2d3352', cursor: 'text', padding: '3px 6px', borderRadius: 4, border: '1.5px solid transparent', fontSize: 13, transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         title="Click para editar"
       >
-        {saving ? '...' : qtyProduced}
+        {qtyProduced}
       </span>
     );
   }
@@ -387,19 +387,29 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     const existing = stock.find(s => normalizeName(s.design_name) === row.designKey);
     const delta = newQty - (Number(existing?.qty_produced) || 0);
     if (delta === 0) return;
-    const stockResult = existing
-      ? await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id)
-      : await supabase.from('production_stock').insert({ design_name: row.designName, qty_produced: newQty });
-    if (stockResult.error) throw stockResult.error;
-    const logResult = await supabase.from('production_stock_log').insert({
-      design_name: row.designName,
-      qty: Math.abs(delta),
-      type: delta >= 0 ? 'add' : 'subtract',
-      note: 'Edición inline',
-    });
-    if (logResult.error) throw logResult.error;
-    await loadStock();
-    await loadStockLog();
+    const previousStock = stock;
+    const optimisticRow = { ...(existing || {}), design_name: row.designName, qty_produced: newQty };
+    setStock(prev => existing
+      ? prev.map(s => s.id === existing.id ? { ...s, qty_produced: newQty } : s)
+      : [...prev, optimisticRow]
+    );
+    try {
+      const stockResult = existing
+        ? await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id)
+        : await supabase.from('production_stock').insert({ design_name: row.designName, qty_produced: newQty });
+      if (stockResult.error) throw stockResult.error;
+      const logResult = await supabase.from('production_stock_log').insert({
+        design_name: row.designName,
+        qty: Math.abs(delta),
+        type: delta >= 0 ? 'add' : 'subtract',
+        note: 'Edición inline',
+      });
+      if (logResult.error) throw logResult.error;
+      await loadStockLog();
+    } catch (error) {
+      setStock(previousStock);
+      throw error;
+    }
   }
 
   async function confirmStock() {
@@ -599,12 +609,6 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
               </div>
             </div>
 
-            {rows.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9aa3bc' }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                <p style={{ fontSize: 14 }}>No hay diseños en la cola con los filtros actuales.</p>
-              </div>
-            ) : (
               <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 6, minHeight: rows.length < 4 ? 220 : 'auto' }}>
                 <table style={{ width: '100%', minWidth: 1060, tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 13 }}>
                   <colgroup>
@@ -684,7 +688,14 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(row => {
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '42px 20px', color: '#9aa3bc', borderBottom: '1px solid #f0f2f8' }}>
+                          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+                          <p style={{ fontSize: 14, margin: 0 }}>No hay diseños en la cola con los filtros actuales.</p>
+                        </td>
+                      </tr>
+                    ) : rows.map(row => {
                       const isExpanded = expandedRow === row.designKey;
                       const urgent = isUrgent(row.orders);
                       const rowBg = row.falta <= 0 ? 'rgba(24,163,106,0.06)' : 'transparent';
@@ -795,7 +806,6 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                   </tbody>
                 </table>
               </div>
-            )}
           </div>
         </>
       )}
