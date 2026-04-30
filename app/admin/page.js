@@ -2686,7 +2686,7 @@ const ACTIVITY_EVENT_CONFIG = {
   click_global: { icon: '🖱️', label: 'Click', color: '#9aa3bc' },
 };
 
-function ActivityHistory({ supabase }) {
+function ActivityHistoryLegacy({ supabase }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [identityFilter, setIdentityFilter] = React.useState('all');
@@ -2889,11 +2889,323 @@ function ActivityHistory({ supabase }) {
   );
 }
 
+function ActivityHistory({ supabase }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [identityFilter, setIdentityFilter] = React.useState('all');
+  const [search, setSearch] = React.useState('');
+  const [typeFilter, setTypeFilter] = React.useState('all');
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo] = React.useState('');
+  const [selectedSessionId, setSelectedSessionId] = React.useState('');
+  const [deleteMode, setDeleteMode] = React.useState('range');
+  const [deleteFrom, setDeleteFrom] = React.useState('');
+  const [deleteTo, setDeleteTo] = React.useState('');
+  const [deleteSessionId, setDeleteSessionId] = React.useState('');
+  const [deleteConfirm, setDeleteConfirm] = React.useState('');
+  const [deleting, setDeleting] = React.useState(false);
+
+  const loadActivity = React.useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('user_activity_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(2000);
+    setEvents(data || []);
+    setLoading(false);
+  }, [supabase]);
+
+  React.useEffect(() => { loadActivity(); }, [loadActivity]);
+
+  const eventTypes = React.useMemo(() => [...new Set(events.map(e => e.event_type).filter(Boolean))].sort(), [events]);
+
+  const filteredEvents = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return events.filter(e => {
+      if (identityFilter === 'known' && e.is_anonymous) return false;
+      if (identityFilter === 'anonymous' && !e.is_anonymous) return false;
+      if (typeFilter !== 'all' && e.event_type !== typeFilter) return false;
+      if (dateFrom && new Date(e.created_at) < new Date(dateFrom)) return false;
+      if (dateTo && new Date(e.created_at) > new Date(dateTo + 'T23:59:59')) return false;
+      if (q) {
+        const haystack = `${e.user_email || ''} ${e.user_name || ''} ${e.session_id || ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [events, identityFilter, search, typeFilter, dateFrom, dateTo]);
+
+  const sessions = React.useMemo(() => {
+    const map = {};
+    filteredEvents.forEach(event => {
+      const key = event.session_id;
+      if (!key) return;
+      if (!map[key]) {
+        map[key] = {
+          session_id: key,
+          user_id: event.user_id,
+          user_email: event.user_email,
+          user_name: event.user_name,
+          is_anonymous: event.is_anonymous,
+          events: [],
+          first_seen: event.created_at,
+          last_seen: event.created_at,
+        };
+      }
+      map[key].events.push(event);
+      if (new Date(event.created_at) < new Date(map[key].first_seen)) map[key].first_seen = event.created_at;
+      if (new Date(event.created_at) > new Date(map[key].last_seen)) map[key].last_seen = event.created_at;
+      if (!map[key].user_email && event.user_email) map[key].user_email = event.user_email;
+      if (!map[key].user_name && event.user_name) map[key].user_name = event.user_name;
+      if (!map[key].user_id && event.user_id) map[key].user_id = event.user_id;
+      map[key].is_anonymous = map[key].is_anonymous && event.is_anonymous;
+    });
+    return Object.values(map)
+      .map(s => ({ ...s, events: s.events.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) }))
+      .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+  }, [filteredEvents]);
+
+  React.useEffect(() => {
+    if (!selectedSessionId && sessions[0]) setSelectedSessionId(sessions[0].session_id);
+    if (selectedSessionId && sessions.length > 0 && !sessions.some(s => s.session_id === selectedSessionId)) {
+      setSelectedSessionId(sessions[0].session_id);
+    }
+  }, [selectedSessionId, sessions]);
+
+  React.useEffect(() => {
+    if (!deleteSessionId && sessions[0]) setDeleteSessionId(sessions[0].session_id);
+  }, [deleteSessionId, sessions]);
+
+  const selectedSession = sessions.find(s => s.session_id === selectedSessionId) || null;
+  const selectedEvents = selectedSession?.events || [];
+
+  const metrics = React.useMemo(() => {
+    const starts = filteredEvents.filter(e => e.event_type === 'checkout_start').length;
+    const abandons = filteredEvents.filter(e => e.event_type === 'checkout_abandon').length;
+    const top = (type, key) => {
+      const counts = {};
+      filteredEvents.filter(e => e.event_type === type).forEach(e => {
+        const value = e.metadata?.[key];
+        if (value) counts[value] = (counts[value] || 0) + 1;
+      });
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+    };
+    return {
+      total: filteredEvents.length,
+      sessions: sessions.length,
+      abandonRate: `${Math.round((abandons / Math.max(starts, 1)) * 100)}%`,
+      topProduct: top('product_view', 'product_name'),
+      topCartDesign: top('cart_add', 'design_name'),
+      stored: events.length,
+    };
+  }, [events.length, filteredEvents, sessions.length]);
+
+  function sessionLabel(session) {
+    if (!session) return 'Sin seleccion';
+    if (session.is_anonymous) return `Anonimo - ${session.session_id.slice(0, 8)} - ${session.events.length} eventos`;
+    const name = session.user_name || session.user_email || 'Usuario';
+    const email = session.user_email && session.user_email !== name ? ` - ${session.user_email}` : '';
+    return `${name}${email} - ${session.events.length} eventos`;
+  }
+
+  function describeEvent(event) {
+    const m = event.metadata || {};
+    if (event.event_type === 'cart_add') return `${m.design_name || 'Diseno'} x${m.qty || 1}${m.price ? ` - $${Number(m.price).toLocaleString('es-AR')}` : ''}`;
+    if (event.event_type === 'cart_qty_change') return `delta ${m.delta > 0 ? '+' : ''}${m.delta || 0} -> ${m.new_qty ?? '-'} total`;
+    if (event.event_type === 'design_search') return `query "${m.query || ''}" - ${m.results_count ?? 0} resultados`;
+    if (event.event_type === 'click_global') return `"${m.element_text || 'sin texto'}" - ${m.element_tag || 'elemento'}`;
+    if (event.event_type === 'checkout_abandon') return `${m.time_spent_seconds || 0} segundos en el formulario`;
+    if (event.event_type === 'order_confirm') return `${m.order_code || 'Pedido'} - ${m.items_count || 0} items${m.total ? ` - $${Number(m.total).toLocaleString('es-AR')}` : ''}`;
+    return m.design_name || m.product_name || m.page_title || m.method || m.page || '';
+  }
+
+  function dateTimeLabel(iso) {
+    return new Date(iso).toLocaleString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  const getDeleteTargetSession = React.useCallback(() => {
+    return sessions.find(s => s.session_id === deleteSessionId) || null;
+  }, [sessions, deleteSessionId]);
+
+  const matchesDeletePreview = React.useCallback((event) => {
+    const target = getDeleteTargetSession();
+    if (deleteMode === 'all') return true;
+    if (deleteMode === 'range') {
+      if (deleteFrom && new Date(event.created_at) < new Date(deleteFrom)) return false;
+      if (deleteTo && new Date(event.created_at) > new Date(deleteTo + 'T23:59:59')) return false;
+      return Boolean(deleteFrom || deleteTo);
+    }
+    if (deleteMode === 'session') return target && event.session_id === target.session_id;
+    if (deleteMode === 'client') {
+      if (!target) return false;
+      if (target.user_id) return event.user_id === target.user_id;
+      if (target.user_email) return event.user_email === target.user_email;
+      return event.session_id === target.session_id;
+    }
+    return false;
+  }, [deleteMode, deleteFrom, deleteTo, getDeleteTargetSession]);
+
+  const deletePreviewCount = React.useMemo(() => {
+    return events.filter(matchesDeletePreview).length;
+  }, [events, matchesDeletePreview]);
+
+  async function deleteActivity() {
+    if (deleteConfirm !== 'BORRAR' || deletePreviewCount === 0) return;
+    const target = getDeleteTargetSession();
+    setDeleting(true);
+
+    let query = supabase.from('user_activity_events').delete();
+    if (deleteMode === 'all') {
+      query = query.neq('id', '00000000-0000-0000-0000-000000000000');
+    } else if (deleteMode === 'range') {
+      if (deleteFrom) query = query.gte('created_at', deleteFrom);
+      if (deleteTo) query = query.lte('created_at', `${deleteTo}T23:59:59`);
+    } else if (deleteMode === 'session' && target) {
+      query = query.eq('session_id', target.session_id);
+    } else if (deleteMode === 'client' && target) {
+      if (target.user_id) query = query.eq('user_id', target.user_id);
+      else if (target.user_email) query = query.eq('user_email', target.user_email);
+      else query = query.eq('session_id', target.session_id);
+    } else {
+      setDeleting(false);
+      return;
+    }
+
+    const { error } = await query;
+    if (error) alert('No se pudo borrar la actividad: ' + error.message);
+    setDeleteConfirm('');
+    await loadActivity();
+    setDeleting(false);
+  }
+
+  const compactInput = { border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de actividad</h2>
+          <button onClick={loadActivity} style={{ ...compactInput, background: 'white', fontWeight: 700, cursor: 'pointer' }}>Actualizar</button>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {[['all', 'Todos'], ['known', 'Logueados'], ['anonymous', 'Anonimos']].map(([id, label]) => (
+            <button key={id} onClick={() => setIdentityFilter(id)} style={{ ...compactInput, background: identityFilter === id ? '#1B2F5E' : 'white', color: identityFilter === id ? 'white' : '#5a6380', fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+          ))}
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesion..." style={{ ...compactInput, minWidth: 220 }} />
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={compactInput}>
+            <option value="all">Todos los eventos</option>
+            {eventTypes.map(t => <option key={t} value={t}>{ACTIVITY_EVENT_CONFIG[t]?.label || t}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={compactInput} />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={compactInput} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
+          {[
+            ['Eventos', metrics.total],
+            ['Sesiones', metrics.sessions],
+            ['Abandono', metrics.abandonRate],
+            ['Producto top', metrics.topProduct],
+            ['Diseno carrito', metrics.topCartDesign],
+            ['Cargados', metrics.stored],
+          ].map(([label, value]) => (
+            <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 7, padding: '8px 10px', minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
+              <div style={{ fontSize: 15, color: '#1B2F5E', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 360px) 1fr', gap: 10, alignItems: 'start' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>Usuario o sesion</label>
+            <select value={selectedSessionId} onChange={e => setSelectedSessionId(e.target.value)} style={{ ...compactInput, width: '100%' }}>
+              {sessions.map(s => <option key={s.session_id} value={s.session_id}>{sessionLabel(s)}</option>)}
+            </select>
+            {selectedSession && (
+              <div style={{ marginTop: 8, background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 7, padding: 10, fontSize: 12, color: '#5a6380', lineHeight: 1.45 }}>
+                <div><strong>{selectedSession.is_anonymous ? 'Anonimo' : (selectedSession.user_name || 'Usuario')}</strong></div>
+                <div>{selectedSession.user_email || selectedSession.session_id}</div>
+                <div>{dateTimeLabel(selectedSession.first_seen)} - {dateTimeLabel(selectedSession.last_seen)}</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden', minWidth: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, background: '#f7f8fc', padding: '6px 9px', fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Hora</span><span>Evento</span><span>Detalle</span><span>Pagina</span>
+            </div>
+            {loading ? (
+              <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>Cargando actividad...</div>
+            ) : selectedEvents.length === 0 ? (
+              <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>No hay eventos para esta seleccion.</div>
+            ) : selectedEvents.map(event => {
+              const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { label: event.event_type, color: '#9aa3bc' };
+              return (
+                <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, alignItems: 'center', padding: '5px 9px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
+                  <span style={{ color: '#9aa3bc' }}>{dateTimeLabel(event.created_at)}</span>
+                  <span style={{ color: cfg.color, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
+                  <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{describeEvent(event)}</span>
+                  <span style={{ color: '#9aa3bc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{event.page || '-'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #fecaca' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#991b1b' }}>Borrar actividad</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select value={deleteMode} onChange={e => { setDeleteMode(e.target.value); setDeleteConfirm(''); }} style={compactInput}>
+            <option value="range">Por rango de fechas</option>
+            <option value="session">Solo sesion seleccionada</option>
+            <option value="client">Todo un cliente</option>
+            <option value="all">Toda la actividad</option>
+          </select>
+          {deleteMode === 'range' && (
+            <>
+              <input type="date" value={deleteFrom} onChange={e => setDeleteFrom(e.target.value)} style={compactInput} />
+              <input type="date" value={deleteTo} onChange={e => setDeleteTo(e.target.value)} style={compactInput} />
+            </>
+          )}
+          {(deleteMode === 'session' || deleteMode === 'client') && (
+            <select value={deleteSessionId} onChange={e => setDeleteSessionId(e.target.value)} style={{ ...compactInput, minWidth: 260 }}>
+              {sessions.map(s => <option key={s.session_id} value={s.session_id}>{sessionLabel(s)}</option>)}
+            </select>
+          )}
+          <span style={{ fontSize: 12, color: '#991b1b', fontWeight: 800 }}>{deletePreviewCount} eventos afectados</span>
+          <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value.toUpperCase())} placeholder="Escribir BORRAR" style={{ ...compactInput, width: 130 }} />
+          <button
+            onClick={deleteActivity}
+            disabled={deleting || deleteConfirm !== 'BORRAR' || deletePreviewCount === 0}
+            style={{ border: 'none', borderRadius: 7, padding: '6px 12px', background: deleting || deleteConfirm !== 'BORRAR' || deletePreviewCount === 0 ? '#fca5a5' : '#dc2626', color: 'white', fontSize: 12, fontWeight: 800, cursor: deleting || deleteConfirm !== 'BORRAR' || deletePreviewCount === 0 ? 'not-allowed' : 'pointer' }}
+          >
+            {deleting ? 'Borrando...' : 'Borrar'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 8 }}>
+          Para clientes anonimos, la opcion todo un cliente borra la sesion seleccionada. Para usuarios logueados borra por user_id o email.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [filterProduct, setFilterProduct] = React.useState('all');
   const [confirmReset, setConfirmReset] = React.useState(false);
+  const [activitySubtab, setActivitySubtab] = React.useState('heatmap');
   const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
 
   React.useEffect(() => {
@@ -2923,6 +3235,32 @@ function HeatmapTab({ supabase, products }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {[
+          ['heatmap', 'Mapa y usuarios'],
+          ['history', 'Historial de actividad'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setActivitySubtab(id)}
+            style={{
+              border: '1.5px solid #dde1ef',
+              borderRadius: 8,
+              padding: '7px 12px',
+              background: activitySubtab === id ? '#1B2F5E' : 'white',
+              color: activitySubtab === id ? 'white' : '#5a6380',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activitySubtab === 'heatmap' ? (
+        <>
       <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Mapa de calor — Catálogo</h2>
 
@@ -3062,7 +3400,10 @@ function HeatmapTab({ supabase, products }) {
         )}
       </div>
 
-      <ActivityHistory supabase={supabase} />
+        </>
+      ) : (
+        <ActivityHistory supabase={supabase} />
+      )}
 
       {confirmReset && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>

@@ -53,9 +53,11 @@ ALTER TABLE public.user_activity_events ENABLE ROW LEVEL SECURITY;
 
 GRANT INSERT ON public.user_activity_events TO anon, authenticated;
 GRANT SELECT ON public.user_activity_events TO authenticated;
+GRANT DELETE ON public.user_activity_events TO authenticated;
 
 DROP POLICY IF EXISTS "Anyone can insert activity" ON public.user_activity_events;
 DROP POLICY IF EXISTS "Admins can read activity" ON public.user_activity_events;
+DROP POLICY IF EXISTS "Admins can delete activity" ON public.user_activity_events;
 
 CREATE POLICY "Anyone can insert activity"
   ON public.user_activity_events FOR INSERT
@@ -63,4 +65,8 @@ CREATE POLICY "Anyone can insert activity"
 
 CREATE POLICY "Admins can read activity"
   ON public.user_activity_events FOR SELECT
+  USING (public.is_admin());
+
+CREATE POLICY "Admins can delete activity"
+  ON public.user_activity_events FOR DELETE
   USING (public.is_admin());

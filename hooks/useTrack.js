@@ -157,6 +157,7 @@ export function useTrack() {
       globalClickMounted = true;
       document.addEventListener('click', event => {
         if (!globalTrackFn) return;
+        if (window.location.pathname.startsWith('/admin')) return;
         globalTrackFn('click_global', getClickMetadata(event));
       });
     }
