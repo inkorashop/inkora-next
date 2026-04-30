@@ -8,6 +8,8 @@ const STATUS_COLOR = { pending: '#f6a800', in_press: '#2D6BE4', done: '#18a36a' 
 const ORDER_STATUS_LABEL = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
 const ORDER_STATUS_COLOR = { pending: '#f6a800', confirmed: '#2D6BE4', in_production: '#6d28d9', ready: '#18a36a', cancelled: '#e53e3e' };
 const DASH = '—';
+const DEFAULT_SORT_ORDER = { in_press: 0, pending: 1, done: 2 };
+const SORT_LABEL = { design: 'Diseño', product: 'Producto', demand: 'Demanda', stock: 'Stock', falta: 'Falta', status: 'Estado', note: 'Nota', orders: 'Pedidos' };
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -36,44 +38,9 @@ function isUrgent(ordersForDesign) {
   return ordersForDesign.some(o => o.status === 'pending' && new Date(o.created_at).getTime() < threeDaysAgo);
 }
 
-// FIX: ColHeader con zIndex dinámico para que el dropdown no quede detrás de otras columnas
-function ColHeader({ label, filter, active }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  return (
-    <th ref={ref} style={{
-      padding: '8px 10px', fontSize: 11, fontWeight: 700, textAlign: 'left',
-      color: active ? '#2D6BE4' : '#5a6380',
-      textTransform: 'uppercase', letterSpacing: 0.5,
-      borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap',
-      background: 'white',
-      // FIX: zIndex alto cuando está abierto para que el dropdown tape las otras columnas
-      position: 'relative', zIndex: open ? 50 : 'auto',
-      userSelect: 'none',
-    }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
-        {label}
-        <span style={{ fontSize: 10, color: active ? '#2D6BE4' : '#c4c9d9' }}>{active ? '●' : '▾'}</span>
-      </div>
-      {open && (
-        <div
-          style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 7, padding: 5, width: 168, boxShadow: '0 4px 16px rgba(27,47,94,0.16)', textTransform: 'none', letterSpacing: 0 }}
-          onClick={e => e.stopPropagation()}
-        >
-          {filter}
-        </div>
-      )}
-    </th>
-  );
+function compareValues(a, b) {
+  if (typeof a === 'number' || typeof b === 'number') return (Number(a) || 0) - (Number(b) || 0);
+  return String(a || '').localeCompare(String(b || ''), 'es', { numeric: true, sensitivity: 'base' });
 }
 
 function NoteCell({ row, onSave }) {
@@ -126,23 +93,23 @@ function NoteCell({ row, onSave }) {
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
 function StockCell({ qtyProduced, onSave }) {
-  const [val, setVal] = useState(String(qtyProduced));
+  const [val, setVal] = useState(qtyProduced === 0 ? '' : String(qtyProduced));
   const [saving, setSaving] = useState(false);
   const editingRef = useRef(false);
 
   // FIX: Solo sincronizar el valor desde afuera cuando NO estamos editando
   useEffect(() => {
     if (!editingRef.current) {
-      setVal(String(qtyProduced));
+      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
     }
   }, [qtyProduced]);
 
   const handleSave = async () => {
     if (saving) return;
     editingRef.current = false;
-    const qty = Number(val);
+    const qty = val === '' ? 0 : Number(val);
     if (!Number.isInteger(qty) || qty < 0) {
-      setVal(String(qtyProduced));
+      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
       return;
     }
     if (qty === qtyProduced) return;
@@ -150,7 +117,7 @@ function StockCell({ qtyProduced, onSave }) {
     try {
       await onSave(qty);
     } catch (error) {
-      setVal(String(qtyProduced));
+      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
       alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
     } finally {
       setSaving(false);
@@ -167,7 +134,7 @@ function StockCell({ qtyProduced, onSave }) {
     try {
       await onSave(nextQty);
     } catch (error) {
-      setVal(String(qtyProduced));
+      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
       alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
     } finally {
       setSaving(false);
@@ -204,7 +171,7 @@ function StockCell({ qtyProduced, onSave }) {
         onClick={e => e.stopPropagation()}
         onKeyDown={e => {
           if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') { editingRef.current = false; setVal(String(qtyProduced)); e.currentTarget.blur(); }
+          if (e.key === 'Escape') { editingRef.current = false; setVal(qtyProduced === 0 ? '' : String(qtyProduced)); e.currentTarget.blur(); }
         }}
         style={{ border: saving ? '1.5px solid #c4c9d9' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: saving ? '#f7f8fc' : 'white' }}
       />
@@ -221,6 +188,58 @@ function StockCell({ qtyProduced, onSave }) {
   );
 }
 
+function SortFilterHeader({ label, filter, active, align = 'left', sortKey, sortRules = [], onToggleSort }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const sortIndex = sortRules.findIndex(rule => rule.key === sortKey);
+  const sortRule = sortIndex >= 0 ? sortRules[sortIndex] : null;
+  const hasFilter = Boolean(filter);
+  const isActive = Boolean(active || sortRule);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <th ref={ref} style={{ padding: '7px 8px', fontSize: 11, fontWeight: 700, textAlign: align, color: isActive ? '#2D6BE4' : '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white', position: 'relative', zIndex: open ? 50 : 'auto', userSelect: 'none' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: align === 'center' ? 'center' : 'flex-start', gap: 4, width: '100%' }}>
+        <span>{label}</span>
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            title="Filtrar"
+            aria-label={`Filtrar por ${label}`}
+            style={{ border: `1.5px solid ${active ? '#2D6BE4' : '#dde1ef'}`, background: active ? '#e8eef9' : 'white', color: active ? '#2D6BE4' : '#5a6380', borderRadius: 5, padding: '1px 5px', fontSize: 10, fontWeight: 800, cursor: 'pointer', lineHeight: 1.4, minWidth: 22 }}
+          >
+            {active ? 'F*' : 'F'}
+          </button>
+        )}
+        {sortKey && (
+          <button
+            type="button"
+            onClick={() => onToggleSort(sortKey)}
+            title={sortRule ? `Orden ${sortRule.dir === 'asc' ? 'ascendente' : 'descendente'} (${sortIndex + 1})` : 'Ordenar'}
+            aria-label={sortRule ? `Ordenar ${label} ${sortRule.dir === 'asc' ? 'descendente' : 'sin orden'}` : `Ordenar ${label} ascendente`}
+            style={{ border: `1.5px solid ${sortRule ? '#2D6BE4' : '#dde1ef'}`, background: sortRule ? '#e8eef9' : 'white', color: sortRule ? '#2D6BE4' : '#5a6380', borderRadius: 5, padding: '1px 5px', fontSize: 10, fontWeight: 800, cursor: 'pointer', lineHeight: 1.4, minWidth: 28 }}
+          >
+            {sortRule ? `${sortIndex + 1}${sortRule.dir === 'asc' ? '↑' : '↓'}` : '↕'}
+          </button>
+        )}
+      </div>
+      {open && hasFilter && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 7, padding: 5, width: 168, boxShadow: '0 4px 16px rgba(27,47,94,0.16)', textTransform: 'none', letterSpacing: 0 }} onClick={e => e.stopPropagation()}>
+          {filter}
+        </div>
+      )}
+    </th>
+  );
+}
+
 export default function ProductionTab({ supabase, sellers = [], products = [], orders = [] }) {
   const [activeSubTab, setActiveSubTab] = useState('queue');
 
@@ -233,6 +252,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterSearch, setFilterSearch] = useState('');   // busca por cliente/email
   const [filterDesign, setFilterDesign] = useState('');   // FIX: filtro de diseño separado
+  const [sortRules, setSortRules] = useState([]);
 
   // Datos
   const [stock, setStock] = useState([]);
@@ -243,6 +263,15 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
   const [expandedRow, setExpandedRow] = useState(null);
   const [savingStatus, setSavingStatus] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
+
+  function toggleSort(key) {
+    setSortRules(prev => {
+      const idx = prev.findIndex(rule => rule.key === key);
+      if (idx === -1) return [...prev, { key, dir: 'asc' }];
+      if (prev[idx].dir === 'asc') return prev.map((rule, i) => i === idx ? { ...rule, dir: 'desc' } : rule);
+      return prev.filter((_, i) => i !== idx);
+    });
+  }
 
   const loadStock = useCallback(async () => {
     const { data, error } = await supabase.from('production_stock').select('*');
@@ -349,12 +378,33 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     rows = rows.filter(r => r.status === filterProdStatus);
   }
 
-  rows.sort((a, b) => {
-    const order = { in_press: 0, pending: 1, done: 2 };
-    if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
-    if (a.status === 'pending') return b.falta - a.falta;
-    return a.designName.localeCompare(b.designName, 'es');
-  });
+  const sortValue = (row, key) => {
+    if (key === 'design') return row.designName;
+    if (key === 'product') return row.productName;
+    if (key === 'demand') return row.demand;
+    if (key === 'stock') return row.qty_produced;
+    if (key === 'falta') return row.falta;
+    if (key === 'status') return DEFAULT_SORT_ORDER[row.status] ?? 99;
+    if (key === 'note') return row.note;
+    if (key === 'orders') return row.orders.length;
+    return '';
+  };
+
+  if (sortRules.length > 0) {
+    rows.sort((a, b) => {
+      for (const rule of sortRules) {
+        const result = compareValues(sortValue(a, rule.key), sortValue(b, rule.key));
+        if (result !== 0) return rule.dir === 'asc' ? result : -result;
+      }
+      return a.designName.localeCompare(b.designName, 'es');
+    });
+  } else {
+    rows.sort((a, b) => {
+      if (DEFAULT_SORT_ORDER[a.status] !== DEFAULT_SORT_ORDER[b.status]) return DEFAULT_SORT_ORDER[a.status] - DEFAULT_SORT_ORDER[b.status];
+      if (a.status === 'pending') return b.falta - a.falta;
+      return a.designName.localeCompare(b.designName, 'es');
+    });
+  }
 
   const totalDesigns = rows.length;
   const totalPending = rows.reduce((acc, r) => acc + Math.max(0, r.falta), 0);
@@ -492,7 +542,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     color: active ? '#2D6BE4' : '#2d3352',
   });
 
-  // Lista de diseños únicos disponibles para el filtro del ColHeader
+  // Lista de diseños únicos disponibles para el filtro de diseño
   const allDesignNames = Object.values(
     (orders || []).reduce((map, order) => {
       (Array.isArray(order.items) ? order.items : []).forEach(item => {
@@ -555,6 +605,16 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                   style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                   ↓ Exportar reporte
                 </button>
+                {sortRules.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSortRules([])}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '4px 9px', background: 'white', color: '#5a6380', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                    title={sortRules.map((rule, i) => `${i + 1}. ${SORT_LABEL[rule.key]} ${rule.dir === 'asc' ? 'asc' : 'desc'}`).join('\n')}
+                  >
+                    Limpiar orden
+                  </button>
+                )}
               </div>
             </div>
 
@@ -617,7 +677,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                     <tr>
                       {/* FIX: Filtro de diseño ahora muestra lista de diseños disponibles,
                           y usa filterDesign (separado de filterSearch) */}
-                      <ColHeader label="Diseño" active={!!filterDesign} filter={
+                      <SortFilterHeader label="Diseño" active={!!filterDesign} sortKey="design" sortRules={sortRules} onToggleSort={toggleSort} filter={
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <input
                             type="text"
@@ -647,7 +707,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                       } />
 
                       {/* Filtro de producto */}
-                      <ColHeader label="Producto" active={filterProduct !== 'all'} filter={
+                      <SortFilterHeader label="Producto" active={filterProduct !== 'all'} sortKey="product" sortRules={sortRules} onToggleSort={toggleSort} filter={
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {[{ id: 'all', name: 'Todos' }, ...products].map(p => (
                             <div key={p.id} onClick={() => setFilterProduct(p.id)} style={optionStyle(filterProduct === p.id)}>{p.name}</div>
@@ -655,12 +715,12 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                         </div>
                       } />
 
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Demanda</th>
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Stock</th>
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Falta</th>
+                      <SortFilterHeader label="Demanda" align="center" sortKey="demand" sortRules={sortRules} onToggleSort={toggleSort} />
+                      <SortFilterHeader label="Stock" align="center" sortKey="stock" sortRules={sortRules} onToggleSort={toggleSort} />
+                      <SortFilterHeader label="Falta" align="center" sortKey="falta" sortRules={sortRules} onToggleSort={toggleSort} />
 
                       {/* FIX: Estado prod. ahora tiene onClick que realmente filtra */}
-                      <ColHeader label="Estado prod." active={filterProdStatus !== 'all'} filter={
+                      <SortFilterHeader label="Estado prod." active={filterProdStatus !== 'all'} sortKey="status" sortRules={sortRules} onToggleSort={toggleSort} filter={
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <div onClick={() => setFilterProdStatus('all')} style={optionStyle(filterProdStatus === 'all')}>Todos</div>
                           {STATUS_CYCLE.map(s => (
@@ -672,8 +732,8 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                         </div>
                       } />
 
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Nota</th>
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Pedidos</th>
+                      <SortFilterHeader label="Nota" sortKey="note" sortRules={sortRules} onToggleSort={toggleSort} />
+                      <SortFilterHeader label="Pedidos" align="center" sortKey="orders" sortRules={sortRules} onToggleSort={toggleSort} />
                     </tr>
                   </thead>
                   <tbody>
