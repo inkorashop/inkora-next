@@ -43,6 +43,10 @@ function compareValues(a, b) {
   return String(a || '').localeCompare(String(b || ''), 'es', { numeric: true, sensitivity: 'base' });
 }
 
+function stockInputValue(qty) {
+  return qty === 0 ? '' : String(qty);
+}
+
 function NoteCell({ row, onSave }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.note || '');
@@ -93,52 +97,86 @@ function NoteCell({ row, onSave }) {
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
 function StockCell({ qtyProduced, onSave }) {
-  const [val, setVal] = useState(qtyProduced === 0 ? '' : String(qtyProduced));
-  const [saving, setSaving] = useState(false);
+  const [val, setVal] = useState(stockInputValue(qtyProduced));
   const editingRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const latestQtyRef = useRef(qtyProduced);
+  const onSaveRef = useRef(onSave);
+  const savingRef = useRef(false);
+  const queuedQtyRef = useRef(null);
 
   // FIX: Solo sincronizar el valor desde afuera cuando NO estamos editando
   useEffect(() => {
+    latestQtyRef.current = qtyProduced;
     if (!editingRef.current) {
-      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
+      setVal(stockInputValue(qtyProduced));
     }
   }, [qtyProduced]);
 
-  const handleSave = async () => {
-    if (saving) return;
-    editingRef.current = false;
-    const qty = val === '' ? 0 : Number(val);
-    if (!Number.isInteger(qty) || qty < 0) {
-      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
+
+  const saveQty = async (qty) => {
+    if (qty === latestQtyRef.current) return;
+    if (savingRef.current) {
+      queuedQtyRef.current = qty;
       return;
     }
-    if (qty === qtyProduced) return;
-    setSaving(true);
+
+    savingRef.current = true;
+    let targetQty = qty;
     try {
-      await onSave(qty);
+      while (targetQty !== null) {
+        if (targetQty !== latestQtyRef.current) {
+          await onSaveRef.current(targetQty);
+          latestQtyRef.current = targetQty;
+        }
+        targetQty = queuedQtyRef.current;
+        queuedQtyRef.current = null;
+      }
     } catch (error) {
-      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
+      queuedQtyRef.current = null;
+      setVal(stockInputValue(latestQtyRef.current));
       alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
     } finally {
-      setSaving(false);
+      savingRef.current = false;
     }
   };
 
-  const adjust = async (delta) => {
-    if (saving) return;
-    const nextQty = Math.max(0, qtyProduced + delta);
-    if (nextQty === qtyProduced) return;
+  const scheduleSave = (qty) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      saveQty(qty);
+    }, 300);
+  };
+
+  const handleSave = () => {
     editingRef.current = false;
-    setVal(String(nextQty));
-    setSaving(true);
-    try {
-      await onSave(nextQty);
-    } catch (error) {
-      setVal(qtyProduced === 0 ? '' : String(qtyProduced));
-      alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
-    } finally {
-      setSaving(false);
+    const qty = val === '' ? 0 : Number(val);
+    if (!Number.isInteger(qty) || qty < 0) {
+      setVal(stockInputValue(latestQtyRef.current));
+      return;
     }
+    setVal(stockInputValue(qty));
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    saveQty(qty);
+  };
+
+  const adjust = (delta) => {
+    const currentQty = val === '' ? 0 : Number(val);
+    const baseQty = Number.isInteger(currentQty) && currentQty >= 0 ? currentQty : latestQtyRef.current;
+    const nextQty = Math.max(0, baseQty + delta);
+    if (nextQty === baseQty) return;
+    editingRef.current = false;
+    setVal(stockInputValue(nextQty));
+    scheduleSave(nextQty);
   };
 
   const handleFocus = (e) => {
@@ -152,9 +190,9 @@ function StockCell({ qtyProduced, onSave }) {
       <button
         type="button"
         onClick={() => adjust(-1)}
-        disabled={saving || qtyProduced <= 0}
+        disabled={(val === '' ? 0 : Number(val)) <= 0}
         title="Restar 1"
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: qtyProduced <= 0 ? '#f7f8fc' : '#fef2f2', color: qtyProduced <= 0 ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: saving || qtyProduced <= 0 ? 'not-allowed' : 'pointer' }}
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: (val === '' ? 0 : Number(val)) <= 0 ? '#f7f8fc' : '#fef2f2', color: (val === '' ? 0 : Number(val)) <= 0 ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: (val === '' ? 0 : Number(val)) <= 0 ? 'not-allowed' : 'pointer' }}
       >
         -
       </button>
@@ -164,23 +202,21 @@ function StockCell({ qtyProduced, onSave }) {
         step="1"
         value={val}
         placeholder="0"
-        disabled={saving}
         onFocus={handleFocus}
         onChange={e => setVal(e.target.value)}
         onBlur={handleSave}
         onClick={e => e.stopPropagation()}
         onKeyDown={e => {
           if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') { editingRef.current = false; setVal(qtyProduced === 0 ? '' : String(qtyProduced)); e.currentTarget.blur(); }
+          if (e.key === 'Escape') { editingRef.current = false; setVal(stockInputValue(latestQtyRef.current)); e.currentTarget.blur(); }
         }}
-        style={{ border: saving ? '1.5px solid #c4c9d9' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: saving ? '#f7f8fc' : 'white' }}
+        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: 'white' }}
       />
       <button
         type="button"
         onClick={() => adjust(1)}
-        disabled={saving}
         title="Sumar 1"
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: saving ? 'wait' : 'pointer' }}
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: 'pointer' }}
       >
         +
       </button>
