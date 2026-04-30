@@ -126,7 +126,6 @@ function NoteCell({ row, onSave }) {
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
 function StockCell({ qtyProduced, onSave }) {
-  const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(qtyProduced));
   const [saving, setSaving] = useState(false);
   const editingRef = useRef(false);
@@ -141,7 +140,6 @@ function StockCell({ qtyProduced, onSave }) {
   const handleSave = async () => {
     if (saving) return;
     editingRef.current = false;
-    setEditing(false);
     const qty = Number(val);
     if (!Number.isInteger(qty) || qty < 0) {
       setVal(String(qtyProduced));
@@ -159,38 +157,67 @@ function StockCell({ qtyProduced, onSave }) {
     }
   };
 
-  const handleStartEdit = (e) => {
-    e.stopPropagation();
-    editingRef.current = true;
-    setVal(qtyProduced === 0 ? '' : String(qtyProduced));
-    setEditing(true);
+  const adjust = async (delta) => {
+    if (saving) return;
+    const nextQty = Math.max(0, qtyProduced + delta);
+    if (nextQty === qtyProduced) return;
+    editingRef.current = false;
+    setVal(String(nextQty));
+    setSaving(true);
+    try {
+      await onSave(nextQty);
+    } catch (error) {
+      setVal(String(qtyProduced));
+      alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (!editing) {
-    return (
-      <span
-        onClick={handleStartEdit}
-        style={{ display: 'inline-block', width: 58, textAlign: 'center', fontWeight: 600, color: '#2d3352', cursor: 'text', padding: '3px 6px', borderRadius: 4, border: '1.5px solid transparent', fontSize: 13, transition: 'border-color 0.2s', boxSizing: 'border-box' }}
-        title="Click para editar"
-      >
-        {qtyProduced}
-      </span>
-    );
-  }
+  const handleFocus = (e) => {
+    e.stopPropagation();
+    editingRef.current = true;
+    e.target.select();
+  };
+
   return (
-    <input
-      autoFocus type="number" min="0" step="1" value={val}
-      placeholder="0"
-      disabled={saving}
-      onChange={e => setVal(e.target.value)}
-      onBlur={handleSave}
-      onClick={e => e.stopPropagation()}
-      onKeyDown={e => {
-        if (e.key === 'Enter') handleSave();
-        if (e.key === 'Escape') { editingRef.current = false; setEditing(false); setVal(String(qtyProduced)); }
-      }}
-      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', width: 58, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
-    />
+    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, width: 118 }}>
+      <button
+        type="button"
+        onClick={() => adjust(-1)}
+        disabled={saving || qtyProduced <= 0}
+        title="Restar 1"
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: qtyProduced <= 0 ? '#f7f8fc' : '#fef2f2', color: qtyProduced <= 0 ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: saving || qtyProduced <= 0 ? 'not-allowed' : 'pointer' }}
+      >
+        -
+      </button>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={val}
+        placeholder="0"
+        disabled={saving}
+        onFocus={handleFocus}
+        onChange={e => setVal(e.target.value)}
+        onBlur={handleSave}
+        onClick={e => e.stopPropagation()}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') { editingRef.current = false; setVal(String(qtyProduced)); e.currentTarget.blur(); }
+        }}
+        style={{ border: saving ? '1.5px solid #c4c9d9' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: saving ? '#f7f8fc' : 'white' }}
+      />
+      <button
+        type="button"
+        onClick={() => adjust(1)}
+        disabled={saving}
+        title="Sumar 1"
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: saving ? 'wait' : 'pointer' }}
+      >
+        +
+      </button>
+    </div>
   );
 }
 
@@ -214,10 +241,6 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
 
   // UI
   const [expandedRow, setExpandedRow] = useState(null);
-  const [stockModal, setStockModal] = useState(null);
-  const [stockQty, setStockQty] = useState('');
-  const [stockNote, setStockNote] = useState('');
-  const [savingStock, setSavingStock] = useState(false);
   const [savingStatus, setSavingStatus] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -395,9 +418,18 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     );
     try {
       const stockResult = existing
-        ? await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id)
-        : await supabase.from('production_stock').insert({ design_name: row.designName, qty_produced: newQty });
+        ? await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id).select('*').single()
+        : await supabase.from('production_stock').insert({ design_name: row.designName, qty_produced: newQty }).select('*').single();
       if (stockResult.error) throw stockResult.error;
+      if (stockResult.data) {
+        setStock(prev => {
+          const byId = stockResult.data.id && prev.some(s => s.id === stockResult.data.id);
+          const byName = prev.some(s => normalizeName(s.design_name) === row.designKey);
+          if (byId) return prev.map(s => s.id === stockResult.data.id ? stockResult.data : s);
+          if (byName) return prev.map(s => normalizeName(s.design_name) === row.designKey ? stockResult.data : s);
+          return [...prev, stockResult.data];
+        });
+      }
       const logResult = await supabase.from('production_stock_log').insert({
         design_name: row.designName,
         qty: Math.abs(delta),
@@ -409,47 +441,6 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     } catch (error) {
       setStock(previousStock);
       throw error;
-    }
-  }
-
-  async function confirmStock() {
-    const qty = Number(stockQty);
-    if (!Number.isInteger(qty) || qty <= 0 || !stockModal) return;
-    setErrorMessage('');
-    setSavingStock(true);
-    try {
-      const { designName, designId, type } = stockModal;
-      const existing = stock.find(s => normalizeName(s.design_name) === normalizeName(designName));
-      const currentQty = Number(existing?.qty_produced) || 0;
-      if (type === 'subtract' && qty > currentQty) {
-        alert(`No podés restar más de lo que hay en stock (${currentQty} unidades).`);
-        return;
-      }
-      const delta = type === 'add' ? qty : -qty;
-      const newQty = Math.max(0, currentQty + delta);
-      const stockResult = existing
-        ? await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id)
-        : await supabase.from('production_stock').insert({ design_name: designName, design_id: designId || null, qty_produced: Math.max(0, delta) });
-      if (stockResult.error) throw stockResult.error;
-
-      const logResult = await supabase.from('production_stock_log').insert({
-        design_name: designName,
-        design_id: designId || null,
-        qty,
-        type,
-        note: stockNote.trim() || null,
-      });
-      if (logResult.error) throw logResult.error;
-      await loadStock();
-      await loadStockLog();
-      setStockModal(null);
-      setStockQty('');
-      setStockNote('');
-    } catch (error) {
-      console.error('Error saving production stock', error);
-      setErrorMessage(formatProductionError(error, `No se pudo guardar el movimiento de stock: ${error.message || error}`));
-    } finally {
-      setSavingStock(false);
     }
   }
 
@@ -610,17 +601,16 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
             </div>
 
               <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 6, minHeight: rows.length < 4 ? 220 : 'auto' }}>
-                <table style={{ width: '100%', minWidth: 1060, tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 13 }}>
+                <table style={{ width: '100%', minWidth: 960, tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 13 }}>
                   <colgroup>
                     <col style={{ width: 230 }} />
                     <col style={{ width: 190 }} />
                     <col style={{ width: 110 }} />
-                    <col style={{ width: 100 }} />
+                    <col style={{ width: 132 }} />
                     <col style={{ width: 100 }} />
                     <col style={{ width: 145 }} />
                     <col style={{ width: 160 }} />
                     <col style={{ width: 110 }} />
-                    <col style={{ width: 115 }} />
                   </colgroup>
                   {/* FIX: thead sin position sticky para evitar superposición con los dropdowns */}
                   <thead>
@@ -684,13 +674,12 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
 
                       <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Nota</th>
                       <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Pedidos</th>
-                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={9} style={{ textAlign: 'center', padding: '42px 20px', color: '#9aa3bc', borderBottom: '1px solid #f0f2f8' }}>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: '42px 20px', color: '#9aa3bc', borderBottom: '1px solid #f0f2f8' }}>
                           <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
                           <p style={{ fontSize: 14, margin: 0 }}>No hay diseños en la cola con los filtros actuales.</p>
                         </td>
@@ -752,23 +741,12 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                               </button>
                             </td>
 
-                            {/* Acciones stock */}
-                            <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>
-                              <button
-                                onClick={() => { setStockModal({ designName: row.designName, designId: null, type: 'add' }); setStockQty(''); setStockNote(''); }}
-                                style={{ background: '#e8f5e9', color: '#18a36a', border: '1.5px solid #18a36a', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginRight: 4 }}
-                                title="Agregar stock">+</button>
-                              <button
-                                onClick={() => { setStockModal({ designName: row.designName, designId: null, type: 'subtract' }); setStockQty(''); setStockNote(''); }}
-                                style={{ background: '#fef2f2', color: '#e53e3e', border: '1.5px solid #e53e3e', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-                                title="Restar stock">−</button>
-                            </td>
                           </tr>
 
                           {/* Fila expandida: detalle de pedidos */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={9} style={{ padding: '0 10px 12px 30px', background: '#f7f8fc' }}>
+                              <td colSpan={8} style={{ padding: '0 10px 12px 30px', background: '#f7f8fc' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                   <thead>
                                     <tr>
@@ -847,50 +825,6 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
         </div>
       )}
 
-      {/* Modal stock */}
-      {stockModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 380, overflow: 'hidden' }}>
-            <div style={{ background: '#1B2F5E', color: 'white', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 15 }}>
-              <span>{stockModal.type === 'add' ? '+ Agregar stock' : '− Restar stock'}</span>
-              <button onClick={() => setStockModal(null)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>✕</button>
-            </div>
-            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={lbl}>Diseño</label>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#1B2F5E' }}>{stockModal.designName}</div>
-              </div>
-              <div>
-                <label style={lbl}>Stock actual</label>
-                <div style={{ fontSize: 14, color: '#2d3352' }}>
-                  {stock.find(s => normalizeName(s.design_name) === normalizeName(stockModal.designName))?.qty_produced || 0} unidades
-                </div>
-              </div>
-              <div>
-                <label style={lbl}>Cantidad a {stockModal.type === 'add' ? 'agregar' : 'restar'}</label>
-                <input style={{ ...inp, width: '100%' }} type="number" min="1" value={stockQty}
-                  onChange={e => setStockQty(e.target.value)} autoFocus
-                  onKeyDown={e => e.key === 'Enter' && confirmStock()} />
-              </div>
-              <div>
-                <label style={lbl}>Nota (opcional)</label>
-                <input style={{ ...inp, width: '100%' }} type="text" value={stockNote}
-                  onChange={e => setStockNote(e.target.value)} placeholder="Ej: Prensa 1, lote del lunes..." />
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setStockModal(null)}
-                  style={{ flex: 1, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 600, color: '#5a6380', cursor: 'pointer' }}>
-                  Cancelar
-                </button>
-                <button onClick={confirmStock} disabled={savingStock || !Number.isInteger(Number(stockQty)) || Number(stockQty) <= 0}
-                  style={{ flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 8, padding: '10px', fontSize: 14, fontWeight: 700, color: 'white', cursor: savingStock ? 'wait' : 'pointer', opacity: savingStock || !Number.isInteger(Number(stockQty)) || Number(stockQty) <= 0 ? 0.6 : 1 }}>
-                  {savingStock ? 'Guardando...' : 'Confirmar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

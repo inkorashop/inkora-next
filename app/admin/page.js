@@ -7,6 +7,8 @@ import ProductionTab from '@/components/ProductionTab';
 
 const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
+const ADMIN_ACTIVE_THRESHOLD = 15000;
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'Estadísticas', production:'Producción' };
 
 function fileToBase64(file) {
   return new Promise(resolve => {
@@ -26,6 +28,17 @@ function blobToBase64(blob) {
 
 function slugify(str) {
   return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function getAdminSessionId() {
+  if (typeof window === 'undefined') return '';
+  const key = 'inkora_admin_session_id';
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    sessionStorage.setItem(key, id);
+  }
+  return id;
 }
 
 function EyeOpen() {
@@ -201,6 +214,8 @@ export default function Admin() {
 
   // Admins
   const [admins, setAdmins] = useState([]);
+  const [adminPresence, setAdminPresence] = useState([]);
+  const [, setPresenceTick] = useState(0);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
@@ -264,10 +279,81 @@ export default function Admin() {
   useEffect(() => {
     if (screen === 'panel' && !panelLoadedRef.current) {
       panelLoadedRef.current = true;
-      loadProducts(); loadDesigns(); loadLocalities(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
+      loadProducts(); loadDesigns(); loadLocalities(); loadPriceTiers(); loadAdmins(); loadAdminPresence(); loadOrders(); loadSettings(); loadSellers();
       loadUsers();
     }
   }, [screen]);
+
+  const realtimeTimersRef = useRef({});
+  useEffect(() => {
+    if (screen !== 'panel') return;
+
+    const scheduleReload = (key, reload) => {
+      clearTimeout(realtimeTimersRef.current[key]);
+      realtimeTimersRef.current[key] = setTimeout(reload, 250);
+    };
+
+    const watch = (table, reload) => (
+      supabase
+        .channel(`admin-${table}-realtime`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, () => scheduleReload(table, reload))
+        .subscribe()
+    );
+
+    const channels = [
+      watch('products', () => { loadProducts(); loadPriceTiers(); }),
+      watch('designs', loadDesigns),
+      watch('localities', () => { loadLocalities(); loadPriceTiers(); loadUsers(); }),
+      watch('price_tiers', loadPriceTiers),
+      watch('admins', loadAdmins),
+      watch('orders', loadOrders),
+      watch('settings', loadSettings),
+      watch('sellers', () => { loadSellers(); loadUsers(); }),
+      watch('profiles', loadUsers),
+      watch('admin_presence', loadAdminPresence),
+    ];
+
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+      Object.values(realtimeTimersRef.current).forEach(clearTimeout);
+      realtimeTimersRef.current = {};
+    };
+  }, [screen]);
+
+  useEffect(() => {
+    if (screen !== 'panel' || !currentUser) return;
+
+    const sessionId = getAdminSessionId();
+    const writePresence = () => {
+      supabase.from('admin_presence').upsert({
+        session_id: sessionId,
+        email: currentUser,
+        tab: activeTab,
+        user_agent: navigator.userAgent,
+        updated_at: new Date().toISOString(),
+      }).then(({ error }) => {
+        if (error) console.error('Error updating admin presence', error);
+      });
+    };
+
+    writePresence();
+    const heartbeat = setInterval(writePresence, 5000);
+    const ticker = setInterval(() => setPresenceTick(t => t + 1), 1000);
+    const onFocus = () => writePresence();
+    const onVisibilityChange = () => {
+      if (!document.hidden) writePresence();
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(heartbeat);
+      clearInterval(ticker);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [screen, currentUser, activeTab]);
 
 
   const popupJustOpenedRef = useRef(false);
@@ -925,6 +1011,52 @@ export default function Admin() {
     if (data) setAdmins(data);
   }
 
+  async function loadAdminPresence() {
+    const { data } = await supabase.from('admin_presence').select('*').order('updated_at', { ascending: false });
+    if (data) setAdminPresence(data);
+  }
+
+  function getAdminPresence(email) {
+    const rows = adminPresence.filter(p => p.email === email);
+    if (rows.length === 0) return { isActive: false, latest: null, activeSessions: [] };
+    const activeSessions = rows.filter(p => Date.now() - new Date(p.updated_at).getTime() < ADMIN_ACTIVE_THRESHOLD);
+    const latest = [...rows].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0] || null;
+    return { isActive: activeSessions.length > 0, latest, activeSessions };
+  }
+
+  function getTabPresence(tab) {
+    return adminPresence
+      .filter(p => p.tab === tab && Date.now() - new Date(p.updated_at).getTime() < ADMIN_ACTIVE_THRESHOLD)
+      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return 'nunca';
+    const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(mins / 60);
+    if (hrs > 0) return `hace ${hrs}h`;
+    if (mins > 0) return `hace ${mins}min`;
+    return 'hace un momento';
+  }
+
+  function renderAdminTabPresence(tab) {
+    const rows = getTabPresence(tab);
+    const uniqueRows = rows.filter((p, idx, arr) => arr.findIndex(x => x.email === p.email) === idx);
+    if (uniqueRows.length === 0) return null;
+
+    return (
+      <span style={s.adminTabPresence} title={uniqueRows.map(p => `${p.email} en ${ADMIN_TAB_LABELS[tab] || tab}`).join('\n')}>
+        {uniqueRows.slice(0, 3).map(p => (
+          <span key={p.session_id} style={s.adminPresenceDot}>
+            {(p.email || '?').slice(0, 1).toUpperCase()}
+          </span>
+        ))}
+        {uniqueRows.length > 3 && <span style={s.adminPresenceMore}>+{uniqueRows.length - 3}</span>}
+      </span>
+    );
+  }
+
   async function addAdmin() {
     const email = newAdminEmail.trim().toLowerCase();
     if (!email) return;
@@ -1015,6 +1147,7 @@ export default function Admin() {
                 {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
                 {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
                 {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
+                {renderAdminTabPresence(id)}
               </button>
             ));
           })()}
@@ -2146,15 +2279,41 @@ export default function Admin() {
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Administradores ({admins.length})</h2>
               {admins.length === 0 && <p style={s.emptyMsg}>No hay administradores.</p>}
-              {admins.map(a => (
-                <div key={a.email} style={s.productRow}>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <span style={s.productName}>{a.email}</span>
-                    {a.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
+              {admins.map(a => {
+                const status = getAdminPresence(a.email);
+                const activeTabs = [...new Set(status.activeSessions.map(p => p.tab).filter(Boolean))];
+                const tabLabel = activeTabs.length > 0
+                  ? activeTabs.map(tab => ADMIN_TAB_LABELS[tab] || tab).join(', ')
+                  : status.latest?.tab ? ADMIN_TAB_LABELS[status.latest.tab] || status.latest.tab : 'Sin actividad reciente';
+
+                return (
+                  <div key={a.email} style={s.productRow}>
+                    <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0, flex:1}}>
+                      <span style={{...s.adminStatusDot, background: status.isActive ? '#18a36a' : '#c4c9d9'}} />
+                      <div style={{minWidth:0}}>
+                        <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                          <span style={s.productName}>{a.email}</span>
+                          {a.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
+                          <span style={{
+                            background: status.isActive ? '#e8f5e9' : '#f0f2f8',
+                            color: status.isActive ? '#15803d' : '#9aa3bc',
+                            borderRadius: 10,
+                            padding: '1px 8px',
+                            fontSize: 11,
+                            fontWeight: 800,
+                          }}>
+                            {status.isActive ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>
+                          {status.isActive ? `Ahora en: ${tabLabel}` : `Ultima vez: ${timeAgo(status.latest?.updated_at)}${status.latest?.tab ? ` en ${tabLabel}` : ''}`}
+                        </div>
+                      </div>
+                    </div>
+                    <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
                   </div>
-                  <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -2366,7 +2525,7 @@ export default function Admin() {
 
       {/* ══ ESTADÍSTICAS ══ */}
         {activeTab === 'stats' && (
-          <StatsTab supabase={supabase} sellers={sellers} />
+          <StatsTab supabase={supabase} sellers={sellers} orders={orders} />
         )}
 
       {/* ══ PRODUCCIÓN ══ */}
@@ -2414,8 +2573,7 @@ export default function Admin() {
   );
 }
 
-function StatsTab({ supabase, sellers }) {
-  const [orders, setOrders] = React.useState([]);
+function StatsTab({ supabase, sellers, orders = [] }) {
   const [loading, setLoading] = React.useState(true);
   const [sellerFilter, setSellerFilter] = React.useState('all');
   const [datePreset, setDatePreset] = React.useState('all');
@@ -2423,9 +2581,8 @@ function StatsTab({ supabase, sellers }) {
   const [dateTo, setDateTo] = React.useState('');
 
   React.useEffect(() => {
-    supabase.from('orders').select('*').order('created_at', { ascending: true })
-      .then(({ data }) => { setOrders(data || []); setLoading(false); });
-  }, [supabase]);
+    setLoading(false);
+  }, [orders]);
 
   function getDateRange() {
     const now = new Date();
@@ -2708,7 +2865,16 @@ function ActivityHistoryLegacy({ supabase }) {
     setLoading(false);
   }, [supabase]);
 
-  React.useEffect(() => { loadActivity(); }, [loadActivity]);
+  React.useEffect(() => {
+    loadActivity();
+
+    const channel = supabase
+      .channel('admin-activity-history-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_activity_events' }, () => loadActivity())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [supabase, loadActivity]);
 
   const eventTypes = React.useMemo(() => [...new Set(events.map(e => e.event_type).filter(Boolean))].sort(), [events]);
 
@@ -2916,7 +3082,16 @@ function ActivityHistory({ supabase }) {
     setLoading(false);
   }, [supabase]);
 
-  React.useEffect(() => { loadActivity(); }, [loadActivity]);
+  React.useEffect(() => {
+    loadActivity();
+
+    const channel = supabase
+      .channel('admin-activity-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_activity_events' }, () => loadActivity())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [supabase, loadActivity]);
 
   const eventTypes = React.useMemo(() => [...new Set(events.map(e => e.event_type).filter(Boolean))].sort(), [events]);
 
@@ -3208,15 +3383,23 @@ function HeatmapTab({ supabase, products }) {
   const [activitySubtab, setActivitySubtab] = React.useState('heatmap');
   const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
 
-  React.useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const { data: clickData } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-      setEvents(clickData || []);
-      setLoading(false);
-    }
-    load();
+  const loadClicks = React.useCallback(async () => {
+    setLoading(true);
+    const { data: clickData } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+    setEvents(clickData || []);
+    setLoading(false);
   }, [supabase]);
+
+  React.useEffect(() => {
+    loadClicks();
+
+    const channel = supabase
+      .channel('admin-click-events-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'click_events' }, () => loadClicks())
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [supabase, loadClicks]);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
@@ -3275,12 +3458,7 @@ function HeatmapTab({ supabase, products }) {
             ))}
           </select>
           <button
-            onClick={async () => {
-              setLoading(true);
-              const { data } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-              setEvents(data || []);
-              setLoading(false);
-            }}
+            onClick={loadClicks}
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
           >
             ↻ Actualizar
@@ -3480,6 +3658,10 @@ const styles = {
   tblInput: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 6px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' },
   footer: { textAlign: 'center', padding: '10px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
   userBadge: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 },
+  adminTabPresence: { display: 'inline-flex', alignItems: 'center', marginLeft: 2 },
+  adminPresenceDot: { width: 17, height: 17, borderRadius: '50%', background: '#18a36a', color: 'white', border: '1.5px solid white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, lineHeight: 1, marginLeft: -3, boxShadow: '0 1px 4px rgba(27,47,94,0.18)' },
+  adminPresenceMore: { fontSize: 10, fontWeight: 800, color: '#5a6380', marginLeft: 3 },
+  adminStatusDot: { width: 9, height: 9, borderRadius: '50%', flexShrink: 0, boxShadow: '0 0 0 3px rgba(24,163,106,0.12)' },
   userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6', gap: 10 },
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
