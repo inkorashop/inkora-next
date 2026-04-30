@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En prensa', done: 'Listo' };
