@@ -10,6 +10,17 @@ const ORDER_STATUS_COLOR = { pending: '#f6a800', confirmed: '#2D6BE4', in_produc
 const DASH = '—';
 const DEFAULT_SORT_ORDER = { in_press: 0, pending: 1, done: 2 };
 const SORT_LABEL = { design: 'Diseño', product: 'Producto', demand: 'Demanda', stock: 'Stock', falta: 'Falta', status: 'Estado', note: 'Nota', orders: 'Pedidos' };
+const REPORT_COLUMNS = [
+  { key: 'design', label: 'Diseño', width: 22, align: 'left', value: row => row.designName },
+  { key: 'product', label: 'Producto', width: 18, align: 'left', value: row => row.productName },
+  { key: 'demand', label: 'Demanda', width: 8, align: 'right', value: row => row.demand },
+  { key: 'stock', label: 'Stock', width: 7, align: 'right', value: row => row.qty_produced },
+  { key: 'falta', label: 'Falta', width: 7, align: 'right', value: row => row.falta },
+  { key: 'status', label: 'Estado', width: 12, align: 'left', value: row => STATUS_LABEL[row.status] || row.status },
+  { key: 'note', label: 'Nota', width: 18, align: 'left', value: row => row.note || DASH },
+  { key: 'orders', label: 'Pedidos', width: 8, align: 'right', value: row => row.orders.length },
+];
+const DEFAULT_REPORT_COLUMNS = ['design', 'demand', 'stock', 'falta', 'status'];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -45,6 +56,12 @@ function compareValues(a, b) {
 
 function stockInputValue(qty) {
   return qty === 0 ? '' : String(qty);
+}
+
+function fitReportValue(value, width, align = 'left') {
+  const text = String(value ?? DASH).replace(/\s+/g, ' ').trim() || DASH;
+  const clipped = text.length > width ? text.slice(0, Math.max(0, width - 1)) + '…' : text;
+  return align === 'right' ? clipped.padStart(width) : clipped.padEnd(width);
 }
 
 function NoteCell({ row, onSave }) {
@@ -289,6 +306,9 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
   const [filterSearch, setFilterSearch] = useState('');   // busca por cliente/email
   const [filterDesign, setFilterDesign] = useState('');   // FIX: filtro de diseño separado
   const [sortRules, setSortRules] = useState([]);
+  const [reportColumns, setReportColumns] = useState(DEFAULT_REPORT_COLUMNS);
+  const [showTextReport, setShowTextReport] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState('');
 
   // Datos
   const [stock, setStock] = useState([]);
@@ -306,6 +326,13 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
       if (idx === -1) return [...prev, { key, dir: 'asc' }];
       if (prev[idx].dir === 'asc') return prev.map((rule, i) => i === idx ? { ...rule, dir: 'desc' } : rule);
       return prev.filter((_, i) => i !== idx);
+    });
+  }
+
+  function toggleReportColumn(key) {
+    setReportColumns(prev => {
+      if (prev.includes(key)) return prev.length > 1 ? prev.filter(col => col !== key) : prev;
+      return REPORT_COLUMNS.filter(col => prev.includes(col.key) || col.key === key).map(col => col.key);
     });
   }
 
@@ -530,34 +557,39 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     }
   }
 
-  function exportReport() {
+  const selectedReportColumns = REPORT_COLUMNS.filter(col => reportColumns.includes(col.key));
+
+  const reportFiltersDesc = [
+    filterSeller !== 'all' ? `Vendedor: ${sellers.find(s => s.id === filterSeller)?.name || filterSeller}` : null,
+    filterProduct !== 'all' ? `Producto: ${products.find(p => p.id === filterProduct)?.name || filterProduct}` : null,
+    filterOrderStatus !== 'all' ? `Estado pedido: ${ORDER_STATUS_LABEL[filterOrderStatus] || filterOrderStatus}` : null,
+    filterProdStatus !== 'all' ? `Estado prod.: ${STATUS_LABEL[filterProdStatus] || filterProdStatus}` : null,
+    filterDateFrom ? `Desde: ${filterDateFrom}` : null,
+    filterDateTo ? `Hasta: ${filterDateTo}` : null,
+    filterSearch ? `Cliente: ${filterSearch}` : null,
+    filterDesign ? `Diseño: ${filterDesign}` : null,
+  ].filter(Boolean);
+
+  const reportLineWidth = Math.max(42, selectedReportColumns.reduce((acc, col) => acc + col.width, 0) + Math.max(0, selectedReportColumns.length - 1) * 2);
+  const reportText = (() => {
     const lines = [];
-    lines.push('INKORA — Reporte de Producción');
+    lines.push('INKORA - Reporte de Producción');
     lines.push(`Generado: ${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}`);
-    const filtersDesc = [
-      filterSeller !== 'all' ? `Vendedor: ${sellers.find(s => s.id === filterSeller)?.name || filterSeller}` : null,
-      filterProduct !== 'all' ? `Producto: ${products.find(p => p.id === filterProduct)?.name || filterProduct}` : null,
-      filterOrderStatus !== 'all' ? `Estado pedido: ${ORDER_STATUS_LABEL[filterOrderStatus] || filterOrderStatus}` : null,
-      filterProdStatus !== 'all' ? `Estado prod.: ${STATUS_LABEL[filterProdStatus] || filterProdStatus}` : null,
-      filterDateFrom ? `Desde: ${filterDateFrom}` : null,
-      filterDateTo ? `Hasta: ${filterDateTo}` : null,
-      filterSearch ? `Cliente: ${filterSearch}` : null,
-      filterDesign ? `Diseño: ${filterDesign}` : null,
-    ].filter(Boolean);
-    lines.push(`Filtros: ${filtersDesc.length ? filtersDesc.join(', ') : 'Ninguno'}`);
-    lines.push('─'.repeat(60));
-    lines.push('DISEÑO                DEMANDA  STOCK   FALTA   ESTADO PROD.');
+    lines.push(`Filtros: ${reportFiltersDesc.length ? reportFiltersDesc.join(', ') : 'Ninguno'}`);
+    lines.push('-'.repeat(reportLineWidth));
+    lines.push(selectedReportColumns.map(col => fitReportValue(col.label.toUpperCase(), col.width, col.align)).join('  '));
     rows.forEach(r => {
-      const d = String(r.designName).padEnd(20).slice(0, 20);
-      const dem = String(r.demand).padStart(7);
-      const stk = String(r.qty_produced).padStart(7);
-      const flt = String(r.falta).padStart(7);
-      const sts = STATUS_LABEL[r.status] || r.status;
-      lines.push(`${d}  ${dem}  ${stk}  ${flt}   ${sts}`);
+      lines.push(selectedReportColumns.map(col => fitReportValue(col.value(r), col.width, col.align)).join('  '));
     });
-    lines.push('─'.repeat(60));
+    lines.push('-'.repeat(reportLineWidth));
     lines.push(`Total unidades pendientes: ${totalPending}`);
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    lines.push(`Diseños distintos: ${totalDesigns}`);
+    lines.push(`Pedidos en filtro: ${totalOrders}`);
+    return lines.join('\n');
+  })();
+
+  function exportReport() {
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -566,6 +598,17 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  async function copyReportText() {
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setCopyFeedback('Copiado');
+      setTimeout(() => setCopyFeedback(''), 1600);
+    } catch (error) {
+      setCopyFeedback('No se pudo copiar');
+      setTimeout(() => setCopyFeedback(''), 2200);
+    }
   }
 
   const inp = { border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', background: 'white', boxSizing: 'border-box' };
@@ -639,7 +682,14 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                 )}
                 <button onClick={exportReport}
                   style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  ↓ Exportar reporte
+                  ↓ Descargar TXT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTextReport(prev => !prev)}
+                  style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 12px', background: showTextReport ? '#e8eef9' : 'white', color: '#2D6BE4', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Texto para copiar
                 </button>
                 {sortRules.length > 0 && (
                   <button
@@ -652,6 +702,57 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Configuración de reporte */}
+            <div style={{ background: '#fbfcff', borderBottom: '1px solid #dde1ef', padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Columnas reporte</span>
+                {REPORT_COLUMNS.map(col => {
+                  const checked = reportColumns.includes(col.key);
+                  const locked = checked && reportColumns.length === 1;
+                  return (
+                    <label key={col.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, border: `1.5px solid ${checked ? '#2D6BE4' : '#dde1ef'}`, borderRadius: 7, padding: '3px 7px', background: checked ? '#e8eef9' : 'white', color: checked ? '#2D6BE4' : '#5a6380', fontSize: 11, fontWeight: 700, cursor: locked ? 'not-allowed' : 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={locked}
+                        onChange={() => toggleReportColumn(col.key)}
+                        style={{ margin: 0 }}
+                      />
+                      {col.label}
+                    </label>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setReportColumns(DEFAULT_REPORT_COLUMNS)}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '4px 8px', background: 'white', color: '#9aa3bc', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Reset
+                </button>
+              </div>
+              {showTextReport && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Reporte actualizado</span>
+                    <button
+                      type="button"
+                      onClick={copyReportText}
+                      style={{ border: 'none', borderRadius: 7, padding: '6px 12px', background: '#18a36a', color: 'white', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      {copyFeedback || 'Copiar'}
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={reportText}
+                    rows={Math.min(14, Math.max(6, rows.length + 7))}
+                    onFocus={e => e.target.select()}
+                    style={{ width: '100%', resize: 'vertical', border: '1.5px solid #dde1ef', borderRadius: 8, padding: 10, fontFamily: 'Consolas, monospace', fontSize: 12, lineHeight: 1.45, color: '#2d3352', background: 'white', boxSizing: 'border-box', whiteSpace: 'pre' }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Barra filtros externos */}
