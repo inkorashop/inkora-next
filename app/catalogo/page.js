@@ -6,6 +6,7 @@ import AuthModal from '@/components/AuthModal';
 import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
+import { useTrack } from '@/hooks/useTrack';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -100,6 +101,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
 }
 
 export default function Home() {
+  const { track } = useTrack();
   const [products, setProducts] = useState([]);
   const [activeProductId, setActiveProductId] = useState(null);
   const [designsByProduct, setDesignsByProduct] = useState({});
@@ -118,6 +120,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stickySearchVisible, setStickySearchVisible] = useState(false);
   const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const checkoutOpenedAtRef = useRef(null);
   const inlineSearchRef = useRef(null);
   const [qtyAnim, setQtyAnim] = useState({});
   const [cardPulse, setCardPulse] = useState({});
@@ -136,6 +139,10 @@ export default function Home() {
 
   const activeProduct = products.find(p => p.id === activeProductId) || null;
   const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
+
+  useEffect(() => {
+    track('page_view', { page_title: 'Catálogo' });
+  }, [track]);
 
   useEffect(() => {
     document.body.style.paddingBottom = '1px';
@@ -599,6 +606,7 @@ export default function Home() {
       setSearchQuery('');
       const product = products.find(p => p.id === id);
       if (product) {
+        track('product_view', { product_id: product.id, product_name: product.name });
         const slug = toSlug(product.name);
         window.history.replaceState(null, '', '/catalogo?producto=' + slug);
       }
@@ -775,6 +783,16 @@ export default function Home() {
         const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category ? [d.category] : []);
         return cats.includes(filter);
       }));
+
+  useEffect(() => {
+    if (!activeProductId) return;
+    if (!searchQuery.trim() && filter === 'Todos') return;
+    track('design_search', {
+      query: searchQuery.trim(),
+      filter_category: filter,
+      results_count: filtered.length,
+    });
+  }, [searchQuery, filter, filtered.length, activeProductId, track]);
   const showPrices = !!user;
 
   const cartByProduct = cartItems.reduce((acc, item) => {
@@ -826,6 +844,7 @@ export default function Home() {
 
   function addToCart(design) {
     const product = products.find(p => p.id === design.product_id);
+    track('design_view', { design_id: design.id, design_name: design.name, product_name: product?.name });
     addToCartCtx(design, product);
     triggerQtyAnim(design.id, 'pop');
     triggerCardPulse(design.id);
@@ -838,6 +857,8 @@ export default function Home() {
   }
 
   function openModal() {
+    checkoutOpenedAtRef.current = Date.now();
+    track('checkout_start', { items_count: cartItems.length, total });
     if (user) {
       setForm({
         name: profile?.name || '',
@@ -849,6 +870,14 @@ export default function Home() {
   }
 
   function closeModal() {
+    if (!success && checkoutOpenedAtRef.current) {
+      track('checkout_abandon', {
+        items_count: cartItems.length,
+        total,
+        time_spent_seconds: Math.round((Date.now() - checkoutOpenedAtRef.current) / 1000),
+      });
+    }
+    checkoutOpenedAtRef.current = null;
     setModalOpen(false);
     setSuccess(false);
     setConfirmedOrder({ items: [], total: 0, form: {} });
@@ -890,6 +919,7 @@ export default function Home() {
         body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) ?? i.pricePerUnit })), total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
       });
 
+      track('order_confirm', { order_code: orderCode, items_count: cartItems.length, total });
       setConfirmedOrder({ items: cartItems, total, form });
       setSuccess(true);
       clearCart();
@@ -1074,7 +1104,10 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
                         : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
                     }}
-                    onMouseEnter={() => setCardHover(prev => ({ ...prev, [d.id]: true }))}
+                    onMouseEnter={() => {
+                      setCardHover(prev => ({ ...prev, [d.id]: true }));
+                      if (d.model_url) track('model_view', { design_id: d.id, design_name: d.name, product_name: activeProduct?.name });
+                    }}
                     onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
@@ -1292,7 +1325,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             </div>
           </div>
           <div style={s.mobileBar}>
-            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => !o)}>
+            <button style={s.mobileBarLeft} onClick={() => setCartPanelOpen(o => {
+              const next = !o;
+              if (next) track('cart_view', { items_count: totalItems, total });
+              return next;
+            })}>
               <span style={s.mobileBadge}>{totalItems}</span>
               <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
               <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
@@ -1399,6 +1436,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           target="_blank"
           rel="noreferrer"
           style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
+          onClick={() => track('whatsapp_click', { page: 'catalogo' })}
           onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
         >

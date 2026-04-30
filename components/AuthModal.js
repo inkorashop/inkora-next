@@ -48,7 +48,7 @@ export default function AuthModal({ onClose, onSuccess }) {
         const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
         if (e) throw e;
         if (!data.user) throw new Error('invalid login credentials');
-        onSuccess(data.user);
+        onSuccess(data.user, { event_type: 'auth_login', method: 'email' });
       } else {
         if (!form.name.trim()) { setError('Ingresá el nombre de tu comercio.'); setLoading(false); return; }
         if (!form.phone.trim()) { setError('Ingresá tu teléfono.'); setLoading(false); return; }
@@ -64,7 +64,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           return;
         }
         if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
-        onSuccess(data.user);
+        onSuccess(data.user, { event_type: 'auth_register', method: 'email' });
       }
     } catch (e) {
       setError(translateError(e.message));
@@ -88,7 +88,7 @@ export default function AuthModal({ onClose, onSuccess }) {
     setError('');
     const { error: e } = await signInWithGoogle();
     if (e) setError(translateError(e.message));
-    else { onSuccess?.(); }
+    else { onSuccess?.(null, { event_type: 'auth_login', method: 'google' }); }
   }
 
   const modalBg = isDark ? 'rgba(27,47,94,0.75)' : 'rgba(240,244,255,0.82)';

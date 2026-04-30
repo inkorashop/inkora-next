@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
+import { useTrack } from '@/hooks/useTrack';
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
@@ -10,11 +11,16 @@ function toSlug(name) {
 }
 
 export default function Landing() {
+  const { track } = useTrack();
   const [products, setProducts] = useState([]);
   const [hovered, setHovered] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const [uiSettings, setUiSettings] = useState({});
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    track('page_view', { page_title: 'Landing' });
+  }, [track]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -182,6 +188,7 @@ export default function Landing() {
             href={"/catalogo/" + toSlug(p.name)}
             className="product-card"
             onClick={e => {
+              track('product_view', { product_id: p.id, product_name: p.name });
               if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
               e.preventDefault();
               document.body.classList.add('page-exit');
@@ -231,6 +238,7 @@ export default function Landing() {
           href={"https://wa.me/" + WHATSAPP + "?text=Hola!%20Vengo%20desde%20la%20p%C3%A1gina.%20"}
           target="_blank"
           rel="noreferrer"
+          onClick={() => track('whatsapp_click', { page: 'landing' })}
           style={{ position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', textDecoration: 'none', bottom: 24, right: 24 }}
         >
           <svg viewBox="0 0 24 24" fill="white" width="28" height="28">

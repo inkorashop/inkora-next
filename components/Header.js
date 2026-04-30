@@ -3,8 +3,11 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 import AuthModal from '@/components/AuthModal';
+import { signInWithGoogle } from '@/lib/auth';
+import { useTrack } from '@/hooks/useTrack';
 
 export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
+  const { track } = useTrack();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -57,6 +60,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       const u = session?.user ?? null;
       setUser(u);
       if (u) loadProfile(u.id); else setProfile(null);
+      if (event === 'SIGNED_IN') track('auth_login', { method: 'supabase' });
     });
     function handleAuthSuccess() {
       supabase.auth.getSession().then(({ data: { session } }) => {
@@ -70,7 +74,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       subscription.unsubscribe();
       window.removeEventListener('inkora_auth_success', handleAuthSuccess);
     };
-  }, []);
+  }, [track]);
 
   useEffect(() => {
     function handleClick(e) {
@@ -162,7 +166,11 @@ export default function Header({ headerVisible = true, showCart = false, page = 
           {showCart && uiSettings[`${page}_show_cart`] !== 'false' && (
             <div ref={cartRef} style={{ position: 'relative' }}>
               <button
-                onClick={() => setCartOpen(v => !v)}
+                onClick={() => setCartOpen(v => {
+                  const next = !v;
+                  if (next) track('cart_view', { items_count: totalItems });
+                  return next;
+                })}
                 className="header-btn" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20">
@@ -278,7 +286,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
               {userMenuOpen && (
                 <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, boxShadow: '0 4px 16px rgba(27,47,94,0.12)', minWidth: 160, zIndex: 200, overflow: 'hidden' }} onClick={() => setUserMenuOpen(false)}>
                   <a href="/dashboard" style={{ display: 'block', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#1B2F5E', textDecoration: 'none', borderBottom: '1px solid #eef0f6' }}>Mi cuenta</a>
-                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+                  <button style={{ display: 'block', width: '100%', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }} onClick={() => { track('auth_logout', {}); supabase.auth.signOut(); }}>Cerrar sesión</button>
                 </div>
               )}
             </div>
@@ -288,6 +296,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                 <button className="header-btn" onClick={async () => {
                   const next = window.location.pathname + window.location.search;
                   await signInWithGoogle();
+                  track('auth_login', { method: 'google' });
                 }} style={{ background: 'white', color: '#2d3352', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                   Ingresar
@@ -305,7 +314,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       {authModalOpen && (
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
-          onSuccess={(u) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } }}
+          onSuccess={(u, meta) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } if (meta?.event_type) track(meta.event_type, { method: meta.method }); }}
         />
       )}
     </>

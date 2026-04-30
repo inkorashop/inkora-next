@@ -2425,7 +2425,7 @@ function StatsTab({ supabase, sellers }) {
   React.useEffect(() => {
     supabase.from('orders').select('*').order('created_at', { ascending: true })
       .then(({ data }) => { setOrders(data || []); setLoading(false); });
-  }, []);
+  }, [supabase]);
 
   function getDateRange() {
     const now = new Date();
@@ -2652,7 +2652,7 @@ function usePresence(supabase) {
 
     const ticker = setInterval(() => setTick(t => t + 1), 500);
     return () => { ch.unsubscribe(); clearInterval(ticker); };
-  }, []);
+  }, [supabase]);
 
   const getStatus = (userId) => {
     const u = presence.find(p => p.user_id === userId);
@@ -2663,6 +2663,230 @@ function usePresence(supabase) {
   };
 
   return { presence, getStatus, ACTIVE_THRESHOLD, tick };
+}
+
+const ACTIVITY_EVENT_CONFIG = {
+  page_view: { icon: '🏠', label: 'Vista de página', color: '#6b7280' },
+  product_view: { icon: '📦', label: 'Vio producto', color: '#2D6BE4' },
+  design_view: { icon: '👁️', label: 'Vio diseño', color: '#2D6BE4' },
+  design_search: { icon: '🔍', label: 'Búsqueda', color: '#7c3aed' },
+  cart_add: { icon: '🛒', label: 'Agregó al carrito', color: '#15803d' },
+  cart_remove: { icon: '🗑️', label: 'Quitó del carrito', color: '#dc2626' },
+  cart_view: { icon: '👜', label: 'Abrió carrito', color: '#6b7280' },
+  cart_qty_change: { icon: '➕', label: 'Cambió cantidad', color: '#d97706' },
+  checkout_start: { icon: '📋', label: 'Inició checkout', color: '#d97706' },
+  checkout_abandon: { icon: '❌', label: 'Abandonó checkout', color: '#dc2626' },
+  order_confirm: { icon: '✅', label: 'Confirmó pedido', color: '#15803d' },
+  model_view: { icon: '🔷', label: 'Abrió visor 3D', color: '#0891b2' },
+  auth_login: { icon: '🔑', label: 'Login', color: '#7c3aed' },
+  auth_register: { icon: '🆕', label: 'Registro', color: '#7c3aed' },
+  auth_logout: { icon: '🚪', label: 'Logout', color: '#6b7280' },
+  whatsapp_click: { icon: '💬', label: 'WhatsApp', color: '#25D366' },
+  session_start: { icon: '🟢', label: 'Nueva sesión', color: '#15803d' },
+  click_global: { icon: '🖱️', label: 'Click', color: '#9aa3bc' },
+};
+
+function ActivityHistory({ supabase }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [identityFilter, setIdentityFilter] = React.useState('all');
+  const [search, setSearch] = React.useState('');
+  const [typeFilter, setTypeFilter] = React.useState('all');
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo] = React.useState('');
+  const [visibleSessions, setVisibleSessions] = React.useState(50);
+  const [expanded, setExpanded] = React.useState(new Set());
+
+  const loadActivity = React.useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('user_activity_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(2000);
+    setEvents(data || []);
+    setLoading(false);
+  }, [supabase]);
+
+  React.useEffect(() => { loadActivity(); }, [loadActivity]);
+
+  const eventTypes = React.useMemo(() => [...new Set(events.map(e => e.event_type).filter(Boolean))].sort(), [events]);
+
+  const filteredEvents = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return events.filter(e => {
+      if (identityFilter === 'known' && e.is_anonymous) return false;
+      if (identityFilter === 'anonymous' && !e.is_anonymous) return false;
+      if (typeFilter !== 'all' && e.event_type !== typeFilter) return false;
+      if (dateFrom && new Date(e.created_at) < new Date(dateFrom)) return false;
+      if (dateTo && new Date(e.created_at) > new Date(dateTo + 'T23:59:59')) return false;
+      if (q) {
+        const haystack = `${e.user_email || ''} ${e.user_name || ''} ${e.session_id || ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [events, identityFilter, search, typeFilter, dateFrom, dateTo]);
+
+  const sessions = React.useMemo(() => {
+    const map = {};
+    filteredEvents.forEach(event => {
+      const key = event.session_id;
+      if (!key) return;
+      if (!map[key]) {
+        map[key] = {
+          session_id: key,
+          user_id: event.user_id,
+          user_email: event.user_email,
+          user_name: event.user_name,
+          is_anonymous: event.is_anonymous,
+          events: [],
+          first_seen: event.created_at,
+          last_seen: event.created_at,
+        };
+      }
+      map[key].events.push(event);
+      if (new Date(event.created_at) < new Date(map[key].first_seen)) map[key].first_seen = event.created_at;
+      if (new Date(event.created_at) > new Date(map[key].last_seen)) map[key].last_seen = event.created_at;
+      if (!map[key].user_email && event.user_email) map[key].user_email = event.user_email;
+      if (!map[key].user_name && event.user_name) map[key].user_name = event.user_name;
+      map[key].is_anonymous = map[key].is_anonymous && event.is_anonymous;
+    });
+    return Object.values(map)
+      .map(s => ({ ...s, events: s.events.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) }))
+      .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+  }, [filteredEvents]);
+
+  const metrics = React.useMemo(() => {
+    const starts = filteredEvents.filter(e => e.event_type === 'checkout_start').length;
+    const abandons = filteredEvents.filter(e => e.event_type === 'checkout_abandon').length;
+    const top = (type, key) => {
+      const counts = {};
+      filteredEvents.filter(e => e.event_type === type).forEach(e => {
+        const value = e.metadata?.[key];
+        if (value) counts[value] = (counts[value] || 0) + 1;
+      });
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    };
+    return {
+      total: filteredEvents.length,
+      sessions: sessions.length,
+      abandonRate: `${Math.round((abandons / Math.max(starts, 1)) * 100)}%`,
+      topProduct: top('product_view', 'product_name'),
+      topCartDesign: top('cart_add', 'design_name'),
+      stored: events.length,
+    };
+  }, [events.length, filteredEvents, sessions.length]);
+
+  function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    return days > 0 ? `hace ${days}d` : hrs > 0 ? `hace ${hrs}h` : mins > 0 ? `hace ${mins}min` : 'hace un momento';
+  }
+
+  function describeEvent(event) {
+    const m = event.metadata || {};
+    if (event.event_type === 'cart_add') return `${m.design_name || 'Diseño'} x${m.qty || 1}${m.price ? ` - $${Number(m.price).toLocaleString('es-AR')}` : ''}`;
+    if (event.event_type === 'cart_qty_change') return `delta: ${m.delta > 0 ? '+' : ''}${m.delta || 0} -> ${m.new_qty ?? '—'} total`;
+    if (event.event_type === 'design_search') return `query: "${m.query || ''}" - ${m.results_count ?? 0} resultados`;
+    if (event.event_type === 'click_global') return `«${m.element_text || 'sin texto'}» - ${m.element_tag || 'elemento'}`;
+    if (event.event_type === 'checkout_abandon') return `${m.time_spent_seconds || 0} segundos en el formulario`;
+    if (event.event_type === 'order_confirm') return `${m.order_code || 'Pedido'} - ${m.items_count || 0} items${m.total ? ` - $${Number(m.total).toLocaleString('es-AR')}` : ''}`;
+    return m.design_name || m.product_name || m.page_title || m.method || m.page || '';
+  }
+
+  function toggleSession(id) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const shownSessions = sessions.slice(0, visibleSessions);
+
+  return (
+    <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
+      <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Historial de actividad</h2>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        {[['all', 'Todos'], ['known', 'Solo logueados'], ['anonymous', 'Solo anónimos']].map(([id, label]) => (
+          <button key={id} onClick={() => setIdentityFilter(id)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: identityFilter === id ? '#1B2F5E' : 'white', color: identityFilter === id ? 'white' : '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+        ))}
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesión..." style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, minWidth: 220 }} />
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }}>
+          <option value="all">Todos los eventos</option>
+          {eventTypes.map(t => <option key={t} value={t}>{ACTIVITY_EVENT_CONFIG[t]?.label || t}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }} />
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }} />
+        <button onClick={loadActivity} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Actualizar</button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 10, marginBottom: 18 }}>
+        {[
+          ['Eventos', metrics.total],
+          ['Sesiones', metrics.sessions],
+          ['Abandono checkout', metrics.abandonRate],
+          ['Producto top', metrics.topProduct],
+          ['Diseño carrito top', metrics.topCartDesign],
+          ['Eventos cargados', metrics.stored],
+        ].map(([label, value]) => (
+          <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+            <div style={{ fontSize: 17, color: '#1B2F5E', fontWeight: 800, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando actividad...</div>
+      ) : shownSessions.length === 0 ? (
+        <div style={{ color: '#9aa3bc', fontSize: 13 }}>No hay eventos para los filtros actuales.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {shownSessions.map(session => {
+            const isOpen = expanded.has(session.session_id);
+            const hasOrder = session.events.some(e => e.event_type === 'order_confirm');
+            const hasAbandon = session.events.some(e => e.event_type === 'checkout_abandon');
+            const title = session.is_anonymous ? `Anónimo · ${session.session_id.slice(0, 8)}` : `${session.user_name || 'Usuario'}${session.user_email ? ` · ${session.user_email}` : ''}`;
+            return (
+              <div key={session.session_id} style={{ border: '1px solid #eef0f6', borderRadius: 9, overflow: 'hidden' }}>
+                <button onClick={() => toggleSession(session.session_id)} style={{ width: '100%', border: 'none', background: '#f7f8fc', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ color: '#1B2F5E', fontWeight: 800 }}>{isOpen ? '▼' : '▶'}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#2d3352', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+                  {hasOrder && <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800 }}>Pedido</span>}
+                  {hasAbandon && <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800 }}>Abandonó</span>}
+                  <span style={{ color: '#9aa3bc', fontSize: 12 }}>{timeAgo(session.last_seen)} · {session.events.length} eventos</span>
+                </button>
+                {isOpen && (
+                  <div style={{ padding: '10px 14px 12px 28px', position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: 16, top: 12, bottom: 12, width: 2, background: '#dbe7ff' }} />
+                    {session.events.map(event => {
+                      const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { icon: '•', label: event.event_type, color: '#9aa3bc' };
+                      return (
+                        <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '24px 150px 1fr 72px', gap: 8, alignItems: 'center', padding: '5px 0', fontSize: 12 }}>
+                          <span style={{ position: 'relative', zIndex: 1, color: cfg.color }}>{cfg.icon}</span>
+                          <span style={{ color: cfg.color, fontWeight: 800 }}>{cfg.label}</span>
+                          <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{describeEvent(event)}</span>
+                          <span style={{ color: '#9aa3bc', textAlign: 'right' }}>{new Date(event.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {visibleSessions < sessions.length && (
+            <button onClick={() => setVisibleSessions(v => v + 50)} style={{ alignSelf: 'center', marginTop: 8, border: '1.5px solid #dde1ef', borderRadius: 8, padding: '8px 18px', background: 'white', color: '#2D6BE4', fontWeight: 800, cursor: 'pointer' }}>Cargar más</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function HeatmapTab({ supabase, products }) {
@@ -2680,7 +2904,7 @@ function HeatmapTab({ supabase, products }) {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [supabase]);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
   const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
@@ -2837,6 +3061,8 @@ function HeatmapTab({ supabase, products }) {
           </div>
         )}
       </div>
+
+      <ActivityHistory supabase={supabase} />
 
       {confirmReset && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>

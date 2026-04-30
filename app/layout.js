@@ -1,6 +1,7 @@
 import { Barlow } from 'next/font/google';
 import './globals.css';
 import { CartProvider } from '@/contexts/CartContext';
+import TrackBootstrap from '@/components/TrackBootstrap';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -28,7 +29,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es" className={barlow.className}>
-      <body><CartProvider>{children}</CartProvider></body>
+      <body>
+        <CartProvider>
+          <TrackBootstrap />
+          {children}
+        </CartProvider>
+      </body>
     </html>
   );
 }
