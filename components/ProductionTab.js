@@ -5,13 +5,12 @@ const STATUS_CYCLE = ['pending', 'in_press', 'done'];
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En prensa', done: 'Listo' };
 const STATUS_COLOR = { pending: '#f6a800', in_press: '#2D6BE4', done: '#18a36a' };
 
+const ORDER_STATUS_LABEL = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
+const ORDER_STATUS_COLOR = { pending: '#f6a800', confirmed: '#2D6BE4', in_production: '#6d28d9', ready: '#18a36a', cancelled: '#e53e3e' };
+
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-AR', {
-    timeZone: 'America/Argentina/Buenos_Aires',
-    day: '2-digit', month: '2-digit', year: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
+  return new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function isUrgent(ordersForDesign) {
@@ -19,8 +18,8 @@ function isUrgent(ordersForDesign) {
   return ordersForDesign.some(o => o.status === 'pending' && new Date(o.created_at).getTime() < threeDaysAgo);
 }
 
-// ── Dropdown de columna genérico ──────────────────────────────────────────────
-function ColHeader({ label, active, children }) {
+// FIX: ColHeader con zIndex dinámico para que el dropdown no quede detrás de otras columnas
+function ColHeader({ label, filter, active }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -38,43 +37,27 @@ function ColHeader({ label, active, children }) {
       color: active ? '#2D6BE4' : '#5a6380',
       textTransform: 'uppercase', letterSpacing: 0.5,
       borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap',
-      background: 'white', position: 'relative', userSelect: 'none',
+      background: 'white',
+      // FIX: zIndex alto cuando está abierto para que el dropdown tape las otras columnas
+      position: 'relative', zIndex: open ? 50 : 'auto',
+      userSelect: 'none',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-        onClick={() => setOpen(o => !o)}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
         {label}
-        <span style={{ fontSize: 10, color: active ? '#2D6BE4' : '#c4c9d9' }}>
-          {active ? '●' : '▾'}
-        </span>
+        <span style={{ fontSize: 10, color: active ? '#2D6BE4' : '#c4c9d9' }}>{active ? '●' : '▾'}</span>
       </div>
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 200,
-          background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
-          padding: 6, minWidth: 180, boxShadow: '0 4px 16px rgba(27,47,94,0.15)',
-        }} onClick={e => e.stopPropagation()}>
-          {children}
+        <div
+          style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: 6, minWidth: 170, boxShadow: '0 4px 20px rgba(27,47,94,0.18)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {filter}
         </div>
       )}
     </th>
   );
 }
 
-// Opción de lista en dropdown
-function DropOpt({ active, onClick, children }) {
-  return (
-    <div onClick={onClick} style={{
-      padding: '6px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12,
-      fontWeight: active ? 700 : 400,
-      background: active ? '#eef4ff' : 'transparent',
-      color: active ? '#2D6BE4' : '#2d3352',
-    }}>
-      {children}
-    </div>
-  );
-}
-
-// ── Celda nota inline ─────────────────────────────────────────────────────────
 function NoteCell({ row, onSave }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.note || '');
@@ -93,74 +76,63 @@ function NoteCell({ row, onSave }) {
     return (
       <span
         onClick={() => setEditing(true)}
-        style={{
-          color: saved ? '#18a36a' : val ? '#2d3352' : '#c4c9d9',
-          cursor: 'text', fontSize: 12, display: 'block',
-          minWidth: 80, padding: '2px 4px', borderRadius: 4,
-          border: `1.5px solid ${saved ? '#18a36a' : 'transparent'}`,
-          transition: 'color 0.3s, border-color 0.3s',
-        }}
-        title="Click para editar">
+        style={{ color: saved ? '#18a36a' : val ? '#2d3352' : '#c4c9d9', cursor: 'text', fontSize: 12, display: 'block', minWidth: 80, padding: '2px 4px', borderRadius: 4, border: `1.5px solid ${saved ? '#18a36a' : 'transparent'}`, transition: 'color 0.3s, border-color 0.3s' }}
+        title="Click para editar"
+      >
         {saved ? '✓ Guardado' : val || 'Agregar nota...'}
       </span>
     );
   }
   return (
     <input
-      autoFocus value={val}
-      onChange={e => setVal(e.target.value)}
+      autoFocus value={val} onChange={e => setVal(e.target.value)}
       onBlur={() => handleSave(val)}
-      onKeyDown={e => {
-        if (e.key === 'Enter') handleSave(val);
-        if (e.key === 'Escape') { setEditing(false); setVal(row.note || ''); }
-      }}
-      style={{
-        border: '1.5px solid #2D6BE4', borderRadius: 6,
-        padding: '3px 6px', fontFamily: 'Barlow, sans-serif',
-        fontSize: 12, color: '#2d3352', minWidth: 120, outline: 'none',
-      }}
+      onKeyDown={e => { if (e.key === 'Enter') handleSave(val); if (e.key === 'Escape') { setEditing(false); setVal(row.note || ''); } }}
+      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 12, color: '#2d3352', minWidth: 120, outline: 'none' }}
     />
   );
 }
 
-// ── Celda stock inline ────────────────────────────────────────────────────────
-// BUG ORIGINAL: el estado local no se sincronizaba después del save async.
-// Ahora actualizamos val optimistamente al confirmar y lo sincronizamos con el prop.
-function StockCell({ row, onSave }) {
+// FIX: StockCell ahora recibe qty_produced como prop separada para evitar que el re-render
+// resetee el input mientras el usuario todavía está editando.
+// El truco es: si está editando, no sincronizamos desde afuera.
+function StockCell({ qtyProduced, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(String(row.qty_produced ?? 0));
+  const [val, setVal] = useState(String(qtyProduced));
+  const editingRef = useRef(false);
 
-  // Sincronizar cuando cambia desde afuera (ej. realtime)
+  // FIX: Solo sincronizar el valor desde afuera cuando NO estamos editando
   useEffect(() => {
-    setVal(String(row.qty_produced ?? 0));
-  }, [row.qty_produced]);
+    if (!editingRef.current) {
+      setVal(String(qtyProduced));
+    }
+  }, [qtyProduced]);
 
   const handleSave = () => {
-    const qty = parseInt(val, 10);
-    if (!isNaN(qty) && qty >= 0) {
-      if (qty !== row.qty_produced) {
-        // Actualización optimista del val local para que no vuelva a 0
-        setVal(String(qty));
-        onSave(qty);
-      }
-    } else {
-      setVal(String(row.qty_produced ?? 0));
-    }
+    editingRef.current = false;
     setEditing(false);
+    const qty = parseInt(val);
+    if (!isNaN(qty) && qty >= 0 && qty !== qtyProduced) {
+      onSave(qty);
+    } else {
+      setVal(String(qtyProduced));
+    }
+  };
+
+  const handleStartEdit = (e) => {
+    e.stopPropagation();
+    editingRef.current = true;
+    setEditing(true);
   };
 
   if (!editing) {
     return (
       <span
-        onClick={e => { e.stopPropagation(); setEditing(true); }}
-        style={{
-          display: 'inline-block', minWidth: 40, textAlign: 'center',
-          fontWeight: 600, color: '#2d3352', cursor: 'text',
-          padding: '2px 6px', borderRadius: 4,
-          border: '1.5px solid transparent', fontSize: 13,
-        }}
-        title="Click para editar">
-        {val}
+        onClick={handleStartEdit}
+        style={{ display: 'inline-block', minWidth: 40, textAlign: 'center', fontWeight: 600, color: '#2d3352', cursor: 'text', padding: '2px 6px', borderRadius: 4, border: '1.5px solid transparent', fontSize: 13, transition: 'border-color 0.2s' }}
+        title="Click para editar"
+      >
+        {qtyProduced}
       </span>
     );
   }
@@ -172,43 +144,37 @@ function StockCell({ row, onSave }) {
       onClick={e => e.stopPropagation()}
       onKeyDown={e => {
         if (e.key === 'Enter') handleSave();
-        if (e.key === 'Escape') { setEditing(false); setVal(String(row.qty_produced ?? 0)); }
+        if (e.key === 'Escape') { editingRef.current = false; setEditing(false); setVal(String(qtyProduced)); }
       }}
-      style={{
-        border: '1.5px solid #2D6BE4', borderRadius: 6,
-        padding: '3px 6px', fontFamily: 'Barlow, sans-serif',
-        fontSize: 13, color: '#2d3352', width: 70,
-        textAlign: 'center', outline: 'none',
-      }}
+      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', width: 70, textAlign: 'center', outline: 'none' }}
     />
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
 export default function ProductionTab({ supabase, sellers, products, orders }) {
   const [activeSubTab, setActiveSubTab] = useState('queue');
 
-  // Filtros — separados: filterDesign es para el dropdown de diseño, filterSearch para cliente
-  const [filterSeller, setFilterSeller]       = useState('all');
-  const [filterProduct, setFilterProduct]     = useState('all');
-  const [filterStatus, setFilterStatus]       = useState('all');
-  const [filterProdStatus, setFilterProdStatus] = useState('all'); // estado de producción
-  const [filterDateFrom, setFilterDateFrom]   = useState('');
-  const [filterDateTo, setFilterDateTo]       = useState('');
-  const [filterSearch, setFilterSearch]       = useState(''); // cliente
-  const [filterDesign, setFilterDesign]       = useState('all'); // diseño
+  // Filtros — FIX: filterDesign separado de filterSearch (cliente)
+  const [filterSeller, setFilterSeller] = useState('all');
+  const [filterProduct, setFilterProduct] = useState('all');
+  const [filterOrderStatus, setFilterOrderStatus] = useState('all');   // estado del pedido
+  const [filterProdStatus, setFilterProdStatus] = useState('all');     // estado de producción — FIX: antes no existía
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');   // busca por cliente/email
+  const [filterDesign, setFilterDesign] = useState('');   // FIX: filtro de diseño separado
 
   // Datos
-  const [stock, setStock]         = useState([]);
+  const [stock, setStock] = useState([]);
   const [prodStatus, setProdStatus] = useState([]);
-  const [stockLog, setStockLog]   = useState([]);
+  const [stockLog, setStockLog] = useState([]);
 
   // UI
-  const [expandedRow, setExpandedRow]   = useState(null);
-  const [stockModal, setStockModal]     = useState(null);
-  const [stockQty, setStockQty]         = useState('');
-  const [stockNote, setStockNote]       = useState('');
-  const [savingStock, setSavingStock]   = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [stockModal, setStockModal] = useState(null);
+  const [stockQty, setStockQty] = useState('');
+  const [stockNote, setStockNote] = useState('');
+  const [savingStock, setSavingStock] = useState(false);
   const [savingStatus, setSavingStatus] = useState({});
 
   const loadStock = useCallback(async () => {
@@ -222,9 +188,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
   }, [supabase]);
 
   const loadStockLog = useCallback(async () => {
-    const { data } = await supabase
-      .from('production_stock_log').select('*')
-      .order('created_at', { ascending: false }).limit(200);
+    const { data } = await supabase.from('production_stock_log').select('*').order('created_at', { ascending: false }).limit(200);
     if (data) setStockLog(data);
   }, [supabase]);
 
@@ -250,24 +214,21 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     };
   }, [loadStock, loadProdStatus, loadStockLog]);
 
-  // ── Filtrar pedidos (cliente, vendedor, fecha, estado pedido) ──────────────
+  // Filtrar pedidos (por vendedor, estado pedido, fecha, cliente)
   const filteredOrders = orders.filter(o => {
     if (filterSeller === 'none' && o.seller_id) return false;
     if (filterSeller !== 'all' && filterSeller !== 'none' && o.seller_id !== filterSeller) return false;
-    if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+    if (filterOrderStatus !== 'all' && o.status !== filterOrderStatus) return false;
     if (filterDateFrom && new Date(o.created_at) < new Date(filterDateFrom)) return false;
     if (filterDateTo && new Date(o.created_at) > new Date(filterDateTo + 'T23:59:59')) return false;
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
-      if (
-        !o.customer_name?.toLowerCase().includes(q) &&
-        !o.customer_email?.toLowerCase().includes(q)
-      ) return false;
+      if (!o.customer_name?.toLowerCase().includes(q) && !o.customer_email?.toLowerCase().includes(q)) return false;
     }
     return true;
   });
 
-  // ── Agrupar por diseño ─────────────────────────────────────────────────────
+  // Agrupar por diseño
   const designMap = {};
   filteredOrders.forEach(order => {
     const items = Array.isArray(order.items) ? order.items : [];
@@ -285,21 +246,22 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
   });
 
   let rows = Object.values(designMap).map(row => {
-    const stockRow  = stock.find(s => s.design_name?.toLowerCase() === row.designName?.toLowerCase());
+    const stockRow = stock.find(s => s.design_name?.toLowerCase() === row.designName?.toLowerCase());
     const statusRow = prodStatus.find(s => s.design_name?.toLowerCase() === row.designName?.toLowerCase());
-    const qty_produced = stockRow?.qty_produced ?? 0;
-    const falta  = row.demand - qty_produced;
+    const qty_produced = stockRow?.qty_produced || 0;
+    const falta = row.demand - qty_produced;
     const status = statusRow?.status || 'pending';
-    const note   = statusRow?.note || '';
+    const note = statusRow?.note || '';
     return { ...row, qty_produced, falta, status, note, stockId: stockRow?.id, statusId: statusRow?.id };
   });
 
-  // Filtrar por diseño (dropdown)
-  if (filterDesign !== 'all') {
-    rows = rows.filter(r => r.designName?.toLowerCase() === filterDesign.toLowerCase());
+  // FIX: filtrar por diseño (texto) — era el bug donde escribir "diseño" escribía en "cliente"
+  if (filterDesign) {
+    const q = filterDesign.toLowerCase();
+    rows = rows.filter(r => r.designName?.toLowerCase().includes(q));
   }
 
-  // Filtrar por estado de producción
+  // FIX: filtrar por estado de producción — antes no funcionaba
   if (filterProdStatus !== 'all') {
     rows = rows.filter(r => r.status === filterProdStatus);
   }
@@ -311,33 +273,34 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     return 0;
   });
 
-  // Lista de diseños disponibles para el dropdown
-  const allDesignNames = Object.values(designMap)
-    .map(r => r.designName)
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  const totalDesigns = rows.length;
+  const totalPending = rows.reduce((acc, r) => acc + Math.max(0, r.falta), 0);
+  // FIX: totalProduced sobre los diseños filtrados, no sobre toda la tabla stock
+  const totalProduced = rows.reduce((acc, r) => acc + (r.qty_produced || 0), 0);
+  const totalOrders = filteredOrders.length;
+  const totalExcess = rows.filter(r => r.falta < 0).length;
 
-  const totalDesigns  = rows.length;
-  const totalPending  = rows.reduce((acc, r) => acc + Math.max(0, r.falta), 0);
-  const totalProduced = stock.reduce((acc, s) => acc + (s.qty_produced || 0), 0);
-  const totalOrders   = filteredOrders.length;
-  const totalExcess   = rows.filter(r => r.falta < 0).length;
+  const hasFilters = filterSeller !== 'all' || filterProduct !== 'all' || filterOrderStatus !== 'all' || filterProdStatus !== 'all' || filterDateFrom || filterDateTo || filterSearch || filterDesign;
 
-  const hasFilters = filterSeller !== 'all' || filterProduct !== 'all' || filterStatus !== 'all' ||
-    filterProdStatus !== 'all' || filterDesign !== 'all' || filterDateFrom || filterDateTo || filterSearch;
+  function clearFilters() {
+    setFilterSeller('all');
+    setFilterProduct('all');
+    setFilterOrderStatus('all');
+    setFilterProdStatus('all');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterSearch('');
+    setFilterDesign('');
+  }
 
-  // ── Acciones ───────────────────────────────────────────────────────────────
   async function cycleStatus(row) {
     setSavingStatus(prev => ({ ...prev, [row.designName]: true }));
     const current = STATUS_CYCLE.indexOf(row.status);
     const next = STATUS_CYCLE[(current + 1) % STATUS_CYCLE.length];
     if (row.statusId) {
-      await supabase.from('production_status')
-        .update({ status: next, updated_at: new Date().toISOString() })
-        .eq('id', row.statusId);
+      await supabase.from('production_status').update({ status: next, updated_at: new Date().toISOString() }).eq('id', row.statusId);
     } else {
-      await supabase.from('production_status')
-        .insert({ design_name: row.designName, status: next });
+      await supabase.from('production_status').insert({ design_name: row.designName, status: next });
     }
     await loadProdStatus();
     setSavingStatus(prev => ({ ...prev, [row.designName]: false }));
@@ -345,12 +308,9 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
 
   async function saveNote(row, note) {
     if (row.statusId) {
-      await supabase.from('production_status')
-        .update({ note, updated_at: new Date().toISOString() })
-        .eq('id', row.statusId);
+      await supabase.from('production_status').update({ note, updated_at: new Date().toISOString() }).eq('id', row.statusId);
     } else {
-      await supabase.from('production_status')
-        .insert({ design_name: row.designName, note, status: row.status || 'pending' });
+      await supabase.from('production_status').insert({ design_name: row.designName, note, status: row.status || 'pending' });
     }
     await loadProdStatus();
   }
@@ -358,12 +318,11 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
   async function saveStockInline(row, newQty) {
     const existing = stock.find(s => s.design_name?.toLowerCase() === row.designName?.toLowerCase());
     const delta = newQty - (existing?.qty_produced || 0);
+    if (delta === 0) return;
     if (existing) {
-      await supabase.from('production_stock')
-        .update({ qty_produced: newQty }).eq('id', existing.id);
+      await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id);
     } else {
-      await supabase.from('production_stock')
-        .insert({ design_name: row.designName, qty_produced: newQty });
+      await supabase.from('production_stock').insert({ design_name: row.designName, qty_produced: newQty });
     }
     await supabase.from('production_stock_log').insert({
       design_name: row.designName,
@@ -390,11 +349,9 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     const delta = type === 'add' ? qty : -qty;
     const newQty = Math.max(0, currentQty + delta);
     if (existing) {
-      await supabase.from('production_stock')
-        .update({ qty_produced: newQty }).eq('id', existing.id);
+      await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id);
     } else {
-      await supabase.from('production_stock')
-        .insert({ design_name: designName, design_id: designId || null, qty_produced: Math.max(0, delta) });
+      await supabase.from('production_stock').insert({ design_name: designName, design_id: designId || null, qty_produced: Math.max(0, delta) });
     }
     await supabase.from('production_stock_log').insert({
       design_name: designName,
@@ -418,53 +375,55 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     const filtersDesc = [
       filterSeller !== 'all' ? `Vendedor: ${sellers.find(s => s.id === filterSeller)?.name || filterSeller}` : null,
       filterProduct !== 'all' ? `Producto: ${products.find(p => p.id === filterProduct)?.name || filterProduct}` : null,
-      filterStatus !== 'all' ? `Estado pedido: ${filterStatus}` : null,
+      filterOrderStatus !== 'all' ? `Estado pedido: ${ORDER_STATUS_LABEL[filterOrderStatus] || filterOrderStatus}` : null,
       filterProdStatus !== 'all' ? `Estado prod.: ${STATUS_LABEL[filterProdStatus] || filterProdStatus}` : null,
-      filterDesign !== 'all' ? `Diseño: ${filterDesign}` : null,
       filterDateFrom ? `Desde: ${filterDateFrom}` : null,
       filterDateTo ? `Hasta: ${filterDateTo}` : null,
       filterSearch ? `Cliente: ${filterSearch}` : null,
+      filterDesign ? `Diseño: ${filterDesign}` : null,
     ].filter(Boolean);
     lines.push(`Filtros: ${filtersDesc.length ? filtersDesc.join(', ') : 'Ninguno'}`);
-    lines.push('─'.repeat(52));
-    lines.push('DISEÑO                DEMANDA  STOCK   FALTA   ESTADO');
+    lines.push('─'.repeat(60));
+    lines.push('DISEÑO                DEMANDA  STOCK   FALTA   ESTADO PROD.');
     rows.forEach(r => {
-      const d   = String(r.designName).padEnd(20).slice(0, 20);
+      const d = String(r.designName).padEnd(20).slice(0, 20);
       const dem = String(r.demand).padStart(7);
       const stk = String(r.qty_produced).padStart(7);
       const flt = String(r.falta).padStart(7);
       const sts = STATUS_LABEL[r.status] || r.status;
       lines.push(`${d}  ${dem}  ${stk}  ${flt}   ${sts}`);
     });
-    lines.push('─'.repeat(52));
+    lines.push('─'.repeat(60));
     lines.push(`Total unidades pendientes: ${totalPending}`);
     const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url;
     a.download = `inkora-produccion-${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  // ── Estilos compartidos ────────────────────────────────────────────────────
-  const inp = {
-    border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px',
-    fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352',
-    background: 'white', boxSizing: 'border-box',
-  };
-  const lbl = {
-    fontSize: 11, fontWeight: 600, color: '#5a6380',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginBottom: 3, display: 'block',
-  };
-  const thBase = {
-    padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white',
-  };
+  const inp = { border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', background: 'white', boxSizing: 'border-box' };
+  const lbl = { fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3, display: 'block' };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const optionStyle = (active) => ({
+    padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 12,
+    fontWeight: active ? 700 : 400,
+    background: active ? '#eef4ff' : 'transparent',
+    color: active ? '#2D6BE4' : '#2d3352',
+  });
+
+  // Lista de diseños únicos disponibles para el filtro del ColHeader
+  const allDesignNames = Object.values(
+    orders.reduce((map, order) => {
+      (Array.isArray(order.items) ? order.items : []).forEach(item => {
+        if (item.name) map[item.name.toLowerCase()] = item.name;
+      });
+      return map;
+    }, {})
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
@@ -472,29 +431,22 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
       <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start' }}>
         {[['queue', 'Cola de producción'], ['log', 'Historial de stock']].map(([id, label]) => (
           <button key={id} onClick={() => setActiveSubTab(id)}
-            style={{
-              border: 'none', padding: '10px 20px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'Barlow, sans-serif',
-              background: activeSubTab === id ? '#1B2F5E' : 'white',
-              color: activeSubTab === id ? 'white' : '#9aa3bc',
-              borderRight: '1.5px solid #dde1ef',
-            }}>
+            style={{ border: 'none', padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef' }}>
             {label}
           </button>
         ))}
       </div>
 
-      {/* ── Cola de producción ── */}
       {activeSubTab === 'queue' && (
         <>
-          {/* Tarjetas resumen */}
+          {/* Resumen */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             {[
-              { label: 'Diseños distintos',      value: totalDesigns,  color: '#1B2F5E' },
-              { label: 'Unidades pendientes',    value: totalPending,  color: totalPending > 0 ? '#e53e3e' : '#18a36a' },
-              { label: 'Stock global producido', value: totalProduced, color: '#2D6BE4' },
-              { label: 'Pedidos en filtro',      value: totalOrders,   color: '#5a6380' },
-              { label: 'Diseños en exceso',      value: totalExcess,   color: totalExcess > 0 ? '#f6a800' : '#18a36a' },
+              { label: 'Diseños distintos', value: totalDesigns, color: '#1B2F5E' },
+              { label: 'Unidades pendientes', value: totalPending, color: totalPending > 0 ? '#e53e3e' : '#18a36a' },
+              { label: 'Stock producido', value: totalProduced, color: '#2D6BE4' },
+              { label: 'Pedidos en filtro', value: totalOrders, color: '#5a6380' },
+              { label: 'Diseños en exceso', value: totalExcess, color: totalExcess > 0 ? '#f6a800' : '#18a36a' },
             ].map(card => (
               <div key={card.label} style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: '14px 18px' }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{card.label}</div>
@@ -505,18 +457,12 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
 
           {/* Tabla */}
           <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-
-            {/* Encabezado de sección */}
+            {/* Header de la tabla */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1.5px solid #dde1ef' }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Cola de producción</h2>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {hasFilters && (
-                  <button
-                    onClick={() => {
-                      setFilterSeller('all'); setFilterProduct('all'); setFilterStatus('all');
-                      setFilterProdStatus('all'); setFilterDesign('all');
-                      setFilterDateFrom(''); setFilterDateTo(''); setFilterSearch('');
-                    }}
+                  <button onClick={clearFilters}
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'white', color: '#9aa3bc' }}>
                     ✕ Limpiar filtros
                   </button>
@@ -528,8 +474,8 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
               </div>
             </div>
 
-            {/* Barra de filtros externos (no sticky para evitar superposición) */}
-            <div style={{ background: '#f7f8fc', borderBottom: '1px solid #dde1ef', padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Barra filtros externos */}
+            <div style={{ background: '#f7f8fc', borderBottom: '1px solid #dde1ef', padding: '8px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Vendedor */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Vendedor</span>
@@ -540,28 +486,26 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                   {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-
-              {/* Producto */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Producto</span>
-                <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
-                  style={{ border: filterProduct !== 'all' ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: filterProduct !== 'all' ? '#2D6BE4' : '#5a6380', background: 'white', cursor: 'pointer' }}>
-                  <option value="all">Todos</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-
-              {/* Cliente */}
+              {/* Cliente — FIX: ahora solo busca por cliente, no mezcla con diseño */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Cliente</span>
-                <input
-                  type="text" placeholder="Buscar..."
-                  value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
-                  style={{ border: filterSearch ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: '#2d3352', background: 'white', width: 110 }}
-                />
+                <input type="text" placeholder="Buscar..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+                  style={{ border: filterSearch ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: '#2d3352', background: 'white', width: 110 }} />
               </div>
-
-              {/* Fecha */}
+              {/* Estado pedido */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Estado pedido</span>
+                <select value={filterOrderStatus} onChange={e => setFilterOrderStatus(e.target.value)}
+                  style={{ border: filterOrderStatus !== 'all' ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: filterOrderStatus !== 'all' ? '#2D6BE4' : '#5a6380', background: 'white', cursor: 'pointer' }}>
+                  <option value="all">Todos</option>
+                  <option value="pending">Pendiente</option>
+                  <option value="confirmed">Confirmado</option>
+                  <option value="in_production">En producción</option>
+                  <option value="ready">Listo</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </div>
+              {/* Fechas */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Fecha</span>
                 <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
@@ -580,64 +524,68 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  {/* FIX: thead sin position sticky para evitar superposición con los dropdowns */}
                   <thead>
                     <tr>
-                      {/* Diseño: dropdown con opciones reales */}
-                      <ColHeader label="Diseño" active={filterDesign !== 'all'}>
-                        <DropOpt active={filterDesign === 'all'} onClick={() => setFilterDesign('all')}>Todos</DropOpt>
-                        {allDesignNames.map(name => (
-                          <DropOpt key={name} active={filterDesign === name} onClick={() => setFilterDesign(name)}>
-                            {name}
-                          </DropOpt>
-                        ))}
-                      </ColHeader>
+                      {/* FIX: Filtro de diseño ahora muestra lista de diseños disponibles,
+                          y usa filterDesign (separado de filterSearch) */}
+                      <ColHeader label="Diseño" active={!!filterDesign} filter={
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <input
+                            type="text"
+                            placeholder="Buscar diseño..."
+                            value={filterDesign}
+                            onChange={e => setFilterDesign(e.target.value)}
+                            autoFocus
+                            style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '5px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', width: '100%', outline: 'none', marginBottom: 4 }}
+                          />
+                          <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+                            <div
+                              onClick={() => setFilterDesign('')}
+                              style={optionStyle(filterDesign === '')}
+                            >
+                              Todos los diseños
+                            </div>
+                            {allDesignNames
+                              .filter(n => !filterDesign || n.toLowerCase().includes(filterDesign.toLowerCase()))
+                              .map(name => (
+                                <div key={name} onClick={() => setFilterDesign(name)} style={optionStyle(filterDesign === name)}>
+                                  {name}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      } />
 
-                      {/* Producto */}
-                      <th style={thBase}>Producto</th>
+                      {/* Filtro de producto */}
+                      <ColHeader label="Producto" active={filterProduct !== 'all'} filter={
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {[{ id: 'all', name: 'Todos' }, ...products].map(p => (
+                            <div key={p.id} onClick={() => setFilterProduct(p.id)} style={optionStyle(filterProduct === p.id)}>{p.name}</div>
+                          ))}
+                        </div>
+                      } />
 
-                      {/* Demanda */}
-                      <th style={{ ...thBase, textAlign: 'center' }}>Demanda</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Demanda</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Stock</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Falta</th>
 
-                      {/* Stock */}
-                      <th style={{ ...thBase, textAlign: 'center' }}>Stock</th>
+                      {/* FIX: Estado prod. ahora tiene onClick que realmente filtra */}
+                      <ColHeader label="Estado prod." active={filterProdStatus !== 'all'} filter={
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div onClick={() => setFilterProdStatus('all')} style={optionStyle(filterProdStatus === 'all')}>Todos</div>
+                          {STATUS_CYCLE.map(s => (
+                            <div key={s} onClick={() => setFilterProdStatus(s)}
+                              style={{ ...optionStyle(filterProdStatus === s), color: filterProdStatus === s ? STATUS_COLOR[s] : '#2d3352', fontWeight: filterProdStatus === s ? 700 : 400 }}>
+                              {STATUS_LABEL[s]}
+                            </div>
+                          ))}
+                        </div>
+                      } />
 
-                      {/* Falta */}
-                      <th style={{ ...thBase, textAlign: 'center' }}>Falta</th>
-
-                      {/* Estado producción: dropdown clickeable */}
-                      <ColHeader label="Estado prod." active={filterProdStatus !== 'all'}>
-                        <DropOpt active={filterProdStatus === 'all'} onClick={() => setFilterProdStatus('all')}>Todos</DropOpt>
-                        {STATUS_CYCLE.map(s => (
-                          <DropOpt key={s} active={filterProdStatus === s} onClick={() => setFilterProdStatus(s)}>
-                            <span style={{ color: STATUS_COLOR[s], fontWeight: 700 }}>{STATUS_LABEL[s]}</span>
-                          </DropOpt>
-                        ))}
-                      </ColHeader>
-
-                      {/* Estado pedido: dropdown clickeable */}
-                      <ColHeader label="Estado pedido" active={filterStatus !== 'all'}>
-                        {[
-                          ['all', 'Todos'],
-                          ['pending', 'Pendiente'],
-                          ['confirmed', 'Confirmado'],
-                          ['in_production', 'En producción'],
-                          ['ready', 'Listo'],
-                          ['cancelled', 'Cancelado'],
-                        ].map(([val, label]) => (
-                          <DropOpt key={val} active={filterStatus === val} onClick={() => setFilterStatus(val)}>
-                            {label}
-                          </DropOpt>
-                        ))}
-                      </ColHeader>
-
-                      {/* Nota */}
-                      <th style={thBase}>Nota</th>
-
-                      {/* Pedidos */}
-                      <th style={{ ...thBase, textAlign: 'center' }}>Pedidos</th>
-
-                      {/* Acciones */}
-                      <th style={thBase}>Acciones</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Nota</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Pedidos</th>
+                      <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -645,81 +593,52 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                       const isExpanded = expandedRow === row.designName;
                       const urgent = isUrgent(row.orders);
                       const rowBg = row.falta <= 0 ? 'rgba(24,163,106,0.06)' : 'transparent';
-
                       return (
                         <React.Fragment key={row.designName}>
                           <tr style={{ borderBottom: '1px solid #f0f2f8', background: rowBg }}>
+
                             {/* Diseño */}
-                            <td style={{ padding: '10px', fontWeight: 700, color: '#1B2F5E', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '10px 10px', fontWeight: 700, color: '#1B2F5E', whiteSpace: 'nowrap' }}>
                               {row.designName}
-                              {urgent && (
-                                <span style={{ marginLeft: 6, fontSize: 11 }}>
-                                  🔴 <span style={{ color: '#e53e3e', fontWeight: 700 }}>Urgente</span>
-                                </span>
-                              )}
-                              {row.falta < 0 && (
-                                <span style={{ marginLeft: 6, background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>
-                                  Exceso +{Math.abs(row.falta)}
-                                </span>
-                              )}
+                              {urgent && <span style={{ marginLeft: 6, fontSize: 11 }}>🔴 <span style={{ color: '#e53e3e', fontWeight: 700 }}>Urgente</span></span>}
+                              {row.falta < 0 && <span style={{ marginLeft: 6, background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>Exceso +{Math.abs(row.falta)}</span>}
                             </td>
 
                             {/* Producto */}
-                            <td style={{ padding: '10px', color: '#5a6380' }}>{row.productName}</td>
+                            <td style={{ padding: '10px 10px', color: '#5a6380' }}>{row.productName}</td>
 
                             {/* Demanda */}
-                            <td style={{ padding: '10px', fontWeight: 600, color: '#2d3352', textAlign: 'center' }}>{row.demand}</td>
+                            <td style={{ padding: '10px 10px', fontWeight: 600, color: '#2d3352', textAlign: 'center' }}>{row.demand}</td>
 
-                            {/* Stock inline editable */}
-                            <td style={{ padding: '10px', textAlign: 'center' }}>
-                              <StockCell row={row} onSave={(qty) => saveStockInline(row, qty)} />
+                            {/* Stock — FIX: pasamos qty_produced como prop separada */}
+                            <td style={{ padding: '10px 10px', textAlign: 'center' }}>
+                              <StockCell
+                                qtyProduced={row.qty_produced}
+                                onSave={(qty) => saveStockInline(row, qty)}
+                              />
                             </td>
 
                             {/* Falta */}
-                            <td style={{ padding: '10px', fontWeight: 700, color: row.falta > 0 ? '#e53e3e' : '#18a36a', textAlign: 'center' }}>
-                              {row.falta}
-                            </td>
+                            <td style={{ padding: '10px 10px', fontWeight: 700, color: row.falta > 0 ? '#e53e3e' : '#18a36a', textAlign: 'center' }}>{row.falta}</td>
 
                             {/* Estado producción */}
-                            <td style={{ padding: '10px' }}>
+                            <td style={{ padding: '10px 10px' }}>
                               <button
                                 onClick={() => cycleStatus(row)}
                                 disabled={savingStatus[row.designName]}
                                 title="Click para cambiar estado"
-                                style={{
-                                  background: `${STATUS_COLOR[row.status]}20`,
-                                  color: STATUS_COLOR[row.status],
-                                  border: `1.5px solid ${STATUS_COLOR[row.status]}`,
-                                  borderRadius: 8, padding: '4px 10px',
-                                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                  opacity: savingStatus[row.designName] ? 0.6 : 1,
-                                }}>
-                                {STATUS_LABEL[row.status]}
+                                style={{ background: `${STATUS_COLOR[row.status]}20`, color: STATUS_COLOR[row.status], border: `1.5px solid ${STATUS_COLOR[row.status]}`, borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                {savingStatus[row.designName] ? '...' : STATUS_LABEL[row.status]}
                               </button>
                             </td>
 
-                            {/* Estado pedido (informativo) */}
-                            <td style={{ padding: '10px', color: '#5a6380', fontSize: 11 }}>
-                              {(() => {
-                                const counts = {};
-                                const sLabel = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En prod.', ready: 'Listo', cancelled: 'Cancelado' };
-                                row.orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
-                                return Object.entries(counts).map(([s, n]) => (
-                                  <span key={s} style={{ display: 'inline-block', marginRight: 4, marginBottom: 2 }}>
-                                    {n} {sLabel[s] || s}
-                                  </span>
-                                ));
-                              })()}
-                            </td>
-
                             {/* Nota */}
-                            <td style={{ padding: '10px' }}>
+                            <td style={{ padding: '10px 10px' }}>
                               <NoteCell row={row} onSave={(note) => saveNote(row, note)} />
                             </td>
 
-                            {/* Pedidos expandible */}
-                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {/* Pedidos (expandible) */}
+                            <td style={{ padding: '10px 10px', textAlign: 'center' }}>
                               <button
                                 onClick={() => setExpandedRow(isExpanded ? null : row.designName)}
                                 style={{ background: 'none', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#5a6380', fontWeight: 600 }}>
@@ -728,24 +647,22 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                             </td>
 
                             {/* Acciones stock */}
-                            <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>
                               <button
                                 onClick={() => { setStockModal({ designName: row.designName, designId: null, type: 'add' }); setStockQty(''); setStockNote(''); }}
-                                style={{ background: '#e8f5e9', color: '#18a36a', border: '1.5px solid #18a36a', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginRight: 4 }}>
-                                +
-                              </button>
+                                style={{ background: '#e8f5e9', color: '#18a36a', border: '1.5px solid #18a36a', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginRight: 4 }}
+                                title="Agregar stock">+</button>
                               <button
                                 onClick={() => { setStockModal({ designName: row.designName, designId: null, type: 'subtract' }); setStockQty(''); setStockNote(''); }}
-                                style={{ background: '#fef2f2', color: '#e53e3e', border: '1.5px solid #e53e3e', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                                −
-                              </button>
+                                style={{ background: '#fef2f2', color: '#e53e3e', border: '1.5px solid #e53e3e', borderRadius: 6, padding: '3px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                                title="Restar stock">−</button>
                             </td>
                           </tr>
 
                           {/* Fila expandida: detalle de pedidos */}
                           {isExpanded && (
                             <tr>
-                              <td colSpan={10} style={{ padding: '0 10px 12px 30px', background: '#f7f8fc' }}>
+                              <td colSpan={9} style={{ padding: '0 10px 12px 30px', background: '#f7f8fc' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                   <thead>
                                     <tr>
@@ -755,29 +672,23 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {[...row.orders]
-                                      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-                                      .map(o => {
-                                        const items = Array.isArray(o.items) ? o.items : [];
-                                        const qty = items
-                                          .filter(i => i.name?.toLowerCase() === row.designName?.toLowerCase())
-                                          .reduce((acc, i) => acc + (i.qty || 0), 0);
-                                        const sColor = { pending: '#f6a800', confirmed: '#2D6BE4', in_production: '#6d28d9', ready: '#18a36a', cancelled: '#e53e3e' };
-                                        const sLabel = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
-                                        return (
-                                          <tr key={o.id} style={{ borderBottom: '1px solid #eef0f6' }}>
-                                            <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#1B2F5E' }}>{o.order_code}</td>
-                                            <td style={{ padding: '6px 8px', color: '#2d3352' }}>{o.customer_name || '—'}</td>
-                                            <td style={{ padding: '6px 8px', color: '#5a6380' }}>{formatDate(o.created_at)}</td>
-                                            <td style={{ padding: '6px 8px', fontWeight: 700, color: '#1B2F5E' }}>{qty}</td>
-                                            <td style={{ padding: '6px 8px' }}>
-                                              <span style={{ background: `${sColor[o.status]}20`, color: sColor[o.status], borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
-                                                {sLabel[o.status] || o.status}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
+                                    {[...row.orders].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(o => {
+                                      const items = Array.isArray(o.items) ? o.items : [];
+                                      const qty = items.filter(i => i.name?.toLowerCase() === row.designName?.toLowerCase()).reduce((acc, i) => acc + (i.qty || 0), 0);
+                                      return (
+                                        <tr key={o.id} style={{ borderBottom: '1px solid #eef0f6' }}>
+                                          <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#1B2F5E' }}>{o.order_code}</td>
+                                          <td style={{ padding: '6px 8px', color: '#2d3352' }}>{o.customer_name || '—'}</td>
+                                          <td style={{ padding: '6px 8px', color: '#5a6380' }}>{formatDate(o.created_at)}</td>
+                                          <td style={{ padding: '6px 8px', fontWeight: 700, color: '#1B2F5E' }}>{qty}</td>
+                                          <td style={{ padding: '6px 8px' }}>
+                                            <span style={{ background: `${ORDER_STATUS_COLOR[o.status] || '#9aa3bc'}20`, color: ORDER_STATUS_COLOR[o.status] || '#9aa3bc', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
+                                              {ORDER_STATUS_LABEL[o.status] || o.status}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </td>
@@ -794,7 +705,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
         </>
       )}
 
-      {/* ── Historial de stock ── */}
+      {/* Sub-tab: Historial */}
       {activeSubTab === 'log' && (
         <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #dde1ef' }}>
@@ -817,9 +728,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
                     <tr key={log.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
                       <td style={{ padding: '8px 10px', fontWeight: 600, color: '#1B2F5E' }}>{log.design_name}</td>
                       <td style={{ padding: '8px 10px' }}>
-                        <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700 }}>
-                          {log.type === 'add' ? '+ Entrada' : '− Salida'}
-                        </span>
+                        <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700 }}>{log.type === 'add' ? '+ Entrada' : '− Salida'}</span>
                       </td>
                       <td style={{ padding: '8px 10px', fontWeight: 700, color: log.type === 'add' ? '#18a36a' : '#e53e3e' }}>{log.qty}</td>
                       <td style={{ padding: '8px 10px', color: '#5a6380' }}>{log.note || '—'}</td>
@@ -833,9 +742,9 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
         </div>
       )}
 
-      {/* ── Modal stock ── */}
+      {/* Modal stock */}
       {stockModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 380, overflow: 'hidden' }}>
             <div style={{ background: '#1B2F5E', color: 'white', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 15 }}>
               <span>{stockModal.type === 'add' ? '+ Agregar stock' : '− Restar stock'}</span>
@@ -849,7 +758,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
               <div>
                 <label style={lbl}>Stock actual</label>
                 <div style={{ fontSize: 14, color: '#2d3352' }}>
-                  {stock.find(s => s.design_name?.toLowerCase() === stockModal.designName?.toLowerCase())?.qty_produced ?? 0} unidades
+                  {stock.find(s => s.design_name?.toLowerCase() === stockModal.designName?.toLowerCase())?.qty_produced || 0} unidades
                 </div>
               </div>
               <div>
@@ -877,7 +786,6 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
