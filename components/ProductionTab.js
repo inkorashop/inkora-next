@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
-const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En prensa', done: 'Listo' };
+const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En proceso', done: 'Terminado' };
 const STATUS_COLOR = { pending: '#f6a800', in_press: '#2D6BE4', done: '#18a36a' };
 
 const ORDER_STATUS_LABEL = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
@@ -16,6 +16,14 @@ function normalizeName(value) {
 function toQty(value) {
   const qty = Number(value);
   return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
+function formatProductionError(error, fallback) {
+  const msg = error?.message || String(error || '');
+  if (msg.toLowerCase().includes('row-level security')) {
+    return 'Faltan permisos de Supabase para producción. Aplicá el SQL de políticas y volvé a intentar.';
+  }
+  return fallback;
 }
 
 function formatDate(iso) {
@@ -43,7 +51,7 @@ function ColHeader({ label, filter, active }) {
 
   return (
     <th ref={ref} style={{
-      padding: '8px 10px', fontSize: 11, fontWeight: 700,
+      padding: '8px 10px', fontSize: 11, fontWeight: 700, textAlign: 'left',
       color: active ? '#2D6BE4' : '#5a6380',
       textTransform: 'uppercase', letterSpacing: 0.5,
       borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap',
@@ -52,13 +60,13 @@ function ColHeader({ label, filter, active }) {
       position: 'relative', zIndex: open ? 50 : 'auto',
       userSelect: 'none',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
         {label}
         <span style={{ fontSize: 10, color: active ? '#2D6BE4' : '#c4c9d9' }}>{active ? '●' : '▾'}</span>
       </div>
       {open && (
         <div
-          style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: 6, minWidth: 170, boxShadow: '0 4px 20px rgba(27,47,94,0.18)' }}
+          style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 7, padding: 5, width: 168, boxShadow: '0 4px 16px rgba(27,47,94,0.16)', textTransform: 'none', letterSpacing: 0 }}
           onClick={e => e.stopPropagation()}
         >
           {filter}
@@ -86,7 +94,7 @@ function NoteCell({ row, onSave }) {
       setTimeout(() => setSaved(false), 1500);
     } catch (error) {
       setVal(row.note || '');
-      alert(`No se pudo guardar la nota: ${error.message || error}`);
+      alert(formatProductionError(error, `No se pudo guardar la nota: ${error.message || error}`));
     } finally {
       setSaving(false);
     }
@@ -96,7 +104,7 @@ function NoteCell({ row, onSave }) {
     return (
       <span
         onClick={() => setEditing(true)}
-        style={{ color: saved ? '#18a36a' : val ? '#2d3352' : '#c4c9d9', cursor: 'text', fontSize: 12, display: 'block', minWidth: 80, padding: '2px 4px', borderRadius: 4, border: `1.5px solid ${saved ? '#18a36a' : 'transparent'}`, transition: 'color 0.3s, border-color 0.3s' }}
+        style={{ color: saved ? '#18a36a' : val ? '#2d3352' : '#c4c9d9', cursor: 'text', fontSize: 12, display: 'block', width: 140, maxWidth: 140, minHeight: 22, padding: '3px 6px', borderRadius: 4, border: `1.5px solid ${saved ? '#18a36a' : 'transparent'}`, transition: 'color 0.3s, border-color 0.3s', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', boxSizing: 'border-box' }}
         title="Click para editar"
       >
         {saving ? 'Guardando...' : saved ? '✓ Guardado' : val || 'Agregar nota...'}
@@ -109,7 +117,7 @@ function NoteCell({ row, onSave }) {
       disabled={saving}
       onBlur={() => handleSave(val)}
       onKeyDown={e => { if (e.key === 'Enter') handleSave(val); if (e.key === 'Escape') { setEditing(false); setVal(row.note || ''); } }}
-      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 12, color: '#2d3352', minWidth: 120, outline: 'none' }}
+      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 12, color: '#2d3352', width: 140, maxWidth: 140, outline: 'none', boxSizing: 'border-box' }}
     />
   );
 }
@@ -145,7 +153,7 @@ function StockCell({ qtyProduced, onSave }) {
       await onSave(qty);
     } catch (error) {
       setVal(String(qtyProduced));
-      alert(`No se pudo actualizar el stock: ${error.message || error}`);
+      alert(formatProductionError(error, `No se pudo actualizar el stock: ${error.message || error}`));
     } finally {
       setSaving(false);
     }
@@ -154,6 +162,7 @@ function StockCell({ qtyProduced, onSave }) {
   const handleStartEdit = (e) => {
     e.stopPropagation();
     editingRef.current = true;
+    setVal(qtyProduced === 0 ? '' : String(qtyProduced));
     setEditing(true);
   };
 
@@ -161,7 +170,7 @@ function StockCell({ qtyProduced, onSave }) {
     return (
       <span
         onClick={handleStartEdit}
-        style={{ display: 'inline-block', minWidth: 40, textAlign: 'center', fontWeight: 600, color: '#2d3352', cursor: 'text', padding: '2px 6px', borderRadius: 4, border: '1.5px solid transparent', fontSize: 13, transition: 'border-color 0.2s' }}
+        style={{ display: 'inline-block', width: 58, textAlign: 'center', fontWeight: 600, color: '#2d3352', cursor: 'text', padding: '3px 6px', borderRadius: 4, border: '1.5px solid transparent', fontSize: 13, transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         title="Click para editar"
       >
         {saving ? '...' : qtyProduced}
@@ -171,6 +180,7 @@ function StockCell({ qtyProduced, onSave }) {
   return (
     <input
       autoFocus type="number" min="0" step="1" value={val}
+      placeholder="0"
       disabled={saving}
       onChange={e => setVal(e.target.value)}
       onBlur={handleSave}
@@ -179,7 +189,7 @@ function StockCell({ qtyProduced, onSave }) {
         if (e.key === 'Enter') handleSave();
         if (e.key === 'Escape') { editingRef.current = false; setEditing(false); setVal(String(qtyProduced)); }
       }}
-      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', width: 70, textAlign: 'center', outline: 'none' }}
+      style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', width: 58, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
     />
   );
 }
@@ -356,7 +366,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
       await loadProdStatus();
     } catch (error) {
       console.error('Error saving production status', error);
-      setErrorMessage(`No se pudo cambiar el estado de ${row.designName}.`);
+      setErrorMessage(formatProductionError(error, `No se pudo cambiar el estado de ${row.designName}.`));
     } finally {
       setSavingStatus(prev => ({ ...prev, [row.designKey]: false }));
     }
@@ -427,7 +437,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
       setStockNote('');
     } catch (error) {
       console.error('Error saving production stock', error);
-      setErrorMessage(`No se pudo guardar el movimiento de stock: ${error.message || error}`);
+      setErrorMessage(formatProductionError(error, `No se pudo guardar el movimiento de stock: ${error.message || error}`));
     } finally {
       setSavingStock(false);
     }
@@ -475,7 +485,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
   const lbl = { fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3, display: 'block' };
 
   const optionStyle = (active) => ({
-    padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 12,
+    padding: '4px 7px', borderRadius: 5, cursor: 'pointer', fontSize: 12,
     fontWeight: active ? 700 : 400,
     background: active ? '#eef4ff' : 'transparent',
     color: active ? '#2D6BE4' : '#2d3352',
@@ -529,7 +539,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
           </div>
 
           {/* Tabla */}
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'visible' }}>
             {/* Header de la tabla */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1.5px solid #dde1ef' }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Cola de producción</h2>
@@ -595,8 +605,19 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                 <p style={{ fontSize: 14 }}>No hay diseños en la cola con los filtros actuales.</p>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 6, minHeight: rows.length < 4 ? 220 : 'auto' }}>
+                <table style={{ width: '100%', minWidth: 1060, tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <colgroup>
+                    <col style={{ width: 230 }} />
+                    <col style={{ width: 190 }} />
+                    <col style={{ width: 110 }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: 145 }} />
+                    <col style={{ width: 160 }} />
+                    <col style={{ width: 110 }} />
+                    <col style={{ width: 115 }} />
+                  </colgroup>
                   {/* FIX: thead sin position sticky para evitar superposición con los dropdowns */}
                   <thead>
                     <tr>
@@ -609,10 +630,11 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                             placeholder="Buscar diseño..."
                             value={filterDesign}
                             onChange={e => setFilterDesign(e.target.value)}
+                            onClick={e => e.stopPropagation()}
                             autoFocus
-                            style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '5px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', width: '100%', outline: 'none', marginBottom: 4 }}
+                            style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 12, fontFamily: 'Barlow, sans-serif', width: '100%', outline: 'none', marginBottom: 4, boxSizing: 'border-box' }}
                           />
-                          <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+                          <div style={{ maxHeight: 132, overflowY: 'auto' }}>
                             <div
                               onClick={() => setFilterDesign('')}
                               style={optionStyle(filterDesign === '')}
@@ -622,7 +644,7 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                             {allDesignNames
                               .filter(n => !filterDesign || n.toLowerCase().includes(filterDesign.toLowerCase()))
                               .map(name => (
-                                <div key={name} onClick={() => setFilterDesign(name)} style={optionStyle(filterDesign === name)}>
+                                <div key={name} onClick={() => setFilterDesign(name)} style={{ ...optionStyle(filterDesign === name), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {name}
                                 </div>
                               ))}
@@ -671,14 +693,14 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
                           <tr style={{ borderBottom: '1px solid #f0f2f8', background: rowBg }}>
 
                             {/* Diseño */}
-                            <td style={{ padding: '10px 10px', fontWeight: 700, color: '#1B2F5E', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '10px 10px', fontWeight: 700, color: '#1B2F5E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {row.designName}
                               {urgent && <span style={{ marginLeft: 6, fontSize: 11 }}>🔴 <span style={{ color: '#e53e3e', fontWeight: 700 }}>Urgente</span></span>}
                               {row.falta < 0 && <span style={{ marginLeft: 6, background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>Exceso +{Math.abs(row.falta)}</span>}
                             </td>
 
                             {/* Producto */}
-                            <td style={{ padding: '10px 10px', color: '#5a6380' }}>{row.productName}</td>
+                            <td style={{ padding: '10px 10px', color: '#5a6380', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.productName}</td>
 
                             {/* Demanda */}
                             <td style={{ padding: '10px 10px', fontWeight: 600, color: '#2d3352', textAlign: 'center' }}>{row.demand}</td>
