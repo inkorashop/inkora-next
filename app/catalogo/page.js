@@ -1092,11 +1092,6 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         if (price !== null && price > 0) {
                           return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
                         }
-                        const minQty = getProductMinQty(activeProductId);
-                        const currentQty = cartByProduct[activeProductId] || 0;
-                        if (minQty && currentQty > 0 && currentQty < minQty) {
-                          return <div style={{...s.cardUnitPrice, color: '#e53e3e'}}>Mín. {minQty}u.</div>;
-                        }
                         return null;
                       })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>

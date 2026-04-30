@@ -900,7 +900,11 @@ export default function Admin() {
 
   async function updateUserSeller(userId, sellerId) {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: sellerId || null } : u));
-    supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    if (error) {
+      console.error('Error al guardar vendedor:', error);
+      loadUsers(); // revertir al estado real si falló
+    }
   }
 
   // ── Admins ──

@@ -60,10 +60,10 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     loadStockLog();
 
     // Realtime
-    const stockSub = supabase.channel('prod_stock')
+    const stockSub = supabase.channel('production-stock-' + Math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_stock' }, () => loadStock())
       .subscribe();
-    const statusSub = supabase.channel('prod_status')
+    const statusSub = supabase.channel('production-status-' + Math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_status' }, () => loadProdStatus())
       .subscribe();
 
