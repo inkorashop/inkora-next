@@ -240,59 +240,10 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
   const sel = { ...inp, cursor: 'pointer' };
   const lbl = { fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3, display: 'block' };
 
+  const hasFilters = filterSeller !== 'all' || filterProduct !== 'all' || filterStatus !== 'all' || filterDateFrom || filterDateTo || filterSearch;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* ── Filtros ── */}
-      <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Filtros</h2>
-          <button
-            onClick={() => { setFilterSeller('all'); setFilterProduct('all'); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSearch(''); }}
-            style={{ background: 'none', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 600, color: '#5a6380', cursor: 'pointer' }}
-          >Limpiar filtros</button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
-          <div>
-            <label style={lbl}>Vendedor</label>
-            <select style={{ ...sel, width: '100%' }} value={filterSeller} onChange={e => setFilterSeller(e.target.value)}>
-              <option value="all">Todos</option>
-              <option value="none">Sin vendedor</option>
-              {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Producto</label>
-            <select style={{ ...sel, width: '100%' }} value={filterProduct} onChange={e => setFilterProduct(e.target.value)}>
-              <option value="all">Todos</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Estado pedido</label>
-            <select style={{ ...sel, width: '100%' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="all">Todos</option>
-              <option value="pending">Pendiente</option>
-              <option value="confirmed">Confirmado</option>
-              <option value="in_production">En producción</option>
-              <option value="ready">Listo</option>
-              <option value="cancelled">Cancelado</option>
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Desde</label>
-            <input style={{ ...inp, width: '100%' }} type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>Hasta</label>
-            <input style={{ ...inp, width: '100%' }} type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} />
-          </div>
-          <div>
-            <label style={lbl}>Cliente / Email</label>
-            <input style={{ ...inp, width: '100%' }} type="text" placeholder="Buscar..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} />
-          </div>
-        </div>
-      </div>
 
       {/* ── Summary ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
@@ -325,13 +276,74 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
             <p style={{ fontSize: 14 }}>No hay diseños en la cola con los filtros actuales.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                {/* Barra de filtros externos sticky */}
                 <tr>
-                  {['Diseño', 'Producto', 'Demanda', 'Stock', 'Falta', 'Estado', 'Nota', 'Pedidos', 'Acciones'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
+                  <td colSpan={9} style={{ background: '#f7f8fc', borderBottom: '1px solid #dde1ef', padding: '8px 10px' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Vendedor</span>
+                        <select value={filterSeller} onChange={e => setFilterSeller(e.target.value)}
+                          style={{ border: filterSeller !== 'all' ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: filterSeller !== 'all' ? '#2D6BE4' : '#5a6380', background: 'white', cursor: 'pointer' }}>
+                          <option value="all">Todos</option>
+                          <option value="none">Sin vendedor</option>
+                          {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Cliente</span>
+                        <input type="text" placeholder="Buscar..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+                          style={{ border: filterSearch ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: '#2d3352', background: 'white', width: 120 }} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Fecha</span>
+                        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                          style={{ border: filterDateFrom ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', background: 'white' }} />
+                        <span style={{ fontSize: 11, color: '#9aa3bc' }}>→</span>
+                        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                          style={{ border: filterDateTo ? '1.5px solid #2D6BE4' : '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', background: 'white' }} />
+                      </div>
+                      {hasFilters && (
+                        <button onClick={() => { setFilterSeller('all'); setFilterProduct('all'); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo(''); setFilterSearch(''); }}
+                          style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 600, color: '#9aa3bc', background: 'white', cursor: 'pointer' }}>
+                          ✕ Limpiar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {/* Encabezados de columna con filtros inline */}
+                <tr style={{ background: 'white' }}>
+                  <ColHeader label="Diseño" filter={
+                    <input type="text" placeholder="Filtrar diseño..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }} />
+                  } active={!!filterSearch} />
+                  <ColHeader label="Producto" filter={
+                    <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }}>
+                      <option value="all">Todos</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  } active={filterProduct !== 'all'} />
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Demanda</th>
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Stock</th>
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Falta</th>
+                  <ColHeader label="Estado" filter={
+                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%' }}>
+                      <option value="all">Todos</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="confirmed">Confirmado</option>
+                      <option value="in_production">En producción</option>
+                      <option value="ready">Listo</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  } active={filterStatus !== 'all'} />
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Nota</th>
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', textAlign: 'center', whiteSpace: 'nowrap', background: 'white' }}>Pedidos</th>
+                  <th style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -515,6 +527,34 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ColHeader({ label, filter, active }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <th ref={ref} style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: active ? '#2D6BE4' : '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', background: 'white', position: 'relative', userSelect: 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => setOpen(o => !o)}>
+        {label}
+        <span style={{ fontSize: 10, color: active ? '#2D6BE4' : '#c4c9d9' }}>{active ? '▾●' : '▾'}</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, padding: 10, minWidth: 180, boxShadow: '0 4px 16px rgba(27,47,94,0.12)' }}
+          onClick={e => e.stopPropagation()}>
+          {filter}
+        </div>
+      )}
+    </th>
   );
 }
 
