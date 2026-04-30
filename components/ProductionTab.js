@@ -67,15 +67,21 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_status' }, () => loadProdStatus())
       .subscribe();
 
+    const logSub = supabase.channel('production-log-' + Math.random())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_stock_log' }, () => { if (logOpen) loadStockLog(); })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(stockSub);
       supabase.removeChannel(statusSub);
+      supabase.removeChannel(logSub);
     };
   }, [loadStock, loadProdStatus]);
 
   // ── Filtrar pedidos ──
   const filteredOrders = orders.filter(o => {
-    if (filterSeller !== 'all' && o.seller_id !== filterSeller) return false;
+    if (filterSeller === 'none' && o.seller_id) return false;
+    if (filterSeller !== 'all' && filterSeller !== 'none' && o.seller_id !== filterSeller) return false;
     if (filterStatus !== 'all' && o.status !== filterStatus) return false;
     if (filterDateFrom && new Date(o.created_at) < new Date(filterDateFrom)) return false;
     if (filterDateTo && new Date(o.created_at) > new Date(filterDateTo + 'T23:59:59')) return false;
@@ -92,8 +98,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     const items = Array.isArray(order.items) ? order.items : [];
     items.forEach(item => {
       if (filterProduct !== 'all') {
-        const prod = products.find(p => p.name === item.productName);
-        if (!prod || prod.id !== filterProduct) return;
+        if (item.product_id !== filterProduct) return;
       }
       const key = item.name?.toLowerCase() || '';
       if (!designMap[key]) {
@@ -167,8 +172,14 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
     const qty = parseInt(stockQty);
     const { designName, designId, type } = stockModal;
     const existing = stock.find(s => s.design_name?.toLowerCase() === designName?.toLowerCase());
+    const currentQty = existing?.qty_produced || 0;
+    if (type === 'subtract' && qty > currentQty) {
+      alert(`No podés restar más de lo que hay en stock (${currentQty} unidades).`);
+      setSavingStock(false);
+      return;
+    }
     const delta = type === 'add' ? qty : -qty;
-    const newQty = Math.max(0, (existing?.qty_produced || 0) + delta);
+    const newQty = Math.max(0, currentQty + delta);
 
     if (existing) {
       await supabase.from('production_stock').update({ qty_produced: newQty }).eq('id', existing.id);
@@ -246,6 +257,7 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
             <label style={lbl}>Vendedor</label>
             <select style={{ ...sel, width: '100%' }} value={filterSeller} onChange={e => setFilterSeller(e.target.value)}>
               <option value="all">Todos</option>
+              <option value="none">Sin vendedor</option>
               {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
@@ -509,17 +521,25 @@ export default function ProductionTab({ supabase, sellers, products, orders }) {
 function NoteCell({ row, onSave }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(row.note || '');
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => { setVal(row.note || ''); }, [row.note]);
+
+  const handleSave = (v) => {
+    setEditing(false);
+    onSave(v);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
 
   if (!editing) {
     return (
       <span
         onClick={() => setEditing(true)}
-        style={{ color: val ? '#2d3352' : '#c4c9d9', cursor: 'text', fontSize: 12, display: 'block', minWidth: 80, padding: '2px 4px', borderRadius: 4, border: '1.5px solid transparent' }}
+        style={{ color: saved ? '#18a36a' : val ? '#2d3352' : '#c4c9d9', cursor: 'text', fontSize: 12, display: 'block', minWidth: 80, padding: '2px 4px', borderRadius: 4, border: `1.5px solid ${saved ? '#18a36a' : 'transparent'}`, transition: 'color 0.3s, border-color 0.3s' }}
         title="Click para editar"
       >
-        {val || 'Agregar nota...'}
+        {saved ? '✓ Guardado' : val || 'Agregar nota...'}
       </span>
     );
   }
@@ -528,8 +548,8 @@ function NoteCell({ row, onSave }) {
       autoFocus
       value={val}
       onChange={e => setVal(e.target.value)}
-      onBlur={() => { setEditing(false); onSave(val); }}
-      onKeyDown={e => { if (e.key === 'Enter') { setEditing(false); onSave(val); } if (e.key === 'Escape') { setEditing(false); setVal(row.note || ''); } }}
+      onBlur={() => handleSave(val)}
+      onKeyDown={e => { if (e.key === 'Enter') handleSave(val); if (e.key === 'Escape') { setEditing(false); setVal(row.note || ''); } }}
       style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '3px 6px', fontFamily: 'Barlow, sans-serif', fontSize: 12, color: '#2d3352', minWidth: 120, outline: 'none' }}
     />
   );
