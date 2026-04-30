@@ -249,7 +249,8 @@ export default function Admin() {
 
   useEffect(() => {
     if (screen === 'panel') {
-      loadProducts(); loadDesigns(); loadLocalities(); loadUsers(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
+      loadProducts(); loadDesigns(); loadLocalities(); loadPriceTiers(); loadAdmins(); loadOrders(); loadSettings(); loadSellers();
+      loadUsers();
     }
   }, [screen]);
 
