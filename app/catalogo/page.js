@@ -86,9 +86,6 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
 
   const showModel = forceActive || (displayMode === 'hover' ? isHovered : visible);
   const modelUrl = cachedUrl || url;
-  const effectiveModelConfig = forceActive && autoRotate
-    ? { ...(modelConfig || {}), mode: 'rotate' }
-    : modelConfig;
 
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
@@ -96,7 +93,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
         <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       )}
       {showModel && (
-        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={effectiveModelConfig} imageUrl={imageUrl} />
+        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} imageUrl={imageUrl} />
       )}
       {!showModel && !imageUrl && <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>
