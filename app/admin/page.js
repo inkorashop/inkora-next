@@ -263,10 +263,16 @@ export default function Admin() {
   useEffect(() => {
     if (!productManageModal) return;
     const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => productManageModalRef.current?.focus());
     return () => {
       document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
     };
   }, [productManageModal]);
 
@@ -3095,26 +3101,29 @@ export default function Admin() {
 
               return (
                 <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
+                  <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:3, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)'}}>
+                    <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
+                    <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Precio/u</div>
+                    <div />
+                  </div>
                   {activeLocalities.map((locality, li) => {
                     const key = `${modalProduct.id}_${locality.id}`;
                     const tiers = productTiers
                       .filter(t => t.locality_id === locality.id)
                       .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
                     const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
-                    const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
+                    const cellStyle = {padding:'4px 8px', verticalAlign:'middle'};
                     const emptyRowIdx = tiers.length;
 
                     return (
                       <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
-                        <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{locality.name}</div>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'7px 12px', fontSize:12, fontWeight:800, letterSpacing:0.4, textAlign:'center', textTransform:'uppercase'}}>{locality.name}</div>
                         <table style={{width:'100%', borderCollapse:'collapse'}}>
-                          <thead>
-                            <tr style={{borderBottom:'1px solid #eef0f6'}}>
-                              <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cantidad</th>
-                              <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
-                              <th style={{padding:'2px 4px', width:22}}></th>
-                            </tr>
-                          </thead>
+                          <colgroup>
+                            <col style={{width:'calc((100% - 36px) / 2)'}} />
+                            <col style={{width:'calc((100% - 36px) / 2)'}} />
+                            <col style={{width:36}} />
+                          </colgroup>
                           <tbody>
                             {tiers.map((t, tierRowIdx) => {
                               const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
