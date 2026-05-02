@@ -169,6 +169,7 @@ export default function Admin() {
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
   const [liveModelConfig, setLiveModelConfig] = useState(null);
   const cellRefs = useRef([]);
+  const tierCellRefs = useRef({});
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
   function askConfirm(message, onConfirm) { setConfirmModal({ open: true, message, onConfirm }); }
@@ -954,12 +955,64 @@ export default function Admin() {
     setEditingTiers(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   }
 
-  async function saveTierAuto(id) {
-    const ef = editingTiers[id];
+  async function saveTierAuto(id, valuesOverride = null) {
+    const ef = valuesOverride || editingTiers[id];
     if (!ef) return;
-    await supabase.from('price_tiers').update({ min_quantity: Number(ef.min_quantity), price_per_unit: Number(ef.price_per_unit) }).eq('id', id);
+
+    await supabase
+      .from('price_tiers')
+      .update({
+        min_quantity: Number(ef.min_quantity),
+        price_per_unit: Number(ef.price_per_unit)
+      })
+      .eq('id', id);
+
     setSavedTierId(id);
     setTimeout(() => setSavedTierId(prev => prev === id ? null : prev), 1200);
+  }
+
+  function setTierCellRef(scaleKey, rowIdx, colIdx) {
+    return el => {
+      if (!tierCellRefs.current[scaleKey]) tierCellRefs.current[scaleKey] = [];
+      if (!tierCellRefs.current[scaleKey][rowIdx]) tierCellRefs.current[scaleKey][rowIdx] = [];
+      tierCellRefs.current[scaleKey][rowIdx][colIdx] = el;
+    };
+  }
+
+  function focusTierCell(scaleKey, rowIdx, colIdx) {
+    const cell = tierCellRefs.current?.[scaleKey]?.[rowIdx]?.[colIdx];
+    if (!cell) return;
+
+    cell.focus();
+    requestAnimationFrame(() => {
+      try {
+        cell.select();
+      } catch {}
+    });
+  }
+
+  function handleTierCellKeyDown(e, scaleKey, rowIdx, colIdx, tierId) {
+    const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (!arrows.includes(e.key)) return;
+
+    e.preventDefault();
+
+    const currentForm = editingTiers[tierId] || {};
+    saveTierAuto(tierId, currentForm);
+
+    let nextRow = rowIdx;
+    let nextCol = colIdx;
+
+    if (e.key === 'ArrowUp') nextRow -= 1;
+    if (e.key === 'ArrowDown') nextRow += 1;
+    if (e.key === 'ArrowLeft') nextCol -= 1;
+    if (e.key === 'ArrowRight') nextCol += 1;
+
+    const maxRow = (tierCellRefs.current?.[scaleKey]?.length || 1) - 1;
+    nextRow = Math.max(0, Math.min(nextRow, maxRow));
+    nextCol = Math.max(0, Math.min(nextCol, 1));
+
+    focusTierCell(scaleKey, nextRow, nextCol);
   }
 
   async function addTierMatrix(productId, localityId, key) {
@@ -1710,24 +1763,42 @@ export default function Admin() {
                           <table style={{width:'100%', borderCollapse:'collapse'}}>
                             <thead>
                               <tr style={{borderBottom:'1px solid #eef0f6'}}>
-                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cant. mín.</th>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cantidad</th>
                                 <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
                                 <th style={{padding:'2px 4px', width:22}}></th>
                               </tr>
                             </thead>
                             <tbody>
                               {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 6px'}}>Sin escalas</td></tr>}
-                              {tiers.map(t => {
+                              {tiers.map((t, tierRowIdx) => {
                                 const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
                                 return (
                                   <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
                                     <td style={cellStyle}>
-                                      <input className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                      <input
+                                        ref={setTierCellRef(key, tierRowIdx, 0)}
+                                        className="tier-input"
+                                        type="number"
+                                        min="1"
+                                        value={ef.min_quantity}
+                                        onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)}
+                                        onBlur={() => saveTierAuto(t.id)}
+                                        onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)}
+                                      />
                                     </td>
                                     <td style={cellStyle}>
                                       <div style={{display:'flex', alignItems:'center', gap:2}}>
                                         <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
-                                        <input className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
+                                        <input
+                                          ref={setTierCellRef(key, tierRowIdx, 1)}
+                                          className="tier-input"
+                                          type="number"
+                                          min="0"
+                                          value={ef.price_per_unit}
+                                          onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)}
+                                          onBlur={() => saveTierAuto(t.id)}
+                                          onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)}
+                                        />
                                         {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
                                       </div>
                                     </td>
