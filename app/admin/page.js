@@ -849,7 +849,7 @@ export default function Admin() {
       category_colors: root.category_colors ? { ...root.category_colors } : {},
       model_config: root.model_config ? { ...root.model_config } : { mode: 'static', speed: 5 },
       active: true,
-      sort_order: (root.sort_order ?? products.length) + variantNumber / 100,
+      sort_order: (root.sort_order ?? products.length) + variantNumber,
     };
 
     const { error } = await supabase.from('products').insert(payload);
