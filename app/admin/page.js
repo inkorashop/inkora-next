@@ -230,7 +230,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
@@ -258,6 +258,21 @@ export default function Admin() {
   const [newTiers, setNewTiers] = useState({});
   const [editingTiers, setEditingTiers] = useState({});
   const [savedTierId, setSavedTierId] = useState(null);
+
+  useEffect(() => {
+    if (!productManageModal) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [productManageModal]);
+
+  useEffect(() => {
+    if ((settings.products_management_mode || 'table_modal') !== 'table_modal') {
+      setProductManageModal(null);
+    }
+  }, [settings.products_management_mode]);
   const [addingTier, setAddingTier] = useState(null);
   const savingNewTierKeysRef = useRef({});
 
@@ -1434,6 +1449,7 @@ export default function Admin() {
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
+  const useProductManagementModals = (settings.products_management_mode || 'table_modal') === 'table_modal';
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
     : null;
@@ -1519,7 +1535,7 @@ export default function Admin() {
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Productos</h2>
               <div style={{overflowX: 'auto'}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: 1240 }}>
+                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1240 : 1080 }}>
                   <thead>
                     <tr>
                       <th style={s.th}>Mostrar</th>
@@ -1534,8 +1550,8 @@ export default function Admin() {
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
-                      <th style={s.th}>Categorías</th>
-                      <th style={s.th}>Escalas</th>
+                      {useProductManagementModals && <th style={s.th}>Categorías</th>}
+                      {useProductManagementModals && <th style={s.th}>Escalas</th>}
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -1803,22 +1819,26 @@ export default function Admin() {
                               ) : null}
                             </div>
                           </td>
-                          <td style={{...s.td, textAlign:'center'}}>
-                            <button
-                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
-                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
-                            >
-                              Editar
-                            </button>
-                          </td>
-                          <td style={{...s.td, textAlign:'center'}}>
-                            <button
-                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
-                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
-                            >
-                              Editar
-                            </button>
-                          </td>
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          )}
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          )}
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
                           </td>
@@ -1868,8 +1888,8 @@ export default function Admin() {
                             <div style={{ position: 'absolute', top: 2, left: newProduct.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
                         </td>
-                        <td style={s.td}></td>
-                        <td style={s.td}></td>
+                        {useProductManagementModals && <td style={s.td}></td>}
+                        {useProductManagementModals && <td style={s.td}></td>}
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
                             {savingProduct ? '...' : 'Crear'}
@@ -1879,7 +1899,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={16} style={{padding:'10px 6px'}}>
+                      <td colSpan={useProductManagementModals ? 16 : 14} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -1889,6 +1909,9 @@ export default function Admin() {
                 </table>
               </div>
             </div>
+
+            {!useProductManagementModals && (
+              <>
 
             {/* CATEGORÍAS */}
             <div style={s.card}>
@@ -2136,6 +2159,8 @@ export default function Admin() {
                 </div>
               )}
             </div>
+              </>
+            )}
           </>
         )}
 
@@ -2821,6 +2846,30 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
+              <h2 style={s.sectionTitle}>Gestión de productos</h2>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Edición de categorías y escalas</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Elegí si se administran desde la tabla de productos o en las secciones separadas.</div>
+                </div>
+                <div style={{display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                  <button
+                    onClick={() => saveSetting('products_management_mode', 'table_modal')}
+                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: useProductManagementModals ? '#1B2F5E' : 'white', color: useProductManagementModals ? 'white' : '#5a6380'}}
+                  >
+                    Tabla con popups
+                  </button>
+                  <button
+                    onClick={() => saveSetting('products_management_mode', 'advanced_sections')}
+                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: !useProductManagementModals ? '#1B2F5E' : 'white', color: !useProductManagementModals ? 'white' : '#5a6380'}}
+                  >
+                    Secciones separadas
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={s.card}>
               <h2 style={s.sectionTitle}>Orden de pestañas</h2>
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
@@ -2935,9 +2984,9 @@ export default function Admin() {
       <footer style={s.footer}>INKORA® Admin</footer>
 
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
-      {productManageModal && modalProduct && (
-        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setProductManageModal(null)}>
-          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, maxHeight:'82vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+      {useProductManagementModals && productManageModal && modalProduct && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, maxHeight:'82vh', overflowY:'auto', overscrollBehavior:'contain', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
               <div>
                 <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>
