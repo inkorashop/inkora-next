@@ -1820,16 +1820,16 @@ export default function Admin() {
 
             {/* ESCALAS */}
             <div style={s.card}>
-              <div style={{display:'flex', justifyContent:'space-between', gap:12, alignItems:'flex-start', marginBottom:12}}>
+              <div style={{display:'flex', justifyContent:'space-between', gap:8, alignItems:'flex-start', marginBottom:8}}>
                 <div>
-                  <h2 style={{...s.sectionTitle, marginBottom:4}}>Escalas de precio</h2>
-                  <p style={{margin:0, color:'#5a6380', fontSize:12, lineHeight:1.35}}>Definí precios según cantidad mínima. El sistema usará la escala correspondiente según la cantidad del pedido.</p>
+                  <h2 style={{...s.sectionTitle, marginBottom:2}}>Escalas de precio</h2>
+                  <p style={{margin:0, color:'#5a6380', fontSize:11, lineHeight:1.25}}>Precios por cantidad mínima. Se aplica la escala correspondiente al pedido.</p>
                 </div>
               </div>
               {localities.filter(l => l.active).length === 0 ? <p style={s.emptyMsg}>No hay localidades activas.</p>
               : products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p>
               : (
-                <div ref={tierGridRef} style={{display:'flex', flexDirection:'column', gap:12}}>
+                <div ref={tierGridRef} style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:8}}>
                   {products.filter(p => p.active).map(product => {
                     const productTiers = priceTiers.filter(t => t.product_id === product.id);
                     const activeLocalities = localities.filter(l => l.active);
@@ -1839,25 +1839,25 @@ export default function Admin() {
                       const tiers = productTiers.filter(t => t.locality_id === localityId).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
                       const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
                       const isAdding = addingTier === key;
-                      const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
+                      const cellStyle = {padding:'1px 4px', verticalAlign:'middle'};
                       return (
                         <div key={key} style={{borderTop: borderTop ? '1px solid #f0f2f8' : 'none'}}>
-                          <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{localityName}</div>
+                          <div style={{padding:'3px 6px 1px', fontSize:9, fontWeight:700, color:'#9aa3bc', letterSpacing:0.3, textTransform:'uppercase'}}>{localityName}</div>
                           <table style={{width:'100%', borderCollapse:'collapse'}}>
                             <thead>
                               <tr style={{borderBottom:'1px solid #eef0f6'}}>
-                                <th style={{padding:'4px 6px', fontSize:10, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Desde cantidad</th>
-                                <th style={{padding:'4px 6px', fontSize:10, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Precio público</th>
-                                <th style={{padding:'4px 4px', width:28, textAlign:'center', fontSize:10, fontWeight:700, color:'#5a6380'}}>Acciones</th>
+                                <th style={{padding:'2px 4px', fontSize:9, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Desde</th>
+                                <th style={{padding:'2px 4px', fontSize:9, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Precio</th>
+                                <th style={{padding:'2px 2px', width:22, textAlign:'center', fontSize:9, fontWeight:700, color:'#5a6380'}}></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 6px'}}>Sin escalas</td></tr>}
+                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:10, fontStyle:'italic', textAlign:'center', padding:'2px 4px'}}>Sin escalas</td></tr>}
                               {tiers.map((t, tierIndex) => {
                                 const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
                                 const minError = getTierCellError(t, 'min_quantity', tiers);
                                 const priceError = getTierCellError(t, 'price_per_unit', tiers);
-                                const inputBaseStyle = error => ({width:'100%', border:'1.5px solid ' + (error ? '#ef4444' : '#dde1ef'), borderRadius:5, padding:'4px 6px', fontSize:12, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:error ? '#fff5f5' : 'white'});
+                                const inputBaseStyle = error => ({width:'100%', height:24, border:'1.5px solid ' + (error ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:error ? '#fff5f5' : 'white'});
                                 return (
                                   <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
                                     <td style={cellStyle}>
@@ -1865,7 +1865,7 @@ export default function Admin() {
                                     </td>
                                     <td style={cellStyle}>
                                       <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                        <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                        <span style={{fontSize:10, color:'#c4c9d9'}}>$</span>
                                         <input className="tier-input" data-tier-cell="true" data-grid-key={key} data-row-index={tierIndex} data-col-index="1" style={inputBaseStyle(priceError)} type="text" inputMode="decimal" value={ef.price_per_unit} title={priceError || 'Precio público'} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={e => { if (e.currentTarget.dataset.skipTierSave === 'true') { delete e.currentTarget.dataset.skipTierSave; return; } saveTierAuto(t.id); }} onKeyDown={e => handleTierCellKeyDown(e, { id: t.id })} />
                                         {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
                                       </div>
@@ -1885,8 +1885,8 @@ export default function Admin() {
                                       data-grid-key={key}
                                       data-row-index={tiers.length}
                                       data-col-index="0"
-                                      style={{width:'100%', border:'1.5px solid ' + (nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:5, padding:'4px 6px', fontSize:12, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#fff5f5' : 'white'}}
-                                      type="text" inputMode="numeric" placeholder="Cantidad"
+                                      style={{width:'100%', height:24, border:'1.5px solid ' + (nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#fff5f5' : 'white'}}
+                                      type="text" inputMode="numeric" placeholder="Cant."
                                       value={nt.min_quantity}
                                       title={nt.min_quantity ? getNewTierCellError(nt, 'min_quantity', tiers) : 'Desde cantidad'}
                                       onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: cleanTierInput(e.target.value, 'min_quantity')}}))}
@@ -1895,14 +1895,14 @@ export default function Admin() {
                                   </td>
                                   <td style={cellStyle}>
                                     <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                      <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                      <span style={{fontSize:10, color:'#c4c9d9'}}>$</span>
                                       <input
                                         className="tier-input"
                                         data-tier-cell="true"
                                         data-grid-key={key}
                                         data-row-index={tiers.length}
                                         data-col-index="1"
-                                        style={{width:'100%', border:'1.5px solid ' + (nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:5, padding:'4px 6px', fontSize:12, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#fff5f5' : 'white'}}
+                                        style={{width:'100%', height:24, border:'1.5px solid ' + (nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#fff5f5' : 'white'}}
                                         type="text" inputMode="decimal" placeholder="Precio"
                                         value={nt.price_per_unit}
                                         title={nt.price_per_unit ? getNewTierCellError(nt, 'price_per_unit', tiers) : 'Precio público'}
@@ -1917,10 +1917,10 @@ export default function Admin() {
                               )}
                             </tbody>
                           </table>
-                          <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
+                          <div style={{padding:'2px 6px', borderTop:'1px solid #f0f2f8'}}>
                             {isAdding
-                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
-                              : <button style={{...s.editBtn, padding:'4px 8px', fontSize:11, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ Agregar escala</button>
+                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:10, padding:0}} onClick={() => setAddingTier(null)}>Cancelar</button>
+                              : <button style={{background:'none', border:'none', cursor:'pointer', color:'#2D6BE4', fontSize:10, fontWeight:700, padding:0}} onClick={() => setAddingTier(key)}>+ escala</button>
                             }
                           </div>
                         </div>
@@ -1928,8 +1928,8 @@ export default function Admin() {
                     };
 
                     return (
-                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:7, overflow:'hidden'}}>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'4px 8px', fontSize:11, fontWeight:700, letterSpacing:0.3}}>{product.name}</div>
                         {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
                       </div>
                     );
