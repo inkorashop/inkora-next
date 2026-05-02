@@ -3559,8 +3559,8 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
 
   return (
     <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.58)', zIndex:320, display:'flex', alignItems:'center', justifyContent:'center', padding:18}} onClick={onClose}>
-      <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 14px 50px rgba(27,47,94,0.22)', width:'100%', maxWidth:980, height:'min(86vh, 760px)', display:'flex', flexDirection:'column', overflow:'hidden'}} onClick={e => e.stopPropagation()}>
-        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, padding:'16px 18px', borderBottom:'1.5px solid #dde1ef', background:'#f8faff'}}>
+      <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 14px 50px rgba(27,47,94,0.22)', width:'100%', maxWidth:980, height:'86vh', maxHeight:760, display:'flex', flexDirection:'column', overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, padding:'14px 18px', borderBottom:'1.5px solid #dde1ef', background:'#f8faff', flexShrink:0}}>
           <div>
             <div style={{fontSize:16, fontWeight:800, color:'#1B2F5E'}}>Datos guardados</div>
             <div style={{fontSize:12, color:'#5a6380', marginTop:3}}>
@@ -3570,7 +3570,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
           <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>×</button>
         </div>
 
-        <div style={{overflow:'auto', minHeight:0, flex:1, padding:12, display:'flex', flexDirection:'column', gap:8}}>
+        <div style={{overflowY:'auto', overflowX:'hidden', minHeight:0, height:0, flex:'1 1 0', padding:12, display:'flex', flexDirection:'column', gap:8, overscrollBehavior:'contain'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
           {loading ? (
             <p style={styles.emptyMsg}>Cargando datos...</p>
           ) : error ? (
@@ -3593,7 +3593,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                 const rows = Array.isArray(tableValue)
                   ? tableValue
                   : Object.entries(tableValue || {}).map(([key, value]) => ({ key, value }));
-                const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))].slice(0, 10);
+                const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
 
                 return (
                   <details key={tableName} open style={{border:'1px solid #eef0f6', borderRadius:8, overflow:'hidden', background:'white'}}>
@@ -3603,7 +3603,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                     {rows.length === 0 ? (
                       <div style={{padding:10, fontSize:12, color:'#9aa3bc'}}>Sin datos.</div>
                     ) : (
-                      <div style={{overflowX:'auto'}}>
+                      <div style={{overflowX:'auto', overflowY:'hidden'}}>
                         <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: Math.max(680, columns.length * 120)}}>
                           <thead>
                             <tr>
