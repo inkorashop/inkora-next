@@ -3873,32 +3873,19 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
 function usePresence(supabase) {
   const [presence, setPresence] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
   const [tick, setTick] = React.useState(0);
-  const ACTIVE_THRESHOLD = 20000;
+  const ACTIVE_THRESHOLD = 4000;
 
   React.useEffect(() => {
-    let mounted = true;
     supabase.from('user_presence').select('*').order('updated_at', { ascending: false })
-      .then(({ data, error: loadError }) => {
-        if (!mounted) return;
-        if (loadError) {
-          setError(loadError.message);
-          setPresence([]);
-        } else {
-          setError('');
-          setPresence(data || []);
-        }
-        setLoading(false);
-      });
+      .then(({ data }) => setPresence((data || []).map(u => ({ ...u, _lastSeen: Date.now() }))));
 
     const ch = supabase.channel('shared-presence-watch-' + Math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setPresence(prev => prev.filter(u => u.user_id !== payload.old.user_id));
         } else {
-          const newEntry = payload.new;
+          const newEntry = { ...payload.new, _lastSeen: Date.now() };
           setPresence(prev => {
             const exists = prev.find(u => u.user_id === newEntry.user_id);
             if (exists) return prev.map(u => u.user_id === newEntry.user_id ? newEntry : u);
@@ -3908,43 +3895,40 @@ function usePresence(supabase) {
       })
       .subscribe();
 
-    const ticker = setInterval(() => setTick(t => t + 1), 1000);
-    return () => {
-      mounted = false;
-      supabase.removeChannel(ch);
-      clearInterval(ticker);
-    };
+    const ticker = setInterval(() => setTick(t => t + 1), 500);
+    return () => { ch.unsubscribe(); clearInterval(ticker); };
   }, [supabase]);
 
   const getStatus = (userId) => {
     const u = presence.find(p => p.user_id === userId);
     if (!u) return null;
-    const isActive = Date.now() - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD;
-    const pageLabel = u.page === 'landing' ? 'Landing' : 'Catalogo';
+    const isActive = u._lastSeen && (Date.now() - u._lastSeen < ACTIVE_THRESHOLD);
+    const pageLabel = u.page === 'landing' ? '🏠' : '🛍️';
     return { isActive, pageLabel, updated_at: u.updated_at };
   };
 
-  return { presence, getStatus, ACTIVE_THRESHOLD, tick, loading, error };
+  return { presence, getStatus, ACTIVE_THRESHOLD, tick };
 }
+
 const ACTIVITY_EVENT_CONFIG = {
-  page_view: { icon: 'ðŸ ', label: 'Vista de pÃ¡gina', color: '#6b7280' },
-  product_view: { icon: 'ðŸ“¦', label: 'Vio producto', color: '#2D6BE4' },
-  design_view: { icon: 'ðŸ‘ï¸', label: 'Vio diseÃ±o', color: '#2D6BE4' },
-  design_search: { icon: 'ðŸ”', label: 'BÃºsqueda', color: '#7c3aed' },
-  cart_add: { icon: 'ðŸ›’', label: 'AgregÃ³ al carrito', color: '#15803d' },
-  cart_remove: { icon: 'ðŸ—‘ï¸', label: 'QuitÃ³ del carrito', color: '#dc2626' },
-  cart_view: { icon: 'ðŸ‘œ', label: 'AbriÃ³ carrito', color: '#6b7280' },
-  cart_qty_change: { icon: 'âž•', label: 'CambiÃ³ cantidad', color: '#d97706' },
-  checkout_start: { icon: 'ðŸ“‹', label: 'IniciÃ³ checkout', color: '#d97706' },
-  checkout_abandon: { icon: 'âŒ', label: 'AbandonÃ³ checkout', color: '#dc2626' },
-  order_confirm: { icon: 'âœ…', label: 'ConfirmÃ³ pedido', color: '#15803d' },
-  model_view: { icon: 'ðŸ”·', label: 'AbriÃ³ visor 3D', color: '#0891b2' },
-  auth_login: { icon: 'ðŸ”‘', label: 'Login', color: '#7c3aed' },
-  auth_register: { icon: 'ðŸ†•', label: 'Registro', color: '#7c3aed' },
-  auth_logout: { icon: 'ðŸšª', label: 'Logout', color: '#6b7280' },
-  whatsapp_click: { icon: 'ðŸ’¬', label: 'WhatsApp', color: '#25D366' },
-  session_start: { icon: 'ðŸŸ¢', label: 'Nueva sesiÃ³n', color: '#15803d' },
-  click_global: { icon: 'ðŸ–±ï¸', label: 'Click', color: '#9aa3bc' },
+  page_view: { icon: '🏠', label: 'Vista de página', color: '#6b7280' },
+  product_view: { icon: '📦', label: 'Vio producto', color: '#2D6BE4' },
+  design_view: { icon: '👁️', label: 'Vio diseño', color: '#2D6BE4' },
+  design_search: { icon: '🔍', label: 'Búsqueda', color: '#7c3aed' },
+  cart_add: { icon: '🛒', label: 'Agregó al carrito', color: '#15803d' },
+  cart_remove: { icon: '🗑️', label: 'Quitó del carrito', color: '#dc2626' },
+  cart_view: { icon: '👜', label: 'Abrió carrito', color: '#6b7280' },
+  cart_qty_change: { icon: '➕', label: 'Cambió cantidad', color: '#d97706' },
+  checkout_start: { icon: '📋', label: 'Inició checkout', color: '#d97706' },
+  checkout_abandon: { icon: '❌', label: 'Abandonó checkout', color: '#dc2626' },
+  order_confirm: { icon: '✅', label: 'Confirmó pedido', color: '#15803d' },
+  model_view: { icon: '🔷', label: 'Abrió visor 3D', color: '#0891b2' },
+  auth_login: { icon: '🔑', label: 'Login', color: '#7c3aed' },
+  auth_register: { icon: '🆕', label: 'Registro', color: '#7c3aed' },
+  auth_logout: { icon: '🚪', label: 'Logout', color: '#6b7280' },
+  whatsapp_click: { icon: '💬', label: 'WhatsApp', color: '#25D366' },
+  session_start: { icon: '🟢', label: 'Nueva sesión', color: '#15803d' },
+  click_global: { icon: '🖱️', label: 'Click', color: '#9aa3bc' },
 };
 
 function ActivityHistoryLegacy({ supabase }) {
@@ -4036,7 +4020,7 @@ function ActivityHistoryLegacy({ supabase }) {
         const value = e.metadata?.[key];
         if (value) counts[value] = (counts[value] || 0) + 1;
       });
-      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'â€”';
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
     };
     return {
       total: filteredEvents.length,
@@ -4058,10 +4042,10 @@ function ActivityHistoryLegacy({ supabase }) {
 
   function describeEvent(event) {
     const m = event.metadata || {};
-    if (event.event_type === 'cart_add') return `${m.design_name || 'DiseÃ±o'} x${m.qty || 1}${m.price ? ` - $${Number(m.price).toLocaleString('es-AR')}` : ''}`;
-    if (event.event_type === 'cart_qty_change') return `delta: ${m.delta > 0 ? '+' : ''}${m.delta || 0} -> ${m.new_qty ?? 'â€”'} total`;
+    if (event.event_type === 'cart_add') return `${m.design_name || 'Diseño'} x${m.qty || 1}${m.price ? ` - $${Number(m.price).toLocaleString('es-AR')}` : ''}`;
+    if (event.event_type === 'cart_qty_change') return `delta: ${m.delta > 0 ? '+' : ''}${m.delta || 0} -> ${m.new_qty ?? '—'} total`;
     if (event.event_type === 'design_search') return `query: "${m.query || ''}" - ${m.results_count ?? 0} resultados`;
-    if (event.event_type === 'click_global') return `Â«${m.element_text || 'sin texto'}Â» - ${m.element_tag || 'elemento'}`;
+    if (event.event_type === 'click_global') return `«${m.element_text || 'sin texto'}» - ${m.element_tag || 'elemento'}`;
     if (event.event_type === 'checkout_abandon') return `${m.time_spent_seconds || 0} segundos en el formulario`;
     if (event.event_type === 'order_confirm') return `${m.order_code || 'Pedido'} - ${m.items_count || 0} items${m.total ? ` - $${Number(m.total).toLocaleString('es-AR')}` : ''}`;
     return m.design_name || m.product_name || m.page_title || m.method || m.page || '';
@@ -4082,17 +4066,17 @@ function ActivityHistoryLegacy({ supabase }) {
       <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Historial de actividad</h2>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-        {[['all', 'Todos'], ['known', 'Solo logueados'], ['anonymous', 'Solo anÃ³nimos']].map(([id, label]) => (
+        {[['all', 'Todos'], ['known', 'Solo logueados'], ['anonymous', 'Solo anónimos']].map(([id, label]) => (
           <button key={id} onClick={() => setIdentityFilter(id)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: identityFilter === id ? '#1B2F5E' : 'white', color: identityFilter === id ? 'white' : '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
         ))}
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesiÃ³n..." style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, minWidth: 220 }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesión..." style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, minWidth: 220 }} />
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }}>
           <option value="all">Todos los eventos</option>
           {eventTypes.map(t => <option key={t} value={t}>{ACTIVITY_EVENT_CONFIG[t]?.label || t}</option>)}
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }} />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }} />
-        <button onClick={loadActivity} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>â†» Actualizar</button>
+        <button onClick={loadActivity} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>↻ Actualizar</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 10, marginBottom: 18 }}>
@@ -4101,7 +4085,7 @@ function ActivityHistoryLegacy({ supabase }) {
           ['Sesiones', metrics.sessions],
           ['Abandono checkout', metrics.abandonRate],
           ['Producto top', metrics.topProduct],
-          ['DiseÃ±o carrito top', metrics.topCartDesign],
+          ['Diseño carrito top', metrics.topCartDesign],
           ['Eventos cargados', metrics.stored],
         ].map(([label, value]) => (
           <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 8, padding: 12 }}>
@@ -4121,21 +4105,21 @@ function ActivityHistoryLegacy({ supabase }) {
             const isOpen = expanded.has(session.session_id);
             const hasOrder = session.events.some(e => e.event_type === 'order_confirm');
             const hasAbandon = session.events.some(e => e.event_type === 'checkout_abandon');
-            const title = session.is_anonymous ? `AnÃ³nimo Â· ${session.session_id.slice(0, 8)}` : `${session.user_name || 'Usuario'}${session.user_email ? ` Â· ${session.user_email}` : ''}`;
+            const title = session.is_anonymous ? `Anónimo · ${session.session_id.slice(0, 8)}` : `${session.user_name || 'Usuario'}${session.user_email ? ` · ${session.user_email}` : ''}`;
             return (
               <div key={session.session_id} style={{ border: '1px solid #eef0f6', borderRadius: 9, overflow: 'hidden' }}>
                 <button onClick={() => toggleSession(session.session_id)} style={{ width: '100%', border: 'none', background: '#f7f8fc', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left' }}>
-                  <span style={{ color: '#1B2F5E', fontWeight: 800 }}>{isOpen ? 'â–¼' : 'â–¶'}</span>
+                  <span style={{ color: '#1B2F5E', fontWeight: 800 }}>{isOpen ? '▼' : '▶'}</span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#2d3352', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
                   {hasOrder && <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800 }}>Pedido</span>}
-                  {hasAbandon && <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800 }}>AbandonÃ³</span>}
-                  <span style={{ color: '#9aa3bc', fontSize: 12 }}>{timeAgo(session.last_seen)} Â· {session.events.length} eventos</span>
+                  {hasAbandon && <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 800 }}>Abandonó</span>}
+                  <span style={{ color: '#9aa3bc', fontSize: 12 }}>{timeAgo(session.last_seen)} · {session.events.length} eventos</span>
                 </button>
                 {isOpen && (
                   <div style={{ padding: '10px 14px 12px 28px', position: 'relative' }}>
                     <div style={{ position: 'absolute', left: 16, top: 12, bottom: 12, width: 2, background: '#dbe7ff' }} />
                     {session.events.map(event => {
-                      const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { icon: 'â€¢', label: event.event_type, color: '#9aa3bc' };
+                      const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { icon: '•', label: event.event_type, color: '#9aa3bc' };
                       return (
                         <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '24px 150px 1fr 72px', gap: 8, alignItems: 'center', padding: '5px 0', fontSize: 12 }}>
                           <span style={{ position: 'relative', zIndex: 1, color: cfg.color }}>{cfg.icon}</span>
@@ -4151,7 +4135,7 @@ function ActivityHistoryLegacy({ supabase }) {
             );
           })}
           {visibleSessions < sessions.length && (
-            <button onClick={() => setVisibleSessions(v => v + 50)} style={{ alignSelf: 'center', marginTop: 8, border: '1.5px solid #dde1ef', borderRadius: 8, padding: '8px 18px', background: 'white', color: '#2D6BE4', fontWeight: 800, cursor: 'pointer' }}>Cargar mÃ¡s</button>
+            <button onClick={() => setVisibleSessions(v => v + 50)} style={{ alignSelf: 'center', marginTop: 8, border: '1.5px solid #dde1ef', borderRadius: 8, padding: '8px 18px', background: 'white', color: '#2D6BE4', fontWeight: 800, cursor: 'pointer' }}>Cargar más</button>
           )}
         </div>
       )}
@@ -4162,7 +4146,6 @@ function ActivityHistoryLegacy({ supabase }) {
 function ActivityHistory({ supabase }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [loadError, setLoadError] = React.useState('');
   const [identityFilter, setIdentityFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('all');
@@ -4178,18 +4161,12 @@ function ActivityHistory({ supabase }) {
 
   const loadActivity = React.useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('user_activity_events')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(2000);
-    if (error) {
-      setLoadError(error.message);
-      setEvents([]);
-    } else {
-      setLoadError('');
-      setEvents(data || []);
-    }
+    setEvents(data || []);
     setLoading(false);
   }, [supabase]);
 
@@ -4257,7 +4234,6 @@ function ActivityHistory({ supabase }) {
     if (selectedSessionId && sessions.length > 0 && !sessions.some(s => s.session_id === selectedSessionId)) {
       setSelectedSessionId(sessions[0].session_id);
     }
-    if (selectedSessionId && sessions.length === 0) setSelectedSessionId('');
   }, [selectedSessionId, sessions]);
 
   React.useEffect(() => {
@@ -4379,14 +4355,8 @@ function ActivityHistory({ supabase }) {
       <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de actividad</h2>
-          <button onClick={loadActivity} disabled={loading} style={{ ...compactInput, background: 'white', fontWeight: 700, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.65 : 1 }}>{loading ? 'Actualizando...' : 'Actualizar'}</button>
+          <button onClick={loadActivity} style={{ ...compactInput, background: 'white', fontWeight: 700, cursor: 'pointer' }}>Actualizar</button>
         </div>
-
-        {loadError && (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
-            No se pudo cargar el historial: {loadError}
-          </div>
-        )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {[['all', 'Todos'], ['known', 'Logueados'], ['anonymous', 'Anonimos']].map(([id, label]) => (
@@ -4417,7 +4387,7 @@ function ActivityHistory({ supabase }) {
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 360px) 1fr', gap: 10, alignItems: 'start' }}>
           <div>
             <label style={{ display: 'block', fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>Usuario o sesion</label>
             <select value={selectedSessionId} onChange={e => setSelectedSessionId(e.target.value)} style={{ ...compactInput, width: '100%' }}>
@@ -4433,10 +4403,9 @@ function ActivityHistory({ supabase }) {
           </div>
 
           <div style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden', minWidth: 0 }}>
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '116px 132px minmax(240px, 1fr) 86px', gap: 8, minWidth: 620, background: '#f7f8fc', padding: '6px 9px', fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase' }}>
-                <span>Hora</span><span>Evento</span><span>Detalle</span><span>Pagina</span>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, background: '#f7f8fc', padding: '6px 9px', fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase' }}>
+              <span>Hora</span><span>Evento</span><span>Detalle</span><span>Pagina</span>
+            </div>
             {loading ? (
               <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>Cargando actividad...</div>
             ) : selectedEvents.length === 0 ? (
@@ -4444,7 +4413,7 @@ function ActivityHistory({ supabase }) {
             ) : selectedEvents.map(event => {
               const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { label: event.event_type, color: '#9aa3bc' };
               return (
-                <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '116px 132px minmax(240px, 1fr) 86px', gap: 8, minWidth: 620, alignItems: 'center', padding: '5px 9px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
+                <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, alignItems: 'center', padding: '5px 9px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
                   <span style={{ color: '#9aa3bc' }}>{dateTimeLabel(event.created_at)}</span>
                   <span style={{ color: cfg.color, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
                   <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{describeEvent(event)}</span>
@@ -4452,7 +4421,6 @@ function ActivityHistory({ supabase }) {
                 </div>
               );
             })}
-            </div>
           </div>
         </div>
       </div>
@@ -4498,23 +4466,15 @@ function ActivityHistory({ supabase }) {
 function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [clicksError, setClicksError] = React.useState('');
   const [filterProduct, setFilterProduct] = React.useState('all');
   const [confirmReset, setConfirmReset] = React.useState(false);
-  const [resettingClicks, setResettingClicks] = React.useState(false);
   const [activitySubtab, setActivitySubtab] = React.useState('heatmap');
-  const { presence, ACTIVE_THRESHOLD, tick, loading: loadingPresence, error: presenceError } = usePresence(supabase);
+  const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
 
   const loadClicks = React.useCallback(async () => {
     setLoading(true);
-    const { data: clickData, error } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
-    if (error) {
-      setClicksError(error.message);
-      setEvents([]);
-    } else {
-      setClicksError('');
-      setEvents(clickData || []);
-    }
+    const { data: clickData } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
+    setEvents(clickData || []);
     setLoading(false);
   }, [supabase]);
 
@@ -4530,19 +4490,17 @@ function HeatmapTab({ supabase, products }) {
   }, [supabase, loadClicks]);
 
   const productOptions = [{ id: 'all', name: 'Todos los productos' }, ...products];
-  const filteredEvents = filterProduct === 'all' ? events : events.filter(e => e.producto_activo === filterProduct);
-  const filteredCount = filteredEvents.length;
-  const latestClick = filteredEvents[0]?.timestamp || null;
+  const filteredCount = filterProduct === 'all' ? events.length : events.filter(e => e.producto_activo === filterProduct).length;
 
   function openHeatmap() {
     const base = window.location.origin;
     if (filterProduct === 'all') {
-      window.open(`${base}/catalogo?heatmap=1`, '_blank', 'noopener,noreferrer');
+      window.open(`${base}/catalogo?heatmap=1`, '_blank');
     } else {
       const p = products.find(pr => pr.id === filterProduct);
       if (!p) return;
       const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      window.open(`${base}/catalogo?producto=${slug}&heatmap=1`, '_blank', 'noopener,noreferrer');
+      window.open(`${base}/catalogo?producto=${slug}&heatmap=1`, '_blank');
     }
   }
 
@@ -4575,7 +4533,7 @@ function HeatmapTab({ supabase, products }) {
       {activitySubtab === 'heatmap' ? (
         <>
       <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Mapa de calor â€” CatÃ¡logo</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Mapa de calor — Catálogo</h2>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
           <select
@@ -4591,7 +4549,7 @@ function HeatmapTab({ supabase, products }) {
             onClick={loadClicks}
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 12, background: 'white', cursor: 'pointer', color: '#5a6380' }}
           >
-            â†» Actualizar
+            ↻ Actualizar
           </button>
         </div>
 
@@ -4607,52 +4565,34 @@ function HeatmapTab({ supabase, products }) {
               <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{new Set(events.map(e => e.producto_activo)).size}</div>
               <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>productos con clicks</div>
             </div>
-            <div style={{ background: '#f0f4ff', borderRadius: 10, padding: '16px 24px', minWidth: 140 }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#1B2F5E' }}>{latestClick ? (() => {
-                const diff = Math.max(0, Date.now() - new Date(latestClick).getTime());
-                const mins = Math.floor(diff / 60000);
-                const hrs = Math.floor(mins / 60);
-                return hrs > 0 ? `${hrs}h` : mins > 0 ? `${mins}m` : 'ahora';
-              })() : 'â€”'}</div>
-              <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>ultimo click</div>
-            </div>
-          </div>
-        )}
-        {clicksError && (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700, marginBottom: 14 }}>
-            No se pudieron cargar los clicks: {clicksError}
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button
             onClick={openHeatmap}
-            disabled={loading}
-            style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+            disabled={loading || events.length === 0}
+            style={{ background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '12px 28px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            ðŸ”¥ Ver mapa de calor en el catÃ¡logo
+            🔥 Ver mapa de calor en el catálogo
           </button>
           <button
             onClick={() => setConfirmReset(true)}
             disabled={loading || events.length === 0}
             style={{ background: 'white', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 700, cursor: loading || events.length === 0 ? 'not-allowed' : 'pointer', opacity: loading || events.length === 0 ? 0.5 : 1 }}
           >
-            ðŸ—‘ï¸ Resetear clicks
+            🗑️ Resetear clicks
           </button>
         </div>
         <p style={{ fontSize: 11, color: '#9aa3bc', marginTop: 10 }}>
-          Abre el catÃ¡logo en una nueva pestaÃ±a con el mapa de calor superpuesto. PodÃ©s scrollear e interactuar normalmente.
+          Abre el catálogo en una nueva pestaña con el mapa de calor superpuesto. Podés scrollear e interactuar normalmente.
         </p>
       </div>
 
       {/* Lista de usuarios activos/inactivos */}
       <div style={{ background: 'white', borderRadius: 10, padding: 24, border: '1.5px solid #dde1ef' }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Usuarios en el catÃ¡logo</h2>
-        {presenceError ? (
-          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 700 }}>
-            No se pudo cargar presencia: {presenceError}
-          </div>
-        ) : loadingPresence ? (
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 16 }}>Usuarios en el catálogo</h2>
+        {loading ? (
           <div style={{ color: '#9aa3bc', fontSize: 14 }}>Cargando...</div>
         ) : presence.length === 0 ? (
           <div style={{ color: '#9aa3bc', fontSize: 13 }}>No hay actividad registrada.</div>
@@ -4663,7 +4603,7 @@ function HeatmapTab({ supabase, products }) {
               const active = presence.filter(u => now - new Date(u.updated_at).getTime() < ACTIVE_THRESHOLD);
               const inactive = presence.filter(u => now - new Date(u.updated_at).getTime() >= ACTIVE_THRESHOLD);
 
-              const pageLabel = (page) => page === 'landing' ? 'ðŸ  Landing' : 'ðŸ›ï¸ CatÃ¡logo';
+              const pageLabel = (page) => page === 'landing' ? '🏠 Landing' : '🛍️ Catálogo';
               const pageOrder = (page) => page === 'landing' ? 0 : 1;
 
               const sortedActive = [...active].sort((a, b) => pageOrder(a.page) - pageOrder(b.page));
@@ -4683,16 +4623,16 @@ function HeatmapTab({ supabase, products }) {
                 <>
                   {sortedActive.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>ðŸŸ¢ Activos ahora ({sortedActive.length})</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>🟢 Activos ahora ({sortedActive.length})</div>
                       {sortedActive.map(u => (
                         <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || 'â€”'}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
                             <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                            <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>En lÃ­nea</div>
+                            <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>En línea</div>
                             <div style={{ fontSize: 10, color: '#9aa3bc', background: '#e8eef9', borderRadius: 4, padding: '1px 6px' }}>{pageLabel(u.page)}</div>
                             <div style={{ fontSize: 10, color: '#c4c9d9' }}>{fecha(u.updated_at)}</div>
                           </div>
@@ -4702,12 +4642,12 @@ function HeatmapTab({ supabase, products }) {
                   )}
                   {sortedInactive.length > 0 && (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: sortedActive.length > 0 ? 12 : 0, marginBottom: 4 }}>âš« Inactivos ({sortedInactive.length})</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 1, marginTop: sortedActive.length > 0 ? 12 : 0, marginBottom: 4 }}>⚫ Inactivos ({sortedInactive.length})</div>
                       {sortedInactive.map(u => (
                         <div key={u.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#f7f8fc', border: '1px solid #eef0f6' }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || 'â€”'}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>{u.name || '—'}</div>
                             <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
@@ -4734,23 +4674,21 @@ function HeatmapTab({ supabase, products }) {
       {confirmReset && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>Â¿Resetear todos los clicks?</div>
-            <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acciÃ³n va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
+            <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button style={{ background: 'white', border: '1.5px solid #dde1ef', color: '#5a6380', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => setConfirmReset(false)}>Cancelar</button>
               <button
-                style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: resettingClicks ? 'wait' : 'pointer', opacity: resettingClicks ? 0.7 : 1, boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
+                style={{ background: 'linear-gradient(135deg, #e53e3e, #c53030)', color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(229,62,62,0.4)' }}
                 onClick={async () => {
-                  setResettingClicks(true);
-                  const { error } = await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-                  if (error) alert('No se pudieron resetear los clicks: ' + error.message);
-                  else setEvents([]);
+                  setLoading(true);
+                  await supabase.from('click_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                  setEvents([]);
                   setConfirmReset(false);
-                  setResettingClicks(false);
+                  setLoading(false);
                 }}
-                disabled={resettingClicks}
               >
-                {resettingClicks ? 'Borrando...' : 'SÃ­, eliminar todo'}
+                Sí, eliminar todo
               </button>
             </div>
           </div>
@@ -4820,6 +4758,12 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
+
+
+
+
+
+
 
 
 
