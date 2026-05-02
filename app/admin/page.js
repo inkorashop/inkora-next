@@ -280,6 +280,7 @@ export default function Admin() {
   const [savingVersionSnapshot, setSavingVersionSnapshot] = useState(false);
   const [versionSnapshotError, setVersionSnapshotError] = useState('');
   const [versionSnapshotNotice, setVersionSnapshotNotice] = useState('');
+  const [versionSnapshotViewer, setVersionSnapshotViewer] = useState({ open: false, snapshot: null, data: null, loading: false, error: '' });
   const [adminDataReadyForSnapshots, setAdminDataReadyForSnapshots] = useState(false);
   const autoSnapshotSavingRef = useRef(false);
 
@@ -1421,6 +1422,22 @@ export default function Admin() {
 
     if (source === 'auto') autoSnapshotSavingRef.current = false;
     if (source === 'manual') setSavingVersionSnapshot(false);
+  }
+
+  async function openVersionSnapshotViewer(snapshot) {
+    setVersionSnapshotViewer({ open: true, snapshot, data: null, loading: true, error: '' });
+    const { data, error } = await supabase
+      .from('admin_version_snapshots')
+      .select('data')
+      .eq('id', snapshot.id)
+      .single();
+
+    setVersionSnapshotViewer(prev => ({
+      ...prev,
+      data: data?.data || null,
+      loading: false,
+      error: error ? `No se pudieron cargar los datos: ${error.message}` : '',
+    }));
   }
 
   // ── Orders ──
@@ -3384,9 +3401,18 @@ export default function Admin() {
             notice={versionSnapshotNotice}
             onRefresh={loadVersionSnapshots}
             onSave={() => createVersionSnapshot({ source: 'manual' })}
+            onView={openVersionSnapshotViewer}
             retentionDays={VERSION_SNAPSHOT_RETENTION_DAYS}
           />
         )}
+
+      {/* MODAL VER DATOS DE VERSION */}
+      {versionSnapshotViewer.open && (
+        <VersionSnapshotViewerModal
+          viewer={versionSnapshotViewer}
+          onClose={() => setVersionSnapshotViewer({ open: false, snapshot: null, data: null, loading: false, error: '' })}
+        />
+      )}
 
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
@@ -3423,7 +3449,7 @@ export default function Admin() {
   );
 }
 
-function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefresh, onSave, retentionDays }) {
+function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefresh, onSave, onView, retentionDays }) {
   const formatDate = (value) => new Date(value).toLocaleString('es-AR', {
     day: '2-digit',
     month: '2-digit',
@@ -3486,7 +3512,7 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
         ) : (
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             {snapshots.map(snapshot => (
-              <div key={snapshot.id} style={{display:'grid', gridTemplateColumns:'minmax(150px, 210px) 100px 1fr minmax(140px, 220px)', gap:12, alignItems:'center', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white'}}>
+              <div key={snapshot.id} style={{display:'grid', gridTemplateColumns:'minmax(150px, 210px) 92px 1fr minmax(140px, 220px) 92px', gap:12, alignItems:'center', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white'}}>
                 <div>
                   <div style={{fontSize:13, fontWeight:800, color:'#1B2F5E'}}>{formatDate(snapshot.created_at)}</div>
                   <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>hash {snapshot.content_hash}</div>
@@ -3498,10 +3524,121 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
                 <div style={{fontSize:11, color:'#9aa3bc', textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
                   {snapshot.created_by || 'Sin usuario registrado'}
                 </div>
+                <button style={{...styles.editBtn, padding:'6px 10px', justifySelf:'end'}} onClick={() => onView(snapshot)}>
+                  Ver datos
+                </button>
               </div>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function VersionSnapshotViewerModal({ viewer, onClose }) {
+  const { snapshot, data, loading, error } = viewer;
+  const tables = data?.tables || {};
+  const tableEntries = Object.entries(tables);
+  const formatDate = (value) => value ? new Date(value).toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }) : '-';
+
+  const compactValue = (value) => {
+    if (value === null || value === undefined || value === '') return '—';
+    if (Array.isArray(value)) return `[${value.length}]`;
+    if (typeof value === 'object') return `{${Object.keys(value).length}}`;
+    return String(value);
+  };
+
+  return (
+    <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.58)', zIndex:320, display:'flex', alignItems:'center', justifyContent:'center', padding:18}} onClick={onClose}>
+      <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 14px 50px rgba(27,47,94,0.22)', width:'100%', maxWidth:980, height:'min(86vh, 760px)', display:'flex', flexDirection:'column', overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, padding:'16px 18px', borderBottom:'1.5px solid #dde1ef', background:'#f8faff'}}>
+          <div>
+            <div style={{fontSize:16, fontWeight:800, color:'#1B2F5E'}}>Datos guardados</div>
+            <div style={{fontSize:12, color:'#5a6380', marginTop:3}}>
+              {formatDate(snapshot?.created_at)} · {snapshot?.source === 'manual' ? 'Manual' : 'Auto'} · hash {snapshot?.content_hash}
+            </div>
+          </div>
+          <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>×</button>
+        </div>
+
+        <div style={{overflow:'auto', padding:14, display:'flex', flexDirection:'column', gap:12}}>
+          {loading ? (
+            <p style={styles.emptyMsg}>Cargando datos...</p>
+          ) : error ? (
+            <div style={{background:'#fff7ed', border:'1px solid #fed7aa', color:'#9a3412', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700}}>{error}</div>
+          ) : (
+            <>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:8}}>
+                {tableEntries.map(([tableName, tableValue]) => {
+                  const count = Array.isArray(tableValue) ? tableValue.length : Object.keys(tableValue || {}).length;
+                  return (
+                    <div key={tableName} style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'9px 10px'}}>
+                      <div style={{fontSize:10, color:'#9aa3bc', fontWeight:800, textTransform:'uppercase', letterSpacing:0.6}}>{tableName}</div>
+                      <div style={{fontSize:18, color:'#1B2F5E', fontWeight:900, marginTop:2}}>{count}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {tableEntries.map(([tableName, tableValue]) => {
+                const rows = Array.isArray(tableValue)
+                  ? tableValue
+                  : Object.entries(tableValue || {}).map(([key, value]) => ({ key, value }));
+                const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))].slice(0, 10);
+
+                return (
+                  <details key={tableName} open style={{border:'1px solid #eef0f6', borderRadius:10, overflow:'hidden', background:'white'}}>
+                    <summary style={{cursor:'pointer', userSelect:'none', background:'#1B2F5E', color:'white', padding:'8px 11px', fontSize:12, fontWeight:800, letterSpacing:0.4}}>
+                      {tableName} ({rows.length})
+                    </summary>
+                    {rows.length === 0 ? (
+                      <div style={{padding:10, fontSize:12, color:'#9aa3bc'}}>Sin datos.</div>
+                    ) : (
+                      <div style={{overflowX:'auto'}}>
+                        <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: Math.max(680, columns.length * 120)}}>
+                          <thead>
+                            <tr>
+                              {columns.map(column => (
+                                <th key={column} style={{position:'sticky', top:0, background:'#f8faff', borderBottom:'1px solid #dde1ef', padding:'6px 7px', fontSize:10, color:'#5a6380', textAlign:'left', textTransform:'uppercase', letterSpacing:0.5}}>
+                                  {column}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, idx) => (
+                              <tr key={row?.id || row?.key || idx}>
+                                {columns.map(column => (
+                                  <td key={column} title={typeof row?.[column] === 'object' ? JSON.stringify(row?.[column]) : String(row?.[column] ?? '')} style={{borderBottom:'1px solid #f0f2f8', padding:'5px 7px', fontSize:11, color:'#2d3352', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                    {compactValue(row?.[column])}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </details>
+                );
+              })}
+
+              <details style={{border:'1px solid #eef0f6', borderRadius:10, overflow:'hidden'}}>
+                <summary style={{cursor:'pointer', background:'#f7f8fc', padding:'8px 11px', fontSize:12, fontWeight:800, color:'#1B2F5E'}}>JSON completo</summary>
+                <pre style={{margin:0, padding:12, maxHeight:260, overflow:'auto', background:'#0f172a', color:'#e2e8f0', fontSize:11, lineHeight:1.45}}>
+                  {JSON.stringify(data, null, 2)}
+                </pre>
+              </details>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
