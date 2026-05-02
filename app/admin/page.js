@@ -591,21 +591,6 @@ export default function Admin() {
     if (screen !== 'panel' || !currentUser) return;
 
     const sessionId = getAdminSessionId();
-    const activityKey = `inkora_admin_activity_${sessionId}_${activeTab}`;
-    if (sessionStorage.getItem(activityKey) !== activeTab) {
-      sessionStorage.setItem(activityKey, activeTab);
-      supabase.from('admin_activity_events').insert({
-        session_id: sessionId,
-        email: currentUser,
-        tab: activeTab,
-        event_type: 'tab_view',
-        metadata: { tab_label: ADMIN_TAB_LABELS[activeTab] || activeTab },
-        created_at: new Date().toISOString(),
-      }).then(({ error }) => {
-        if (error && error.code !== '42P01') console.error('Error tracking admin activity', error);
-      });
-    }
-
     const writePresence = () => {
       supabase.from('admin_presence').upsert({
         session_id: sessionId,
@@ -730,6 +715,20 @@ export default function Admin() {
     setCurrentUser(null);
   }
 
+  function trackAdminActivity(eventType, metadata = {}, tab = activeTab) {
+    if (screen !== 'panel' || !currentUser) return;
+    supabase.from('admin_activity_events').insert({
+      session_id: getAdminSessionId(),
+      email: currentUser,
+      tab,
+      event_type: eventType,
+      metadata,
+      created_at: new Date().toISOString(),
+    }).then(({ error }) => {
+      if (error && error.code !== '42P01') console.error('Error tracking admin activity', error);
+    });
+  }
+
   // ── Products ──
   async function handleProductDrop(targetId) {
     const srcId = dragSrcProductIdRef.current;
@@ -759,6 +758,7 @@ export default function Admin() {
   async function saveProduct(id, overrides = {}) {
     const data = { ...(productForms[id] || {}), ...overrides };
     await supabase.from('products').update(data).eq('id', id);
+    trackAdminActivity('product_update', { product_id: id, product_name: data.name, fields: Object.keys(data) }, 'products');
     setSavedProductId(id);
     setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
     loadProducts();
@@ -781,6 +781,7 @@ export default function Admin() {
     if (!newProduct.name.trim() || !newProduct.slug.trim()) return;
     setSavingProduct(true);
     await supabase.from('products').insert({ ...newProduct, active: true });
+    trackAdminActivity('product_create', { product_name: newProduct.name, slug: newProduct.slug }, 'products');
     setNewProduct(EMPTY_PRODUCT);
     setSavingProduct(false);
     setShowAddForm(false);
@@ -793,6 +794,8 @@ export default function Admin() {
       message: '¿Seguro que querés eliminar este producto? Los diseños y escalas quedarán en la base de datos pero desvinculados.',
       onConfirm: async () => {
         await supabase.from('products').delete().eq('id', id);
+        const product = products.find(p => p.id === id);
+        trackAdminActivity('product_delete', { product_id: id, product_name: product?.name }, 'products');
         loadProducts();
       },
       requireHold: true,
@@ -801,6 +804,8 @@ export default function Admin() {
 
   async function toggleProduct(id, active) {
     await supabase.from('products').update({ active: !active }).eq('id', id);
+    const product = products.find(p => p.id === id);
+    trackAdminActivity('product_toggle', { product_id: id, product_name: product?.name, active: !active }, 'products');
     setSavedProductId(id);
     setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
     loadProducts();
@@ -897,6 +902,7 @@ export default function Admin() {
   async function saveDesignCategory(id, category) {
     const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
     await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ category }).eq('id', did)));
+    trackAdminActivity('design_category_update', { design_ids: idsToUpdate, category }, 'designs');
     setDesigns(prev => prev.map(d => idsToUpdate.includes(d.id) ? { ...d, category } : d));
   }
 
@@ -910,6 +916,7 @@ export default function Admin() {
     reordered.splice(srcIdx, 1);
     reordered.splice(tgtIdx, 0, srcCat);
     await supabase.from('products').update({ categories: reordered }).eq('id', productId);
+    trackAdminActivity('product_category_reorder', { product_id: productId, category: srcCat }, 'products');
     loadProducts();
   }
 
@@ -921,6 +928,7 @@ export default function Admin() {
     if (current.includes(normalized)) return;
     const updated = [...current, normalized];
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    trackAdminActivity('product_category_create', { product_id: productId, category: normalized }, 'products');
     setNewCatInputs(prev => ({ ...prev, [productId]: '' }));
     loadProducts();
   }
@@ -930,6 +938,7 @@ export default function Admin() {
     const current = p?.category_colors || {};
     const updated = { ...current, [cat]: color };
     await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
+    trackAdminActivity('product_category_color_update', { product_id: productId, category: cat, color }, 'products');
     loadProducts();
   }
 
@@ -1008,6 +1017,7 @@ export default function Admin() {
       }));
       const failed = results.find(result => result.error);
       if (failed) throw failed.error;
+      trackAdminActivity('product_category_rename', { product_id: edit.productId, from: edit.oldName, to: nextName, affected_designs: designsToUpdate.length }, 'products');
     } catch (error) {
       setProducts(previousProducts);
       setDesigns(previousDesigns);
@@ -1022,12 +1032,14 @@ export default function Admin() {
     if (current.length <= 1) return;
     const updated = current.filter(c => c !== cat);
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
+    trackAdminActivity('product_category_delete', { product_id: productId, category: cat }, 'products');
     loadProducts();
   }
 
   async function toggleDesign(id, active) {
     const idsToUpdate = selectedIds.has(id) && selectedIds.size > 1 ? [...selectedIds] : [id];
     await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ active: !active }).eq('id', did)));
+    trackAdminActivity('design_toggle', { design_ids: idsToUpdate, active: !active }, 'designs');
     loadDesigns();
   }
 
@@ -1035,11 +1047,14 @@ export default function Admin() {
     if (selectedIds.has(id) && selectedIds.size > 1) {
       askConfirm(`¿Eliminar los ${selectedIds.size} diseños seleccionados? Esta acción no se puede deshacer.`, async () => {
         await Promise.all([...selectedIds].map(did => supabase.from('designs').delete().eq('id', did)));
+        trackAdminActivity('design_delete_bulk', { design_ids: [...selectedIds], count: selectedIds.size }, 'designs');
         setSelectedIds(new Set());
         loadDesigns();
       });
     } else {
+      const design = designs.find(d => d.id === id);
       await supabase.from('designs').delete().eq('id', id);
+      trackAdminActivity('design_delete', { design_id: id, design_name: design?.name }, 'designs');
       setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
       loadDesigns();
     }
@@ -1049,6 +1064,7 @@ export default function Admin() {
     if (products.length === 0) { alert('Primero creá al menos un producto.'); return; }
     setMigrating(true);
     await supabase.from('designs').update({ product_id: products[0].id }).is('product_id', null).eq('active', true);
+    trackAdminActivity('design_migrate_orphans', { target_product_id: products[0].id, target_product_name: products[0].name }, 'designs');
     setMigrating(false);
     loadDesigns();
   }
@@ -1146,6 +1162,7 @@ export default function Admin() {
     }
     setUploading(false);
     if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
+    trackAdminActivity('design_create_bulk', { count: pendingFiles.length, product_id: selectedProductId, product_name: selectedProduct?.name, had_errors: anyError }, 'designs');
     console.log('Upload completo, recargando diseños...');
     loadDesigns();
   }
@@ -1196,6 +1213,7 @@ export default function Admin() {
     if (!newLocality.name.trim()) return;
     setSavingLocality(true);
     await supabase.from('localities').insert({ ...newLocality, active: true });
+    trackAdminActivity('locality_create', { locality_name: newLocality.name }, 'localities');
     setNewLocality({ name: '' });
     setSavingLocality(false);
     loadLocalities();
@@ -1203,13 +1221,17 @@ export default function Admin() {
 
   async function toggleLocality(id, active) {
     await supabase.from('localities').update({ active: !active }).eq('id', id);
+    const locality = localities.find(l => l.id === id);
+    trackAdminActivity('locality_toggle', { locality_id: id, locality_name: locality?.name, active: !active }, 'localities');
     loadLocalities();
   }
 
   function deleteLocality(id) {
     askConfirm('¿Seguro que querés eliminar esta localidad? Se eliminarán también todas sus escalas de precio.', async () => {
+      const locality = localities.find(l => l.id === id);
       await supabase.from('price_tiers').delete().eq('locality_id', id);
       await supabase.from('localities').delete().eq('id', id);
+      trackAdminActivity('locality_delete', { locality_id: id, locality_name: locality?.name }, 'localities');
       loadLocalities(); loadPriceTiers();
     });
   }
@@ -1224,6 +1246,9 @@ export default function Admin() {
 
   async function updateUserLocality(userId, localityId) {
     await supabase.rpc('admin_update_user_locality', { p_user_id: userId, p_locality_id: localityId || null });
+    const user = users.find(u => u.id === userId);
+    const locality = localities.find(l => l.id === localityId);
+    trackAdminActivity('user_locality_update', { user_id: userId, user_email: user?.email, locality_id: localityId || null, locality_name: locality?.name || null }, 'users');
     loadUsers();
   }
 
@@ -1253,6 +1278,7 @@ export default function Admin() {
         price_per_unit: Number(ef.price_per_unit)
       })
       .eq('id', id);
+    trackAdminActivity('price_tier_update', { price_tier_id: id, min_quantity: Number(ef.min_quantity), price_per_unit: Number(ef.price_per_unit) }, 'localities');
 
     setSavedTierId(id);
     setTimeout(() => setSavedTierId(prev => prev === id ? null : prev), 1200);
@@ -1326,6 +1352,9 @@ export default function Admin() {
       min_quantity: Number(t.min_quantity),
       price_per_unit: Number(t.price_per_unit)
     });
+    const product = products.find(p => p.id === productId);
+    const locality = localities.find(l => l.id === localityId);
+    trackAdminActivity('price_tier_create', { product_id: productId, product_name: product?.name, locality_id: localityId, locality_name: locality?.name, min_quantity: Number(t.min_quantity), price_per_unit: Number(t.price_per_unit) }, 'localities');
 
     setNewTiers(prev => ({ ...prev, [key]: { min_quantity: '', price_per_unit: '' } }));
     setAddingTier(null);
@@ -1371,7 +1400,9 @@ export default function Admin() {
 
   function deleteScale(id) {
     askConfirm('¿Eliminar esta escala de precio?', async () => {
+      const tier = priceTiers.find(t => t.id === id);
       await supabase.from('price_tiers').delete().eq('id', id);
+      trackAdminActivity('price_tier_delete', { price_tier_id: id, product_id: tier?.product_id, locality_id: tier?.locality_id, min_quantity: tier?.min_quantity, price_per_unit: tier?.price_per_unit }, 'localities');
       loadPriceTiers();
     });
   }
@@ -1388,6 +1419,7 @@ export default function Admin() {
 
   async function saveSetting(key, value) {
     await supabase.from('settings').upsert({ key, value });
+    trackAdminActivity('setting_update', { key, value }, 'config');
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
@@ -1450,6 +1482,7 @@ export default function Admin() {
       supabase.from('admin_version_snapshots').delete().lt('created_at', cutoff).then(() => {});
       await loadVersionSnapshots();
       if (!silent) setVersionSnapshotNotice('Versión actual guardada correctamente.');
+      if (source === 'manual') trackAdminActivity('version_snapshot_create', { content_hash: contentHash, counts }, 'version_history');
     }
 
     if (source === 'auto') autoSnapshotSavingRef.current = false;
@@ -1480,12 +1513,15 @@ export default function Admin() {
 
   async function deleteOrders(ids) {
     await Promise.all([...ids].map(id => supabase.from('orders').delete().eq('id', id)));
+    trackAdminActivity('order_delete_bulk', { order_ids: [...ids], count: ids.size }, 'orders');
     setOrders(prev => prev.filter(o => !ids.has(o.id)));
     setSelectedOrderIds(new Set());
   }
 
   async function updateOrderStatus(id, status) {
     await supabase.from('orders').update({ status }).eq('id', id);
+    const order = orders.find(o => o.id === id);
+    trackAdminActivity('order_status_update', { order_id: id, order_code: order?.order_code, status }, 'orders');
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
   }
 
@@ -1539,6 +1575,7 @@ export default function Admin() {
     if (!newSeller.name.trim()) return;
     setSavingSeller(true);
     await supabase.from('sellers').insert({ ...newSeller, active: true });
+    trackAdminActivity('seller_create', { seller_name: newSeller.name, seller_email: newSeller.email }, 'sellers');
     setNewSeller({ name: '', email: '', phone: '' });
     setSavingSeller(false);
     loadSellers();
@@ -1546,18 +1583,24 @@ export default function Admin() {
 
   async function toggleSeller(id, active) {
     await supabase.from('sellers').update({ active: !active }).eq('id', id);
+    const seller = sellers.find(s => s.id === id);
+    trackAdminActivity('seller_toggle', { seller_id: id, seller_name: seller?.name, active: !active }, 'sellers');
     loadSellers();
   }
 
   async function deleteSeller(id) {
     askConfirm('¿Eliminar este vendedor?', async () => {
+      const seller = sellers.find(s => s.id === id);
       await supabase.from('sellers').delete().eq('id', id);
+      trackAdminActivity('seller_delete', { seller_id: id, seller_name: seller?.name, seller_email: seller?.email }, 'sellers');
       loadSellers();
     });
   }
 
   async function updateSellerField(id, field, value) {
     await supabase.from('sellers').update({ [field]: value }).eq('id', id);
+    const seller = sellers.find(s => s.id === id);
+    trackAdminActivity('seller_update', { seller_id: id, seller_name: seller?.name, field, value }, 'sellers');
     loadSellers();
   }
 
@@ -1567,6 +1610,10 @@ export default function Admin() {
     if (error) {
       console.error('Error al guardar vendedor:', error);
       loadUsers(); // revertir al estado real si falló
+    } else {
+      const user = users.find(u => u.id === userId);
+      const seller = sellers.find(s => s.id === sellerId);
+      trackAdminActivity('user_seller_update', { user_id: userId, user_email: user?.email, seller_id: sellerId || null, seller_name: seller?.name || null }, 'users');
     }
   }
 
@@ -1627,6 +1674,7 @@ export default function Admin() {
     if (!email) return;
     setAddingAdmin(true);
     await supabase.from('admins').insert({ email });
+    trackAdminActivity('admin_create', { email }, 'admins');
     setNewAdminEmail('');
     setAddingAdmin(false);
     loadAdmins();
@@ -1635,6 +1683,7 @@ export default function Admin() {
   async function deleteAdmin(email) {
     if (email === currentUser) { alert('No podés eliminarte a vos mismo.'); return; }
     await supabase.from('admins').delete().eq('email', email);
+    trackAdminActivity('admin_delete', { email }, 'admins');
     setDeleteConfirmEmail(null);
     loadAdmins();
   }
@@ -2521,8 +2570,15 @@ export default function Admin() {
                       <input
                         style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
                         value={d.name}
-                        onFocus={e => e.target.style.borderColor = '#dde1ef'}
-                        onBlur={async e => { e.target.style.borderColor = 'transparent'; await supabase.from('designs').update({ name: e.target.value }).eq('id', d.id); }}
+                        onFocus={e => { e.target.style.borderColor = '#dde1ef'; e.target.dataset.originalName = d.name; }}
+                        onBlur={async e => {
+                          e.target.style.borderColor = 'transparent';
+                          const nextName = e.target.value.trim();
+                          const originalName = e.target.dataset.originalName || d.name;
+                          if (!nextName || nextName === originalName) return;
+                          await supabase.from('designs').update({ name: nextName }).eq('id', d.id);
+                          trackAdminActivity('design_rename', { design_id: d.id, from: originalName, to: nextName }, 'designs');
+                        }}
                         onChange={e => setDesigns(prev => prev.map(x => x.id === d.id ? { ...x, name: e.target.value } : x))}
                         onClick={e => e.stopPropagation()}
                         onDragStart={e => e.stopPropagation()}
@@ -2531,7 +2587,7 @@ export default function Admin() {
                         {(d.tags || []).map((tag, ti) => (
                           <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
                             {tag}
-                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); trackAdminActivity('design_tag_delete', { design_id: d.id, design_name: d.name, tag }, 'designs'); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
                           </span>
                         ))}
                         <input
@@ -2544,6 +2600,7 @@ export default function Admin() {
                               const newTag = e.target.value.trim().toLowerCase();
                               const newTags = [...(d.tags || []), newTag];
                               await supabase.from('designs').update({ tags: newTags }).eq('id', d.id);
+                              trackAdminActivity('design_tag_create', { design_id: d.id, design_name: d.name, tag: newTag }, 'designs');
                               setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x));
                               e.target.value = '';
                             }
@@ -2566,6 +2623,7 @@ export default function Admin() {
                                     const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
                                     const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
                                     await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
+                                    trackAdminActivity('design_categories_update', { design_ids: idsToUpdate, category: c, active: !active, categories: newCats }, 'designs');
                                     setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
                                   }}
                                   style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
@@ -3682,6 +3740,8 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   const [datePreset, setDatePreset] = React.useState('all');
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
+  const [activityEvents, setActivityEvents] = React.useState([]);
+  const [activityError, setActivityError] = React.useState('');
 
   React.useEffect(() => {
     setLoading(false);
@@ -3698,6 +3758,23 @@ function StatsTab({ supabase, sellers, orders = [] }) {
     }
     return [null, null];
   }
+
+  React.useEffect(() => {
+    supabase
+      .from('user_activity_events')
+      .select('id, created_at, session_id, user_id, user_email, user_name, is_anonymous, event_type, metadata, page')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+      .then(({ data, error }) => {
+        if (error) {
+          setActivityEvents([]);
+          setActivityError(error.code === '42P01' ? 'Falta crear user_activity_events.' : error.message);
+        } else {
+          setActivityEvents(data || []);
+          setActivityError('');
+        }
+      });
+  }, [supabase]);
 
   const [from, to] = getDateRange();
 
@@ -3749,6 +3826,76 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
   const uniqueEmails = new Set(filtered.map(o => o.customer_email).filter(Boolean));
   const recurringEmails = [...uniqueEmails].filter(e => filtered.filter(o => o.customer_email === e).length > 1);
+
+  const filteredActivity = activityEvents.filter(e => {
+    if (from && new Date(e.created_at) < from) return false;
+    if (to && new Date(e.created_at) > to) return false;
+    return true;
+  });
+
+  const activitySessions = Object.values(filteredActivity.reduce((acc, event) => {
+    const key = event.session_id || event.id;
+    if (!acc[key]) {
+      acc[key] = {
+        session_id: key,
+        user: event.user_email || event.user_name || (event.is_anonymous ? 'Anónimo' : 'Usuario'),
+        is_anonymous: event.is_anonymous,
+        events: 0,
+        first: event.created_at,
+        last: event.created_at,
+      };
+    }
+    acc[key].events += 1;
+    if (new Date(event.created_at) < new Date(acc[key].first)) acc[key].first = event.created_at;
+    if (new Date(event.created_at) > new Date(acc[key].last)) acc[key].last = event.created_at;
+    return acc;
+  }, {})).map(session => {
+    const durationMs = Math.max(0, new Date(session.last).getTime() - new Date(session.first).getTime());
+    return { ...session, durationMs };
+  });
+
+  const activityUsers = Object.values(filteredActivity.reduce((acc, event) => {
+    const key = event.user_id || event.user_email || event.session_id || event.id;
+    if (!acc[key]) {
+      acc[key] = {
+        key,
+        label: event.user_email || event.user_name || `Anónimo ${String(event.session_id || '').slice(0, 8)}`,
+        sessions: new Set(),
+        events: 0,
+        durationMs: 0,
+      };
+    }
+    acc[key].events += 1;
+    if (event.session_id) acc[key].sessions.add(event.session_id);
+    return acc;
+  }, {})).map(user => {
+    const userSessions = activitySessions.filter(session => user.sessions.has(session.session_id));
+    return {
+      ...user,
+      sessionsCount: user.sessions.size,
+      durationMs: userSessions.reduce((sum, session) => sum + session.durationMs, 0),
+    };
+  }).sort((a, b) => b.events - a.events).slice(0, 8);
+
+  const totalConnectionMs = activitySessions.reduce((sum, session) => sum + session.durationMs, 0);
+  const avgConnectionMs = activitySessions.length ? totalConnectionMs / activitySessions.length : 0;
+  const pageCounts = Object.entries(filteredActivity.reduce((acc, event) => {
+    const page = event.page || 'sin página';
+    acc[page] = (acc[page] || 0) + 1;
+    return acc;
+  }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const searchCount = filteredActivity.filter(e => e.event_type === 'design_search').length;
+  const cartAdds = filteredActivity.filter(e => e.event_type === 'cart_add').length;
+  const checkoutStarts = filteredActivity.filter(e => e.event_type === 'checkout_start').length;
+  const confirmedOrders = filteredActivity.filter(e => e.event_type === 'order_confirm').length;
+
+  const formatDuration = (ms) => {
+    const mins = Math.floor(ms / 60000);
+    const hrs = Math.floor(mins / 60);
+    if (hrs > 0) return `${hrs}h ${mins % 60}min`;
+    if (mins > 0) return `${mins}min`;
+    return `${Math.max(0, Math.round(ms / 1000))}s`;
+  };
 
   const card = { background: 'white', borderRadius: 10, padding: 20, border: '1.5px solid #dde1ef' };
   const metricCard = { ...card, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flex: '1 1 140px' };
@@ -3809,6 +3956,65 @@ function StatsTab({ supabase, sellers, orders = [] }) {
             <div style={{ fontSize: 26, fontWeight: 800, color: '#1B2F5E' }}>{value}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E' }}>Actividad de la página</div>
+          <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 3 }}>
+            Conexiones, duración y eventos del catálogo/landing según el mismo período seleccionado.
+          </div>
+        </div>
+        {activityError ? (
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 8, padding: '9px 10px', fontSize: 12, fontWeight: 700 }}>{activityError}</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10 }}>
+              {[
+                { label: 'Conexiones', value: activitySessions.length },
+                { label: 'Usuarios detectados', value: activityUsers.length },
+                { label: 'Eventos', value: filteredActivity.length },
+                { label: 'Tiempo total', value: formatDuration(totalConnectionMs) },
+                { label: 'Prom. conexión', value: formatDuration(avgConnectionMs) },
+                { label: 'Búsquedas', value: searchCount },
+                { label: 'Agregados carrito', value: cartAdds },
+                { label: 'Checkout → pedido', value: `${confirmedOrders}/${checkoutStarts}` },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 8, padding: '10px 12px', minWidth: 0 }}>
+                  <div style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+                  <div style={{ fontSize: 20, color: '#1B2F5E', fontWeight: 900, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+              <div style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ background: '#f7f8fc', padding: '7px 10px', fontSize: 11, color: '#1B2F5E', fontWeight: 800 }}>Top usuarios por actividad</div>
+                {activityUsers.length === 0 ? (
+                  <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>Sin actividad registrada.</div>
+                ) : activityUsers.map(user => (
+                  <div key={user.key} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px', gap: 8, padding: '7px 10px', borderTop: '1px solid #eef0f6', fontSize: 12, alignItems: 'center' }}>
+                    <span style={{ color: '#2d3352', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.label}</span>
+                    <span style={{ color: '#5a6380', textAlign: 'right' }}>{user.sessionsCount} ses.</span>
+                    <span style={{ color: '#1B2F5E', fontWeight: 800, textAlign: 'right' }}>{formatDuration(user.durationMs)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ background: '#f7f8fc', padding: '7px 10px', fontSize: 11, color: '#1B2F5E', fontWeight: 800 }}>Páginas con más actividad</div>
+                {pageCounts.length === 0 ? (
+                  <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>Sin actividad registrada.</div>
+                ) : pageCounts.map(([page, count]) => (
+                  <div key={page} style={{ display: 'grid', gridTemplateColumns: '1fr 55px', gap: 8, padding: '7px 10px', borderTop: '1px solid #eef0f6', fontSize: 12, alignItems: 'center' }}>
+                    <span style={{ color: '#2d3352', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{page}</span>
+                    <span style={{ color: '#1B2F5E', fontWeight: 800, textAlign: 'right' }}>{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div style={card}>
@@ -4161,6 +4367,7 @@ function ActivityHistoryLegacy({ supabase }) {
 function ActivityHistory({ supabase }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [historyView, setHistoryView] = React.useState('clients');
   const [identityFilter, setIdentityFilter] = React.useState('all');
   const [search, setSearch] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('all');
@@ -4420,6 +4627,23 @@ function ActivityHistory({ supabase }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {[
+          ['clients', 'Clientes y sesiones'],
+          ['admin', 'Actividad admin'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setHistoryView(id)}
+            style={{ ...compactInput, background: historyView === id ? '#1B2F5E' : 'white', color: historyView === id ? 'white' : '#5a6380', fontWeight: 800, cursor: 'pointer' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {historyView === 'clients' ? (
+        <>
       <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de actividad</h2>
@@ -4537,6 +4761,10 @@ function ActivityHistory({ supabase }) {
           Para clientes anonimos, la opcion todo un cliente borra la sesion seleccionada. Para usuarios logueados borra por user_id o email.
         </div>
       </div>
+        </>
+      ) : (
+        <AdminActivityHistory supabase={supabase} />
+      )}
     </div>
   );
 }
@@ -4606,8 +4834,45 @@ function AdminActivityHistory({ supabase }) {
   const compactInput = { border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif' };
   const formatDate = (iso) => new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const eventLabel = (event) => {
-    if (event.event_type === 'tab_view') return `Entró a ${event.metadata?.tab_label || event.tab || 'una pestaña'}`;
-    return event.event_type || 'Actividad';
+    const labels = {
+      product_create: 'Creó producto',
+      product_update: 'Editó producto',
+      product_delete: 'Eliminó producto',
+      product_toggle: 'Activó/desactivó producto',
+      product_category_create: 'Creó categoría',
+      product_category_rename: 'Renombró categoría',
+      product_category_delete: 'Eliminó categoría',
+      design_create_bulk: 'Subió diseños',
+      design_rename: 'Renombró diseño',
+      design_delete: 'Eliminó diseño',
+      design_delete_bulk: 'Eliminó diseños',
+      design_toggle: 'Activó/desactivó diseño',
+      design_categories_update: 'Cambió categorías de diseño',
+      design_tag_create: 'Agregó tag',
+      design_tag_delete: 'Eliminó tag',
+      price_tier_create: 'Creó escala de precio',
+      price_tier_update: 'Editó escala de precio',
+      price_tier_delete: 'Eliminó escala de precio',
+      locality_create: 'Creó localidad',
+      locality_delete: 'Eliminó localidad',
+      setting_update: 'Cambió configuración',
+      seller_create: 'Creó vendedor',
+      seller_update: 'Editó vendedor',
+      seller_delete: 'Eliminó vendedor',
+      user_seller_update: 'Asignó vendedor a usuario',
+      user_locality_update: 'Asignó localidad a usuario',
+      admin_create: 'Agregó admin',
+      admin_delete: 'Eliminó admin',
+      order_status_update: 'Cambió estado de pedido',
+      order_delete_bulk: 'Eliminó pedidos',
+      version_snapshot_create: 'Guardó versión',
+    };
+    return labels[event.event_type] || event.event_type || 'Actividad';
+  };
+
+  const eventDetail = (event) => {
+    const m = event.metadata || {};
+    return m.design_name || m.product_name || m.locality_name || m.seller_name || m.order_code || m.email || m.key || m.to || m.from || '';
   };
 
   return (
@@ -4645,7 +4910,7 @@ function AdminActivityHistory({ supabase }) {
                 <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '118px 120px 1fr', gap: 8, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
                   <span style={{ color: '#9aa3bc' }}>{formatDate(event.created_at)}</span>
                   <span style={{ color: '#1B2F5E', fontWeight: 800 }}>{ADMIN_TAB_LABELS[event.tab] || event.tab || 'Admin'}</span>
-                  <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eventLabel(event)}</span>
+                  <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eventLabel(event)} {eventDetail(event) ? `· ${eventDetail(event)}` : ''}</span>
                 </div>
               ))}
             </div>
@@ -4703,7 +4968,6 @@ function HeatmapTab({ supabase, products }) {
         {[
           ['heatmap', 'Mapa y usuarios'],
           ['history', 'Historial de actividad'],
-          ['admin', 'Actividad admin'],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -4861,10 +5125,8 @@ function HeatmapTab({ supabase, products }) {
       </div>
 
         </>
-      ) : activitySubtab === 'history' ? (
-        <ActivityHistory supabase={supabase} />
       ) : (
-        <AdminActivityHistory supabase={supabase} />
+        <ActivityHistory supabase={supabase} />
       )}
 
       {confirmReset && (
