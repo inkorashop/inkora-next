@@ -139,6 +139,8 @@ export default function Admin() {
     return SLUG_TABS[slug] || 'products';
   };
   const [activeTab, setActiveTab] = useState(initialTab);
+  const screenRef = useRef(screen);
+  const activeTabRef = useRef(activeTab);
   const adminScrollPositionsRef = useRef({});
   const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
@@ -264,21 +266,44 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  function rememberAdminScroll(tab = activeTabRef.current) {
+    if (typeof window === 'undefined') return;
+    const y = window.scrollY || document.documentElement.scrollTop || 0;
+    adminScrollPositionsRef.current[tab] = y;
+    sessionStorage.setItem(`inkora_admin_scroll_${tab}`, String(y));
+  }
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) {
         checkAdmin(session.user.email);
       } else {
+        rememberAdminScroll();
         setScreen('login');
+        setCurrentUser(null);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') { setScreen('login'); return; }
+      if (event === 'SIGNED_OUT') {
+        rememberAdminScroll();
+        setScreen('login');
+        setCurrentUser(null);
+        return;
+      }
       if (event === 'SIGNED_IN' && session?.user?.email) {
         checkAdmin(session.user.email);
       }
     });
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const panelLoadedRef = useRef(false);
@@ -511,10 +536,18 @@ export default function Admin() {
 
   // ── Auth functions ──
   async function checkAdmin(email) {
-    setScreen('checking');
+    const panelIsVisible = screenRef.current === 'panel';
+    rememberAdminScroll();
+    if (!panelIsVisible) setScreen('checking');
+
     const { data } = await supabase.from('admins').select('email').eq('email', email).single();
-    if (data) { setCurrentUser(email); setScreen('panel'); }
-    else { setScreen('denied'); }
+    if (data) {
+      setCurrentUser(email);
+      if (!panelIsVisible) setScreen('panel');
+    } else {
+      setCurrentUser(null);
+      setScreen('denied');
+    }
   }
 
   async function signInWithGoogle() {
