@@ -3100,8 +3100,8 @@ export default function Admin() {
               if (activeLocalities.length === 0) return <p style={s.emptyMsg}>No hay localidades activas.</p>;
 
               return (
-                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
-                  <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:3, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)'}}>
+                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
+                  <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
                     <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
                     <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Precio/u</div>
                     <div />
@@ -3117,7 +3117,7 @@ export default function Admin() {
 
                     return (
                       <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'7px 12px', fontSize:12, fontWeight:800, letterSpacing:0.4, textAlign:'center', textTransform:'uppercase'}}>{locality.name}</div>
+                        <div style={{background:'linear-gradient(90deg, #edf3ff, #f8faff)', color:'#1B2F5E', padding:'7px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, textAlign:'center', textTransform:'uppercase', borderBottom:'1px solid #dde1ef'}}>{locality.name}</div>
                         <table style={{width:'100%', borderCollapse:'collapse'}}>
                           <colgroup>
                             <col style={{width:'calc((100% - 36px) / 2)'}} />
