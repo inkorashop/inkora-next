@@ -750,17 +750,43 @@ export default function Admin() {
     const reordered = [...products];
     const [removed] = reordered.splice(srcIdx, 1);
     reordered.splice(tgtIdx, 0, removed);
-    setProducts(reordered);
-    await Promise.all(reordered.map((p, i) => supabase.from('products').update({ sort_order: i }).eq('id', p.id)));
+    const grouped = sortProductRows(reordered);
+    setProducts(grouped);
+    await Promise.all(grouped.map((p, i) => supabase.from('products').update({ sort_order: i }).eq('id', p.id)));
   }
 
   async function loadProducts() {
     const { data } = await supabase.from('products').select('*').order('sort_order', { nullsFirst: false }).order('created_at');
-    if (data) setProducts(data);
+    if (data) setProducts(sortProductRows(data));
   }
 
   function updateProductForm(id, field, value) {
     setProductForms(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  }
+
+  function sortProductRows(rows) {
+    const orderValue = (product, fallback) => product.sort_order ?? fallback;
+    const rootRows = rows
+      .filter(product => !product.parent_product_id)
+      .sort((a, b) => orderValue(a, 0) - orderValue(b, 0) || new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    const variantsByRoot = rows.reduce((acc, product) => {
+      if (!product.parent_product_id) return acc;
+      if (!acc[product.parent_product_id]) acc[product.parent_product_id] = [];
+      acc[product.parent_product_id].push(product);
+      return acc;
+    }, {});
+    const grouped = [];
+    rootRows.forEach(root => {
+      grouped.push(root);
+      (variantsByRoot[root.id] || [])
+        .sort((a, b) => orderValue(a, 0) - orderValue(b, 0) || new Date(a.created_at || 0) - new Date(b.created_at || 0))
+        .forEach(variant => grouped.push(variant));
+      delete variantsByRoot[root.id];
+    });
+    Object.values(variantsByRoot).flat()
+      .sort((a, b) => orderValue(a, 0) - orderValue(b, 0) || new Date(a.created_at || 0) - new Date(b.created_at || 0))
+      .forEach(orphanVariant => grouped.push(orphanVariant));
+    return grouped;
   }
 
   function getRootProductId(product) {
@@ -5077,6 +5103,12 @@ function HeatmapTab({ supabase, products }) {
   const [activitySubtab, setActivitySubtab] = React.useState('heatmap');
   const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
 
+  function heatmapProductLabel(product) {
+    if (!product) return '';
+    if (product.id === 'all') return product.name;
+    return product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
+  }
+
   const loadClicks = React.useCallback(async () => {
     setLoading(true);
     const { data: clickData } = await supabase.from('click_events').select('*').order('timestamp', { ascending: false }).limit(5000);
@@ -5105,7 +5137,7 @@ function HeatmapTab({ supabase, products }) {
     } else {
       const p = products.find(pr => pr.id === filterProduct);
       if (!p) return;
-      const slug = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const slug = p.slug || p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       window.open(`${base}/catalogo?producto=${slug}&heatmap=1`, '_blank');
     }
   }
@@ -5148,7 +5180,7 @@ function HeatmapTab({ supabase, products }) {
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
           >
             {productOptions.map(p => (
-              <option key={p.id} value={p.id}>{productDisplayName(p)}</option>
+              <option key={p.id} value={p.id}>{heatmapProductLabel(p)}</option>
             ))}
           </select>
           <button
