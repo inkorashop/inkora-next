@@ -5,10 +5,10 @@ import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 
-const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
+const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -147,14 +147,21 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas', production: 'produccion', version_history: 'historial-de-versiones' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
     const slug = window.location.pathname.split('/admin/')[1] || '';
+    if (slug === 'actividad' || slug === 'estadisticas') return 'tracking';
     return SLUG_TABS[slug] || 'products';
   };
+  const initialTrackingSubtab = () => {
+    if (typeof window === 'undefined') return 'activity';
+    const slug = window.location.pathname.split('/admin/')[1] || '';
+    return slug === 'estadisticas' ? 'stats' : 'activity';
+  };
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [trackingSubtab, setTrackingSubtab] = useState(initialTrackingSubtab);
   const screenRef = useRef(screen);
   const activeTabRef = useRef(activeTab);
   const adminScrollPositionsRef = useRef({});
@@ -164,11 +171,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production','version_history'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production','version_history'];
+    return ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -666,7 +673,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 } };
+        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 } };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -755,9 +762,28 @@ export default function Admin() {
     setProductForms(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   }
 
+  function getRootProductId(product) {
+    return product?.parent_product_id || product?.id;
+  }
+
+  function getProductVariants(product) {
+    const rootId = getRootProductId(product);
+    return products.filter(p => getRootProductId(p) === rootId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }
+
+  function productDisplayName(product) {
+    if (!product) return '';
+    return product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
+  }
+
   async function saveProduct(id, overrides = {}) {
     const data = { ...(productForms[id] || {}), ...overrides };
-    await supabase.from('products').update(data).eq('id', id);
+    const product = products.find(p => p.id === id);
+    const payload = { ...data, parent_product_id: data.parent_product_id || null, variant_name: (data.variant_name || '').trim() || null };
+    await supabase.from('products').update(payload).eq('id', id);
+    if (product && !product.parent_product_id && payload.name && payload.name !== product.name) {
+      await supabase.from('products').update({ name: payload.name }).eq('parent_product_id', id);
+    }
     trackAdminActivity('product_update', { product_id: id, product_name: data.name, fields: Object.keys(data) }, 'products');
     setSavedProductId(id);
     setTimeout(() => setSavedProductId(prev => prev === id ? null : prev), 1200);
@@ -765,7 +791,7 @@ export default function Admin() {
   }
 
   function handleProductKeyDown(e, rowIdx, colIdx) {
-    const NCOLS = 6;
+    const NCOLS = 7;
     if ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowRight') {
       if (colIdx + 1 < NCOLS) { e.preventDefault(); cellRefs.current[rowIdx]?.[colIdx + 1]?.focus(); }
     } else if ((e.key === 'Tab' && e.shiftKey) || e.key === 'ArrowLeft') {
@@ -780,11 +806,35 @@ export default function Admin() {
   async function addProduct() {
     if (!newProduct.name.trim() || !newProduct.slug.trim()) return;
     setSavingProduct(true);
-    await supabase.from('products').insert({ ...newProduct, active: true });
+    await supabase.from('products').insert({ ...newProduct, variant_name: newProduct.variant_name.trim() || null, parent_product_id: null, active: true });
     trackAdminActivity('product_create', { product_name: newProduct.name, slug: newProduct.slug }, 'products');
     setNewProduct(EMPTY_PRODUCT);
     setSavingProduct(false);
     setShowAddForm(false);
+    loadProducts();
+  }
+
+  async function addProductVariant(product) {
+    const root = products.find(p => p.id === getRootProductId(product)) || product;
+    const variants = getProductVariants(root);
+    const variantNumber = variants.length + 1;
+    const payload = {
+      ...EMPTY_PRODUCT,
+      ...root,
+      id: undefined,
+      created_at: undefined,
+      updated_at: undefined,
+      parent_product_id: root.id,
+      name: root.name,
+      slug: `${root.slug || slugify(root.name)}-${variantNumber}`,
+      variant_name: `Variante ${variantNumber}`,
+      categories: ['Todos'],
+      category_colors: {},
+      active: true,
+      sort_order: (root.sort_order ?? products.length) + variantNumber / 100,
+    };
+    await supabase.from('products').insert(payload);
+    trackAdminActivity('product_variant_create', { product_id: root.id, product_name: root.name, variant_name: payload.variant_name }, 'products');
     loadProducts();
   }
 
@@ -1749,7 +1799,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -1783,11 +1833,12 @@ export default function Admin() {
                 <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600}}>{products.length} producto{products.length !== 1 ? 's' : ''}</span>
               </div>
               <div style={{...s.productTableWrap, maxHeight: useProductManagementModals ? 'calc(100vh - 112px)' : undefined}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1240 : 1080 }}>
+                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1360 : 1200 }}>
                   <thead>
                     <tr>
                       <th style={s.th}>Mostrar</th>
-                      <th style={s.th}>Nombre</th>
+                      <th style={s.th}>Producto</th>
+                      <th style={s.th}>Variante</th>
                       <th style={s.th}>Card catálogo PC (px)</th>
                       <th style={s.th}>Card catálogo Cel (px)</th>
                       <th style={s.th}>Card landing PC (px)</th>
@@ -1807,6 +1858,8 @@ export default function Admin() {
                   <tbody>
                     {products.map((p, rowIdx) => {
                       const form = productForms[p.id] || {};
+                      const isVariant = !!p.parent_product_id;
+                      const variantCount = !isVariant ? getProductVariants(p).length : 0;
                       const setRef = (colIdx) => (el) => {
                         if (!cellRefs.current[rowIdx]) cellRefs.current[rowIdx] = [];
                         cellRefs.current[rowIdx][colIdx] = el;
@@ -1818,12 +1871,23 @@ export default function Admin() {
                           onDragOver={e => { e.preventDefault(); setDragOverProductId(p.id); }}
                           onDrop={() => handleProductDrop(p.id)}
                           onDragEnd={() => { setDraggingProductId(null); setDragOverProductId(null); dragSrcProductIdRef.current = null; }}
-                          style={{opacity: p.active ? 1 : 0.5, cursor: 'grab', background: dragOverProductId === p.id ? '#eef4ff' : 'transparent', outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none'}}>
+                          style={{opacity: p.active ? 1 : 0.5, cursor: 'grab', background: dragOverProductId === p.id ? '#eef4ff' : isVariant ? '#fbfcff' : 'transparent', outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none', boxShadow: isVariant ? 'inset 4px 0 0 #dbe7ff' : 'none'}}>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
                           <td style={s.td}>
                             <input ref={setRef(0)} style={s.tblInput} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                          </td>
+                          <td style={s.td}>
+                            <div style={{display:'flex', alignItems:'center', gap:6}}>
+                              <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12}}>{isVariant ? '↳' : ''}</span>
+                              <input style={{...s.tblInput, width: 120, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
+                              {!isVariant && (
+                                <button style={{...s.editBtn, padding:'4px 7px', whiteSpace:'nowrap'}} onClick={e => { e.stopPropagation(); addProductVariant(p); }}>
+                                  + Variante{variantCount > 1 ? ` (${variantCount - 1})` : ''}
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td style={s.td}>
                             <input ref={setRef(1)} style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={form.card_width_desktop ?? 180} onChange={e => updateProductForm(p.id, 'card_width_desktop', parseInt(e.target.value)||180)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
@@ -2099,7 +2163,8 @@ export default function Admin() {
                     {showAddForm && (
                       <tr style={{background:'#f7f8fc'}}>
                         <td style={{...s.td, textAlign:'center', color:'#9aa3bc'}}>—</td>
-                        <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
+                        <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Producto" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width:120}} value={newProduct.variant_name} placeholder="Opcional" onChange={e => setNewProduct(p => ({...p, variant_name: e.target.value}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.card_width_desktop} onChange={e => setNewProduct(p => ({...p, card_width_desktop: parseInt(e.target.value)||180}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={newProduct.card_width_mobile} onChange={e => setNewProduct(p => ({...p, card_width_mobile: parseInt(e.target.value)||160}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="800" value={newProduct.landing_card_width_desktop} onChange={e => setNewProduct(p => ({...p, landing_card_width_desktop: parseInt(e.target.value)||320}))} /></td>
@@ -2171,7 +2236,7 @@ export default function Admin() {
                     const newCat = newCatInputs[product.id] || '';
                     return (
                       <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 200px', minWidth:180}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{productDisplayName(product)}</div>
                         <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
                           <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
                           {cats.map(cat => {
@@ -2399,7 +2464,7 @@ export default function Admin() {
 
                     return (
                       <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 220px', minWidth:200}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{productDisplayName(product)}</div>
                         {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
                       </div>
                     );
@@ -2422,7 +2487,7 @@ export default function Admin() {
                 <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
                   {products.map(p => (
                     <button key={p.id} onClick={() => { setSelectedProductId(p.id); if (p.id !== selectedProductId) setPendingFiles([]); }} style={{border:'none', borderRadius:7, padding:'6px 14px', fontSize:13, fontWeight:600, cursor:'pointer', background: selectedProductId === p.id ? '#1B2F5E' : '#eef0f6', color: selectedProductId === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
-                      {p.name}
+                      {productDisplayName(p)}
                     </button>
                   ))}
                 </div>
@@ -2514,7 +2579,7 @@ export default function Admin() {
               <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
                 {[{id:'all', name:'Todos'}, ...products].map(p => (
                   <button key={p.id} onClick={() => setDesignFilterProduct(p.id)} style={{border:'none', borderRadius:7, padding:'5px 13px', fontSize:12, fontWeight:600, cursor:'pointer', background: designFilterProduct === p.id ? '#1B2F5E' : '#eef0f6', color: designFilterProduct === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
-                    {p.name}
+                    {p.id === 'all' ? p.name : productDisplayName(p)}
                   </button>
                 ))}
               </div>
@@ -2683,7 +2748,7 @@ export default function Admin() {
               <select value={orderFilterProduct} onChange={e => setOrderFilterProduct(e.target.value)}
                 style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
                 <option value="all">Todos los productos</option>
-                {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {products.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{productDisplayName(p)}</option>)}
               </select>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input type="date" value={orderFilterDateFrom} onChange={e => setOrderFilterDateFrom(e.target.value)}
@@ -3131,7 +3196,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -3461,14 +3526,16 @@ export default function Admin() {
         </div>
       )}
 
-      {/* == HEATMAP == */}
-        {activeTab === 'heatmap' && (
-          <HeatmapTab supabase={supabase} products={products} />
-        )}
-
-      {/* == ESTADISTICAS == */}
-        {activeTab === 'stats' && (
-          <StatsTab supabase={supabase} sellers={sellers} orders={orders} />
+      {/* == SEGUIMIENTO == */}
+        {activeTab === 'tracking' && (
+          <TrackingTab
+            supabase={supabase}
+            products={products}
+            sellers={sellers}
+            orders={orders}
+            activeSubtab={trackingSubtab}
+            onChangeSubtab={setTrackingSubtab}
+          />
         )}
 
       {/* == PRODUCCIÓN == */}
@@ -4088,6 +4155,42 @@ function StatsTab({ supabase, sellers, orders = [] }) {
       </div>
 
       </>}
+    </div>
+  );
+}
+
+function TrackingTab({ supabase, products, sellers, orders, activeSubtab, onChangeSubtab }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {[
+          ['activity', 'Actividad'],
+          ['stats', 'Estadísticas'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => onChangeSubtab(id)}
+            style={{
+              border: '1.5px solid #dde1ef',
+              borderRadius: 8,
+              padding: '7px 12px',
+              background: activeSubtab === id ? '#1B2F5E' : 'white',
+              color: activeSubtab === id ? 'white' : '#5a6380',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeSubtab === 'activity' ? (
+        <HeatmapTab supabase={supabase} products={products} />
+      ) : (
+        <StatsTab supabase={supabase} sellers={sellers} orders={orders} />
+      )}
     </div>
   );
 }
@@ -5000,7 +5103,7 @@ function HeatmapTab({ supabase, products }) {
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '7px 12px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', cursor: 'pointer' }}
           >
             {productOptions.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>{productDisplayName(p)}</option>
             ))}
           </select>
           <button

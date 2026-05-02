@@ -50,7 +50,7 @@ function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
   );
 }
 
-function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) {
+function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, forceActive = false }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
   const [cachedUrl, setCachedUrl] = useState(null);
@@ -84,8 +84,11 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
       .catch(() => {});
   }, [visible, url]);
 
-  const showModel = displayMode === 'hover' ? isHovered : visible;
+  const showModel = forceActive || (displayMode === 'hover' ? isHovered : visible);
   const modelUrl = cachedUrl || url;
+  const effectiveModelConfig = forceActive && autoRotate
+    ? { ...(modelConfig || {}), mode: 'rotate' }
+    : modelConfig;
 
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
@@ -93,7 +96,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
         <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       )}
       {showModel && (
-        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} imageUrl={imageUrl} />
+        <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={effectiveModelConfig} imageUrl={imageUrl} />
       )}
       {!showModel && !imageUrl && <span style={{ fontSize: 36 }}>🖨️</span>}
     </div>
@@ -141,7 +144,17 @@ export default function Home() {
   const width = useWindowWidth();
   const isMobile = width < 768;
 
+  const getRootProductId = (product) => product?.parent_product_id || product?.id;
+  const productGroups = useMemo(() => {
+    const roots = products.filter(p => !p.parent_product_id || !products.some(root => root.id === p.parent_product_id));
+    return roots.map(root => ({
+      root,
+      variants: products.filter(p => getRootProductId(p) === root.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    }));
+  }, [products]);
   const activeProduct = products.find(p => p.id === activeProductId) || null;
+  const activeGroup = productGroups.find(group => group.variants.some(p => p.id === activeProductId)) || null;
+  const activeVariants = activeGroup?.variants || [];
   const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
 
   useEffect(() => {
@@ -620,17 +633,20 @@ export default function Home() {
   }
 
   function switchProduct(id) {
-    if (id === activeProductId) return;
+    const selected = products.find(p => p.id === id);
+    const group = productGroups.find(g => g.root.id === id || g.variants.some(v => v.id === id));
+    const nextProduct = selected?.parent_product_id ? selected : (group?.variants[0] || selected);
+    if (!nextProduct || nextProduct.id === activeProductId) return;
     setEditingCategory(null);
     setGridTransition('opacity 0.15s ease');
     setGridOpacity(0);
     setTimeout(() => {
-      setActiveProductId(id);
+      setActiveProductId(nextProduct.id);
       setFilter('Todos');
       setSearchQuery('');
-      const product = products.find(p => p.id === id);
+      const product = nextProduct;
       if (product) {
-        track('product_view', { product_id: product.id, product_name: product.name });
+        track('product_view', { product_id: product.id, product_name: product.name, variant_name: product.variant_name || null });
         const slug = toSlug(product.name);
         window.history.replaceState(null, '', '/catalogo?producto=' + slug);
       }
@@ -766,7 +782,9 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('producto');
       const match = slug ? data.find(p => toSlug(p.name) === slug) : null;
-      setActiveProductId(match ? match.id : data[0].id);
+      const rootId = match ? getRootProductId(match) : getRootProductId(data[0]);
+      const firstVariant = data.find(p => getRootProductId(p) === rootId) || match || data[0];
+      setActiveProductId(firstVariant.id);
       loadAllDesigns(data);
     }
   }
@@ -1136,10 +1154,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             <p style={s.subtitle}>Selecciona los diseños y arma tu pedido</p>
           </div>
 
-          {products.length > 1 && (
+          {productGroups.length > 1 && (
             <div style={s.productTabs}>
-              {products.map(p => {
-                const isActive = activeProductId === p.id;
+              {productGroups.map(group => {
+                const p = group.root;
+                const isActive = activeGroup?.root?.id === group.root.id;
                 return (
                   <button
                     key={p.id}
@@ -1164,6 +1183,34 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     <span style={{position:'absolute', bottom:7, left:9, right:9, color:'white', fontSize:12, fontWeight:700, textAlign:'left', lineHeight:1.2, textShadow:'0 1px 3px rgba(0,0,0,1), 0 2px 8px rgba(0,0,0,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
                       {p.name}
                     </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {activeVariants.length > 1 && (
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', margin:'2px 0 14px'}}>
+              {activeVariants.map(variant => {
+                const isActive = activeProductId === variant.id;
+                return (
+                  <button
+                    key={variant.id}
+                    onClick={() => switchProduct(variant.id)}
+                    style={{
+                      border:'1.5px solid',
+                      borderColor: isActive ? '#1B2F5E' : '#dde1ef',
+                      borderRadius: 12,
+                      padding:'9px 16px',
+                      background: isActive ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)' : 'white',
+                      color: isActive ? 'white' : '#1B2F5E',
+                      fontSize:13,
+                      fontWeight:800,
+                      cursor:'pointer',
+                      boxShadow: isActive ? '0 8px 20px rgba(27,47,94,0.18)' : '0 2px 8px rgba(27,47,94,0.06)',
+                    }}
+                  >
+                    {variant.variant_name || 'Base'}
                   </button>
                 );
               })}
@@ -1266,10 +1313,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
             <div style={{...s.grid, gridTemplateColumns: gridCols}}>
-              {filtered.map(d => {
+              {filtered.map((d, idx) => {
                 const inCart = cart[d.id];
                 const isHovered = cardHover[d.id];
                 const isPulsing = cardPulse[d.id];
+                const isFirstRow3d = idx < colCount && !!d.model_url && activeProduct?.allow_3d === true;
                 return (
                   <div
                     key={d.id}
@@ -1289,7 +1337,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
-                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
