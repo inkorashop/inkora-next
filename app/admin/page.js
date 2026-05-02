@@ -8,7 +8,23 @@ import ProductionTab from '@/components/ProductionTab';
 const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'Estadísticas', production:'Producción' };
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
+const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
+function hashString(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
 
 function fileToBase64(file) {
   return new Promise(resolve => {
@@ -131,7 +147,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas', production: 'produccion' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas', production: 'produccion', version_history: 'historial-de-versiones' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -148,11 +164,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production'];
+        const all = ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production','version_history'];
         if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production'];
+    return ['products','designs','orders','localities','users','sellers','admins','config','heatmap','stats','production','version_history'];
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -259,6 +275,13 @@ export default function Admin() {
   const [newTiers, setNewTiers] = useState({});
   const [editingTiers, setEditingTiers] = useState({});
   const [savedTierId, setSavedTierId] = useState(null);
+  const [versionSnapshots, setVersionSnapshots] = useState([]);
+  const [loadingVersionSnapshots, setLoadingVersionSnapshots] = useState(false);
+  const [savingVersionSnapshot, setSavingVersionSnapshot] = useState(false);
+  const [versionSnapshotError, setVersionSnapshotError] = useState('');
+  const [versionSnapshotNotice, setVersionSnapshotNotice] = useState('');
+  const [adminDataReadyForSnapshots, setAdminDataReadyForSnapshots] = useState(false);
+  const autoSnapshotSavingRef = useRef(false);
 
   useEffect(() => {
     if (!productManageModal) return;
@@ -283,6 +306,53 @@ export default function Admin() {
   }, [settings.products_management_mode]);
   const [addingTier, setAddingTier] = useState(null);
   const savingNewTierKeysRef = useRef({});
+
+  const buildVersionSnapshotPayload = useCallback(() => {
+    const stripDesign = ({ products: _productRelation, ...design }) => design;
+    const stripAdmin = admin => ({ email: admin.email, created_at: admin.created_at || null });
+
+    return {
+      version: 1,
+      tables: {
+        products,
+        designs: designs.map(stripDesign),
+        localities,
+        price_tiers: priceTiers,
+        settings,
+        sellers,
+        admins: admins.map(stripAdmin),
+      },
+    };
+  }, [admins, designs, localities, priceTiers, products, sellers, settings]);
+
+  const buildVersionSnapshotCounts = useCallback((payload) => ({
+    products: payload.tables.products.length,
+    designs: payload.tables.designs.length,
+    localities: payload.tables.localities.length,
+    price_tiers: payload.tables.price_tiers.length,
+    settings: Object.keys(payload.tables.settings || {}).length,
+    sellers: payload.tables.sellers.length,
+    admins: payload.tables.admins.length,
+  }), []);
+
+  useEffect(() => {
+    if (screen !== 'panel' || !adminDataReadyForSnapshots || versionSnapshotError) return;
+    if (loadingVersionSnapshots || autoSnapshotSavingRef.current || savingVersionSnapshot) return;
+
+    const payload = buildVersionSnapshotPayload();
+    const contentHash = hashString(stableStringify(payload));
+    const latest = versionSnapshots[0];
+    if (latest?.content_hash === contentHash) return;
+
+    const elapsed = latest?.created_at ? Date.now() - new Date(latest.created_at).getTime() : VERSION_SNAPSHOT_INTERVAL_MS;
+    const delay = Math.max(0, VERSION_SNAPSHOT_INTERVAL_MS - elapsed);
+    const timer = setTimeout(() => {
+      createVersionSnapshot({ source: 'auto', silent: true });
+    }, delay);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminDataReadyForSnapshots, buildVersionSnapshotPayload, loadingVersionSnapshots, savingVersionSnapshot, screen, versionSnapshotError, versionSnapshots]);
 
   // ── Auth listener ──
   useEffect(() => {
@@ -336,16 +406,19 @@ export default function Admin() {
     if (screen === 'panel' && !panelLoadedRef.current) {
       panelLoadedRef.current = true;
 
-      loadProducts();
-      loadDesigns();
-      loadLocalities();
-      loadPriceTiers();
-      loadAdmins();
-      loadAdminPresence();
-      loadOrders();
-      loadSettings();
-      loadSellers();
-      loadUsers();
+      Promise.all([
+        loadProducts(),
+        loadDesigns(),
+        loadLocalities(),
+        loadPriceTiers(),
+        loadAdmins(),
+        loadAdminPresence(),
+        loadOrders(),
+        loadSettings(),
+        loadSellers(),
+        loadUsers(),
+        loadVersionSnapshots(),
+      ]).finally(() => setAdminDataReadyForSnapshots(true));
     }
   }, [screen]);
 
@@ -486,6 +559,7 @@ export default function Admin() {
       watch('sellers', () => { loadSellers(); loadUsers(); }),
       watch('profiles', loadUsers),
       watch('admin_presence', loadAdminPresence),
+      watch('admin_version_snapshots', loadVersionSnapshots),
     ];
 
     return () => {
@@ -1284,6 +1358,71 @@ export default function Admin() {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
+  async function loadVersionSnapshots() {
+    setLoadingVersionSnapshots(true);
+    const { data, error } = await supabase
+      .from('admin_version_snapshots')
+      .select('id, created_at, created_by, source, content_hash, counts, label')
+      .order('created_at', { ascending: false })
+      .limit(120);
+
+    if (error) {
+      const message = error.code === '42P01'
+        ? 'Falta crear la tabla admin_version_snapshots en Supabase. Ejecutá sql/admin_version_snapshots.sql.'
+        : `No se pudo cargar el historial: ${error.message}`;
+      setVersionSnapshotError(message);
+      setVersionSnapshots([]);
+    } else {
+      setVersionSnapshotError('');
+      setVersionSnapshots(data || []);
+    }
+
+    setLoadingVersionSnapshots(false);
+  }
+
+  async function createVersionSnapshot({ source = 'manual', silent = false } = {}) {
+    if (source === 'auto' && autoSnapshotSavingRef.current) return;
+    if (source === 'auto') autoSnapshotSavingRef.current = true;
+    if (source === 'manual') setSavingVersionSnapshot(true);
+    if (!silent) {
+      setVersionSnapshotNotice('');
+      setVersionSnapshotError('');
+    }
+
+    const payload = buildVersionSnapshotPayload();
+    const contentHash = hashString(stableStringify(payload));
+    const latest = versionSnapshots[0];
+
+    if (source === 'auto' && latest?.content_hash === contentHash) {
+      autoSnapshotSavingRef.current = false;
+      return;
+    }
+
+    const counts = buildVersionSnapshotCounts(payload);
+    const { error } = await supabase.from('admin_version_snapshots').insert({
+      source,
+      created_by: currentUser || null,
+      content_hash: contentHash,
+      counts,
+      data: payload,
+    });
+
+    if (error) {
+      const message = error.code === '42P01'
+        ? 'Falta crear la tabla admin_version_snapshots en Supabase. Ejecutá sql/admin_version_snapshots.sql.'
+        : `No se pudo guardar la versión: ${error.message}`;
+      setVersionSnapshotError(message);
+    } else {
+      const cutoff = new Date(Date.now() - VERSION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      supabase.from('admin_version_snapshots').delete().lt('created_at', cutoff).then(() => {});
+      await loadVersionSnapshots();
+      if (!silent) setVersionSnapshotNotice('Versión actual guardada correctamente.');
+    }
+
+    if (source === 'auto') autoSnapshotSavingRef.current = false;
+    if (source === 'manual') setSavingVersionSnapshot(false);
+  }
+
   // ── Orders ──
   async function loadOrders() {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
@@ -1512,7 +1651,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -2885,7 +3024,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -3117,7 +3256,7 @@ export default function Admin() {
 
                     return (
                       <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
-                        <div style={{background:'linear-gradient(90deg, #edf3ff, #f8faff)', color:'#1B2F5E', padding:'7px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, textAlign:'center', textTransform:'uppercase', borderBottom:'1px solid #dde1ef'}}>{locality.name}</div>
+                        <div style={{background:'linear-gradient(90deg, #1B2F5E, #2D6BE4)', color:'white', padding:'7px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, textAlign:'center', textTransform:'uppercase', borderBottom:'1px solid #dde1ef'}}>{locality.name}</div>
                         <table style={{width:'100%', borderCollapse:'collapse'}}>
                           <colgroup>
                             <col style={{width:'calc((100% - 36px) / 2)'}} />
@@ -3235,6 +3374,20 @@ export default function Admin() {
           />
         )}
 
+      {/* ══ HISTORIAL DE VERSIONES ══ */}
+        {activeTab === 'version_history' && (
+          <VersionHistoryTab
+            snapshots={versionSnapshots}
+            loading={loadingVersionSnapshots}
+            saving={savingVersionSnapshot}
+            error={versionSnapshotError}
+            notice={versionSnapshotNotice}
+            onRefresh={loadVersionSnapshots}
+            onSave={() => createVersionSnapshot({ source: 'manual' })}
+            retentionDays={VERSION_SNAPSHOT_RETENTION_DAYS}
+          />
+        )}
+
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
@@ -3266,6 +3419,90 @@ export default function Admin() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefresh, onSave, retentionDays }) {
+  const formatDate = (value) => new Date(value).toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const countLabel = (counts = {}) => [
+    ['Productos', counts.products],
+    ['Diseños', counts.designs],
+    ['Escalas', counts.price_tiers],
+    ['Localidades', counts.localities],
+    ['Vendedores', counts.sellers],
+  ].filter(([, value]) => typeof value === 'number').map(([label, value]) => `${label}: ${value}`).join(' · ');
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:14}}>
+      <div style={styles.card}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:14, flexWrap:'wrap'}}>
+          <div>
+            <h2 style={{...styles.sectionTitle, marginBottom:6}}>Historial de versiones</h2>
+            <p style={{margin:0, color:'#5a6380', fontSize:13, lineHeight:1.5}}>
+              Guarda copias de seguridad de productos, diseños, escalas, localidades, configuración, vendedores y admins. No incluye pedidos ni archivos físicos, solo datos y URLs.
+            </p>
+          </div>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+            <button style={{...styles.editBtn, padding:'8px 14px'}} onClick={onRefresh} disabled={loading}>
+              {loading ? 'Actualizando...' : 'Actualizar'}
+            </button>
+            <button style={{...styles.btnPrimary, padding:'8px 16px', opacity: saving ? 0.65 : 1}} onClick={onSave} disabled={saving}>
+              {saving ? 'Guardando...' : 'Guardar versión actual'}
+            </button>
+          </div>
+        </div>
+        <div style={{marginTop:14, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:10}}>
+          <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Automático</div>
+            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>Cada 1 hora si hubo cambios</div>
+          </div>
+          <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Retención</div>
+            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>Últimos {retentionDays} días</div>
+          </div>
+          <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Restauración</div>
+            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>No implementada todavía</div>
+          </div>
+        </div>
+        {notice && <div style={{marginTop:12, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700}}>{notice}</div>}
+        {error && <div style={{marginTop:12, background:'#fff7ed', border:'1px solid #fed7aa', color:'#9a3412', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700}}>{error}</div>}
+      </div>
+
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>Versiones guardadas ({snapshots.length})</h2>
+        {loading ? (
+          <p style={styles.emptyMsg}>Cargando historial...</p>
+        ) : snapshots.length === 0 ? (
+          <p style={styles.emptyMsg}>Todavía no hay versiones guardadas.</p>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {snapshots.map(snapshot => (
+              <div key={snapshot.id} style={{display:'grid', gridTemplateColumns:'minmax(150px, 210px) 100px 1fr minmax(140px, 220px)', gap:12, alignItems:'center', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:800, color:'#1B2F5E'}}>{formatDate(snapshot.created_at)}</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>hash {snapshot.content_hash}</div>
+                </div>
+                <span style={{justifySelf:'start', background: snapshot.source === 'manual' ? '#e8eef9' : '#f0f2f8', color: snapshot.source === 'manual' ? '#1B2F5E' : '#5a6380', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:800}}>
+                  {snapshot.source === 'manual' ? 'Manual' : 'Auto'}
+                </span>
+                <div style={{fontSize:12, color:'#5a6380', lineHeight:1.5}}>{countLabel(snapshot.counts)}</div>
+                <div style={{fontSize:11, color:'#9aa3bc', textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                  {snapshot.created_by || 'Sin usuario registrado'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -118,7 +118,8 @@ FROM (
     ('production_stock'),
     ('production_status'),
     ('production_stock_log'),
-    ('admin_presence')
+    ('admin_presence'),
+    ('admin_version_snapshots')
 ) AS realtime_tables(table_name);
 
 DROP FUNCTION IF EXISTS public.add_table_to_supabase_realtime(text);
