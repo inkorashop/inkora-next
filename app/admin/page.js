@@ -1529,14 +1529,17 @@ export default function Admin() {
         </div>
       </div>
 
-      <div style={s.content}>
+      <div style={{...s.content, ...(activeTab === 'products' ? s.contentFull : {})}}>
 
         {/* ══ PRODUCTOS ══ */}
         {activeTab === 'products' && (
           <>
-            <div style={s.card}>
-              <h2 style={s.sectionTitle}>Productos</h2>
-              <div style={{overflowX: 'auto'}} data-orders-table>
+            <div style={s.productWorkspace}>
+              <div style={s.productWorkspaceHeader}>
+                <h2 style={{...s.sectionTitle, marginBottom:0}}>Productos</h2>
+                <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600}}>{products.length} producto{products.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div style={{...s.productTableWrap, maxHeight: useProductManagementModals ? 'calc(100vh - 112px)' : undefined}} data-orders-table>
                 <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1240 : 1080 }}>
                   <thead>
                     <tr>
@@ -4311,7 +4314,11 @@ const styles = {
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
   content: { width: '90%', maxWidth: '100%', margin: '16px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 },
+  contentFull: { width: '100%', margin: 0, padding: 0 },
   card: { background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' },
+  productWorkspace: { background: 'white', minHeight: 'calc(100vh - 88px)', borderRadius: 0, padding: 0, border: 'none', boxShadow: 'none' },
+  productWorkspaceHeader: { display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, minHeight:44, padding:'0 16px', borderBottom:'1.5px solid #dde1ef', background:'white' },
+  productTableWrap: { overflow:'auto', border:'none', borderRadius:0, overscrollBehavior:'contain' },
   sectionTitle: { fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 12 },
   emptyMsg: { color: '#9aa3bc', fontSize: 12 },
   formGroup: { marginBottom: 10 },
@@ -4338,7 +4345,7 @@ const styles = {
   productTag: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   orphanTag: { background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   tbl: { width: '100%', borderCollapse: 'collapse', minWidth: 820 },
-  th: { fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 6px', borderBottom: '2px solid #dde1ef', textAlign: 'left', whiteSpace: 'normal', minWidth: 60 },
+  th: { fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, padding: '8px 6px', borderBottom: '2px solid #dde1ef', textAlign: 'left', whiteSpace: 'normal', minWidth: 60, position:'sticky', top:0, zIndex:2, background:'#f8faff' },
   td: { padding: '4px 5px', borderBottom: '1px solid #f0f2f8', verticalAlign: 'middle' },
   tblInput: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 6px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' },
   footer: { textAlign: 'center', padding: '10px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
