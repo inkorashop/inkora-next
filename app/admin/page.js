@@ -139,6 +139,8 @@ export default function Admin() {
     return SLUG_TABS[slug] || 'products';
   };
   const [activeTab, setActiveTab] = useState(initialTab);
+  const adminScrollPositionsRef = useRef({});
+  const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
     try {
       const saved = localStorage.getItem('admin_tab_order');
@@ -307,51 +309,57 @@ export default function Admin() {
 
     const scrollKey = `inkora_admin_scroll_${activeTab}`;
     let restoreTimer = null;
-    let restoreAttempts = 0;
-    let hasRestored = false;
+    let restoreStopTimer = null;
 
-    const saveScroll = () => {
+    const getSavedScroll = () => {
+      const fromRef = adminScrollPositionsRef.current[activeTab];
+      if (typeof fromRef === 'number') return fromRef;
+      return Number(sessionStorage.getItem(scrollKey) || 0);
+    };
+
+    const saveScroll = (force = false) => {
       const y = window.scrollY || document.documentElement.scrollTop || 0;
+      const saved = getSavedScroll();
+      const suppressing = Date.now() < suppressAdminScrollSaveUntilRef.current;
 
-      // Evita pisar el scroll guardado con 0 antes de que la pestaña termine de restaurarse.
-      if (!hasRestored && y === 0) return;
+      // Al volver de otra pestaña, algunos browsers disparan un scroll a 0 antes
+      // de recomponer el layout. No dejamos que ese 0 pise la posición real.
+      if (!force && suppressing) return;
+      if (!force && y === 0 && saved > 80 && document.visibilityState === 'visible') return;
 
+      adminScrollPositionsRef.current[activeTab] = y;
       sessionStorage.setItem(scrollKey, String(y));
     };
 
     const restoreScroll = () => {
-      const saved = Number(sessionStorage.getItem(scrollKey) || 0);
-      if (!saved) {
-        hasRestored = true;
-        return;
-      }
-
-      window.scrollTo(0, saved);
-      hasRestored = true;
+      const saved = getSavedScroll();
+      if (saved > 0) window.scrollTo(0, saved);
     };
 
     const restoreScrollRepeatedly = () => {
       clearInterval(restoreTimer);
-      restoreAttempts = 0;
+      clearTimeout(restoreStopTimer);
+      suppressAdminScrollSaveUntilRef.current = Date.now() + 1800;
 
       restoreTimer = setInterval(() => {
-        restoreAttempts += 1;
         restoreScroll();
+      }, 80);
 
-        if (restoreAttempts >= 20) {
-          clearInterval(restoreTimer);
-        }
-      }, 150);
+      restoreStopTimer = setTimeout(() => {
+        clearInterval(restoreTimer);
+        restoreScroll();
+      }, 1500);
     };
 
     requestAnimationFrame(restoreScroll);
     setTimeout(restoreScrollRepeatedly, 100);
 
-    const handlePageHide = () => saveScroll();
+    const handleScroll = () => saveScroll();
+    const handlePageHide = () => saveScroll(true);
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        saveScroll();
+        saveScroll(true);
       } else {
         setTimeout(restoreScrollRepeatedly, 100);
       }
@@ -361,22 +369,23 @@ export default function Admin() {
       setTimeout(restoreScrollRepeatedly, 100);
     };
 
-    window.addEventListener('scroll', saveScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('beforeunload', handlePageHide);
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      saveScroll();
+      saveScroll(true);
       clearInterval(restoreTimer);
-      window.removeEventListener('scroll', saveScroll);
+      clearTimeout(restoreStopTimer);
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handlePageHide);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [screen, activeTab, products.length, designs.length, orders.length, localities.length, priceTiers.length]);
+  }, [screen, activeTab]);
 
   const realtimeTimersRef = useRef({});
   useEffect(() => {
