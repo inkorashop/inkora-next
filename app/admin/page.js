@@ -194,6 +194,8 @@ export default function Admin() {
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
   const [catColorPicker, setCatColorPicker] = useState({});
+  const [editingProductCategory, setEditingProductCategory] = useState(null);
+  const [savingProductCategory, setSavingProductCategory] = useState(false);
   const catColorValueRef = useRef({});
   const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
@@ -641,6 +643,90 @@ export default function Admin() {
     const updated = { ...current, [cat]: color };
     await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
     loadProducts();
+  }
+
+  function startProductCategoryEdit(productId, cat) {
+    setEditingProductCategory({ productId, oldName: cat, value: cat });
+    setDragOverCat(null);
+    dragSrcCatRef.current = null;
+  }
+
+  async function saveProductCategoryName() {
+    const edit = editingProductCategory;
+    if (!edit || savingProductCategory) return;
+
+    const nextName = edit.value.trim();
+    if (!nextName || nextName === edit.oldName) {
+      setEditingProductCategory(null);
+      return;
+    }
+
+    const product = products.find(p => p.id === edit.productId);
+    const currentCategories = getProductCategories(edit.productId);
+    if (currentCategories.some(cat => cat !== edit.oldName && cat.toLowerCase() === nextName.toLowerCase())) {
+      alert('Ya existe una categoria con ese nombre.');
+      setEditingProductCategory(null);
+      return;
+    }
+
+    setSavingProductCategory(true);
+    const nextCategories = currentCategories.map(cat => cat === edit.oldName ? nextName : cat);
+    const currentColors = product?.category_colors || {};
+    const nextColors = { ...currentColors };
+    if (Object.prototype.hasOwnProperty.call(nextColors, edit.oldName)) {
+      nextColors[nextName] = nextColors[edit.oldName];
+      delete nextColors[edit.oldName];
+    }
+
+    const previousProducts = products;
+    const previousDesigns = designs;
+
+    setProducts(prev => prev.map(p => p.id === edit.productId ? {
+      ...p,
+      categories: nextCategories,
+      category_colors: nextColors,
+    } : p));
+    setDesigns(prev => prev.map(d => {
+      if (d.product_id !== edit.productId) return d;
+      const nextDesignCategories = Array.isArray(d.categories)
+        ? d.categories.map(cat => cat === edit.oldName ? nextName : cat)
+        : d.categories;
+      return {
+        ...d,
+        category: d.category === edit.oldName ? nextName : d.category,
+        categories: nextDesignCategories,
+      };
+    }));
+    setEditingProductCategory(null);
+
+    try {
+      const { error: productError } = await supabase
+        .from('products')
+        .update({ categories: nextCategories, category_colors: nextColors })
+        .eq('id', edit.productId);
+      if (productError) throw productError;
+
+      const designsToUpdate = designs.filter(d =>
+        d.product_id === edit.productId &&
+        (d.category === edit.oldName || (Array.isArray(d.categories) && d.categories.includes(edit.oldName)))
+      );
+
+      const results = await Promise.all(designsToUpdate.map(d => {
+        const payload = { category: d.category === edit.oldName ? nextName : d.category };
+        if (Array.isArray(d.categories)) {
+          payload.categories = d.categories.map(cat => cat === edit.oldName ? nextName : cat);
+        }
+        return supabase.from('designs').update(payload).eq('id', d.id);
+      }));
+      const failed = results.find(result => result.error);
+      if (failed) throw failed.error;
+    } catch (error) {
+      setProducts(previousProducts);
+      setDesigns(previousDesigns);
+      alert('No se pudo renombrar la categoria. Intenta de nuevo.');
+    } finally {
+      setSavingProductCategory(false);
+    }
   }
 
   async function removeProductCategory(productId, cat) {
@@ -1531,15 +1617,33 @@ export default function Admin() {
                             const savedColor = p?.category_colors?.[cat] || '#e8eef9';
                             const pickerKey = `${product.id}:${cat}`;
                             const pickerOpen = catColorPicker[pickerKey];
+                            const isEditingCat = editingProductCategory?.productId === product.id && editingProductCategory?.oldName === cat;
                             return (
                               <span key={cat}
-                                draggable
-                                onDragStart={() => { dragSrcCatRef.current = cat; setDragOverCat(null); }}
-                                onDragOver={e => { e.preventDefault(); setDragOverCat(cat); }}
-                                onDrop={() => { reorderProductCategory(product.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
+                                draggable={!isEditingCat}
+                                onDragStart={e => { if (isEditingCat) { e.preventDefault(); return; } dragSrcCatRef.current = cat; setDragOverCat(null); }}
+                                onDragOver={e => { if (isEditingCat) return; e.preventDefault(); setDragOverCat(cat); }}
+                                onDrop={() => { if (!isEditingCat) reorderProductCategory(product.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
                                 onDragEnd={() => { dragSrcCatRef.current = null; setDragOverCat(null); }}
-                                style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor:'grab'}}>
-                                {cat}
+                                style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor: isEditingCat ? 'text' : 'grab'}}>
+                                {isEditingCat ? (
+                                  <input
+                                    autoFocus
+                                    value={editingProductCategory.value}
+                                    disabled={savingProductCategory}
+                                    onMouseDown={e => e.stopPropagation()}
+                                    onClick={e => e.stopPropagation()}
+                                    onChange={e => setEditingProductCategory(prev => prev ? {...prev, value: e.target.value} : prev)}
+                                    onBlur={saveProductCategoryName}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' || e.key === 'Escape') {
+                                        e.preventDefault();
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+                                    style={{width: Math.max(72, editingProductCategory.value.length * 7), maxWidth:160, border:'none', borderBottom:'1px solid #2D6BE4', background:'transparent', color:'#1B2F5E', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:600, padding:0, outline:'none'}}
+                                  />
+                                ) : cat}
                                 <span
                                   title="Color de la categoría"
                                   onClick={e => { e.stopPropagation(); const pickerOpen = catColorPicker[pickerKey]; setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
@@ -1553,6 +1657,14 @@ export default function Admin() {
                                   onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
                                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
                                 />
+                                <button
+                                  title="Editar categoria"
+                                  style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  onClick={e => { e.stopPropagation(); startProductCategoryEdit(product.id, cat); }}
+                                >
+                                  ✎
+                                </button>
                                 <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
                             );

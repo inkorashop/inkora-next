@@ -4531,6 +4531,8 @@ export default function Admin() {
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
   const [catColorPicker, setCatColorPicker] = useState({});
+  const [editingProductCategory, setEditingProductCategory] = useState(null);
+  const [savingProductCategory, setSavingProductCategory] = useState(false);
   const catColorValueRef = useRef({});
   const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
@@ -8139,6 +8141,9 @@ export default function Home() {
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState({});
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [savingCategory, setSavingCategory] = useState(false);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -8162,7 +8167,10 @@ export default function Home() {
       supabase.auth.getSession().then(({ data: { session } }) => {
         const u = session?.user ?? null;
         setUser(u);
-        if (u) loadProfile(u.id);
+        if (u) {
+          loadProfile(u.id);
+          loadAdminStatus(u.email);
+        }
       });
     }
 
@@ -8171,7 +8179,14 @@ export default function Home() {
       : supabase.auth.onAuthStateChange((event, session) => {
           const u = session?.user ?? null;
           setUser(u);
-          if (u) loadProfile(u.id); else { setProfile(null); setPriceTiers([]); }
+          if (u) {
+            loadProfile(u.id);
+            loadAdminStatus(u.email);
+          } else {
+            setProfile(null);
+            setPriceTiers([]);
+            setIsAdmin(false);
+          }
         });
 
     supabase.from('settings').select('*')
@@ -8604,8 +8619,18 @@ export default function Home() {
     }
   }
 
+  async function loadAdminStatus(email) {
+    if (!email) {
+      setIsAdmin(false);
+      return;
+    }
+    const { data } = await supabase.from('admins').select('email').eq('email', email).single();
+    setIsAdmin(!!data);
+  }
+
   function switchProduct(id) {
     if (id === activeProductId) return;
+    setEditingCategory(null);
     setGridTransition('opacity 0.15s ease');
     setGridOpacity(0);
     setTimeout(() => {
@@ -8766,6 +8791,114 @@ export default function Home() {
       if (results[i].data) map[p.id] = results[i].data;
     });
     setDesignsByProduct(map);
+  }
+
+  function beginCategoryEdit(cat, anchor, event) {
+    if (!isAdmin || !activeProductId || cat === 'Todos' || cat === 'Sin categoria' || cat === 'Sin categoría') return;
+    event?.preventDefault();
+    event?.stopPropagation();
+    setEditingCategory({ productId: activeProductId, oldName: cat, value: cat, anchor });
+  }
+
+  function updateLocalCategoryName(productId, oldName, newName, nextCategories, nextColors) {
+    setProducts(prev => prev.map(p => p.id === productId ? {
+      ...p,
+      categories: nextCategories,
+      category_colors: nextColors,
+    } : p));
+    setDesignsByProduct(prev => {
+      const productDesigns = prev[productId] || [];
+      return {
+        ...prev,
+        [productId]: productDesigns.map(d => {
+          const nextDesignCategories = Array.isArray(d.categories)
+            ? [...new Set(d.categories.map(c => c === oldName ? newName : c))]
+            : d.categories;
+          return {
+            ...d,
+            category: d.category === oldName ? newName : d.category,
+            categories: nextDesignCategories,
+          };
+        }),
+      };
+    });
+  }
+
+  async function saveCategoryRename() {
+    const edit = editingCategory;
+    if (!edit || savingCategory) return;
+
+    const newName = edit.value.trim();
+    if (!newName || newName === edit.oldName) {
+      setEditingCategory(null);
+      return;
+    }
+
+    setSavingCategory(true);
+    const product = products.find(p => p.id === edit.productId);
+    const currentCategories = Array.isArray(product?.categories) && product.categories.length > 0
+      ? product.categories
+      : [...new Set((designsByProduct[edit.productId] || []).map(d => d.category).filter(c => c && c !== 'Sin categoria' && c !== 'Sin categoría'))];
+    const nextCategories = [...new Set(currentCategories.map(c => c === edit.oldName ? newName : c))];
+    const currentColors = product?.category_colors || {};
+    const nextColors = { ...currentColors };
+
+    if (Object.prototype.hasOwnProperty.call(nextColors, edit.oldName)) {
+      nextColors[newName] = nextColors[newName] || nextColors[edit.oldName];
+      delete nextColors[edit.oldName];
+    }
+
+    const previousProducts = products;
+    const previousDesignsByProduct = designsByProduct;
+    updateLocalCategoryName(edit.productId, edit.oldName, newName, nextCategories, nextColors);
+    if (filter === edit.oldName) setFilter(newName);
+    setEditingCategory(null);
+
+    try {
+      const { error: productError } = await supabase
+        .from('products')
+        .update({ categories: nextCategories, category_colors: nextColors })
+        .eq('id', edit.productId);
+      if (productError) throw productError;
+
+      const { data: productDesigns, error: designsError } = await supabase
+        .from('designs')
+        .select('id, category, categories')
+        .eq('product_id', edit.productId)
+        .limit(10000);
+      if (designsError) throw designsError;
+
+      const updates = (productDesigns || [])
+        .filter(d => d.category === edit.oldName || (Array.isArray(d.categories) && d.categories.includes(edit.oldName)))
+        .map(d => {
+          const nextDesignCategories = Array.isArray(d.categories)
+            ? [...new Set(d.categories.map(c => c === edit.oldName ? newName : c))]
+            : d.categories;
+          const payload = {
+            category: d.category === edit.oldName ? newName : d.category,
+          };
+          if (Array.isArray(nextDesignCategories)) payload.categories = nextDesignCategories;
+          return supabase
+            .from('designs')
+            .update(payload)
+            .eq('id', d.id);
+        });
+
+      const results = await Promise.all(updates);
+      const failed = results.find(result => result.error);
+      if (failed) throw failed.error;
+    } catch (error) {
+      setProducts(previousProducts);
+      setDesignsByProduct(previousDesignsByProduct);
+      if (filter === newName) setFilter(edit.oldName);
+      alert('No se pudo renombrar la categoria. Intenta de nuevo.');
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  function cancelCategoryEdit() {
+    setEditingCategory(null);
   }
 
   const fuse = useMemo(() => new Fuse(designs, {
@@ -9050,6 +9183,39 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 textColor = (r * 299 + g * 587 + b * 114) / 1000 > 100 ? '#000000' : '#ffffff';
               }
               const isActive = filter === cat;
+              const editAnchor = `filter:${cat}`;
+              const isEditing = editingCategory?.productId === activeProductId && editingCategory?.anchor === editAnchor;
+              if (isEditing) {
+                return (
+                  <input
+                    key={cat}
+                    autoFocus
+                    className="filter-btn"
+                    style={{
+                      ...s.filterBtn,
+                      ...s.categoryEditInput,
+                      background: isActive ? '#1B2F5E' : bg,
+                      color: isActive ? 'white' : textColor,
+                      boxShadow: '0 2px 8px rgba(27,47,94,0.22)',
+                    }}
+                    value={editingCategory.value}
+                    disabled={savingCategory}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => setEditingCategory(prev => prev ? { ...prev, value: e.target.value } : prev)}
+                    onBlur={saveCategoryRename}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelCategoryEdit();
+                      }
+                    }}
+                  />
+                );
+              }
               return (
                 <button
                   key={cat}
@@ -9064,6 +9230,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     opacity: isActive ? 1 : 0.85,
                   }}
                   onClick={() => setFilter(cat)}
+                  onDoubleClick={e => beginCategoryEdit(cat, editAnchor, e)}
+                  title={isAdmin && cat !== 'Todos' ? 'Doble click para renombrar' : undefined}
                 >
                   {cat}
                 </button>
@@ -9092,7 +9260,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
-            <div style={s.emptyState}><p>No hay diseños todavia.</p></div>
+            <div style={s.emptyState}><p>Próximamente...</p></div>
           ) : filtered.length === 0 ? (
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
@@ -9127,7 +9295,42 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
-                      {d.category !== 'Sin categoria' && <span style={s.catTag}>{d.category}</span>}
+                      {d.category !== 'Sin categoria' && (() => {
+                        const editAnchor = `card:${d.id}`;
+                        const isEditing = editingCategory?.productId === activeProductId && editingCategory?.anchor === editAnchor;
+                        if (isEditing) {
+                          return (
+                            <input
+                              autoFocus
+                              style={{...s.catTag, ...s.categoryEditInput, width: Math.max(80, editingCategory.value.length * 8)}}
+                              value={editingCategory.value}
+                              disabled={savingCategory}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setEditingCategory(prev => prev ? { ...prev, value: e.target.value } : prev)}
+                              onBlur={saveCategoryRename}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                                if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  cancelCategoryEdit();
+                                }
+                              }}
+                            />
+                          );
+                        }
+                        return (
+                          <span
+                            style={{...s.catTag, cursor: isAdmin ? 'text' : 'default'}}
+                            onDoubleClick={e => beginCategoryEdit(d.category, editAnchor, e)}
+                            title={isAdmin ? 'Doble click para renombrar' : undefined}
+                          >
+                            {d.category}
+                          </span>
+                        );
+                      })()}
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
                         if (price !== null && price > 0) {
@@ -9501,6 +9704,7 @@ const styles = {
   filters: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
   filterBtn: { background: '#e8eef9', border: 'none', color: '#2D6BE4', borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   filterActive: { background: '#1B2F5E', borderColor: '#1B2F5E', color: 'white' },
+  categoryEditInput: { border: '1.5px solid rgba(45,107,228,0.55)', outline: 'none', fontFamily: 'Barlow, sans-serif', minWidth: 86, maxWidth: 180, cursor: 'text', boxSizing: 'border-box', textTransform: 'none', letterSpacing: 0 },
   grid: { display: 'grid', gap: 14 },
   card: { background: 'linear-gradient(145deg, rgba(27,47,94,0.08) 0%, rgba(27,47,94,0.15) 100%)', borderRadius: 12, overflow: 'hidden', border: '1.5px solid rgba(27,47,94,0.12)', boxShadow: '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)', transition: 'transform 0.15s ease, box-shadow 0.15s ease', display: 'flex', flexDirection: 'column' },
   cardImg: { background: '#eef0f6', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
