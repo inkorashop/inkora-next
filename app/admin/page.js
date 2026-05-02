@@ -253,7 +253,6 @@ export default function Admin() {
   const [editingTiers, setEditingTiers] = useState({});
   const [savedTierId, setSavedTierId] = useState(null);
   const [addingTier, setAddingTier] = useState(null);
-  const tierGridRef = useRef(null);
 
   // ── Auth listener ──
   useEffect(() => {
@@ -952,64 +951,12 @@ export default function Admin() {
   }
 
   function updateTierForm(id, field, value) {
-    setEditingTiers(prev => ({ ...prev, [id]: { ...prev[id], [field]: cleanTierInput(value, field) } }));
-  }
-
-  function cleanTierInput(value, field) {
-    const raw = String(value ?? '').replace(',', '.');
-    if (field === 'min_quantity') return raw.replace(/\D/g, '');
-    const cleaned = raw.replace(/[^\d.]/g, '');
-    const parts = cleaned.split('.');
-    return parts.length > 1 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
-  }
-
-  function isTierValueInvalid(value, field) {
-    if (value === '' || value === null || value === undefined) return true;
-    const n = Number(value);
-    if (!Number.isFinite(n)) return true;
-    if (field === 'min_quantity') return n < 1 || !Number.isInteger(n);
-    return n < 0;
-  }
-
-  function getTierCellError(tier, field, tiersInGroup) {
-    const ef = editingTiers[tier.id] || { min_quantity: tier.min_quantity, price_per_unit: tier.price_per_unit };
-    if (isTierValueInvalid(ef[field], field)) return 'Valor inválido';
-    if (field === 'min_quantity') {
-      const repeated = tiersInGroup.some(other => {
-        if (other.id === tier.id) return false;
-        const otherForm = editingTiers[other.id] || { min_quantity: other.min_quantity };
-        return String(otherForm.min_quantity) === String(ef.min_quantity);
-      });
-      if (repeated) return 'Cantidad repetida';
-    }
-    return '';
-  }
-
-  function getNewTierCellError(tier, field, tiersInGroup) {
-    if (isTierValueInvalid(tier[field], field)) return 'Valor inválido';
-    if (field === 'min_quantity' && tiersInGroup.some(existing => {
-      const ef = editingTiers[existing.id] || { min_quantity: existing.min_quantity };
-      return String(ef.min_quantity) === String(tier.min_quantity);
-    })) {
-      return 'Cantidad repetida';
-    }
-    return '';
+    setEditingTiers(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   }
 
   async function saveTierAuto(id) {
     const ef = editingTiers[id];
     if (!ef) return;
-    if (isTierValueInvalid(ef.min_quantity, 'min_quantity') || isTierValueInvalid(ef.price_per_unit, 'price_per_unit')) return;
-    const tier = priceTiers.find(t => t.id === id);
-    if (tier) {
-      const duplicated = priceTiers.some(other => {
-        if (other.id === id) return false;
-        if (other.product_id !== tier.product_id || other.locality_id !== tier.locality_id) return false;
-        const otherForm = editingTiers[other.id] || { min_quantity: other.min_quantity };
-        return String(otherForm.min_quantity) === String(ef.min_quantity);
-      });
-      if (duplicated) return;
-    }
     await supabase.from('price_tiers').update({ min_quantity: Number(ef.min_quantity), price_per_unit: Number(ef.price_per_unit) }).eq('id', id);
     setSavedTierId(id);
     setTimeout(() => setSavedTierId(prev => prev === id ? null : prev), 1200);
@@ -1017,89 +964,11 @@ export default function Admin() {
 
   async function addTierMatrix(productId, localityId, key) {
     const t = newTiers[key] || { min_quantity: '', price_per_unit: '' };
-    if (isTierValueInvalid(t.min_quantity, 'min_quantity') || isTierValueInvalid(t.price_per_unit, 'price_per_unit')) return;
-    const duplicated = priceTiers.some(existing =>
-      existing.product_id === productId &&
-      existing.locality_id === localityId &&
-      String(existing.min_quantity) === String(t.min_quantity)
-    );
-    if (duplicated) return;
+    if (!t.min_quantity || !t.price_per_unit) return;
     await supabase.from('price_tiers').insert({ product_id: productId, locality_id: localityId, min_quantity: Number(t.min_quantity), price_per_unit: Number(t.price_per_unit) });
     setNewTiers(prev => ({ ...prev, [key]: { min_quantity: '', price_per_unit: '' } }));
     setAddingTier(null);
     loadPriceTiers();
-  }
-
-  function cancelTierEdit(id) {
-    const original = priceTiers.find(t => t.id === id);
-    if (!original) return;
-    setEditingTiers(prev => ({
-      ...prev,
-      [id]: { min_quantity: original.min_quantity, price_per_unit: original.price_per_unit },
-    }));
-  }
-
-  function focusTierCell(current, direction) {
-    const root = tierGridRef.current;
-    if (!root) return;
-    const cells = Array.from(root.querySelectorAll('[data-tier-cell="true"]'));
-    const currentIndex = cells.indexOf(current);
-    if (currentIndex === -1) return;
-
-    let target = null;
-    if (direction === 'next') target = cells[currentIndex + 1];
-    if (direction === 'prev') target = cells[currentIndex - 1];
-    if (direction === 'right') {
-      target = cells.find(cell => cell.dataset.gridKey === current.dataset.gridKey && cell.dataset.rowIndex === current.dataset.rowIndex && Number(cell.dataset.colIndex) === Number(current.dataset.colIndex) + 1);
-    }
-    if (direction === 'left') {
-      target = cells.find(cell => cell.dataset.gridKey === current.dataset.gridKey && cell.dataset.rowIndex === current.dataset.rowIndex && Number(cell.dataset.colIndex) === Number(current.dataset.colIndex) - 1);
-    }
-    if (direction === 'down') {
-      target = cells.find(cell => cell.dataset.gridKey === current.dataset.gridKey && Number(cell.dataset.rowIndex) === Number(current.dataset.rowIndex) + 1 && cell.dataset.colIndex === current.dataset.colIndex);
-    }
-    if (direction === 'up') {
-      target = cells.find(cell => cell.dataset.gridKey === current.dataset.gridKey && Number(cell.dataset.rowIndex) === Number(current.dataset.rowIndex) - 1 && cell.dataset.colIndex === current.dataset.colIndex);
-    }
-    if (target) {
-      target.focus();
-      target.select?.();
-    }
-  }
-
-  function handleTierCellKeyDown(e, { id, isNew, key }) {
-    const keyName = e.key;
-    const moveKeys = ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Tab', 'Enter', 'Escape'];
-    if (!moveKeys.includes(keyName)) return;
-    e.preventDefault();
-
-    if (keyName === 'Escape') {
-      e.currentTarget.dataset.skipTierSave = 'true';
-      if (isNew) {
-        setAddingTier(null);
-      } else {
-        cancelTierEdit(id);
-      }
-      e.currentTarget.blur();
-      return;
-    }
-
-    if (keyName === 'Enter') {
-      if (isNew) {
-        const [productId, localityId] = key.split('_');
-        addTierMatrix(productId, localityId, key);
-      } else {
-        saveTierAuto(id);
-      }
-      focusTierCell(e.currentTarget, 'down');
-      return;
-    }
-
-    if (keyName === 'Tab') focusTierCell(e.currentTarget, e.shiftKey ? 'prev' : 'next');
-    if (keyName === 'ArrowRight') focusTierCell(e.currentTarget, 'right');
-    if (keyName === 'ArrowLeft') focusTierCell(e.currentTarget, 'left');
-    if (keyName === 'ArrowDown') focusTierCell(e.currentTarget, 'down');
-    if (keyName === 'ArrowUp') focusTierCell(e.currentTarget, 'up');
   }
 
   function deleteScale(id) {
@@ -1820,16 +1689,11 @@ export default function Admin() {
 
             {/* ESCALAS */}
             <div style={s.card}>
-              <div style={{display:'flex', justifyContent:'space-between', gap:8, alignItems:'flex-start', marginBottom:8}}>
-                <div>
-                  <h2 style={{...s.sectionTitle, marginBottom:2}}>Escalas de precio</h2>
-                  <p style={{margin:0, color:'#5a6380', fontSize:11, lineHeight:1.25}}>Precios por cantidad mínima. Se aplica la escala correspondiente al pedido.</p>
-                </div>
-              </div>
+              <h2 style={s.sectionTitle}>Escalas de precio</h2>
               {localities.filter(l => l.active).length === 0 ? <p style={s.emptyMsg}>No hay localidades activas.</p>
               : products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p>
               : (
-                <div ref={tierGridRef} style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:8}}>
+                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
                   {products.filter(p => p.active).map(product => {
                     const productTiers = priceTiers.filter(t => t.product_id === product.id);
                     const activeLocalities = localities.filter(l => l.active);
@@ -1839,34 +1703,31 @@ export default function Admin() {
                       const tiers = productTiers.filter(t => t.locality_id === localityId).sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
                       const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
                       const isAdding = addingTier === key;
-                      const cellStyle = {padding:'1px 4px', verticalAlign:'middle'};
+                      const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
                       return (
                         <div key={key} style={{borderTop: borderTop ? '1px solid #f0f2f8' : 'none'}}>
-                          <div style={{padding:'3px 6px 1px', fontSize:9, fontWeight:700, color:'#9aa3bc', letterSpacing:0.3, textTransform:'uppercase'}}>{localityName}</div>
+                          <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{localityName}</div>
                           <table style={{width:'100%', borderCollapse:'collapse'}}>
                             <thead>
                               <tr style={{borderBottom:'1px solid #eef0f6'}}>
-                                <th style={{padding:'2px 4px', fontSize:9, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Desde</th>
-                                <th style={{padding:'2px 4px', fontSize:9, fontWeight:700, color:'#5a6380', textAlign:'right', whiteSpace:'nowrap'}}>Precio</th>
-                                <th style={{padding:'2px 2px', width:22, textAlign:'center', fontSize:9, fontWeight:700, color:'#5a6380'}}></th>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cant. mín.</th>
+                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
+                                <th style={{padding:'2px 4px', width:22}}></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:10, fontStyle:'italic', textAlign:'center', padding:'2px 4px'}}>Sin escalas</td></tr>}
-                              {tiers.map((t, tierIndex) => {
+                              {tiers.length === 0 && !isAdding && <tr><td colSpan={3} style={{...cellStyle, color:'#c4c9d9', fontSize:11, fontStyle:'italic', textAlign:'center', padding:'4px 6px'}}>Sin escalas</td></tr>}
+                              {tiers.map(t => {
                                 const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
-                                const minError = getTierCellError(t, 'min_quantity', tiers);
-                                const priceError = getTierCellError(t, 'price_per_unit', tiers);
-                                const inputBaseStyle = error => ({width:'100%', height:24, border:'1.5px solid ' + (error ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:error ? '#fff5f5' : 'white'});
                                 return (
                                   <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
                                     <td style={cellStyle}>
-                                      <input className="tier-input" data-tier-cell="true" data-grid-key={key} data-row-index={tierIndex} data-col-index="0" style={inputBaseStyle(minError)} type="text" inputMode="numeric" value={ef.min_quantity} title={minError || 'Desde cantidad'} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={e => { if (e.currentTarget.dataset.skipTierSave === 'true') { delete e.currentTarget.dataset.skipTierSave; return; } saveTierAuto(t.id); }} onKeyDown={e => handleTierCellKeyDown(e, { id: t.id })} />
+                                      <input className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
                                     </td>
                                     <td style={cellStyle}>
                                       <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                        <span style={{fontSize:10, color:'#c4c9d9'}}>$</span>
-                                        <input className="tier-input" data-tier-cell="true" data-grid-key={key} data-row-index={tierIndex} data-col-index="1" style={inputBaseStyle(priceError)} type="text" inputMode="decimal" value={ef.price_per_unit} title={priceError || 'Precio público'} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={e => { if (e.currentTarget.dataset.skipTierSave === 'true') { delete e.currentTarget.dataset.skipTierSave; return; } saveTierAuto(t.id); }} onKeyDown={e => handleTierCellKeyDown(e, { id: t.id })} />
+                                        <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                        <input className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} />
                                         {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
                                       </div>
                                     </td>
@@ -1881,34 +1742,22 @@ export default function Admin() {
                                   <td style={cellStyle}>
                                     <input
                                       className="tier-input"
-                                      data-tier-cell="true"
-                                      data-grid-key={key}
-                                      data-row-index={tiers.length}
-                                      data-col-index="0"
-                                      style={{width:'100%', height:24, border:'1.5px solid ' + (nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.min_quantity && getNewTierCellError(nt, 'min_quantity', tiers) ? '#fff5f5' : 'white'}}
-                                      type="text" inputMode="numeric" placeholder="Cant."
+                                      type="number" min="1" placeholder="Cantidad"
                                       value={nt.min_quantity}
-                                      title={nt.min_quantity ? getNewTierCellError(nt, 'min_quantity', tiers) : 'Desde cantidad'}
-                                      onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: cleanTierInput(e.target.value, 'min_quantity')}}))}
-                                      onKeyDown={e => handleTierCellKeyDown(e, { isNew: true, key })}
+                                      onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, min_quantity: e.target.value}}))}
+                                      onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
                                     />
                                   </td>
                                   <td style={cellStyle}>
                                     <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                      <span style={{fontSize:10, color:'#c4c9d9'}}>$</span>
+                                      <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
                                       <input
                                         className="tier-input"
-                                        data-tier-cell="true"
-                                        data-grid-key={key}
-                                        data-row-index={tiers.length}
-                                        data-col-index="1"
-                                        style={{width:'100%', height:24, border:'1.5px solid ' + (nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#ef4444' : '#dde1ef'), borderRadius:4, padding:'2px 5px', fontSize:11, color:'#2d3352', fontFamily:'Barlow, sans-serif', boxSizing:'border-box', textAlign:'right', background:nt.price_per_unit && getNewTierCellError(nt, 'price_per_unit', tiers) ? '#fff5f5' : 'white'}}
-                                        type="text" inputMode="decimal" placeholder="Precio"
+                                        type="number" min="0" placeholder="Precio"
                                         value={nt.price_per_unit}
-                                        title={nt.price_per_unit ? getNewTierCellError(nt, 'price_per_unit', tiers) : 'Precio público'}
-                                        onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: cleanTierInput(e.target.value, 'price_per_unit')}}))}
-                                        onBlur={e => { if (e.currentTarget.dataset.skipTierSave === 'true') { delete e.currentTarget.dataset.skipTierSave; return; } addTierMatrix(product.id, localityId, key); }}
-                                        onKeyDown={e => handleTierCellKeyDown(e, { isNew: true, key })}
+                                        onChange={e => setNewTiers(prev => ({...prev, [key]: {...nt, price_per_unit: e.target.value}}))}
+                                        onBlur={() => addTierMatrix(product.id, localityId, key)}
+                                        onKeyDown={e => { if (e.key === 'Enter') addTierMatrix(product.id, localityId, key); }}
                                       />
                                     </div>
                                   </td>
@@ -1917,10 +1766,10 @@ export default function Admin() {
                               )}
                             </tbody>
                           </table>
-                          <div style={{padding:'2px 6px', borderTop:'1px solid #f0f2f8'}}>
+                          <div style={{padding:'3px 8px', borderTop:'1px solid #f0f2f8'}}>
                             {isAdding
-                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:10, padding:0}} onClick={() => setAddingTier(null)}>Cancelar</button>
-                              : <button style={{background:'none', border:'none', cursor:'pointer', color:'#2D6BE4', fontSize:10, fontWeight:700, padding:0}} onClick={() => setAddingTier(key)}>+ escala</button>
+                              ? <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0}} onClick={() => setAddingTier(null)}>✕ Cancelar</button>
+                              : <button style={{background:'none', border:'none', cursor:'pointer', color:'#b0b8d0', fontSize:11, padding:0, width:'100%', textAlign:'center'}} onClick={() => setAddingTier(key)}>+ escala</button>
                             }
                           </div>
                         </div>
@@ -1928,8 +1777,8 @@ export default function Admin() {
                     };
 
                     return (
-                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:7, overflow:'hidden'}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'4px 8px', fontSize:11, fontWeight:700, letterSpacing:0.3}}>{product.name}</div>
+                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 220px', minWidth:200}}>
+                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
                         {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
                       </div>
                     );
