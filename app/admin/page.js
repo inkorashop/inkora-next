@@ -8,7 +8,7 @@ import ProductionTab from '@/components/ProductionTab';
 const EMPTY_PRODUCT = { name: '', slug: '', card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'DiseÃ±os', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'EstadÃ­sticas', production:'ProducciÃ³n', version_history:'Historial de versiones' };
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -119,7 +119,7 @@ function HoldButton({ onConfirm }) {
     >
       <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', width: progress + '%', transition:'width 0.05s linear'}} />
       <span style={{position:'relative', zIndex:1}}>
-        {progress === 0 ? 'MantenÃ© para eliminar' : progress >= 100 ? 'âœ“ Eliminado' : `${Math.round(progress)}%`}
+        {progress === 0 ? 'Mantené para eliminar' : progress >= 100 ? '✓ Eliminado' : `${Math.round(progress)}%`}
       </span>
     </button>
   );
@@ -139,15 +139,15 @@ function TrashBtn({ onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
-    >âœ•</button>
+    >✕</button>
   );
 }
 
 export default function Admin() {
-  // â”€â”€ Auth â”€â”€
+  // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseÃ±os', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas', production: 'produccion', version_history: 'historial-de-versiones' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', heatmap: 'actividad', stats: 'estadisticas', production: 'produccion', version_history: 'historial-de-versiones' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -247,7 +247,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA ðŸ”·', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA ðŸ”·', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
@@ -372,7 +372,7 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminDataReadyForSnapshots, buildVersionSnapshotPayload, loadingVersionSnapshots, savingVersionSnapshot, screen, versionSnapshotError, versionSnapshots]);
 
-  // â”€â”€ Auth listener â”€â”€
+  // ── Auth listener ──
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
   }, []);
@@ -462,8 +462,8 @@ export default function Admin() {
       const saved = getSavedScroll();
       const suppressing = Date.now() < suppressAdminScrollSaveUntilRef.current;
 
-      // Al volver de otra pestaÃ±a, algunos browsers disparan un scroll a 0 antes
-      // de recomponer el layout. No dejamos que ese 0 pise la posiciÃ³n real.
+      // Al volver de otra pestaña, algunos browsers disparan un scroll a 0 antes
+      // de recomponer el layout. No dejamos que ese 0 pise la posición real.
       if (!force && suppressing) return;
       if (!force && y === 0 && saved > 80 && document.visibilityState === 'visible') return;
 
@@ -673,7 +673,7 @@ export default function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
-  // â”€â”€ Auth functions â”€â”€
+  // ── Auth functions ──
   async function checkAdmin(email) {
     const panelIsVisible = screenRef.current === 'panel';
     rememberAdminScroll();
@@ -715,7 +715,7 @@ export default function Admin() {
     setCurrentUser(null);
   }
 
-  // â”€â”€ Products â”€â”€
+  // ── Products ──
   async function handleProductDrop(targetId) {
     const srcId = dragSrcProductIdRef.current;
     dragSrcProductIdRef.current = null;
@@ -775,7 +775,7 @@ export default function Admin() {
   function deleteProduct(id) {
     setConfirmModal({
       open: true,
-      message: 'Â¿Seguro que querÃ©s eliminar este producto? Los diseÃ±os y escalas quedarÃ¡n en la base de datos pero desvinculados.',
+      message: '¿Seguro que querés eliminar este producto? Los diseños y escalas quedarán en la base de datos pero desvinculados.',
       onConfirm: async () => {
         await supabase.from('products').delete().eq('id', id);
         loadProducts();
@@ -791,10 +791,10 @@ export default function Admin() {
     loadProducts();
   }
 
-  // â”€â”€ Designs â”€â”€
+  // ── Designs ──
   async function loadDesigns() {
     const { data } = await supabase.from('designs').select('*, products(name)').order('sort_order', { nullsFirst: false }).order('created_at').limit(10000);
-    console.log('DiseÃ±os cargados:', data?.length, data);
+    console.log('Diseños cargados:', data?.length, data);
     if (data) { setDesigns(data); setOrphanCount(data.filter(d => !d.product_id && d.active).length); }
   }
 
@@ -1018,7 +1018,7 @@ export default function Admin() {
 
   async function deleteDesign(id) {
     if (selectedIds.has(id) && selectedIds.size > 1) {
-      askConfirm(`Â¿Eliminar los ${selectedIds.size} diseÃ±os seleccionados? Esta acciÃ³n no se puede deshacer.`, async () => {
+      askConfirm(`¿Eliminar los ${selectedIds.size} diseños seleccionados? Esta acción no se puede deshacer.`, async () => {
         await Promise.all([...selectedIds].map(did => supabase.from('designs').delete().eq('id', did)));
         setSelectedIds(new Set());
         loadDesigns();
@@ -1031,7 +1031,7 @@ export default function Admin() {
   }
 
   async function migrateOrphans() {
-    if (products.length === 0) { alert('Primero creÃ¡ al menos un producto.'); return; }
+    if (products.length === 0) { alert('Primero creá al menos un producto.'); return; }
     setMigrating(true);
     await supabase.from('designs').update({ product_id: products[0].id }).is('product_id', null).eq('active', true);
     setMigrating(false);
@@ -1042,9 +1042,9 @@ export default function Admin() {
   const maxSizeKb = selectedProduct ? selectedProduct.max_file_size_kb : 250;
 
   async function handleFileSelect(e) {
-    if (!selectedProductId) { alert('Primero seleccionÃ¡ un producto.'); e.target.value = ''; return; }
+    if (!selectedProductId) { alert('Primero seleccioná un producto.'); e.target.value = ''; return; }
     const files = Array.from(e.target.files);
-    const defaultCategory = 'Sin categorÃ­a';
+    const defaultCategory = 'Sin categoría';
     const entries = files.map(file => ({
       file, preview: URL.createObjectURL(file),
       name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
@@ -1131,11 +1131,11 @@ export default function Admin() {
     }
     setUploading(false);
     if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
-    console.log('Upload completo, recargando diseÃ±os...');
+    console.log('Upload completo, recargando diseños...');
     loadDesigns();
   }
 
-  // â”€â”€ Localities â”€â”€
+  // ── Localities ──
   async function loadLocalities() {
     const { data } = await supabase.from('localities').select('*').order('sort_order').order('created_at');
     if (data) setLocalities(data);
@@ -1192,14 +1192,14 @@ export default function Admin() {
   }
 
   function deleteLocality(id) {
-    askConfirm('Â¿Seguro que querÃ©s eliminar esta localidad? Se eliminarÃ¡n tambiÃ©n todas sus escalas de precio.', async () => {
+    askConfirm('¿Seguro que querés eliminar esta localidad? Se eliminarán también todas sus escalas de precio.', async () => {
       await supabase.from('price_tiers').delete().eq('locality_id', id);
       await supabase.from('localities').delete().eq('id', id);
       loadLocalities(); loadPriceTiers();
     });
   }
 
-  // â”€â”€ Users â”€â”€
+  // ── Users ──
   async function loadUsers() {
     setLoadingUsers(true);
     const { data } = await supabase.rpc('admin_get_profiles');
@@ -1212,7 +1212,7 @@ export default function Admin() {
     loadUsers();
   }
 
-  // â”€â”€ Price tiers â”€â”€
+  // ── Price tiers ──
   async function loadPriceTiers() {
     const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
     if (data) {
@@ -1355,13 +1355,13 @@ export default function Admin() {
   }
 
   function deleteScale(id) {
-    askConfirm('Â¿Eliminar esta escala de precio?', async () => {
+    askConfirm('¿Eliminar esta escala de precio?', async () => {
       await supabase.from('price_tiers').delete().eq('id', id);
       loadPriceTiers();
     });
   }
 
-  // â”€â”€ Settings â”€â”€
+  // ── Settings ──
   async function loadSettings() {
     const { data } = await supabase.from('settings').select('*');
     if (data) {
@@ -1386,7 +1386,7 @@ export default function Admin() {
 
     if (error) {
       const message = error.code === '42P01'
-        ? 'Falta crear la tabla admin_version_snapshots en Supabase. EjecutÃ¡ sql/admin_version_snapshots.sql.'
+        ? 'Falta crear la tabla admin_version_snapshots en Supabase. Ejecutá sql/admin_version_snapshots.sql.'
         : `No se pudo cargar el historial: ${error.message}`;
       setVersionSnapshotError(message);
       setVersionSnapshots([]);
@@ -1427,14 +1427,14 @@ export default function Admin() {
 
     if (error) {
       const message = error.code === '42P01'
-        ? 'Falta crear la tabla admin_version_snapshots en Supabase. EjecutÃ¡ sql/admin_version_snapshots.sql.'
-        : `No se pudo guardar la versiÃ³n: ${error.message}`;
+        ? 'Falta crear la tabla admin_version_snapshots en Supabase. Ejecutá sql/admin_version_snapshots.sql.'
+        : `No se pudo guardar la versión: ${error.message}`;
       setVersionSnapshotError(message);
     } else {
       const cutoff = new Date(Date.now() - VERSION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
       supabase.from('admin_version_snapshots').delete().lt('created_at', cutoff).then(() => {});
       await loadVersionSnapshots();
-      if (!silent) setVersionSnapshotNotice('VersiÃ³n actual guardada correctamente.');
+      if (!silent) setVersionSnapshotNotice('Versión actual guardada correctamente.');
     }
 
     if (source === 'auto') autoSnapshotSavingRef.current = false;
@@ -1457,7 +1457,7 @@ export default function Admin() {
     }));
   }
 
-  // â”€â”€ Orders â”€â”€
+  // ── Orders ──
   async function loadOrders() {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (data) setOrders(data);
@@ -1477,7 +1477,7 @@ export default function Admin() {
   const ORDER_STATUSES = [
     { value: 'pending',       label: 'Pendiente',      color: '#b45309', bg: '#fef3c7' },
     { value: 'confirmed',     label: 'Confirmado',     color: '#1d4ed8', bg: '#dbeafe' },
-    { value: 'in_production', label: 'En producciÃ³n',  color: '#6d28d9', bg: '#ede9fe' },
+    { value: 'in_production', label: 'En producción',  color: '#6d28d9', bg: '#ede9fe' },
     { value: 'ready',         label: 'Listo',          color: '#15803d', bg: '#dcfce7' },
     { value: 'cancelled',     label: 'Cancelado',      color: '#b91c1c', bg: '#fee2e2' },
   ];
@@ -1487,14 +1487,14 @@ export default function Admin() {
   }
 
   function summarizeItems(items) {
-    if (!Array.isArray(items) || items.length === 0) return 'â€”';
+    if (!Array.isArray(items) || items.length === 0) return '—';
     const byProduct = {};
     items.forEach(i => {
       const p = i.productName || 'Sin producto';
       if (!byProduct[p]) byProduct[p] = [];
       byProduct[p].push(`${i.name} x${i.qty}`);
     });
-    return Object.entries(byProduct).map(([product, designs]) => `${product} â€” ${designs.join(', ')}`).join(' | ');
+    return Object.entries(byProduct).map(([product, designs]) => `${product} — ${designs.join(', ')}`).join(' | ');
   }
 
   const filteredOrders = orders.filter(o => {
@@ -1514,7 +1514,7 @@ export default function Admin() {
     return true;
   });
 
-  // â”€â”€ Sellers â”€â”€
+  // ── Sellers ──
   async function loadSellers() {
     const { data } = await supabase.from('sellers').select('*').order('name');
     if (data) setSellers(data);
@@ -1535,7 +1535,7 @@ export default function Admin() {
   }
 
   async function deleteSeller(id) {
-    askConfirm('Â¿Eliminar este vendedor?', async () => {
+    askConfirm('¿Eliminar este vendedor?', async () => {
       await supabase.from('sellers').delete().eq('id', id);
       loadSellers();
     });
@@ -1551,11 +1551,11 @@ export default function Admin() {
     const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
     if (error) {
       console.error('Error al guardar vendedor:', error);
-      loadUsers(); // revertir al estado real si fallÃ³
+      loadUsers(); // revertir al estado real si falló
     }
   }
 
-  // â”€â”€ Admins â”€â”€
+  // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
     if (data) setAdmins(data);
@@ -1618,7 +1618,7 @@ export default function Admin() {
   }
 
   async function deleteAdmin(email) {
-    if (email === currentUser) { alert('No podÃ©s eliminarte a vos mismo.'); return; }
+    if (email === currentUser) { alert('No podés eliminarte a vos mismo.'); return; }
     await supabase.from('admins').delete().eq('email', email);
     setDeleteConfirmEmail(null);
     loadAdmins();
@@ -1635,7 +1635,7 @@ export default function Admin() {
     ? products.find(p => p.id === productManageModal.productId)
     : null;
 
-  // â”€â”€ PANTALLAS AUTH â”€â”€
+  // ── PANTALLAS AUTH ──
   const sessionBar = currentUser ? (
     <div style={{position:'fixed', top:0, left:0, right:0, zIndex:999, background:'rgba(17,32,64,0.92)', backdropFilter:'blur(6px)', padding:'6px 20px', fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'right'}}>
       {currentUser}
@@ -1647,7 +1647,7 @@ export default function Admin() {
       {sessionBar}
       <div style={s.loginBox}>
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
-        <h2 style={s.loginTitle}>Panel de AdministraciÃ³n</h2>
+        <h2 style={s.loginTitle}>Panel de Administración</h2>
         <button style={s.btnGoogle} onClick={signInWithGoogle}>
           <GoogleIcon />
           Ingresar con Google
@@ -1667,25 +1667,25 @@ export default function Admin() {
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
         <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>Acceso denegado</div>
         <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>Tu cuenta no tiene permisos de administrador.</p>
-        <button style={s.btnPrimary} onClick={handleSignOut}>Cerrar sesiÃ³n</button>
+        <button style={s.btnPrimary} onClick={handleSignOut}>Cerrar sesión</button>
       </div>
     </div>
   );
 
-  // â”€â”€ PANEL â”€â”€
+  // ── PANEL ──
   return (
     <div style={s.wrap}>
       <header style={s.header}>
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
-        <span style={s.headerTitle}>Panel de AdministraciÃ³n</span>
+        <span style={s.headerTitle}>Panel de Administración</span>
         <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
-        <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesiÃ³n</button>
+        <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'DiseÃ±os', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'ConfiguraciÃ³n', heatmap:'Actividad', stats:'EstadÃ­sticas', production:'ProducciÃ³n', version_history:'Historial de versiones' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -1710,7 +1710,7 @@ export default function Admin() {
 
       <div style={{...s.content, ...(activeTab === 'products' ? s.contentFull : {})}}>
 
-        {/* â•â• PRODUCTOS â•â• */}
+        {/* == PRODUCTOS == */}
         {activeTab === 'products' && (
           <>
             <div style={s.productWorkspace}>
@@ -1724,17 +1724,17 @@ export default function Admin() {
                     <tr>
                       <th style={s.th}>Mostrar</th>
                       <th style={s.th}>Nombre</th>
-                      <th style={s.th}>Card catÃ¡logo PC (px)</th>
-                      <th style={s.th}>Card catÃ¡logo Cel (px)</th>
+                      <th style={s.th}>Card catálogo PC (px)</th>
+                      <th style={s.th}>Card catálogo Cel (px)</th>
                       <th style={s.th}>Card landing PC (px)</th>
                       <th style={s.th}>Card landing Cel (px)</th>
-                      <th style={s.th}>ProporciÃ³n</th>
-                      <th style={s.th}>TamaÃ±o MÃ¡x (KB)</th>
+                      <th style={s.th}>Proporción</th>
+                      <th style={s.th}>Tamaño Máx (KB)</th>
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
-                      <th style={s.th}>MÃ¡x Landing</th>
+                      <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
-                      {useProductManagementModals && <th style={s.th}>CategorÃ­as</th>}
+                      {useProductManagementModals && <th style={s.th}>Categorías</th>}
                       {useProductManagementModals && <th style={s.th}>Escalas</th>}
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
@@ -1815,12 +1815,12 @@ export default function Admin() {
                               <div data-model-popup style={{position:'absolute', zIndex:9999, top: popupPos.top, left: popupPos.left, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, boxShadow:'0 8px 32px rgba(27,47,94,0.18)', padding:'16px', width:340, textAlign:'left'}}
                                 onClick={e => e.stopPropagation()}
                               >
-                                <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>AnimaciÃ³n 3D â€” {p.name}</div>
+                                <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:12}}>Animación 3D — {p.name}</div>
 
                                 <div style={{marginBottom:10}}>
-                                  <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Mostrar modelo en catÃ¡logo</div>
+                                  <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Mostrar modelo en catálogo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                                    {[{val:'hover', label:'Al hacer hover', desc:'Imagen estÃ¡tica, 3D al pasar el mouse'}, {val:'scroll', label:'Al hacer scroll', desc:'Se activa cuando la card es visible'}].map(opt => (
+                                    {[{val:'hover', label:'Al hacer hover', desc:'Imagen estática, 3D al pasar el mouse'}, {val:'scroll', label:'Al hacer scroll', desc:'Se activa cuando la card es visible'}].map(opt => (
                                       <label key={opt.val} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'5px 8px', borderRadius:7, background: (form.model_config?.display_mode || 'hover') === opt.val ? '#eef4ff' : 'transparent', border: (form.model_config?.display_mode || 'hover') === opt.val ? '1.5px solid #2D6BE4' : '1.5px solid transparent'}}>
                                         <input type="radio" name={`display_mode_${p.id}`} value={opt.val} checked={(form.model_config?.display_mode || 'hover') === opt.val}
                                           onChange={() => {
@@ -1842,7 +1842,7 @@ export default function Admin() {
                                 <div style={{marginBottom:10}}>
                                   <div style={{fontSize:11, fontWeight:600, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Modo</div>
                                   <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                                    {[{val:'static', label:'EstÃ¡tico', desc:'Sin movimiento'}, {val:'rotate', label:'RotaciÃ³n 360Â°', desc:'Gira continuamente'}, {val:'pendulum', label:'PÃ©ndulo', desc:'Va y viene mostrando el frente'}].map(opt => (
+                                    {[{val:'static', label:'Estático', desc:'Sin movimiento'}, {val:'rotate', label:'Rotación 360°', desc:'Gira continuamente'}, {val:'pendulum', label:'Péndulo', desc:'Va y viene mostrando el frente'}].map(opt => (
                                       <label key={opt.val} style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'5px 8px', borderRadius:7, background: (form.model_config?.mode || 'static') === opt.val ? '#eef4ff' : 'transparent', border: (form.model_config?.mode || 'static') === opt.val ? '1.5px solid #2D6BE4' : '1.5px solid transparent'}}>
                                         <input type="radio" name={`mode_${p.id}`} value={opt.val} checked={(form.model_config?.mode || 'static') === opt.val}
                                           onChange={() => {
@@ -1878,7 +1878,7 @@ export default function Admin() {
                                         <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:16}}>{form.model_config?.speed ?? 5}</span>
                                       </div>
                                       <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'#9aa3bc', marginTop:2}}>
-                                        <span>Lento</span><span>RÃ¡pido</span>
+                                        <span>Lento</span><span>Rápido</span>
                                       </div>
                                     </div>
                                     {form.model_config?.mode === 'pendulum' && (
@@ -1953,7 +1953,7 @@ export default function Admin() {
                           <td style={s.td}>
                             {!form.landing_image && uploadingLandingImage !== p.id && (
                               <span style={{fontSize:9, color:'#9aa3bc', display:'block', marginBottom:3}}>
-                                MÃ¡x. {(form.landing_max_file_size_kb ?? 4096) >= 1024 ? ((form.landing_max_file_size_kb ?? 4096)/1024).toFixed(0) + 'MB' : (form.landing_max_file_size_kb ?? 4096) + 'KB'}
+                                Máx. {(form.landing_max_file_size_kb ?? 4096) >= 1024 ? ((form.landing_max_file_size_kb ?? 4096)/1024).toFixed(0) + 'MB' : (form.landing_max_file_size_kb ?? 4096) + 'KB'}
                               </span>
                             )}
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
@@ -1963,7 +1963,7 @@ export default function Admin() {
                                   <button
                                     onClick={() => { updateProductForm(p.id, 'landing_image', ''); saveProduct(p.id, {landing_image: null}); }}
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
-                                  >âœ•</button>
+                                  >✕</button>
                                 </>
                               ) : null}
                               {uploadingLandingImage === p.id ? (
@@ -2024,7 +2024,7 @@ export default function Admin() {
                             </td>
                           )}
                           <td style={{...s.td, textAlign:'center', width: 32}}>
-                            {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>âœ“</span>}
+                            {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             <TrashBtn onClick={() => deleteProduct(p.id)} />
@@ -2034,7 +2034,7 @@ export default function Admin() {
                     })}
                     {showAddForm && (
                       <tr style={{background:'#f7f8fc'}}>
-                        <td style={{...s.td, textAlign:'center', color:'#9aa3bc'}}>â€”</td>
+                        <td style={{...s.td, textAlign:'center', color:'#9aa3bc'}}>—</td>
                         <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Nombre" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.card_width_desktop} onChange={e => setNewProduct(p => ({...p, card_width_desktop: parseInt(e.target.value)||180}))} /></td>
                         <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={newProduct.card_width_mobile} onChange={e => setNewProduct(p => ({...p, card_width_mobile: parseInt(e.target.value)||160}))} /></td>
@@ -2085,7 +2085,7 @@ export default function Admin() {
                     <tr>
                       <td colSpan={useProductManagementModals ? 16 : 14} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
-                          {showAddForm ? 'âœ• Cancelar' : '+ Agregar producto'}
+                          {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
                       </td>
                     </tr>
@@ -2097,9 +2097,9 @@ export default function Admin() {
             {!useProductManagementModals && (
               <>
 
-            {/* CATEGORÃAS */}
+            {/* CATEGORIAS */}
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>CategorÃ­as por producto</h2>
+              <h2 style={s.sectionTitle}>Categorías por producto</h2>
               {products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p> : (
                 <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
                   {products.filter(p => p.active).map(product => {
@@ -2109,7 +2109,7 @@ export default function Admin() {
                       <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 200px', minWidth:180}}>
                         <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{product.name}</div>
                         <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
-                          <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categorÃ­a</span>
+                          <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
                           {cats.map(cat => {
                             const p = products.find(pr => pr.id === product.id);
                             const savedColor = p?.category_colors?.[cat] || '#e8eef9';
@@ -2143,7 +2143,7 @@ export default function Admin() {
                                   />
                                 ) : cat}
                                 <span
-                                  title="Color de la categorÃ­a"
+                                  title="Color de la categoría"
                                   onClick={e => { e.stopPropagation(); const pickerOpen = catColorPicker[pickerKey]; setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
                                   style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                                 />
@@ -2161,9 +2161,9 @@ export default function Admin() {
                                   onMouseDown={e => e.stopPropagation()}
                                   onClick={e => { e.stopPropagation(); startProductCategoryEdit(product.id, cat); }}
                                 >
-                                  âœŽ
+                                  ✎
                                 </button>
-                                <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>Ã—</button>
+                                <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
                               </span>
                             );
                           })}
@@ -2171,7 +2171,7 @@ export default function Admin() {
                         <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
                           <input
                             style={{...s.tblInput, flex:1, padding:'3px 6px', fontSize:12}}
-                            placeholder="Nueva categorÃ­a..."
+                            placeholder="Nueva categoría..."
                             value={newCat}
                             onChange={e => setNewCatInputs(prev => ({...prev, [product.id]: e.target.value}))}
                             onKeyDown={e => { if (e.key === 'Enter') addProductCategory(product.id, newCat); }}
@@ -2266,7 +2266,7 @@ export default function Admin() {
                                             opacity: savedTierId === t.id ? 1 : 0
                                           }}
                                         >
-                                          âœ“
+                                          ✓
                                         </span>
                                       </div>
                                     </td>
@@ -2320,7 +2320,7 @@ export default function Admin() {
                                         opacity: 0
                                       }}
                                     >
-                                      âœ“
+                                      ✓
                                     </span>
                                   </div>
                                 </td>
@@ -2348,11 +2348,11 @@ export default function Admin() {
           </>
         )}
 
-        {/* â•â• DISEÃ‘OS â•â• */}
+        {/* == DISEÑOS == */}
         {activeTab === 'designs' && (
           <>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Agregar diseÃ±os</h2>
+              <h2 style={s.sectionTitle}>Agregar diseños</h2>
               <div style={s.formGroup}>
                 <label style={s.label}>Producto *</label>
                 <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
@@ -2365,20 +2365,20 @@ export default function Admin() {
               </div>
               {selectedProductId && !selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>ImÃ¡genes (mÃ¡x. {maxSizeKb}kb c/u)</label>
+                  <label style={s.label}>Imágenes (máx. {maxSizeKb}kb c/u)</label>
                   <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
               {selectedProductId && selectedProduct?.allow_glb && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>3MF (mÃ¡x. {maxSizeKb}kb c/u â€” mÃ¡x. 10 archivos por vez)</label>
+                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u — máx. 10 archivos por vez)</label>
                   <input type="file" accept=".glb,.3mf" multiple style={{...s.input, padding: 6}} onChange={async e => {
                     const files = Array.from(e.target.files);
-                    if (files.length > 10) { alert('PodÃ©s subir hasta 10 archivos 3D por vez. SeleccionÃ¡ menos archivos.'); e.target.value = ''; return; }
+                    if (files.length > 10) { alert('Podés subir hasta 10 archivos 3D por vez. Seleccioná menos archivos.'); e.target.value = ''; return; }
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
                       file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
-                      category: 'Sin categorÃ­a', nameExists: false,
+                      category: 'Sin categoría', nameExists: false,
                       sizeError: file.size > maxSizeKb * 1024, modelFile: file, fileType: file.name.split('.').pop().toLowerCase(),
                     }));
                     setPendingFiles(prev => {
@@ -2412,29 +2412,29 @@ export default function Admin() {
                               : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
                           }
                           <div style={s.fileFields}>
-                            <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseÃ±o" />
-                            {entry.nameExists && <div style={s.errorMsg}>âš  Ya existe este diseÃ±o</div>}
-                            {dupInBatch && <div style={s.errorMsg}>âš  Nombre duplicado en este lote</div>}
+                            <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
+                            {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
+                            {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                             {(entry.file || entry.modelFile) && (() => {
                               const f = entry.modelFile || entry.file;
                               const kb = (f.size / 1024).toFixed(0);
                               return entry.sizeError
-                                ? <div style={s.errorMsg}>âš  {kb}kb â€” supera el mÃ¡ximo de {maxSizeKb}kb</div>
-                                : <div style={{fontSize:11, color:'#18a36a', marginTop:3, fontWeight:600}}>âœ“ {kb}kb</div>;
+                                ? <div style={s.errorMsg}>⚠ {kb}kb — supera el máximo de {maxSizeKb}kb</div>
+                                : <div style={{fontSize:11, color:'#18a36a', marginTop:3, fontWeight:600}}>✓ {kb}kb</div>;
                             })()}
                           </div>
                           <select style={{...s.input, width: 140, flexShrink: 0}} value={entry.category} onChange={e => updateEntry(i, 'category', e.target.value)}>
-                            <option value="Sin categorÃ­a">Sin categorÃ­a</option>
+                            <option value="Sin categoría">Sin categoría</option>
                             {getProductCategories(selectedProductId).map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                           
-                          <button style={s.removePendingBtn} onClick={() => removePending(i)}>âœ•</button>
+                          <button style={s.removePendingBtn} onClick={() => removePending(i)}>✕</button>
                         </div>
                       );
                     })}
                   </div>
                   <button style={{...s.btnPrimary, marginTop: 16, opacity: canSubmit && !uploading ? 1 : 0.5}} disabled={!canSubmit || uploading} onClick={addDesigns}>
-                    {uploading ? 'Subiendo...' : `Agregar ${pendingFiles.length} diseÃ±o${pendingFiles.length !== 1 ? 's' : ''}`}
+                    {uploading ? 'Subiendo...' : `Agregar ${pendingFiles.length} diseño${pendingFiles.length !== 1 ? 's' : ''}`}
                   </button>
                 </>
               )}
@@ -2442,10 +2442,10 @@ export default function Admin() {
             <div style={s.card}>
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12}}>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
-                  <h2 style={{...s.sectionTitle, marginBottom: 0}}>DiseÃ±os actuales ({designs.length})</h2>
+                  <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
                   {selectedIds.size > 1 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:700}}>{selectedIds.size} seleccionados</span>}
                 </div>
-                {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto â†’`}</button>}
+                {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
               </div>
               <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
                 {[{id:'all', name:'Todos'}, ...products].map(p => (
@@ -2457,7 +2457,7 @@ export default function Admin() {
               <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom: 12, alignItems:'center'}}>
                 <input
                   style={{...s.input, maxWidth: 220}}
-                  placeholder="Buscar diseÃ±o..."
+                  placeholder="Buscar diseño..."
                   value={designSearch ?? ''}
                   onChange={e => setDesignSearch(e.target.value)}
                 />
@@ -2465,7 +2465,7 @@ export default function Admin() {
                   <button onClick={() => setDesignCatFilter('')} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: !designCatFilter ? '#1B2F5E' : '#eef0f6', color: !designCatFilter ? 'white' : '#5a6380', transition:'background 0.15s'}}>
                     Todas
                   </button>
-                  {[...new Set(designs.flatMap(d => Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categorÃ­a' ? [d.category] : [])))].sort().map(c => (
+                  {[...new Set(designs.flatMap(d => Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : [])))].sort().map(c => (
                     <button key={c} onClick={() => setDesignCatFilter(designCatFilter === c ? '' : c)} style={{border:'none', borderRadius:7, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background: designCatFilter === c ? '#1B2F5E' : '#eef0f6', color: designCatFilter === c ? 'white' : '#5a6380', transition:'background 0.15s'}}>
                       {c}
                     </button>
@@ -2474,7 +2474,7 @@ export default function Admin() {
               </div>
               <div onClick={() => setSelectedIds(new Set())}>
               {designs.filter(d => {
-                const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categorÃ­a' ? [d.category] : []);
+                const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
                 return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
                   && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
                   && (!designCatFilter || cats.includes(designCatFilter));
@@ -2516,7 +2516,7 @@ export default function Admin() {
                         {(d.tags || []).map((tag, ti) => (
                           <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
                             {tag}
-                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>Ã—</button>
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
                           </span>
                         ))}
                         <input
@@ -2541,7 +2541,7 @@ export default function Admin() {
                         {d.product_id ? (
                           <div style={{display:'flex', flexWrap:'wrap', gap:3}} onClick={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()}>
                             {getProductCategories(d.product_id).map(c => {
-                              const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categorÃ­a' ? [d.category] : []);
+                              const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
                               const active = cats.includes(c);
                               return (
                                 <span
@@ -2550,8 +2550,8 @@ export default function Admin() {
                                     e.stopPropagation();
                                     const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
                                     const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
-                                    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categorÃ­a' }).eq('id', did)));
-                                    setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categorÃ­a'} : x));
+                                    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
+                                    setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
                                   }}
                                   style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
                                 >
@@ -2577,7 +2577,7 @@ export default function Admin() {
           </>
         )}
 
-        {/* â•â• PEDIDOS â•â• */}
+        {/* == PEDIDOS == */}
         {activeTab === 'orders' && (
           <div style={s.card} onClick={() => setSelectedOrderIds(new Set())}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -2592,7 +2592,7 @@ export default function Admin() {
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
               <input
                 style={{ ...s.input, maxWidth: 220 }}
-                placeholder="CÃ³digo, nombre o email..."
+                placeholder="Código, nombre o email..."
                 value={orderSearch}
                 onChange={e => setOrderSearch(e.target.value)}
               />
@@ -2615,14 +2615,14 @@ export default function Admin() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input type="date" value={orderFilterDateFrom} onChange={e => setOrderFilterDateFrom(e.target.value)}
                   style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
-                <span style={{ fontSize: 12, color: '#9aa3bc' }}>â†’</span>
+                <span style={{ fontSize: 12, color: '#9aa3bc' }}>→</span>
                 <input type="date" value={orderFilterDateTo} onChange={e => setOrderFilterDateTo(e.target.value)}
                   style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif' }} />
               </div>
               {(orderSearch || orderFilterStatus !== 'all' || orderFilterSeller !== 'all' || orderFilterProduct !== 'all' || orderFilterDateFrom || orderFilterDateTo) && (
                 <button onClick={() => { setOrderSearch(''); setOrderFilterStatus('all'); setOrderFilterSeller('all'); setOrderFilterProduct('all'); setOrderFilterDateFrom(''); setOrderFilterDateTo(''); }}
                   style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'white', color: '#9aa3bc' }}>
-                  âœ• Limpiar filtros
+                  ✕ Limpiar filtros
                 </button>
               )}
             </div>
@@ -2633,7 +2633,7 @@ export default function Admin() {
                   <thead>
                     <tr>
                       <th style={{...s.th, width: 20}}></th>
-                      <th style={s.th}>CÃ³digo</th>
+                      <th style={s.th}>Código</th>
                       <th style={s.th}>Fecha</th>
                       <th style={s.th}>Cliente</th>
                       <th style={s.th}>Email</th>
@@ -2681,9 +2681,9 @@ export default function Admin() {
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedOrderIds.has(o.id) ? '#2D6BE4' : '#eef0f6', margin: '0 auto' }} />
                           </td>
                           <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'â€”'}</span></td>
-                          <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || 'â€”'}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || 'â€”'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
                           <td style={s.td}>
                             {notes ? (
@@ -2716,15 +2716,15 @@ export default function Admin() {
                                     }}
                                     style={{border:'1.5px solid #dde1ef', background:'white', color:'#2D6BE4', borderRadius:5, padding:'2px 6px', fontSize:11, fontWeight:700, cursor:'pointer', flexShrink:0}}
                                   >
-                                    {notesExpanded ? 'Menos' : 'MÃ¡s'}
+                                    {notesExpanded ? 'Menos' : 'Más'}
                                   </button>
                                 )}
                               </div>
                             ) : (
-                              <span style={{fontSize:12, color:'#c4c9d9'}}>â€”</span>
+                              <span style={{fontSize:12, color:'#c4c9d9'}}>—</span>
                             )}
                           </td>
-                          <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : 'â€”'}</span></td>
+                          <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
                           <td style={s.td}>
                             <select
                               value={o.status || 'pending'}
@@ -2748,7 +2748,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* â•â• LOCALIDADES â•â• */}
+        {/* == LOCALIDADES == */}
         {activeTab === 'localities' && (
           <>
             <div style={s.card}>
@@ -2763,7 +2763,7 @@ export default function Admin() {
             </div>
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Localidades ({localities.length})</h2>
-              {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavÃ­a.</p>}
+              {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavía.</p>}
               {localities.map(l => (
                 <div
                   key={l.id}
@@ -2793,7 +2793,7 @@ export default function Admin() {
           </>
         )}
 
-        {/* â•â• USUARIOS â•â• */}
+        {/* == USUARIOS == */}
         {activeTab === 'users' && (
           <div style={s.card}>
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
@@ -2807,12 +2807,12 @@ export default function Admin() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
                     <span style={{ fontSize: 10, fontWeight: 600, color: status?.isActive ? '#15803d' : '#9aa3bc' }}>
-                      {status?.isActive ? 'En lÃ­nea' : status ? 'Inactivo' : 'â€”'}
+                      {status?.isActive ? 'En línea' : status ? 'Inactivo' : '—'}
                     </span>
                   </div>
                   {status && (
                     <>
-                      <span style={{ fontSize: 10, color: '#9aa3bc' }}>{status.pageLabel === 'ðŸ ' ? 'ðŸ  Landing' : 'ðŸ›ï¸ CatÃ¡logo'}</span>
+                      <span style={{ fontSize: 10, color: '#9aa3bc' }}>{status.pageLabel === '🏠' ? '🏠 Landing' : '🛍️ Catálogo'}</span>
                       <span style={{ fontSize: 10, color: '#c4c9d9' }}>
                         {new Date(status.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -2820,7 +2820,7 @@ export default function Admin() {
                   )}
                 </div>
                 <div style={s.userInfo}>
-                  <div style={s.productName}>{u.name || 'â€”'}</div>
+                  <div style={s.productName}>{u.name || '—'}</div>
                   <div style={s.productMeta}>{u.email}</div>
                 </div>
                 <div style={{display:'flex', gap:8, alignItems:'center'}}>
@@ -2828,7 +2828,7 @@ export default function Admin() {
                     {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                   <div style={{display:'flex', alignItems:'center', gap:6}}>
-                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmaciÃ³n de pedido?</span>
+                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
                     <div
                       onClick={() => {
                         const newVal = u.send_confirmation_email === false ? true : false;
@@ -2863,7 +2863,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* â•â• VENDEDORES â•â• */}
+        {/* == VENDEDORES == */}
         {activeTab === 'sellers' && (
           <>
             <div style={s.card}>
@@ -2874,7 +2874,7 @@ export default function Admin() {
                   <input style={s.input} value={newSeller.name} onChange={e => setNewSeller(v => ({...v, name: e.target.value}))} placeholder="Nombre completo" />
                 </div>
                 <div style={{...s.formGroup, flex:'1 1 160px', marginBottom:0}}>
-                  <label style={s.label}>TelÃ©fono INKORA</label>
+                  <label style={s.label}>Teléfono INKORA</label>
                   <input style={s.input} value={newSeller.phone} onChange={e => setNewSeller(v => ({...v, phone: e.target.value}))} placeholder="+54 9 ..." />
                 </div>
                 <button style={{...s.btnPrimary, opacity: newSeller.name.trim() && !savingSeller ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newSeller.name.trim() || savingSeller} onClick={addSeller}>
@@ -2884,14 +2884,14 @@ export default function Admin() {
             </div>
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Vendedores ({sellers.length})</h2>
-              {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavÃ­a.</p>}
+              {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavía.</p>}
               {sellers.length > 0 && (
                 <div style={{overflowX:'auto'}}>
                   <table style={s.tbl}>
                     <thead>
                       <tr>
                         <th style={s.th}>Nombre</th>
-                        <th style={s.th}>TelÃ©fono INKORA</th>
+                        <th style={s.th}>Teléfono INKORA</th>
                         <th style={s.th}>Visible</th>
                         <th style={{...s.th, width:32}}></th>
                       </tr>
@@ -2910,7 +2910,7 @@ export default function Admin() {
                             <input
                               style={{...s.tblInput, maxWidth:180}}
                               defaultValue={sel.phone || ''}
-                              placeholder="TelÃ©fono"
+                              placeholder="Teléfono"
                               onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
                             />
                           </td>
@@ -2932,7 +2932,7 @@ export default function Admin() {
           </>
         )}
 
-        {/* â•â• ADMINS â•â• */}
+        {/* == ADMINS == */}
         {activeTab === 'admins' && (
           <>
             <div style={s.card}>
@@ -2989,22 +2989,22 @@ export default function Admin() {
           </>
         )}
 
-      {/* â•â• CONFIGURACIÃ“N â•â• */}
+      {/* == CONFIGURACIÓN == */}
         {activeTab === 'config' && (
           <>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Inicio de sesiÃ³n</h2>
+              <h2 style={s.sectionTitle}>Inicio de sesión</h2>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
                 <div>
-                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>MÃ©todo de login</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>CÃ³mo ingresan los usuarios al catÃ¡logo</div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Método de login</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Cómo ingresan los usuarios al catálogo</div>
                 </div>
                 <div style={{display:'flex', gap:6}}>
                   <button
                     onClick={() => saveSetting('login_method', 'modal')}
                     style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings.login_method !== 'google' ? '#1B2F5E' : 'white', color: settings.login_method !== 'google' ? 'white' : '#5a6380'}}
                   >
-                    ðŸ“‹ Modal completo
+                    📋 Modal completo
                   </button>
                   <button
                     onClick={() => saveSetting('login_method', 'google')}
@@ -3020,7 +3020,7 @@ export default function Admin() {
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <div>
                   <div style={{fontSize:13, fontWeight:700, color:'#1B2F5E'}}>Pre-seleccionar cuenta Google</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Recuerda el Ãºltimo email usado y lo sugiere automÃ¡ticamente</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Recuerda el último email usado y lo sugiere automáticamente</div>
                 </div>
                 <div onClick={() => saveSetting('google_login_hint', settings['google_login_hint'] === 'true' ? 'false' : 'true')}
                   style={{ width: 36, height: 20, borderRadius: 10, background: settings['google_login_hint'] === 'true' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
@@ -3030,11 +3030,11 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>GestiÃ³n de productos</h2>
+              <h2 style={s.sectionTitle}>Gestión de productos</h2>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
                 <div>
-                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>EdiciÃ³n de categorÃ­as y escalas</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>ElegÃ­ si se administran desde la tabla de productos o en las secciones separadas.</div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Edición de categorías y escalas</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Elegí si se administran desde la tabla de productos o en las secciones separadas.</div>
                 </div>
                 <div style={{display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end'}}>
                   <button
@@ -3054,11 +3054,11 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Orden de pestaÃ±as</h2>
-              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>ArrastrÃ¡ para reordenar las pestaÃ±as del panel.</p>
+              <h2 style={s.sectionTitle}>Orden de pestañas</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'DiseÃ±os', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'ConfiguraciÃ³n', heatmap:'Actividad', stats:'EstadÃ­sticas', production:'ProducciÃ³n', version_history:'Historial de versiones' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -3077,7 +3077,7 @@ export default function Admin() {
                         userSelect: 'none',
                       }}
                     >
-                      <span style={{color:'#b0b8d0', fontSize:16, lineHeight:1}}>â ¿</span>
+                      <span style={{color:'#b0b8d0', fontSize:16, lineHeight:1}}>⠿</span>
                       <span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{ALL_TABS[id]}</span>
                       <span style={{marginLeft:'auto', fontSize:11, color:'#b0b8d0'}}>#{idx + 1}</span>
                     </div>
@@ -3104,28 +3104,28 @@ export default function Admin() {
 
             {[
               { page: 'landing', label: 'Landing', subtitle: 'inkora.com.ar' },
-              { page: 'catalogo', label: 'CatÃ¡logo', subtitle: 'inkora.com.ar/catalogo' },
+              { page: 'catalogo', label: 'Catálogo', subtitle: 'inkora.com.ar/catalogo' },
             ].map(({ page, label, subtitle }) => (
               <div key={page} style={s.card}>
                 <h2 style={s.sectionTitle}>{label} <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>{subtitle}</span></h2>
                 <div style={{display:'flex', flexDirection:'column', gap:0}}>
                   {[
                     { key: `${page}_mode`, label: 'Tema', desc: 'Modo oscuro o claro', type: 'theme', disabled: page === 'catalogo' },
-                    { key: `${page}_show_theme`, label: 'BotÃ³n tema', desc: 'Switch oscuro/claro visible para usuarios' },
-                    { key: `${page}_show_cart`, label: 'BotÃ³n carrito', desc: 'Ãcono de carrito en el header', disabled: page === 'catalogo' },
-                    { key: `${page}_show_account`, label: 'BotÃ³n cuenta', desc: 'BotÃ³n de login/perfil en el header' },
-                    { key: `${page}_show_whatsapp`, label: 'BotÃ³n WhatsApp', desc: 'FAB de WhatsApp flotante' },
-                    { key: `${page}_show_history`, label: 'BotÃ³n historial', desc: 'Ãcono de historial de pedidos en el header' },
+                    { key: `${page}_show_theme`, label: 'Botón tema', desc: 'Switch oscuro/claro visible para usuarios' },
+                    { key: `${page}_show_cart`, label: 'Botón carrito', desc: 'Icono de carrito en el header', disabled: page === 'catalogo' },
+                    { key: `${page}_show_account`, label: 'Botón cuenta', desc: 'Botón de login/perfil en el header' },
+                    { key: `${page}_show_whatsapp`, label: 'Botón WhatsApp', desc: 'FAB de WhatsApp flotante' },
+                    { key: `${page}_show_history`, label: 'Botón historial', desc: 'Icono de historial de pedidos en el header' },
                     
-                    { key: `${page}_tab_text`, label: 'Texto pestaÃ±a', desc: 'Texto animado en la pestaÃ±a del navegador', type: 'text' },
+                    { key: `${page}_tab_text`, label: 'Texto pestaña', desc: 'Texto animado en la pestaña del navegador', type: 'text' },
                     { key: `${page}_tab_interval`, label: 'Velocidad parpadeo (ms)', desc: 'Intervalo en milisegundos (ej: 1000 = 1 seg)', type: 'number' },
-                    { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaÃ±a' },
-{ key: `${page}_tab_on_active`, label: 'Animar al estar', desc: 'Anima mientras el usuario estÃ¡ viendo la pÃ¡gina' },
+                    { key: `${page}_tab_on_away`, label: 'Animar al salir', desc: 'Anima cuando el usuario cambia a otra pestaña' },
+{ key: `${page}_tab_on_active`, label: 'Animar al estar', desc: 'Anima mientras el usuario está viendo la página' },
                   ].map(({ key, label: rowLabel, desc, type, disabled }, i, arr) => (
                     <div key={key} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom: i < arr.length - 1 ? '1px solid #eef0f6' : 'none', opacity: disabled ? 0.4 : 1, pointerEvents: disabled ? 'none' : 'auto'}}>
                       <div>
                         <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{rowLabel}</div>
-                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>{desc}{disabled ? ' â€” prÃ³ximamente' : ''}</div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>{desc}{disabled ? ' — próximamente' : ''}</div>
                       </div>
                       {type === 'text' ? (
                         <input
@@ -3144,8 +3144,8 @@ export default function Admin() {
                         />
                       ) : type === 'theme' ? (
                         <div style={{display:'flex', gap:6}}>
-                          <button onClick={() => saveSetting(key, 'light')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] === 'light' ? '#1B2F5E' : 'white', color: settings[key] === 'light' ? 'white' : '#5a6380'}}>â˜€ï¸ Claro</button>
-                          <button onClick={() => saveSetting(key, 'dark')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] !== 'light' ? '#1B2F5E' : 'white', color: settings[key] !== 'light' ? 'white' : '#5a6380'}}>ðŸŒ™ Oscuro</button>
+                          <button onClick={() => saveSetting(key, 'light')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] === 'light' ? '#1B2F5E' : 'white', color: settings[key] === 'light' ? 'white' : '#5a6380'}}>☀️ Claro</button>
+                          <button onClick={() => saveSetting(key, 'dark')} style={{padding:'5px 12px', borderRadius:7, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: settings[key] !== 'light' ? '#1B2F5E' : 'white', color: settings[key] !== 'light' ? 'white' : '#5a6380'}}>🌙 Oscuro</button>
                         </div>
                       ) : (
                         <div
@@ -3165,9 +3165,9 @@ export default function Admin() {
 
       </div>
 
-      <footer style={s.footer}>INKORAÂ® Admin</footer>
+      <footer style={s.footer}>INKORA® Admin</footer>
 
-      {/* MODALES DE GESTIÃ“N POR PRODUCTO */}
+      {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
           <div
@@ -3188,11 +3188,11 @@ export default function Admin() {
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
               <div>
                 <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>
-                  {productManageModal.type === 'categories' ? 'CategorÃ­as' : 'Escalas de precio'}
+                  {productManageModal.type === 'categories' ? 'Categorías' : 'Escalas de precio'}
                 </div>
                 <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{modalProduct.name}</div>
               </div>
-              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>Ã—</button>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
             </div>
 
             <div style={{overflowY:'auto', minHeight:0, flex:1, paddingRight:4, overscrollBehavior:'contain'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
@@ -3202,7 +3202,7 @@ export default function Admin() {
               return (
                 <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
                   <div style={{padding:'10px 12px', display:'flex', flexWrap:'wrap', gap:6, minHeight:42}}>
-                    <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categorÃ­a</span>
+                    <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
                     {cats.map(cat => {
                       const savedColor = modalProduct?.category_colors?.[cat] || '#e8eef9';
                       const pickerKey = `${modalProduct.id}:${cat}`;
@@ -3235,7 +3235,7 @@ export default function Admin() {
                             />
                           ) : cat}
                           <span
-                            title="Color de la categorÃ­a"
+                            title="Color de la categoría"
                             onClick={e => { e.stopPropagation(); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
                             style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
                           />
@@ -3247,8 +3247,8 @@ export default function Admin() {
                             onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
                             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(modalProduct.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
                           />
-                          <button title="Editar categoria" style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); startProductCategoryEdit(modalProduct.id, cat); }}>âœŽ</button>
-                          <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(modalProduct.id, cat)}>Ã—</button>
+                          <button title="Editar categoria" style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); startProductCategoryEdit(modalProduct.id, cat); }}>✎</button>
+                          <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(modalProduct.id, cat)}>×</button>
                         </span>
                       );
                     })}
@@ -3256,7 +3256,7 @@ export default function Admin() {
                   <div style={{padding:'0 12px 12px', display:'flex', gap:6}}>
                     <input
                       style={{...s.tblInput, flex:1, padding:'5px 8px', fontSize:12}}
-                      placeholder="Nueva categorÃ­a..."
+                      placeholder="Nueva categoría..."
                       value={newCat}
                       onChange={e => setNewCatInputs(prev => ({...prev, [modalProduct.id]: e.target.value}))}
                       onKeyDown={e => { if (e.key === 'Enter') addProductCategory(modalProduct.id, newCat); }}
@@ -3309,7 +3309,7 @@ export default function Admin() {
                                     <div style={{display:'flex', alignItems:'center', gap:2}}>
                                       <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
                                       <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
-                                      <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity: savedTierId === t.id ? 1 : 0}}>âœ“</span>
+                                      <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity: savedTierId === t.id ? 1 : 0}}>✓</span>
                                     </div>
                                   </td>
                                   <td style={{...cellStyle, textAlign:'center'}}><TrashBtn onClick={() => deleteScale(t.id)} /></td>
@@ -3324,7 +3324,7 @@ export default function Admin() {
                                 <div style={{display:'flex', alignItems:'center', gap:2}}>
                                   <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
                                   <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="Precio" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(modalProduct.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, modalProduct.id, locality.id, key, emptyRowIdx, 1)} />
-                                  <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity:0}}>âœ“</span>
+                                  <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity:0}}>✓</span>
                                 </div>
                               </td>
                               <td style={{...cellStyle, textAlign:'center'}} />
@@ -3348,13 +3348,13 @@ export default function Admin() {
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:520, maxHeight:'80vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
               <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Pedido {orderDetail.order_code}</div>
-              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>âœ•</button>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>✕</button>
             </div>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 16px', fontSize:13}}>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Cliente</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_name || 'â€”'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>TelÃ©fono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || 'â€”'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || 'â€”'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : 'â€”'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Cliente</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_name || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div></div>
+              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div></div>
               {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
             </div>
             <div>
@@ -3362,7 +3362,7 @@ export default function Admin() {
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead>
                   <tr>
-                    <th style={{...s.th, padding:'4px 8px'}}>DiseÃ±o</th>
+                    <th style={{...s.th, padding:'4px 8px'}}>Diseño</th>
                     <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Cant.</th>
                     <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>P/u</th>
                     <th style={{...s.th, padding:'4px 8px', textAlign:'right'}}>Subtotal</th>
@@ -3373,8 +3373,8 @@ export default function Admin() {
                     <tr key={i}>
                       <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
                       <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : 'â€”'}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : 'â€”'}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3382,23 +3382,23 @@ export default function Admin() {
             </div>
             <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:16, borderTop:'1.5px solid #eef0f6', paddingTop:12}}>
               <span style={{fontSize:13, color:'#5a6380'}}>Total</span>
-              <span style={{fontSize:18, fontWeight:800, color:'#1B2F5E'}}>{orderDetail.total ? `$${Number(orderDetail.total).toLocaleString('es-AR')}` : 'â€”'}</span>
+              <span style={{fontSize:18, fontWeight:800, color:'#1B2F5E'}}>{orderDetail.total ? `$${Number(orderDetail.total).toLocaleString('es-AR')}` : '—'}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* â•â• HEATMAP â•â• */}
+      {/* == HEATMAP == */}
         {activeTab === 'heatmap' && (
           <HeatmapTab supabase={supabase} products={products} />
         )}
 
-      {/* â•â• ESTADÃSTICAS â•â• */}
+      {/* == ESTADISTICAS == */}
         {activeTab === 'stats' && (
           <StatsTab supabase={supabase} sellers={sellers} orders={orders} />
         )}
 
-      {/* â•â• PRODUCCIÃ“N â•â• */}
+      {/* == PRODUCCIÓN == */}
         {activeTab === 'production' && (
           <ProductionTab
             supabase={supabase}
@@ -3408,7 +3408,7 @@ export default function Admin() {
           />
         )}
 
-      {/* â•â• HISTORIAL DE VERSIONES â•â• */}
+      {/* == HISTORIAL DE VERSIONES == */}
         {activeTab === 'version_history' && (
           <VersionHistoryTab
             snapshots={versionSnapshots}
@@ -3435,7 +3435,7 @@ export default function Admin() {
       {confirmModal.open && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
-            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Â¿Confirmar eliminaciÃ³n?</div>
+            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>¿Confirmar eliminación?</div>
             <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}>{confirmModal.message}</div>
             <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
               <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={closeConfirm}>Cancelar</button>
@@ -3453,8 +3453,8 @@ export default function Admin() {
       {deleteConfirmEmail && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
-            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Â¿Eliminar administrador?</div>
-            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}><strong>{deleteConfirmEmail}</strong> ya no podrÃ¡ ingresar al panel.</div>
+            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>¿Eliminar administrador?</div>
+            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}><strong>{deleteConfirmEmail}</strong> ya no podrá ingresar al panel.</div>
             <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
               <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={() => setDeleteConfirmEmail(null)}>Cancelar</button>
               <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => deleteAdmin(deleteConfirmEmail)}>Eliminar</button>
@@ -3477,11 +3477,11 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
 
   const countLabel = (counts = {}) => [
     ['Productos', counts.products],
-    ['DiseÃ±os', counts.designs],
+    ['Diseños', counts.designs],
     ['Escalas', counts.price_tiers],
     ['Localidades', counts.localities],
     ['Vendedores', counts.sellers],
-  ].filter(([, value]) => typeof value === 'number').map(([label, value]) => `${label}: ${value}`).join(' Â· ');
+  ].filter(([, value]) => typeof value === 'number').map(([label, value]) => `${label}: ${value}`).join(' · ');
 
   return (
     <div style={{display:'flex', flexDirection:'column', gap:14}}>
@@ -3490,7 +3490,7 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
           <div>
             <h2 style={{...styles.sectionTitle, marginBottom:6}}>Historial de versiones</h2>
             <p style={{margin:0, color:'#5a6380', fontSize:13, lineHeight:1.5}}>
-              Guarda copias de seguridad de productos, diseÃ±os, escalas, localidades, configuraciÃ³n, vendedores, usuarios y admins. No incluye pedidos ni archivos fÃ­sicos, solo datos y URLs.
+              Guarda copias de seguridad de productos, diseños, escalas, localidades, configuración, vendedores, usuarios y admins. No incluye pedidos ni archivos físicos, solo datos y URLs.
             </p>
           </div>
           <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -3498,22 +3498,22 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
               {loading ? 'Actualizando...' : 'Actualizar'}
             </button>
             <button style={{...styles.btnPrimary, padding:'8px 16px', opacity: saving ? 0.65 : 1}} onClick={onSave} disabled={saving}>
-              {saving ? 'Guardando...' : 'Guardar versiÃ³n actual'}
+              {saving ? 'Guardando...' : 'Guardar versión actual'}
             </button>
           </div>
         </div>
         <div style={{marginTop:14, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:10}}>
           <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
-            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>AutomÃ¡tico</div>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Automático</div>
             <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>Cada 1 hora si hubo cambios</div>
           </div>
           <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
-            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>RetenciÃ³n</div>
-            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>Ãšltimos {retentionDays} dÃ­as</div>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Retención</div>
+            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>Últimos {retentionDays} días</div>
           </div>
           <div style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
-            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>RestauraciÃ³n</div>
-            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>No implementada todavÃ­a</div>
+            <div style={{fontSize:11, color:'#9aa3bc', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6}}>Restauración</div>
+            <div style={{fontSize:13, color:'#2d3352', fontWeight:700, marginTop:3}}>No implementada todavía</div>
           </div>
         </div>
         {notice && <div style={{marginTop:12, background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d', borderRadius:8, padding:'8px 10px', fontSize:12, fontWeight:700}}>{notice}</div>}
@@ -3525,7 +3525,7 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
         {loading ? (
           <p style={styles.emptyMsg}>Cargando historial...</p>
         ) : snapshots.length === 0 ? (
-          <p style={styles.emptyMsg}>TodavÃ­a no hay versiones guardadas.</p>
+          <p style={styles.emptyMsg}>Todavía no hay versiones guardadas.</p>
         ) : (
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             {snapshots.map(snapshot => (
@@ -3566,7 +3566,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
   }) : '-';
 
   const compactValue = (value) => {
-    if (value === null || value === undefined || value === '') return 'â€”';
+    if (value === null || value === undefined || value === '') return '—';
     if (Array.isArray(value)) return `[${value.length}]`;
     if (typeof value === 'object') return `{${Object.keys(value).length}}`;
     return String(value);
@@ -3579,10 +3579,10 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
           <div>
             <div style={{fontSize:16, fontWeight:800, color:'#1B2F5E'}}>Datos guardados</div>
             <div style={{fontSize:12, color:'#5a6380', marginTop:3}}>
-              {formatDate(snapshot?.created_at)} Â· {snapshot?.source === 'manual' ? 'Manual' : 'Auto'} Â· hash {snapshot?.content_hash}
+              {formatDate(snapshot?.created_at)} · {snapshot?.source === 'manual' ? 'Manual' : 'Auto'} · hash {snapshot?.content_hash}
             </div>
           </div>
-          <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>Ã—</button>
+          <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>×</button>
         </div>
 
         <div style={{overflowY:'scroll', overflowX:'hidden', minHeight:0, height:0, flex:'1 1 0', padding:12, display:'flex', flexDirection:'column', gap:8, overscrollBehavior:'contain', WebkitOverflowScrolling:'touch'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
@@ -3702,7 +3702,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
   const byStatus = { pending: 0, confirmed: 0, in_production: 0, ready: 0, cancelled: 0 };
   filtered.forEach(o => { if (byStatus[o.status] !== undefined) byStatus[o.status]++; });
-  const STATUS_LABELS = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producciÃ³n', ready: 'Listo', cancelled: 'Cancelado' };
+  const STATUS_LABELS = { pending: 'Pendiente', confirmed: 'Confirmado', in_production: 'En producción', ready: 'Listo', cancelled: 'Cancelado' };
   const STATUS_COLORS = { pending: '#f59e0b', confirmed: '#3b82f6', in_production: '#8b5cf6', ready: '#22c55e', cancelled: '#ef4444' };
 
   const designMap = {};
@@ -3751,9 +3751,9 @@ function StatsTab({ supabase, sellers, orders = [] }) {
           </select>
         </div>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>PerÃ­odo</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Período</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {[['all','Todo'], ['7d','7 dÃ­as'], ['30d','30 dÃ­as'], ['90d','90 dÃ­as'], ['year','1 aÃ±o'], ['custom','Personalizado']].map(([val, label]) => (
+            {[['all','Todo'], ['7d','7 días'], ['30d','30 días'], ['90d','90 días'], ['year','1 año'], ['custom','Personalizado']].map(([val, label]) => (
               <button key={val} onClick={() => setDatePreset(val)}
                 style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: datePreset === val ? '#1B2F5E' : 'white', color: datePreset === val ? 'white' : '#5a6380' }}>
                 {label}
@@ -3782,11 +3782,11 @@ function StatsTab({ supabase, sellers, orders = [] }) {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {[
           { label: 'Pedidos', value: totalOrders },
-          { label: 'FacturaciÃ³n total', value: '$' + totalRevenue.toLocaleString('es-AR') },
+          { label: 'Facturación total', value: '$' + totalRevenue.toLocaleString('es-AR') },
           { label: 'Ticket promedio', value: '$' + Math.round(avgTicket).toLocaleString('es-AR') },
           { label: 'Unidades totales', value: totalUnits.toLocaleString('es-AR') },
           { label: 'Prom. unidades/pedido', value: avgUnitsPerOrder.toFixed(1) },
-          { label: 'Clientes Ãºnicos', value: uniqueEmails.size },
+          { label: 'Clientes únicos', value: uniqueEmails.size },
           { label: 'Clientes recurrentes', value: recurringEmails.length },
         ].map(({ label, value }) => (
           <div key={label} style={metricCard}>
@@ -3811,7 +3811,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
       {dayData.length > 0 && (
         <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Pedidos por dÃ­a</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Pedidos por día</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120, overflowX: 'auto' }}>
             {dayData.map(d => (
               <div key={d.day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 32 }}>
@@ -3826,7 +3826,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ ...card, flex: '1 1 300px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Top 10 diseÃ±os mÃ¡s pedidos</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Top 10 diseños más pedidos</div>
           {topDesigns.length === 0 ? <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin datos</div> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {topDesigns.map((d, i) => (
