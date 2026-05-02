@@ -3573,8 +3573,8 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
   };
 
   return (
-    <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.58)', zIndex:320, display:'flex', alignItems:'center', justifyContent:'center', padding:18, overflow:'hidden'}} onClick={onClose}>
-      <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 14px 50px rgba(27,47,94,0.22)', width:'100%', maxWidth:980, height:'86vh', maxHeight:760, display:'flex', flexDirection:'column', overflow:'hidden', overscrollBehavior:'contain'}} onClick={e => e.stopPropagation()}>
+    <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.58)', zIndex:320, display:'flex', alignItems:'center', justifyContent:'center', padding:18, overflow:'hidden', overscrollBehavior:'none'}} onClick={onClose} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
+      <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 14px 50px rgba(27,47,94,0.22)', width:'100%', maxWidth:980, height:'min(760px, calc(100dvh - 36px))', maxHeight:'calc(100dvh - 36px)', display:'flex', flexDirection:'column', overflow:'hidden', overscrollBehavior:'contain'}} onClick={e => e.stopPropagation()}>
         <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, padding:'14px 18px', borderBottom:'1.5px solid #dde1ef', background:'#f8faff', flexShrink:0}}>
           <div>
             <div style={{fontSize:16, fontWeight:800, color:'#1B2F5E'}}>Datos guardados</div>
@@ -3585,7 +3585,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
           <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>×</button>
         </div>
 
-        <div style={{overflowY:'scroll', overflowX:'hidden', minHeight:0, height:0, flex:'1 1 0', padding:12, display:'flex', flexDirection:'column', gap:8, overscrollBehavior:'contain', WebkitOverflowScrolling:'touch'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
+        <div style={{flex:1, minHeight:0, overflowY:'auto', overflowX:'hidden', padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:10, overscrollBehavior:'contain', WebkitOverflowScrolling:'touch', scrollbarGutter:'stable'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
           {loading ? (
             <p style={styles.emptyMsg}>Cargando datos...</p>
           ) : error ? (
@@ -3611,14 +3611,14 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                 const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
 
                 return (
-                  <details key={tableName} open style={{border:'1px solid #eef0f6', borderRadius:8, overflow:'hidden', background:'white'}}>
-                    <summary style={{cursor:'pointer', userSelect:'none', background:'#1B2F5E', color:'white', padding:'4px 9px', fontSize:11, fontWeight:800, letterSpacing:0.35, lineHeight:1.2}}>
+                  <details key={tableName} open style={{border:'1px solid #dde4f2', borderRadius:9, overflow:'hidden', background:'white', flexShrink:0}}>
+                    <summary style={{cursor:'pointer', userSelect:'none', background:'#1B2F5E', color:'white', padding:'6px 10px', fontSize:11, fontWeight:800, letterSpacing:0.35, lineHeight:1.25, minHeight:26, display:'flex', alignItems:'center'}}>
                       {tableName} ({rows.length})
                     </summary>
                     {rows.length === 0 ? (
                       <div style={{padding:10, fontSize:12, color:'#9aa3bc'}}>Sin datos.</div>
                     ) : (
-                      <div style={{overflowX:'auto', overflowY:'hidden'}}>
+                      <div style={{overflowX:'auto', overflowY:'visible'}}>
                         <table style={{width:'100%', borderCollapse:'collapse', tableLayout:'fixed', minWidth: Math.max(680, columns.length * 120)}}>
                           <thead>
                             <tr>
@@ -3647,8 +3647,8 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                 );
               })}
 
-              <details style={{border:'1px solid #eef0f6', borderRadius:8, overflow:'hidden'}}>
-                <summary style={{cursor:'pointer', background:'#f7f8fc', padding:'4px 9px', fontSize:11, fontWeight:800, color:'#1B2F5E', lineHeight:1.2}}>JSON completo</summary>
+              <details style={{border:'1px solid #dde4f2', borderRadius:9, overflow:'hidden', flexShrink:0}}>
+                <summary style={{cursor:'pointer', background:'#f7f8fc', padding:'6px 10px', fontSize:11, fontWeight:800, color:'#1B2F5E', lineHeight:1.25, minHeight:26, display:'flex', alignItems:'center'}}>JSON completo</summary>
                 <pre style={{margin:0, padding:12, maxHeight:260, overflow:'auto', background:'#0f172a', color:'#e2e8f0', fontSize:11, lineHeight:1.45}}>
                   {JSON.stringify(data, null, 2)}
                 </pre>
@@ -4758,7 +4758,6 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
-
 
 
 
