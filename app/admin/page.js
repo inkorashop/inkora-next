@@ -1799,7 +1799,21 @@ export default function Admin() {
                                           onBlur={() => saveTierAuto(t.id)}
                                           onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)}
                                         />
-                                        {savedTierId === t.id && <span style={{color:'#18a36a', fontSize:11, fontWeight:700}}>✓</span>}
+                                        <span
+  style={{
+    width: 12,
+    minWidth: 12,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#18a36a',
+    fontSize: 11,
+    fontWeight: 700,
+    opacity: savedTierId === t.id ? 1 : 0
+  }}
+>
+  ✓
+</span>
                                       </div>
                                     </td>
                                     <td style={{...cellStyle, textAlign:'center'}}>
