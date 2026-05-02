@@ -190,6 +190,7 @@ export default function Admin() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [productForms, setProductForms] = useState({});
   const [savedProductId, setSavedProductId] = useState(null);
+  const [addingVariantId, setAddingVariantId] = useState(null);
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
   const [productManageModal, setProductManageModal] = useState(null);
   const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
@@ -816,24 +817,51 @@ export default function Admin() {
 
   async function addProductVariant(product) {
     const root = products.find(p => p.id === getRootProductId(product)) || product;
+    if (!root?.id) return;
+    setAddingVariantId(root.id);
     const variants = getProductVariants(root);
-    const variantNumber = variants.length + 1;
+    const usedSlugs = new Set(products.map(p => p.slug).filter(Boolean));
+    const baseSlug = root.slug || slugify(root.name);
+    let variantNumber = variants.length + 1;
+    let nextSlug = `${baseSlug}-${variantNumber}`;
+    while (usedSlugs.has(nextSlug)) {
+      variantNumber += 1;
+      nextSlug = `${baseSlug}-${variantNumber}`;
+    }
+
+    const {
+      id,
+      created_at,
+      updated_at,
+      parent_product_id,
+      variant_name,
+      ...rootData
+    } = root;
+
     const payload = {
       ...EMPTY_PRODUCT,
-      ...root,
-      id: undefined,
-      created_at: undefined,
-      updated_at: undefined,
+      ...rootData,
       parent_product_id: root.id,
       name: root.name,
-      slug: `${root.slug || slugify(root.name)}-${variantNumber}`,
+      slug: nextSlug,
       variant_name: `Variante ${variantNumber}`,
-      categories: ['Todos'],
-      category_colors: {},
+      categories: Array.isArray(root.categories) ? [...root.categories] : [],
+      category_colors: root.category_colors ? { ...root.category_colors } : {},
+      model_config: root.model_config ? { ...root.model_config } : { mode: 'static', speed: 5 },
       active: true,
       sort_order: (root.sort_order ?? products.length) + variantNumber / 100,
     };
-    await supabase.from('products').insert(payload);
+
+    const { error } = await supabase.from('products').insert(payload);
+    setAddingVariantId(null);
+    if (error) {
+      const missingVariantColumns = error.code === 'PGRST204' || error.code === '42703' || /parent_product_id|variant_name/i.test(error.message || '');
+      alert(missingVariantColumns
+        ? 'No se pudo crear la variante. Parece faltar ejecutar sql/product_variants.sql en Supabase.'
+        : `No se pudo crear la variante: ${error.message || 'error desconocido'}`
+      );
+      return;
+    }
     trackAdminActivity('product_variant_create', { product_id: root.id, product_name: root.name, variant_name: payload.variant_name }, 'products');
     loadProducts();
   }
@@ -1833,22 +1861,41 @@ export default function Admin() {
                 <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600}}>{products.length} producto{products.length !== 1 ? 's' : ''}</span>
               </div>
               <div style={{...s.productTableWrap, maxHeight: useProductManagementModals ? 'calc(100vh - 112px)' : undefined}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1360 : 1200 }}>
+                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1320 : 1160 }}>
+                  <colgroup>
+                    <col style={{width:42}} />
+                    <col style={{width:240}} />
+                    <col style={{width:260}} />
+                    <col style={{width:70}} />
+                    <col style={{width:70}} />
+                    <col style={{width:72}} />
+                    <col style={{width:72}} />
+                    <col style={{width:70}} />
+                    <col style={{width:72}} />
+                    <col style={{width:52}} />
+                    <col style={{width:72}} />
+                    <col style={{width:72}} />
+                    <col style={{width:86}} />
+                    {useProductManagementModals && <col style={{width:78}} />}
+                    {useProductManagementModals && <col style={{width:72}} />}
+                    <col style={{width:34}} />
+                    <col style={{width:34}} />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th style={s.th}>Mostrar</th>
+                      <th style={s.th}>Ver</th>
                       <th style={s.th}>Producto</th>
                       <th style={s.th}>Variante</th>
-                      <th style={s.th}>Card catálogo PC (px)</th>
-                      <th style={s.th}>Card catálogo Cel (px)</th>
-                      <th style={s.th}>Card landing PC (px)</th>
-                      <th style={s.th}>Card landing Cel (px)</th>
-                      <th style={s.th}>Proporción</th>
-                      <th style={s.th}>Tamaño Máx (KB)</th>
+                      <th style={s.th}>Cat PC</th>
+                      <th style={s.th}>Cat Cel</th>
+                      <th style={s.th}>Land PC</th>
+                      <th style={s.th}>Land Cel</th>
+                      <th style={s.th}>Prop.</th>
+                      <th style={s.th}>Máx KB</th>
                       <th style={s.th}>Precios</th>
                       <th style={s.th}>3D</th>
-                      <th style={s.th}>Máx Landing</th>
-                      <th style={s.th}>Img Landing</th>
+                      <th style={s.th}>Land KB</th>
+                      <th style={s.th}>Img</th>
                       {useProductManagementModals && <th style={s.th}>Categorías</th>}
                       {useProductManagementModals && <th style={s.th}>Escalas</th>}
                       <th style={{...s.th, width: 32}}></th>
@@ -1876,33 +1923,37 @@ export default function Admin() {
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(0)} style={s.tblInput} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            <input ref={setRef(0)} style={{...s.tblInput, minWidth:220}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
                           </td>
                           <td style={s.td}>
-                            <div style={{display:'flex', alignItems:'center', gap:6}}>
+                            <div style={{display:'flex', alignItems:'center', gap:6, minWidth:250}}>
                               <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12}}>{isVariant ? '↳' : ''}</span>
-                              <input style={{...s.tblInput, width: 120, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
+                              <input style={{...s.tblInput, flex:'1 1 150px', minWidth:150, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
                               {!isVariant && (
-                                <button style={{...s.editBtn, padding:'4px 7px', whiteSpace:'nowrap'}} onClick={e => { e.stopPropagation(); addProductVariant(p); }}>
-                                  + Variante{variantCount > 1 ? ` (${variantCount - 1})` : ''}
+                                <button
+                                  style={{...s.editBtn, padding:'4px 7px', whiteSpace:'nowrap', opacity: addingVariantId === p.id ? 0.6 : 1}}
+                                  disabled={addingVariantId === p.id}
+                                  onClick={e => { e.stopPropagation(); addProductVariant(p); }}
+                                >
+                                  {addingVariantId === p.id ? '...' : `+ Variante${variantCount > 1 ? ` (${variantCount - 1})` : ''}`}
                                 </button>
                               )}
                             </div>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(1)} style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={form.card_width_desktop ?? 180} onChange={e => updateProductForm(p.id, 'card_width_desktop', parseInt(e.target.value)||180)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
+                            <input ref={setRef(1)} style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={form.card_width_desktop ?? 180} onChange={e => updateProductForm(p.id, 'card_width_desktop', parseInt(e.target.value)||180)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(2)} style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={form.card_width_mobile ?? 160} onChange={e => updateProductForm(p.id, 'card_width_mobile', parseInt(e.target.value)||160)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
+                            <input ref={setRef(2)} style={{...s.tblInput, width: 62}} type="number" min="80" max="400" value={form.card_width_mobile ?? 160} onChange={e => updateProductForm(p.id, 'card_width_mobile', parseInt(e.target.value)||160)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 2)} />
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="80" max="800" value={form.landing_card_width_desktop ?? 320} onChange={e => updateProductForm(p.id, 'landing_card_width_desktop', parseInt(e.target.value)||320)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
+                            <input ref={setRef(3)} style={{...s.tblInput, width: 62}} type="number" min="80" max="800" value={form.landing_card_width_desktop ?? 320} onChange={e => updateProductForm(p.id, 'landing_card_width_desktop', parseInt(e.target.value)||320)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(4)} style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={form.landing_card_width_mobile ?? 280} onChange={e => updateProductForm(p.id, 'landing_card_width_mobile', parseInt(e.target.value)||280)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 4)} />
+                            <input ref={setRef(4)} style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={form.landing_card_width_mobile ?? 280} onChange={e => updateProductForm(p.id, 'landing_card_width_mobile', parseInt(e.target.value)||280)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 4)} />
                           </td>
                           <td style={s.td}>
-                            <select style={{...s.tblInput, width: 72}} value={form.aspect_ratio || '2/3'} onChange={e => { updateProductForm(p.id, 'aspect_ratio', e.target.value); saveProduct(p.id, { aspect_ratio: e.target.value }); }}>
+                            <select style={{...s.tblInput, width: 64}} value={form.aspect_ratio || '2/3'} onChange={e => { updateProductForm(p.id, 'aspect_ratio', e.target.value); saveProduct(p.id, { aspect_ratio: e.target.value }); }}>
                               <option value="1/1">1/1</option>
                               <option value="2/3">2/3</option>
                               <option value="3/4">3/4</option>
@@ -1912,7 +1963,7 @@ export default function Admin() {
                             </select>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(3)} style={{...s.tblInput, width: 80}} type="number" min="50" value={form.max_file_size_kb ?? 250} onChange={e => updateProductForm(p.id, 'max_file_size_kb', parseInt(e.target.value)||250)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
+                            <input ref={setRef(3)} style={{...s.tblInput, width: 64}} type="number" min="50" value={form.max_file_size_kb ?? 250} onChange={e => updateProductForm(p.id, 'max_file_size_kb', parseInt(e.target.value)||250)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 3)} />
                           </td>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => { const newVal = !form.show_price; updateProductForm(p.id, 'show_price', newVal); saveProduct(p.id, { show_price: newVal }); }}>
@@ -2076,7 +2127,7 @@ export default function Admin() {
                             )}
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(5)} style={{...s.tblInput, width: 70}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />
+                            <input ref={setRef(5)} style={{...s.tblInput, width: 64}} type="number" min="100" value={form.landing_max_file_size_kb ?? 4096} onChange={e => updateProductForm(p.id, 'landing_max_file_size_kb', parseInt(e.target.value)||4096)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 5)} />
                           </td>
                           <td style={s.td}>
                             {!form.landing_image && uploadingLandingImage !== p.id && (
@@ -2163,14 +2214,14 @@ export default function Admin() {
                     {showAddForm && (
                       <tr style={{background:'#f7f8fc'}}>
                         <td style={{...s.td, textAlign:'center', color:'#9aa3bc'}}>—</td>
-                        <td style={s.td}><input style={s.tblInput} value={newProduct.name} placeholder="Producto" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
-                        <td style={s.td}><input style={{...s.tblInput, width:120}} value={newProduct.variant_name} placeholder="Opcional" onChange={e => setNewProduct(p => ({...p, variant_name: e.target.value}))} /></td>
-                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.card_width_desktop} onChange={e => setNewProduct(p => ({...p, card_width_desktop: parseInt(e.target.value)||180}))} /></td>
-                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="400" value={newProduct.card_width_mobile} onChange={e => setNewProduct(p => ({...p, card_width_mobile: parseInt(e.target.value)||160}))} /></td>
-                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="800" value={newProduct.landing_card_width_desktop} onChange={e => setNewProduct(p => ({...p, landing_card_width_desktop: parseInt(e.target.value)||320}))} /></td>
-                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="80" max="600" value={newProduct.landing_card_width_mobile} onChange={e => setNewProduct(p => ({...p, landing_card_width_mobile: parseInt(e.target.value)||280}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, minWidth:220}} value={newProduct.name} placeholder="Producto" onChange={e => { const name = e.target.value; setNewProduct(p => ({...p, name, slug: slugify(name)})); }} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, minWidth:238}} value={newProduct.variant_name} placeholder="Opcional" onChange={e => setNewProduct(p => ({...p, variant_name: e.target.value}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={newProduct.card_width_desktop} onChange={e => setNewProduct(p => ({...p, card_width_desktop: parseInt(e.target.value)||180}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 62}} type="number" min="80" max="400" value={newProduct.card_width_mobile} onChange={e => setNewProduct(p => ({...p, card_width_mobile: parseInt(e.target.value)||160}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 62}} type="number" min="80" max="800" value={newProduct.landing_card_width_desktop} onChange={e => setNewProduct(p => ({...p, landing_card_width_desktop: parseInt(e.target.value)||320}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={newProduct.landing_card_width_mobile} onChange={e => setNewProduct(p => ({...p, landing_card_width_mobile: parseInt(e.target.value)||280}))} /></td>
                         <td style={s.td}>
-                          <select style={{...s.tblInput, width: 72}} value={newProduct.aspect_ratio} onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))}>
+                          <select style={{...s.tblInput, width: 64}} value={newProduct.aspect_ratio} onChange={e => setNewProduct(p => ({...p, aspect_ratio: e.target.value}))}>
                             <option value="1/1">1/1</option>
                             <option value="2/3">2/3</option>
                             <option value="3/4">3/4</option>
@@ -2179,7 +2230,7 @@ export default function Admin() {
                             <option value="16/9">16/9</option>
                           </select>
                         </td>
-                        <td style={s.td}><input style={{...s.tblInput, width: 80}} type="number" min="50" value={newProduct.max_file_size_kb} onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value)||250}))} /></td>
+                        <td style={s.td}><input style={{...s.tblInput, width: 64}} type="number" min="50" value={newProduct.max_file_size_kb} onChange={e => setNewProduct(p => ({...p, max_file_size_kb: parseInt(e.target.value)||250}))} /></td>
                         <td style={{...s.td, textAlign:'center'}}>
                           <button style={s.iconBtn} onClick={() => setNewProduct(p => ({...p, show_price: !p.show_price}))}>
                             {newProduct.show_price ? <EyeOpen /> : <EyeOff />}
@@ -2187,20 +2238,14 @@ export default function Admin() {
                         </td>
                         <td style={{...s.td, textAlign:'center'}}>
                           <div
-                            onClick={() => setNewProduct(p => ({...p, allow_glb: !p.allow_glb}))}
-                            style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_glb ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                          >
-                            <div style={{ position: 'absolute', top: 2, left: newProduct.allow_glb ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                          </div>
-                        </td>
-                        <td style={{...s.td, textAlign:'center'}}>
-                          <div
-                            onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d}))}
+                            onClick={() => setNewProduct(p => ({...p, allow_3d: !p.allow_3d, allow_glb: !p.allow_3d}))}
                             style={{ width: 36, height: 20, borderRadius: 10, background: newProduct.allow_3d ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                           >
                             <div style={{ position: 'absolute', top: 2, left: newProduct.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
                         </td>
+                        <td style={s.td}><input style={{...s.tblInput, width:64}} type="number" min="100" value={newProduct.landing_max_file_size_kb} onChange={e => setNewProduct(p => ({...p, landing_max_file_size_kb: parseInt(e.target.value)||4096}))} /></td>
+                        <td style={{...s.td, textAlign:'center', color:'#9aa3bc', fontSize:11}}>Luego</td>
                         {useProductManagementModals && <td style={s.td}></td>}
                         {useProductManagementModals && <td style={s.td}></td>}
                         <td style={s.td}>
@@ -2212,7 +2257,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={useProductManagementModals ? 16 : 14} style={{padding:'10px 6px'}}>
+                      <td colSpan={useProductManagementModals ? 17 : 15} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -5269,8 +5314,8 @@ const styles = {
   header: { background: '#1B2F5E', padding: '0 20px', height: 46, display: 'flex', alignItems: 'center', gap: 12 },
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
-  tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
-  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 2 },
+  tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef', position: 'sticky', top: 0, zIndex: 120, boxShadow: '0 5px 16px rgba(27,47,94,0.08)' },
+  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 3 },
   tab: { background: 'none', border: 'none', padding: '10px 7px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'1 1 0', minWidth:0, whiteSpace:'nowrap' },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
@@ -5306,7 +5351,7 @@ const styles = {
   productTag: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   orphanTag: { background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
   tbl: { width: '100%', borderCollapse: 'collapse', minWidth: 820 },
-  th: { fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, padding: '8px 6px', borderBottom: '2px solid #dde1ef', textAlign: 'left', whiteSpace: 'normal', minWidth: 60, position:'sticky', top:0, zIndex:2, background:'#f8faff' },
+  th: { fontSize: 10, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.45, padding: '7px 5px', borderBottom: '2px solid #dde1ef', textAlign: 'left', whiteSpace: 'normal', minWidth: 0, position:'sticky', top:0, zIndex:2, background:'#f8faff' },
   td: { padding: '4px 5px', borderBottom: '1px solid #f0f2f8', verticalAlign: 'middle' },
   tblInput: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 6px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' },
   footer: { textAlign: 'center', padding: '10px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
