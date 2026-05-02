@@ -1084,7 +1084,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
           {designs.length === 0 ? (
-            <div style={s.emptyState}><p>No hay diseños todavia.</p></div>
+            <div style={s.emptyState}><p>Proximamente...</p></div>
           ) : filtered.length === 0 ? (
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>
           ) : (
