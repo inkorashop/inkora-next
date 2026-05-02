@@ -175,6 +175,7 @@ export default function Admin() {
   const [liveModelConfig, setLiveModelConfig] = useState(null);
   const cellRefs = useRef([]);
   const tierCellRefs = useRef({});
+  const productManageModalRef = useRef(null);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
   function askConfirm(message, onConfirm) { setConfirmModal({ open: true, message, onConfirm }); }
@@ -263,6 +264,7 @@ export default function Admin() {
     if (!productManageModal) return;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => productManageModalRef.current?.focus());
     return () => {
       document.body.style.overflow = originalOverflow;
     };
@@ -2986,7 +2988,21 @@ export default function Admin() {
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
-          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, maxHeight:'82vh', overflowY:'auto', overscrollBehavior:'contain', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
+          <div
+            ref={productManageModalRef}
+            tabIndex={-1}
+            style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, height:'min(82vh, 760px)', overflow:'hidden', overscrollBehavior:'contain', display:'flex', flexDirection:'column', gap:14, outline:'none'}}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setProductManageModal(null);
+              }
+            }}
+            onKeyUp={e => {
+              if (e.key === 'Enter') setProductManageModal(null);
+            }}
+          >
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
               <div>
                 <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>
@@ -2997,6 +3013,7 @@ export default function Admin() {
               <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
             </div>
 
+            <div style={{overflowY:'auto', minHeight:0, flex:1, paddingRight:4, overscrollBehavior:'contain'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
             {productManageModal.type === 'categories' && (() => {
               const cats = getProductCategories(modalProduct.id);
               const newCat = newCatInputs[modalProduct.id] || '';
@@ -3135,6 +3152,7 @@ export default function Admin() {
                 </div>
               );
             })()}
+            </div>
           </div>
         </div>
       )}
