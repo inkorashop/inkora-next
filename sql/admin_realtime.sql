@@ -119,6 +119,7 @@ FROM (
     ('production_status'),
     ('production_stock_log'),
     ('admin_presence'),
+    ('admin_activity_events'),
     ('admin_version_snapshots')
 ) AS realtime_tables(table_name);
 

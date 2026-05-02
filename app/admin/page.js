@@ -591,6 +591,21 @@ export default function Admin() {
     if (screen !== 'panel' || !currentUser) return;
 
     const sessionId = getAdminSessionId();
+    const activityKey = `inkora_admin_activity_${sessionId}_${activeTab}`;
+    if (sessionStorage.getItem(activityKey) !== activeTab) {
+      sessionStorage.setItem(activityKey, activeTab);
+      supabase.from('admin_activity_events').insert({
+        session_id: sessionId,
+        email: currentUser,
+        tab: activeTab,
+        event_type: 'tab_view',
+        metadata: { tab_label: ADMIN_TAB_LABELS[activeTab] || activeTab },
+        created_at: new Date().toISOString(),
+      }).then(({ error }) => {
+        if (error && error.code !== '42P01') console.error('Error tracking admin activity', error);
+      });
+    }
+
     const writePresence = () => {
       supabase.from('admin_presence').upsert({
         session_id: sessionId,
@@ -4151,6 +4166,7 @@ function ActivityHistory({ supabase }) {
   const [typeFilter, setTypeFilter] = React.useState('all');
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
+  const [selectedClientKey, setSelectedClientKey] = React.useState('');
   const [selectedSessionId, setSelectedSessionId] = React.useState('');
   const [deleteMode, setDeleteMode] = React.useState('range');
   const [deleteFrom, setDeleteFrom] = React.useState('');
@@ -4229,18 +4245,69 @@ function ActivityHistory({ supabase }) {
       .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
   }, [filteredEvents]);
 
+  const clientKeyForSession = React.useCallback((session) => {
+    if (!session) return '';
+    if (session.user_id) return `user:${session.user_id}`;
+    if (session.user_email) return `email:${session.user_email}`;
+    return `session:${session.session_id}`;
+  }, []);
+
+  const clients = React.useMemo(() => {
+    const map = {};
+    sessions.forEach(session => {
+      const key = clientKeyForSession(session);
+      if (!map[key]) {
+        const label = session.is_anonymous
+          ? `Anónimo ${session.session_id.slice(0, 8)}`
+          : (session.user_name || session.user_email || 'Usuario');
+        map[key] = {
+          key,
+          label,
+          email: session.user_email,
+          is_anonymous: session.is_anonymous,
+          sessions: [],
+          events_count: 0,
+          first_seen: session.first_seen,
+          last_seen: session.last_seen,
+        };
+      }
+      map[key].sessions.push(session);
+      map[key].events_count += session.events.length;
+      if (new Date(session.first_seen) < new Date(map[key].first_seen)) map[key].first_seen = session.first_seen;
+      if (new Date(session.last_seen) > new Date(map[key].last_seen)) map[key].last_seen = session.last_seen;
+      if (!map[key].email && session.user_email) map[key].email = session.user_email;
+      map[key].is_anonymous = map[key].is_anonymous && session.is_anonymous;
+    });
+
+    return Object.values(map)
+      .map(client => ({ ...client, sessions: client.sessions.sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen)) }))
+      .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+  }, [sessions, clientKeyForSession]);
+
+  const selectedClient = React.useMemo(() => (
+    clients.find(client => client.key === selectedClientKey) || clients[0] || null
+  ), [clients, selectedClientKey]);
+  const clientSessions = React.useMemo(() => selectedClient?.sessions || [], [selectedClient]);
+
   React.useEffect(() => {
-    if (!selectedSessionId && sessions[0]) setSelectedSessionId(sessions[0].session_id);
-    if (selectedSessionId && sessions.length > 0 && !sessions.some(s => s.session_id === selectedSessionId)) {
-      setSelectedSessionId(sessions[0].session_id);
+    if (!selectedClientKey && clients[0]) setSelectedClientKey(clients[0].key);
+    if (selectedClientKey && clients.length > 0 && !clients.some(client => client.key === selectedClientKey)) {
+      setSelectedClientKey(clients[0].key);
     }
-  }, [selectedSessionId, sessions]);
+  }, [selectedClientKey, clients]);
+
+  React.useEffect(() => {
+    if (!selectedSessionId && clientSessions[0]) setSelectedSessionId(clientSessions[0].session_id);
+    if (selectedSessionId && clientSessions.length > 0 && !clientSessions.some(s => s.session_id === selectedSessionId)) {
+      setSelectedSessionId(clientSessions[0].session_id);
+    }
+  }, [selectedSessionId, clientSessions]);
 
   React.useEffect(() => {
     if (!deleteSessionId && sessions[0]) setDeleteSessionId(sessions[0].session_id);
   }, [deleteSessionId, sessions]);
 
-  const selectedSession = sessions.find(s => s.session_id === selectedSessionId) || null;
+  const selectedSession = clientSessions.find(s => s.session_id === selectedSessionId) || null;
   const selectedEvents = selectedSession?.events || [];
 
   const metrics = React.useMemo(() => {
@@ -4257,16 +4324,17 @@ function ActivityHistory({ supabase }) {
     return {
       total: filteredEvents.length,
       sessions: sessions.length,
+      clients: clients.length,
       abandonRate: `${Math.round((abandons / Math.max(starts, 1)) * 100)}%`,
       topProduct: top('product_view', 'product_name'),
       topCartDesign: top('cart_add', 'design_name'),
       stored: events.length,
     };
-  }, [events.length, filteredEvents, sessions.length]);
+  }, [clients, events.length, filteredEvents, sessions.length]);
 
   function sessionLabel(session) {
-    if (!session) return 'Sin seleccion';
-    if (session.is_anonymous) return `Anonimo - ${session.session_id.slice(0, 8)} - ${session.events.length} eventos`;
+    if (!session) return 'Sin selección';
+    if (session.is_anonymous) return `Anónimo - ${session.session_id.slice(0, 8)} - ${session.events.length} eventos`;
     const name = session.user_name || session.user_email || 'Usuario';
     const email = session.user_email && session.user_email !== name ? ` - ${session.user_email}` : '';
     return `${name}${email} - ${session.events.length} eventos`;
@@ -4374,10 +4442,11 @@ function ActivityHistory({ supabase }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
           {[
             ['Eventos', metrics.total],
+            ['Clientes', metrics.clients],
             ['Sesiones', metrics.sessions],
             ['Abandono', metrics.abandonRate],
             ['Producto top', metrics.topProduct],
-            ['Diseno carrito', metrics.topCartDesign],
+            ['Diseño carrito', metrics.topCartDesign],
             ['Cargados', metrics.stored],
           ].map(([label, value]) => (
             <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 7, padding: '8px 10px', minWidth: 0 }}>
@@ -4389,15 +4458,24 @@ function ActivityHistory({ supabase }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 360px) 1fr', gap: 10, alignItems: 'start' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>Usuario o sesion</label>
+            <label style={{ display: 'block', fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>Cliente</label>
+            <select value={selectedClient?.key || ''} onChange={e => { setSelectedClientKey(e.target.value); setSelectedSessionId(''); }} style={{ ...compactInput, width: '100%', marginBottom: 8 }}>
+              {clients.map(client => (
+                <option key={client.key} value={client.key}>
+                  {client.label}{client.email ? ` - ${client.email}` : ''} - {client.sessions.length} sesión{client.sessions.length !== 1 ? 'es' : ''}
+                </option>
+              ))}
+            </select>
+            <label style={{ display: 'block', fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>Sesión del cliente</label>
             <select value={selectedSessionId} onChange={e => setSelectedSessionId(e.target.value)} style={{ ...compactInput, width: '100%' }}>
-              {sessions.map(s => <option key={s.session_id} value={s.session_id}>{sessionLabel(s)}</option>)}
+              {clientSessions.map(s => <option key={s.session_id} value={s.session_id}>{sessionLabel(s)}</option>)}
             </select>
             {selectedSession && (
               <div style={{ marginTop: 8, background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 7, padding: 10, fontSize: 12, color: '#5a6380', lineHeight: 1.45 }}>
-                <div><strong>{selectedSession.is_anonymous ? 'Anonimo' : (selectedSession.user_name || 'Usuario')}</strong></div>
+                <div><strong>{selectedSession.is_anonymous ? 'Anónimo' : (selectedSession.user_name || 'Usuario')}</strong></div>
                 <div>{selectedSession.user_email || selectedSession.session_id}</div>
                 <div>{dateTimeLabel(selectedSession.first_seen)} - {dateTimeLabel(selectedSession.last_seen)}</div>
+                {selectedClient && <div>{selectedClient.sessions.length} sesión{selectedClient.sessions.length !== 1 ? 'es' : ''} del cliente · {selectedClient.events_count} eventos</div>}
               </div>
             )}
           </div>
@@ -4463,6 +4541,121 @@ function ActivityHistory({ supabase }) {
   );
 }
 
+function AdminActivityHistory({ supabase }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+  const [emailFilter, setEmailFilter] = React.useState('all');
+
+  const loadAdminActivity = React.useCallback(async () => {
+    setLoading(true);
+    const { data, error: loadError } = await supabase
+      .from('admin_activity_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    if (loadError) {
+      setEvents([]);
+      setError(loadError.code === '42P01'
+        ? 'Falta crear la tabla admin_activity_events en Supabase. Ejecutá el SQL actualizado.'
+        : loadError.message);
+    } else {
+      setEvents(data || []);
+      setError('');
+    }
+    setLoading(false);
+  }, [supabase]);
+
+  React.useEffect(() => {
+    loadAdminActivity();
+    const channel = supabase
+      .channel('admin-panel-activity-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_activity_events' }, () => loadAdminActivity())
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [supabase, loadAdminActivity]);
+
+  const emails = React.useMemo(() => [...new Set(events.map(e => e.email).filter(Boolean))].sort(), [events]);
+  const filteredEvents = React.useMemo(() => (
+    emailFilter === 'all' ? events : events.filter(e => e.email === emailFilter)
+  ), [emailFilter, events]);
+
+  const groupedBySession = React.useMemo(() => {
+    const map = {};
+    filteredEvents.forEach(event => {
+      const key = event.session_id || `${event.email}-${event.created_at}`;
+      if (!map[key]) {
+        map[key] = {
+          session_id: key,
+          email: event.email,
+          events: [],
+          first_seen: event.created_at,
+          last_seen: event.created_at,
+        };
+      }
+      map[key].events.push(event);
+      if (new Date(event.created_at) < new Date(map[key].first_seen)) map[key].first_seen = event.created_at;
+      if (new Date(event.created_at) > new Date(map[key].last_seen)) map[key].last_seen = event.created_at;
+    });
+    return Object.values(map)
+      .map(session => ({ ...session, events: session.events.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) }))
+      .sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen));
+  }, [filteredEvents]);
+
+  const compactInput = { border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 8px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif' };
+  const formatDate = (iso) => new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const eventLabel = (event) => {
+    if (event.event_type === 'tab_view') return `Entró a ${event.metadata?.tab_label || event.tab || 'una pestaña'}`;
+    return event.event_type || 'Actividad';
+  };
+
+  return (
+    <div style={{ background: 'white', borderRadius: 10, padding: 16, border: '1.5px solid #dde1ef' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Actividad admin</h2>
+          <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 3 }}>Registra qué admin entra a cada pestaña del panel.</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select value={emailFilter} onChange={e => setEmailFilter(e.target.value)} style={compactInput}>
+            <option value="all">Todos los admins</option>
+            {emails.map(email => <option key={email} value={email}>{email}</option>)}
+          </select>
+          <button onClick={loadAdminActivity} style={{ ...compactInput, background: 'white', fontWeight: 700, cursor: 'pointer' }}>Actualizar</button>
+        </div>
+      </div>
+
+      {error ? (
+        <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 8, padding: '10px 12px', fontSize: 12, fontWeight: 700 }}>{error}</div>
+      ) : loading ? (
+        <div style={{ color: '#9aa3bc', fontSize: 13 }}>Cargando actividad admin...</div>
+      ) : groupedBySession.length === 0 ? (
+        <div style={{ color: '#9aa3bc', fontSize: 13 }}>Todavía no hay actividad admin registrada.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {groupedBySession.map(session => (
+            <div key={session.session_id} style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 110px 110px', gap: 8, background: '#f7f8fc', padding: '8px 10px', fontSize: 12, color: '#2d3352', fontWeight: 800 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.email || 'Admin'}</span>
+                <span>{session.events.length} eventos</span>
+                <span style={{ color: '#9aa3bc', textAlign: 'right' }}>{formatDate(session.last_seen)}</span>
+              </div>
+              {session.events.map(event => (
+                <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '118px 120px 1fr', gap: 8, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
+                  <span style={{ color: '#9aa3bc' }}>{formatDate(event.created_at)}</span>
+                  <span style={{ color: '#1B2F5E', fontWeight: 800 }}>{ADMIN_TAB_LABELS[event.tab] || event.tab || 'Admin'}</span>
+                  <span style={{ color: '#5a6380', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eventLabel(event)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HeatmapTab({ supabase, products }) {
   const [events, setEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -4510,6 +4703,7 @@ function HeatmapTab({ supabase, products }) {
         {[
           ['heatmap', 'Mapa y usuarios'],
           ['history', 'Historial de actividad'],
+          ['admin', 'Actividad admin'],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -4667,8 +4861,10 @@ function HeatmapTab({ supabase, products }) {
       </div>
 
         </>
-      ) : (
+      ) : activitySubtab === 'history' ? (
         <ActivityHistory supabase={supabase} />
+      ) : (
+        <AdminActivityHistory supabase={supabase} />
       )}
 
       {confirmReset && (
@@ -4758,11 +4954,3 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
-
-
-
-
-
-
-
-

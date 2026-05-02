@@ -102,6 +102,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl }) 
 
 export default function Home() {
   const { track } = useTrack();
+  const lastTrackedSearchRef = useRef('');
   const [products, setProducts] = useState([]);
   const [activeProductId, setActiveProductId] = useState(null);
   const [designsByProduct, setDesignsByProduct] = useState({});
@@ -917,12 +918,22 @@ export default function Home() {
 
   useEffect(() => {
     if (!activeProductId) return;
-    if (!searchQuery.trim() && filter === 'Todos') return;
-    track('design_search', {
-      query: searchQuery.trim(),
-      filter_category: filter,
-      results_count: filtered.length,
-    });
+    const query = searchQuery.trim();
+    if (!query && filter === 'Todos') return;
+    if (query && query.length < 2) return;
+
+    const payloadKey = JSON.stringify({ query, filter, results: filtered.length, product: activeProductId });
+    const timer = setTimeout(() => {
+      if (lastTrackedSearchRef.current === payloadKey) return;
+      lastTrackedSearchRef.current = payloadKey;
+      track('design_search', {
+        query,
+        filter_category: filter,
+        results_count: filtered.length,
+      });
+    }, 750);
+
+    return () => clearTimeout(timer);
   }, [searchQuery, filter, filtered.length, activeProductId, track]);
   const showPrices = !!user;
 
