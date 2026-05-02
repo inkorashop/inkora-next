@@ -306,30 +306,77 @@ export default function Admin() {
     }
 
     const scrollKey = `inkora_admin_scroll_${activeTab}`;
+    let restoreTimer = null;
+    let restoreAttempts = 0;
+    let hasRestored = false;
 
     const saveScroll = () => {
-      sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+
+      // Evita pisar el scroll guardado con 0 antes de que la pestaña termine de restaurarse.
+      if (!hasRestored && y === 0) return;
+
+      sessionStorage.setItem(scrollKey, String(y));
     };
 
     const restoreScroll = () => {
       const saved = Number(sessionStorage.getItem(scrollKey) || 0);
-      if (!saved) return;
+      if (!saved) {
+        hasRestored = true;
+        return;
+      }
+
       window.scrollTo(0, saved);
+      hasRestored = true;
+    };
+
+    const restoreScrollRepeatedly = () => {
+      clearInterval(restoreTimer);
+      restoreAttempts = 0;
+
+      restoreTimer = setInterval(() => {
+        restoreAttempts += 1;
+        restoreScroll();
+
+        if (restoreAttempts >= 20) {
+          clearInterval(restoreTimer);
+        }
+      }, 150);
     };
 
     requestAnimationFrame(restoreScroll);
-    setTimeout(restoreScroll, 250);
-    setTimeout(restoreScroll, 700);
+    setTimeout(restoreScrollRepeatedly, 100);
+
+    const handlePageHide = () => saveScroll();
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveScroll();
+      } else {
+        setTimeout(restoreScrollRepeatedly, 100);
+      }
+    };
+
+    const handleFocus = () => {
+      setTimeout(restoreScrollRepeatedly, 100);
+    };
 
     window.addEventListener('scroll', saveScroll, { passive: true });
-    window.addEventListener('pagehide', saveScroll);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handlePageHide);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       saveScroll();
+      clearInterval(restoreTimer);
       window.removeEventListener('scroll', saveScroll);
-      window.removeEventListener('pagehide', saveScroll);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handlePageHide);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [screen, activeTab]);
+  }, [screen, activeTab, products.length, designs.length, orders.length, localities.length, priceTiers.length]);
 
   const realtimeTimersRef = useRef({});
   useEffect(() => {
@@ -1942,7 +1989,7 @@ export default function Admin() {
                                     className="tier-input"
                                     type="number"
                                     min="1"
-                                    placeholder="Nueva"
+                                    placeholder="Cantidad"
                                     value={nt.min_quantity}
                                     onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)}
                                     onBlur={() => commitNewTierIfReady(product.id, localityId, key)}
