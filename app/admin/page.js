@@ -321,10 +321,11 @@ export default function Admin() {
         price_tiers: priceTiers,
         settings,
         sellers,
+        users,
         admins: admins.map(stripAdmin),
       },
     };
-  }, [admins, designs, localities, priceTiers, products, sellers, settings]);
+  }, [admins, designs, localities, priceTiers, products, sellers, settings, users]);
 
   const buildVersionSnapshotCounts = useCallback((payload) => ({
     products: payload.tables.products.length,
@@ -333,6 +334,7 @@ export default function Admin() {
     price_tiers: payload.tables.price_tiers.length,
     settings: Object.keys(payload.tables.settings || {}).length,
     sellers: payload.tables.sellers.length,
+    users: payload.tables.users.length,
     admins: payload.tables.admins.length,
   }), []);
 
@@ -1576,7 +1578,7 @@ export default function Admin() {
   function renderAdminTabPresence(tab) {
     const rows = getTabPresence(tab);
     const uniqueRows = rows.filter((p, idx, arr) => arr.findIndex(x => x.email === p.email) === idx);
-    if (uniqueRows.length === 0) return null;
+    if (uniqueRows.length === 0) return <span style={{...s.adminTabPresence, visibility:'hidden'}} />;
 
     return (
       <span style={s.adminTabPresence} title={uniqueRows.map(p => `${p.email} en ${ADMIN_TAB_LABELS[tab] || tab}`).join('\n')}>
@@ -3473,7 +3475,7 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
           <div>
             <h2 style={{...styles.sectionTitle, marginBottom:6}}>Historial de versiones</h2>
             <p style={{margin:0, color:'#5a6380', fontSize:13, lineHeight:1.5}}>
-              Guarda copias de seguridad de productos, diseños, escalas, localidades, configuración, vendedores y admins. No incluye pedidos ni archivos físicos, solo datos y URLs.
+              Guarda copias de seguridad de productos, diseños, escalas, localidades, configuración, vendedores, usuarios y admins. No incluye pedidos ni archivos físicos, solo datos y URLs.
             </p>
           </div>
           <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -3568,7 +3570,7 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
           <button style={{background:'none', border:'none', fontSize:20, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={onClose}>×</button>
         </div>
 
-        <div style={{overflow:'auto', padding:14, display:'flex', flexDirection:'column', gap:12}}>
+        <div style={{overflow:'auto', minHeight:0, flex:1, padding:12, display:'flex', flexDirection:'column', gap:8}}>
           {loading ? (
             <p style={styles.emptyMsg}>Cargando datos...</p>
           ) : error ? (
@@ -3594,8 +3596,8 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                 const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))].slice(0, 10);
 
                 return (
-                  <details key={tableName} open style={{border:'1px solid #eef0f6', borderRadius:10, overflow:'hidden', background:'white'}}>
-                    <summary style={{cursor:'pointer', userSelect:'none', background:'#1B2F5E', color:'white', padding:'8px 11px', fontSize:12, fontWeight:800, letterSpacing:0.4}}>
+                  <details key={tableName} open style={{border:'1px solid #eef0f6', borderRadius:8, overflow:'hidden', background:'white'}}>
+                    <summary style={{cursor:'pointer', userSelect:'none', background:'#1B2F5E', color:'white', padding:'4px 9px', fontSize:11, fontWeight:800, letterSpacing:0.35, lineHeight:1.2}}>
                       {tableName} ({rows.length})
                     </summary>
                     {rows.length === 0 ? (
@@ -3630,8 +3632,8 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
                 );
               })}
 
-              <details style={{border:'1px solid #eef0f6', borderRadius:10, overflow:'hidden'}}>
-                <summary style={{cursor:'pointer', background:'#f7f8fc', padding:'8px 11px', fontSize:12, fontWeight:800, color:'#1B2F5E'}}>JSON completo</summary>
+              <details style={{border:'1px solid #eef0f6', borderRadius:8, overflow:'hidden'}}>
+                <summary style={{cursor:'pointer', background:'#f7f8fc', padding:'4px 9px', fontSize:11, fontWeight:800, color:'#1B2F5E', lineHeight:1.2}}>JSON completo</summary>
                 <pre style={{margin:0, padding:12, maxHeight:260, overflow:'auto', background:'#0f172a', color:'#e2e8f0', fontSize:11, lineHeight:1.45}}>
                   {JSON.stringify(data, null, 2)}
                 </pre>
@@ -4692,8 +4694,8 @@ const styles = {
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef' },
-  tabBarInner: { width: '90%', maxWidth: '100%', margin: '0 auto', padding: '0 16px', display: 'flex', gap: 0 },
-  tab: { background: 'none', border: 'none', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 },
+  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 2 },
+  tab: { background: 'none', border: 'none', padding: '10px 7px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'1 1 0', minWidth:0, whiteSpace:'nowrap' },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
   content: { width: '90%', maxWidth: '100%', margin: '16px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 },
@@ -4733,7 +4735,7 @@ const styles = {
   tblInput: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '4px 6px', fontSize: 12, color: '#2d3352', fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' },
   footer: { textAlign: 'center', padding: '10px', fontSize: 10, color: 'rgba(0,0,0,0.15)', letterSpacing: 1 },
   userBadge: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 },
-  adminTabPresence: { display: 'inline-flex', alignItems: 'center', marginLeft: 2 },
+  adminTabPresence: { width: 42, minWidth: 42, display: 'inline-flex', alignItems: 'center', justifyContent:'flex-start', marginLeft: 2 },
   adminPresenceDot: { width: 17, height: 17, borderRadius: '50%', background: '#18a36a', color: 'white', border: '1.5px solid white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, lineHeight: 1, marginLeft: -3, boxShadow: '0 1px 4px rgba(27,47,94,0.18)' },
   adminPresenceMore: { fontSize: 10, fontWeight: 800, color: '#5a6380', marginLeft: 3 },
   adminStatusDot: { width: 9, height: 9, borderRadius: '50%', flexShrink: 0, boxShadow: '0 0 0 3px rgba(24,163,106,0.12)' },
@@ -4741,3 +4743,4 @@ const styles = {
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
 };
+
