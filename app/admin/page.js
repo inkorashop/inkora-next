@@ -168,6 +168,7 @@ export default function Admin() {
   const [productForms, setProductForms] = useState({});
   const [savedProductId, setSavedProductId] = useState(null);
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
+  const [productManageModal, setProductManageModal] = useState(null);
   const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
   const [popupPreviewModel, setPopupPreviewModel] = useState(null); // model_url seleccionado
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
@@ -1433,6 +1434,9 @@ export default function Admin() {
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
+  const modalProduct = productManageModal?.productId
+    ? products.find(p => p.id === productManageModal.productId)
+    : null;
 
   // ── PANTALLAS AUTH ──
   const sessionBar = currentUser ? (
@@ -1515,7 +1519,7 @@ export default function Admin() {
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Productos</h2>
               <div style={{overflowX: 'auto'}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: 1080 }}>
+                <table style={{ ...s.tbl, minWidth: 1240 }}>
                   <thead>
                     <tr>
                       <th style={s.th}>Mostrar</th>
@@ -1530,6 +1534,8 @@ export default function Admin() {
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Máx Landing</th>
                       <th style={s.th}>Img Landing</th>
+                      <th style={s.th}>Categorías</th>
+                      <th style={s.th}>Escalas</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -1797,6 +1803,22 @@ export default function Admin() {
                               ) : null}
                             </div>
                           </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
+                            >
+                              Editar
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
+                            >
+                              Editar
+                            </button>
+                          </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
                           </td>
@@ -1846,6 +1868,8 @@ export default function Admin() {
                             <div style={{ position: 'absolute', top: 2, left: newProduct.allow_3d ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
                         </td>
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
                             {savingProduct ? '...' : 'Crear'}
@@ -1855,7 +1879,7 @@ export default function Admin() {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={11} style={{padding:'10px 6px'}}>
+                      <td colSpan={16} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -2909,6 +2933,162 @@ export default function Admin() {
       </div>
 
       <footer style={s.footer}>INKORA® Admin</footer>
+
+      {/* MODALES DE GESTIÓN POR PRODUCTO */}
+      {productManageModal && modalProduct && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setProductManageModal(null)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, maxHeight:'82vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+              <div>
+                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>
+                  {productManageModal.type === 'categories' ? 'Categorías' : 'Escalas de precio'}
+                </div>
+                <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{modalProduct.name}</div>
+              </div>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
+            </div>
+
+            {productManageModal.type === 'categories' && (() => {
+              const cats = getProductCategories(modalProduct.id);
+              const newCat = newCatInputs[modalProduct.id] || '';
+              return (
+                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
+                  <div style={{padding:'10px 12px', display:'flex', flexWrap:'wrap', gap:6, minHeight:42}}>
+                    <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
+                    {cats.map(cat => {
+                      const savedColor = modalProduct?.category_colors?.[cat] || '#e8eef9';
+                      const pickerKey = `${modalProduct.id}:${cat}`;
+                      const pickerOpen = catColorPicker[pickerKey];
+                      const isEditingCat = editingProductCategory?.productId === modalProduct.id && editingProductCategory?.oldName === cat;
+                      return (
+                        <span key={cat}
+                          draggable={!isEditingCat}
+                          onDragStart={e => { if (isEditingCat) { e.preventDefault(); return; } dragSrcCatRef.current = cat; setDragOverCat(null); }}
+                          onDragOver={e => { if (isEditingCat) return; e.preventDefault(); setDragOverCat(cat); }}
+                          onDrop={() => { if (!isEditingCat) reorderProductCategory(modalProduct.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
+                          onDragEnd={() => { dragSrcCatRef.current = null; setDragOverCat(null); }}
+                          style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor: isEditingCat ? 'text' : 'grab'}}>
+                          {isEditingCat ? (
+                            <input
+                              autoFocus
+                              value={editingProductCategory.value}
+                              disabled={savingProductCategory}
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setEditingProductCategory(prev => prev ? {...prev, value: e.target.value} : prev)}
+                              onBlur={saveProductCategoryName}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              style={{width: Math.max(72, editingProductCategory.value.length * 7), maxWidth:160, border:'none', borderBottom:'1px solid #2D6BE4', background:'transparent', color:'#1B2F5E', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:600, padding:0, outline:'none'}}
+                            />
+                          ) : cat}
+                          <span
+                            title="Color de la categoría"
+                            onClick={e => { e.stopPropagation(); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
+                            style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
+                          />
+                          <input
+                            type="color"
+                            defaultValue={savedColor}
+                            style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
+                            onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(modalProduct.id, cat, e.target.value); }}
+                            onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(modalProduct.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
+                          />
+                          <button title="Editar categoria" style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); startProductCategoryEdit(modalProduct.id, cat); }}>✎</button>
+                          <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(modalProduct.id, cat)}>×</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <div style={{padding:'0 12px 12px', display:'flex', gap:6}}>
+                    <input
+                      style={{...s.tblInput, flex:1, padding:'5px 8px', fontSize:12}}
+                      placeholder="Nueva categoría..."
+                      value={newCat}
+                      onChange={e => setNewCatInputs(prev => ({...prev, [modalProduct.id]: e.target.value}))}
+                      onKeyDown={e => { if (e.key === 'Enter') addProductCategory(modalProduct.id, newCat); }}
+                    />
+                    <button style={{...s.editBtn, whiteSpace:'nowrap'}} onClick={() => addProductCategory(modalProduct.id, newCat)}>+ Agregar</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {productManageModal.type === 'tiers' && (() => {
+              const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
+              const activeLocalities = localities.filter(l => l.active);
+              if (activeLocalities.length === 0) return <p style={s.emptyMsg}>No hay localidades activas.</p>;
+
+              return (
+                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
+                  {activeLocalities.map((locality, li) => {
+                    const key = `${modalProduct.id}_${locality.id}`;
+                    const tiers = productTiers
+                      .filter(t => t.locality_id === locality.id)
+                      .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                    const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                    const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
+                    const emptyRowIdx = tiers.length;
+
+                    return (
+                      <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
+                        <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>{locality.name}</div>
+                        <table style={{width:'100%', borderCollapse:'collapse'}}>
+                          <thead>
+                            <tr style={{borderBottom:'1px solid #eef0f6'}}>
+                              <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cantidad</th>
+                              <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
+                              <th style={{padding:'2px 4px', width:22}}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tiers.map((t, tierRowIdx) => {
+                              const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                              return (
+                                <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
+                                  <td style={cellStyle}>
+                                    <input ref={setTierCellRef(key, tierRowIdx, 0)} className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)} />
+                                  </td>
+                                  <td style={cellStyle}>
+                                    <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                      <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                      <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
+                                      <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity: savedTierId === t.id ? 1 : 0}}>✓</span>
+                                    </div>
+                                  </td>
+                                  <td style={{...cellStyle, textAlign:'center'}}><TrashBtn onClick={() => deleteScale(t.id)} /></td>
+                                </tr>
+                              );
+                            })}
+                            <tr style={{borderBottom:'1px solid #f0f2f8', background:'#fbfcff'}}>
+                              <td style={cellStyle}>
+                                <input ref={setTierCellRef(key, emptyRowIdx, 0)} className="tier-input" type="number" min="1" placeholder="Cantidad" value={nt.min_quantity} onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)} onBlur={() => commitNewTierIfReady(modalProduct.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, modalProduct.id, locality.id, key, emptyRowIdx, 0)} />
+                              </td>
+                              <td style={cellStyle}>
+                                <div style={{display:'flex', alignItems:'center', gap:2}}>
+                                  <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
+                                  <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="Precio" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(modalProduct.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, modalProduct.id, locality.id, key, emptyRowIdx, 1)} />
+                                  <span style={{width:12, minWidth:12, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#18a36a', fontSize:11, fontWeight:700, opacity:0}}>✓</span>
+                                </div>
+                              </td>
+                              <td style={{...cellStyle, textAlign:'center'}} />
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* MODAL DETALLE PEDIDO */}
       {orderDetail && (
