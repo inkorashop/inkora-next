@@ -361,19 +361,24 @@ export default function Admin() {
       if (saved > 0) window.scrollTo(0, saved);
     };
 
-    const restoreScrollRepeatedly = () => {
+    const stopRestoringScroll = () => {
       clearInterval(restoreTimer);
       clearTimeout(restoreStopTimer);
-      suppressAdminScrollSaveUntilRef.current = Date.now() + 1800;
+      suppressAdminScrollSaveUntilRef.current = 0;
+    };
+
+    const restoreScrollRepeatedly = () => {
+      stopRestoringScroll();
+      suppressAdminScrollSaveUntilRef.current = Date.now() + 700;
 
       restoreTimer = setInterval(() => {
         restoreScroll();
-      }, 80);
+      }, 60);
 
       restoreStopTimer = setTimeout(() => {
-        clearInterval(restoreTimer);
+        stopRestoringScroll();
         restoreScroll();
-      }, 1500);
+      }, 650);
     };
 
     requestAnimationFrame(restoreScroll);
@@ -394,7 +399,22 @@ export default function Admin() {
       setTimeout(restoreScrollRepeatedly, 100);
     };
 
+    const handleUserScrollIntent = () => {
+      stopRestoringScroll();
+      setTimeout(() => saveScroll(true), 0);
+    };
+
+    const handleUserKeyIntent = e => {
+      if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(e.key)) {
+        handleUserScrollIntent();
+      }
+    };
+
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('wheel', handleUserScrollIntent, { passive: true });
+    window.addEventListener('touchstart', handleUserScrollIntent, { passive: true });
+    window.addEventListener('pointerdown', handleUserScrollIntent, { passive: true });
+    window.addEventListener('keydown', handleUserKeyIntent);
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('beforeunload', handlePageHide);
     window.addEventListener('focus', handleFocus);
@@ -402,9 +422,12 @@ export default function Admin() {
 
     return () => {
       saveScroll(true);
-      clearInterval(restoreTimer);
-      clearTimeout(restoreStopTimer);
+      stopRestoringScroll();
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('wheel', handleUserScrollIntent);
+      window.removeEventListener('touchstart', handleUserScrollIntent);
+      window.removeEventListener('pointerdown', handleUserScrollIntent);
+      window.removeEventListener('keydown', handleUserKeyIntent);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handlePageHide);
       window.removeEventListener('focus', handleFocus);
