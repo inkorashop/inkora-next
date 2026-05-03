@@ -9,17 +9,21 @@ CREATE TABLE IF NOT EXISTS localities (
   name             text NOT NULL,
   price_per_unit   integer NOT NULL DEFAULT 500,
   active           boolean NOT NULL DEFAULT true,
+  sort_order       integer,
+  seller_id        uuid,
   created_at       timestamptz DEFAULT now()
 );
 
 ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
 
 -- Cualquiera puede leer localidades activas
+DROP POLICY IF EXISTS "public_read_localities" ON localities;
 CREATE POLICY "public_read_localities"
   ON localities FOR SELECT
   USING (active = true);
 
 -- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
+DROP POLICY IF EXISTS "admin_all_localities" ON localities;
 CREATE POLICY "admin_all_localities"
   ON localities FOR ALL
   USING (true)
@@ -38,14 +42,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- Cada usuario solo ve y edita su propio perfil
+DROP POLICY IF EXISTS "users_select_own_profile" ON profiles;
 CREATE POLICY "users_select_own_profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "users_insert_own_profile" ON profiles;
 CREATE POLICY "users_insert_own_profile"
   ON profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "users_update_own_profile" ON profiles;
 CREATE POLICY "users_update_own_profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id);
@@ -77,6 +84,7 @@ CREATE TRIGGER on_auth_user_created
 -- ── RPC ADMIN: listar todos los perfiles ─────────────────────
 -- SECURITY DEFINER permite que el anon key llame esta función
 -- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
+DROP FUNCTION IF EXISTS admin_get_profiles();
 CREATE OR REPLACE FUNCTION admin_get_profiles()
 RETURNS TABLE (
   id           uuid,
@@ -104,6 +112,7 @@ $$;
 
 
 -- ── RPC ADMIN: asignar localidad a usuario ───────────────────
+DROP FUNCTION IF EXISTS admin_update_user_locality(uuid, uuid);
 CREATE OR REPLACE FUNCTION admin_update_user_locality(
   p_user_id    uuid,
   p_locality_id uuid

@@ -8,7 +8,8 @@ import ProductionTab from '@/components/ProductionTab';
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history'];
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -147,7 +148,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -171,11 +172,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
-        if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
+        const filtered = parsed.filter(t => ADMIN_TABS.includes(t));
+        if (Array.isArray(parsed) && ADMIN_TABS.every(t => filtered.includes(t))) return filtered;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
+    return ADMIN_TABS;
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -234,6 +235,8 @@ export default function Admin() {
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
+  const [scaleSellerFilter, setScaleSellerFilter] = useState('all');
+  const [allScalesModalOpen, setAllScalesModalOpen] = useState(false);
 
   // Localities
   const [localities, setLocalities] = useState([]);
@@ -297,7 +300,7 @@ export default function Admin() {
   const autoSnapshotSavingRef = useRef(false);
 
   useEffect(() => {
-    if (!productManageModal) return;
+    if (!productManageModal && !allScalesModalOpen) return;
     const originalOverflow = document.body.style.overflow;
     const originalPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -310,13 +313,7 @@ export default function Admin() {
       document.body.style.overflow = originalOverflow;
       document.body.style.paddingRight = originalPaddingRight;
     };
-  }, [productManageModal]);
-
-  useEffect(() => {
-    if ((settings.products_management_mode || 'table_modal') !== 'table_modal') {
-      setProductManageModal(null);
-    }
-  }, [settings.products_management_mode]);
+  }, [productManageModal, allScalesModalOpen]);
 
   useEffect(() => {
     if (!versionSnapshotViewer.open) return;
@@ -1285,6 +1282,42 @@ export default function Admin() {
     if (data) setLocalities(data);
   }
 
+  function orderedLocalities(list = localities) {
+    return [...list].sort((a, b) => {
+      const ao = a.sort_order ?? 999999;
+      const bo = b.sort_order ?? 999999;
+      if (ao !== bo) return ao - bo;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    });
+  }
+
+  function filteredLocalities(list = localities) {
+    const active = orderedLocalities(list).filter(l => l.active);
+    if (scaleSellerFilter === 'all') return active;
+    if (scaleSellerFilter === 'none') return active.filter(l => !l.seller_id);
+    return active.filter(l => l.seller_id === scaleSellerFilter);
+  }
+
+  function sellerName(id) {
+    if (!id) return 'Sin vendedor';
+    return sellers.find(s => s.id === id)?.name || 'Vendedor';
+  }
+
+  function renderScaleSellerFilter() {
+    return (
+      <select
+        value={scaleSellerFilter}
+        onChange={e => setScaleSellerFilter(e.target.value)}
+        onKeyUp={e => e.stopPropagation()}
+        style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 9px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', background:'white'}}
+      >
+        <option value="all">Todos los vendedores</option>
+        <option value="none">Sin vendedor</option>
+        {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+      </select>
+    );
+  }
+
   function handleLocalityDragStart(e, id) {
     localityDragSrcIdRef.current = id;
     setDraggingLocalityId(id);
@@ -1305,10 +1338,10 @@ export default function Admin() {
     const srcId = localityDragSrcIdRef.current;
     localityDragSrcIdRef.current = null;
     if (!srcId || srcId === targetId) return;
-    const srcIdx = localities.findIndex(l => l.id === srcId);
-    const tgtIdx = localities.findIndex(l => l.id === targetId);
+    const reordered = orderedLocalities(localities);
+    const srcIdx = reordered.findIndex(l => l.id === srcId);
+    const tgtIdx = reordered.findIndex(l => l.id === targetId);
     if (srcIdx === -1 || tgtIdx === -1) return;
-    const reordered = [...localities];
     const [removed] = reordered.splice(srcIdx, 1);
     reordered.splice(tgtIdx, 0, removed);
     await Promise.all(reordered.map((l, i) => supabase.from('localities').update({ sort_order: i }).eq('id', l.id)));
@@ -1335,7 +1368,9 @@ export default function Admin() {
     const name = (newScaleNames[productId] || '').trim();
     if (!name) return;
     setSavingLocality(true);
-    const { data, error } = await supabase.from('localities').insert({ name, active: true }).select('*').single();
+    const nextOrder = localities.reduce((max, l) => Math.max(max, Number(l.sort_order) || 0), -1) + 1;
+    const sellerId = scaleSellerFilter !== 'all' && scaleSellerFilter !== 'none' ? scaleSellerFilter : null;
+    const { data, error } = await supabase.from('localities').insert({ name, active: true, sort_order: nextOrder, seller_id: sellerId }).select('*').single();
     if (error) {
       console.error('Error creating scale', error);
       alert('No se pudo crear la escala.');
@@ -1343,7 +1378,7 @@ export default function Admin() {
       setLocalities(prev => [...prev, data]);
       setNewScaleNames(prev => ({ ...prev, [productId]: '' }));
       const product = products.find(p => p.id === productId);
-      trackAdminActivity('locality_create_from_product', { locality_id: data.id, locality_name: name, product_id: productId, product_name: product?.name }, 'localities');
+      trackAdminActivity('locality_create_from_product', { locality_id: data.id, locality_name: name, product_id: productId, product_name: product?.name, seller_id: sellerId }, 'localities');
     }
     setSavingLocality(false);
     loadLocalities();
@@ -1357,13 +1392,24 @@ export default function Admin() {
   }
 
   function deleteLocality(id) {
-    askConfirm('¿Seguro que querés eliminar esta localidad? Se eliminarán también todas sus escalas de precio.', async () => {
+    askConfirm('¿Seguro que querés eliminar esta escala? Se eliminarán sus precios en todos los productos y sus asignaciones a clientes.', async () => {
       const locality = localities.find(l => l.id === id);
+      await supabase.rpc('admin_clear_profiles_locality', { p_locality_id: id });
+      await supabase.from('user_product_localities').delete().eq('locality_id', id);
       await supabase.from('price_tiers').delete().eq('locality_id', id);
       await supabase.from('localities').delete().eq('id', id);
       trackAdminActivity('locality_delete', { locality_id: id, locality_name: locality?.name }, 'localities');
       loadLocalities(); loadPriceTiers();
     });
+  }
+
+  async function updateScaleSeller(localityId, sellerId) {
+    const value = sellerId || null;
+    await supabase.from('localities').update({ seller_id: value }).eq('id', localityId);
+    const locality = localities.find(l => l.id === localityId);
+    const seller = sellers.find(s => s.id === value);
+    trackAdminActivity('locality_seller_update', { locality_id: localityId, locality_name: locality?.name, seller_id: value, seller_name: seller?.name || null }, 'localities');
+    setLocalities(prev => prev.map(l => l.id === localityId ? { ...l, seller_id: value } : l));
   }
 
   // ── Users ──
@@ -1898,7 +1944,7 @@ export default function Admin() {
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
-  const useProductManagementModals = (settings.products_management_mode || 'table_modal') === 'table_modal';
+  const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
     : null;
@@ -1953,7 +1999,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -3351,22 +3397,9 @@ export default function Admin() {
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
                 <div>
                   <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Edición de categorías y escalas</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Elegí si se administran desde la tabla de productos o en las secciones separadas.</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Las escalas se administran desde los popups de cada producto.</div>
                 </div>
-                <div style={{display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end'}}>
-                  <button
-                    onClick={() => saveSetting('products_management_mode', 'table_modal')}
-                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: useProductManagementModals ? '#1B2F5E' : 'white', color: useProductManagementModals ? 'white' : '#5a6380'}}
-                  >
-                    Tabla con popups
-                  </button>
-                  <button
-                    onClick={() => saveSetting('products_management_mode', 'advanced_sections')}
-                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: !useProductManagementModals ? '#1B2F5E' : 'white', color: !useProductManagementModals ? 'white' : '#5a6380'}}
-                  >
-                    Secciones separadas
-                  </button>
-                </div>
+                <span style={{padding:'5px 10px', borderRadius:7, background:'#eef4ff', color:'#1B2F5E', fontSize:12, fontWeight:700}}>Popups activos</span>
               </div>
             </div>
 
@@ -3375,7 +3408,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -3554,6 +3587,95 @@ export default function Admin() {
         </div>
       )}
 
+      {/* MODAL GLOBAL DE ESCALAS */}
+      {allScalesModalOpen && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:310, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setAllScalesModalOpen(false)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'20px 20px 18px', width:'100%', maxWidth:1180, height:'min(86vh, 820px)', overflow:'hidden', display:'flex', flexDirection:'column', gap:12}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+              <div>
+                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Todas las escalas</div>
+                <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Vista compacta por escala y producto</div>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                {renderScaleSellerFilter()}
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setAllScalesModalOpen(false)}>×</button>
+              </div>
+            </div>
+
+            <div style={{overflow:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}}>
+              {filteredLocalities().length === 0 ? (
+                <p style={{...s.emptyMsg, padding:14}}>No hay escalas para este filtro.</p>
+              ) : filteredLocalities().map(locality => (
+                <div key={locality.id} style={{borderBottom:'1px solid #eef0f6'}}>
+                  <div
+                    draggable
+                    onDragStart={e => handleLocalityDragStart(e, locality.id)}
+                    onDragOver={e => handleLocalityDragOver(e, locality.id)}
+                    onDragLeave={handleLocalityDragLeave}
+                    onDrop={e => handleLocalityDrop(e, locality.id)}
+                    onDragEnd={handleLocalityDragEnd}
+                    style={{position:'sticky', left:0, zIndex:2, background: dragOverLocalityId === locality.id ? '#eef4ff' : '#f8faff', borderBottom:'1px solid #dde1ef', padding:'7px 10px', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab'}}
+                  >
+                    <span style={{color:'#b0b8d0', fontSize:14, lineHeight:1}}>⠿</span>
+                    <span style={{fontSize:12, fontWeight:800, color:'#1B2F5E', textTransform:'uppercase', letterSpacing:0.5}}>{locality.name}</span>
+                    <span style={{fontSize:11, color:'#9aa3bc'}}>{sellerName(locality.seller_id)}</span>
+                    <select
+                      value={locality.seller_id || ''}
+                      onChange={e => updateScaleSeller(locality.id, e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      onDragStart={e => e.stopPropagation()}
+                      style={{marginLeft:'auto', border:'1.5px solid #dde1ef', borderRadius:5, padding:'3px 7px', fontSize:11, color:'#2d3352', background:'white', fontFamily:'Barlow, sans-serif'}}
+                    >
+                      <option value="">Sin vendedor</option>
+                      {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+                    </select>
+                    <button
+                      title="Eliminar escala"
+                      onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
+                      onDragStart={e => e.stopPropagation()}
+                      style={{border:'1.5px solid #fecaca', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:24, height:24, lineHeight:1, cursor:'pointer', fontSize:14, fontWeight:800}}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div style={{display:'grid', gridTemplateColumns:`repeat(${Math.max(1, products.filter(p => p.active).length)}, minmax(190px, 1fr))`, minWidth: Math.max(1, products.filter(p => p.active).length) * 190}}>
+                    {products.filter(p => p.active).map(product => {
+                      const key = `${product.id}_${locality.id}`;
+                      const tiers = priceTiers
+                        .filter(t => t.product_id === product.id && t.locality_id === locality.id)
+                        .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                      const emptyRowIdx = tiers.length;
+                      return (
+                        <div key={key} style={{borderRight:'1px solid #eef0f6', padding:'8px 9px'}}>
+                          <div style={{fontSize:11, fontWeight:800, color:'#2d3352', marginBottom:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{productDisplayName(product)}</div>
+                          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 24px', gap:4, alignItems:'center'}}>
+                            {tiers.map((t, tierRowIdx) => {
+                              const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                              return (
+                                <React.Fragment key={t.id}>
+                                  <input ref={setTierCellRef(key, tierRowIdx, 0)} className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)} />
+                                  <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
+                                  <button title="Eliminar precio" style={{border:'none', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:22, height:22, cursor:'pointer', fontSize:12, fontWeight:800}} onClick={() => deleteScale(t.id)}>×</button>
+                                </React.Fragment>
+                              );
+                            })}
+                            <input ref={setTierCellRef(key, emptyRowIdx, 0)} className="tier-input" type="number" min="1" placeholder="Cant." value={nt.min_quantity} onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 0)} />
+                            <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="$" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 1)} />
+                            <span />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
@@ -3579,7 +3701,20 @@ export default function Admin() {
                 </div>
                 <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{modalProduct.name}</div>
               </div>
-              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
+              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                {productManageModal.type === 'tiers' && (
+                  <>
+                    {renderScaleSellerFilter()}
+                    <button
+                      onClick={() => setAllScalesModalOpen(true)}
+                      style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontWeight:700, cursor:'pointer', background:'#f8faff', color:'#1B2F5E', fontFamily:'Barlow, sans-serif'}}
+                    >
+                      Mostrar todas las escalas
+                    </button>
+                  </>
+                )}
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
+              </div>
             </div>
 
             <div style={{overflowY:'auto', minHeight:0, flex:1, paddingRight:4, overscrollBehavior:'contain'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
@@ -3656,7 +3791,7 @@ export default function Admin() {
 
             {productManageModal.type === 'tiers' && (() => {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
-              const activeLocalities = localities.filter(l => l.active);
+              const activeLocalities = filteredLocalities();
               const newScaleName = newScaleNames[modalProduct.id] || '';
 
               return (
@@ -3690,7 +3825,37 @@ export default function Admin() {
 
                     return (
                       <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
-                        <div style={{background:'linear-gradient(90deg, #1B2F5E, #2D6BE4)', color:'white', padding:'7px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, textAlign:'center', textTransform:'uppercase', borderBottom:'1px solid #dde1ef'}}>{locality.name}</div>
+                        <div
+                          draggable
+                          onDragStart={e => handleLocalityDragStart(e, locality.id)}
+                          onDragOver={e => handleLocalityDragOver(e, locality.id)}
+                          onDragLeave={handleLocalityDragLeave}
+                          onDrop={e => handleLocalityDrop(e, locality.id)}
+                          onDragEnd={handleLocalityDragEnd}
+                          style={{background: dragOverLocalityId === locality.id ? '#2D6BE4' : '#1B2F5E', color:'white', padding:'6px 8px 6px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, borderBottom:'1px solid #dde1ef', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab', opacity: draggingLocalityId === locality.id ? 0.45 : 1}}
+                        >
+                          <span style={{color:'rgba(255,255,255,0.55)', fontSize:13, lineHeight:1}}>⠿</span>
+                          <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                          <select
+                            value={locality.seller_id || ''}
+                            onChange={e => updateScaleSeller(locality.id, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            onDragStart={e => e.stopPropagation()}
+                            onKeyUp={e => e.stopPropagation()}
+                            style={{marginLeft:'auto', border:'1px solid rgba(255,255,255,0.35)', borderRadius:5, padding:'2px 6px', fontSize:10, fontWeight:700, color:'#1B2F5E', background:'white', maxWidth:140, fontFamily:'Barlow, sans-serif'}}
+                          >
+                            <option value="">Sin vendedor</option>
+                            {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+                          </select>
+                          <button
+                            title="Eliminar escala"
+                            onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
+                            onDragStart={e => e.stopPropagation()}
+                            style={{border:'1px solid rgba(255,255,255,0.35)', background:'rgba(255,255,255,0.14)', color:'white', borderRadius:5, width:22, height:22, lineHeight:1, cursor:'pointer', fontSize:13, fontWeight:800}}
+                          >
+                            ×
+                          </button>
+                        </div>
                         <table style={{width:'100%', borderCollapse:'collapse'}}>
                           <colgroup>
                             <col style={{width:'calc((100% - 36px) / 2)'}} />
