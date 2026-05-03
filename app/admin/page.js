@@ -258,7 +258,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
@@ -1303,11 +1303,34 @@ export default function Admin() {
     return sellers.find(s => s.id === id)?.name || 'Vendedor';
   }
 
+  function adminPreferenceKey(baseKey) {
+    const safeEmail = String(currentUser || 'anon').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return `${baseKey}_${safeEmail || 'anon'}`;
+  }
+
+  function scaleSellerFilterSettingKey() {
+    return settings.admin_scale_seller_filter_individual !== 'false'
+      ? adminPreferenceKey('admin_scale_seller_filter')
+      : 'admin_scale_seller_filter_global';
+  }
+
+  useEffect(() => {
+    const key = scaleSellerFilterSettingKey();
+    const next = settings[key] || settings.admin_scale_seller_filter_global || 'all';
+    if (next !== scaleSellerFilter) setScaleSellerFilter(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, settings]);
+
+  async function updateScaleSellerFilter(value) {
+    setScaleSellerFilter(value);
+    await saveSetting(scaleSellerFilterSettingKey(), value);
+  }
+
   function renderScaleSellerFilter() {
     return (
       <select
         value={scaleSellerFilter}
-        onChange={e => setScaleSellerFilter(e.target.value)}
+        onChange={e => updateScaleSellerFilter(e.target.value)}
         onKeyUp={e => e.stopPropagation()}
         style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 9px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', background:'white'}}
       >
@@ -3404,6 +3427,31 @@ export default function Admin() {
             </div>
 
             <div style={s.card}>
+              <h2 style={s.sectionTitle}>Preferencias del admin</h2>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Filtro de vendedor en escalas</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>
+                    {settings.admin_scale_seller_filter_individual !== 'false'
+                      ? 'Cada administrador conserva su filtro entre sesiones.'
+                      : 'El filtro que se elija aplica globalmente para todos los administradores.'}
+                  </div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <span style={{fontSize:11, color:'#9aa3bc', fontWeight:700, whiteSpace:'nowrap'}}>
+                    {settings.admin_scale_seller_filter_individual !== 'false' ? 'Individual' : 'Global'}
+                  </span>
+                  <div
+                    onClick={() => saveSetting('admin_scale_seller_filter_individual', settings.admin_scale_seller_filter_individual === 'false' ? 'true' : 'false')}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: settings.admin_scale_seller_filter_individual !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'absolute', top: 2, left: settings.admin_scale_seller_filter_individual !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={s.card}>
               <h2 style={s.sectionTitle}>Orden de pestañas</h2>
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
@@ -3796,18 +3844,7 @@ export default function Admin() {
 
               return (
                 <div style={{display:'flex', flexDirection:'column', gap:10}}>
-                  <div style={{display:'flex', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
-                    <input
-                      style={{...s.tblInput, flex:1, padding:'6px 9px', fontSize:12}}
-                      placeholder="Nueva escala para este producto..."
-                      value={newScaleName}
-                      onChange={e => setNewScaleNames(prev => ({...prev, [modalProduct.id]: e.target.value}))}
-                      onKeyDown={e => { if (e.key === 'Enter') addScaleFromProduct(modalProduct.id); }}
-                      onKeyUp={e => e.stopPropagation()}
-                    />
-                    <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
-                  </div>
-                  {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera arriba.</p> : (
+                  {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera abajo.</p> : (
                   <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
                     <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
                       <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
@@ -3901,6 +3938,17 @@ export default function Admin() {
                     })}
                   </div>
                   )}
+                  <div style={{display:'flex', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
+                    <input
+                      style={{...s.tblInput, flex:1, padding:'6px 9px', fontSize:12}}
+                      placeholder="Nueva escala para este producto..."
+                      value={newScaleName}
+                      onChange={e => setNewScaleNames(prev => ({...prev, [modalProduct.id]: e.target.value}))}
+                      onKeyDown={e => { if (e.key === 'Enter') addScaleFromProduct(modalProduct.id); }}
+                      onKeyUp={e => e.stopPropagation()}
+                    />
+                    <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
+                  </div>
                 </div>
               );
             })()}
