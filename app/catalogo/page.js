@@ -1187,30 +1187,127 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           {activeVariants.length > 1 && (
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', margin:'2px 0 14px'}}>
-              {activeVariants.map(variant => {
-                const isActive = activeProductId === variant.id;
-                return (
-                  <button
-                    key={variant.id}
-                    onClick={() => switchProduct(variant.id)}
-                    style={{
-                      border:'1.5px solid',
-                      borderColor: isActive ? '#1B2F5E' : '#dde1ef',
-                      borderRadius: 12,
-                      padding:'9px 16px',
-                      background: isActive ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)' : 'white',
-                      color: isActive ? 'white' : '#1B2F5E',
-                      fontSize:13,
-                      fontWeight:800,
-                      cursor:'pointer',
-                      boxShadow: isActive ? '0 8px 20px rgba(27,47,94,0.18)' : '0 2px 8px rgba(27,47,94,0.06)',
-                    }}
-                  >
-                    {variant.variant_name || 'Base'}
-                  </button>
-                );
-              })}
+            <div style={{
+              margin: isMobile ? '4px 0 16px' : '4px 0 18px',
+              padding: isMobile ? 10 : 12,
+              borderRadius: 18,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.96), rgba(247,248,252,0.96))',
+              border: '1.5px solid rgba(221,225,239,0.95)',
+              boxShadow: '0 10px 28px rgba(27,47,94,0.07)',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom: 10,
+              }}>
+                <div>
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    letterSpacing: 1.1,
+                    textTransform: 'uppercase',
+                    color: '#7b86a5',
+                    marginBottom: 2,
+                  }}>
+                    Variante
+                  </div>
+                  <div style={{
+                    fontSize: isMobile ? 13 : 14,
+                    fontWeight: 700,
+                    color: '#1B2F5E',
+                    lineHeight: 1.2,
+                  }}>
+                    Elegí la presentación del producto
+                  </div>
+                </div>
+
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#9aa3bc',
+                  background: 'white',
+                  border: '1px solid #eef1f7',
+                  borderRadius: 999,
+                  padding: '5px 9px',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {activeVariants.length} opciones
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: isMobile ? 8 : 10,
+                flexWrap: 'wrap',
+              }}>
+                {activeVariants.map(variant => {
+                  const isActive = activeProductId === variant.id;
+                  return (
+                    <button
+                      key={variant.id}
+                      onClick={() => switchProduct(variant.id)}
+                      style={{
+                        position: 'relative',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        minHeight: isMobile ? 42 : 46,
+                        border: '1.5px solid',
+                        borderColor: isActive ? '#2D6BE4' : '#dde1ef',
+                        borderRadius: 14,
+                        padding: isMobile ? '9px 13px' : '10px 16px',
+                        background: isActive
+                          ? 'linear-gradient(135deg, #1B2F5E 0%, #2D6BE4 100%)'
+                          : 'white',
+                        color: isActive ? 'white' : '#1B2F5E',
+                        fontSize: isMobile ? 13 : 14,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        boxShadow: isActive
+                          ? '0 10px 24px rgba(45,107,228,0.24)'
+                          : '0 4px 12px rgba(27,47,94,0.06)',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
+                      }}
+                    >
+                      <span style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: isActive ? 'white' : '#2D6BE4',
+                        boxShadow: isActive ? '0 0 0 4px rgba(255,255,255,0.18)' : '0 0 0 4px rgba(45,107,228,0.10)',
+                        flexShrink: 0,
+                      }} />
+
+                      <span style={{
+                        maxWidth: isMobile ? 150 : 190,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {variant.variant_name || 'Base'}
+                      </span>
+
+                      {isActive && (
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                          background: 'rgba(255,255,255,0.18)',
+                          border: '1px solid rgba(255,255,255,0.22)',
+                          borderRadius: 999,
+                          padding: '3px 7px',
+                          marginLeft: 2,
+                        }}>
+                          Actual
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
