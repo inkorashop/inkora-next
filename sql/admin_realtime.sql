@@ -107,6 +107,7 @@ FROM (
     ('designs'),
     ('localities'),
     ('price_tiers'),
+    ('user_product_localities'),
     ('admins'),
     ('orders'),
     ('settings'),

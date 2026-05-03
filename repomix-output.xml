@@ -89,6 +89,7 @@ sql/product_variants.sql
 sql/production_rls_policies.sql
 sql/setup.sql
 sql/user_activity_events.sql
+sql/user_product_price_scales.sql
 </directory_structure>
 
 <files>
@@ -1829,6 +1830,108 @@ AS $$
 $$;
 </file>
 
+<file path="sql/user_product_price_scales.sql">
+-- INKORA - Asignacion de escalas de precio por cliente y producto
+-- Ejecutar en Supabase SQL Editor.
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.admins
+    WHERE email = auth.jwt() ->> 'email'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
+CREATE TABLE IF NOT EXISTS public.user_product_localities (
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  locality_id uuid NOT NULL REFERENCES public.localities(id) ON DELETE RESTRICT,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_user_id_idx
+  ON public.user_product_localities (user_id);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_product_id_idx
+  ON public.user_product_localities (product_id);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_locality_id_idx
+  ON public.user_product_localities (locality_id);
+
+ALTER TABLE public.user_product_localities ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_product_localities TO authenticated;
+
+DROP POLICY IF EXISTS "users_read_own_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_read_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_insert_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_update_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_delete_user_product_localities" ON public.user_product_localities;
+
+CREATE POLICY "users_read_own_product_localities"
+  ON public.user_product_localities FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "admins_read_user_product_localities"
+  ON public.user_product_localities FOR SELECT
+  USING (public.is_admin());
+
+CREATE POLICY "admins_insert_user_product_localities"
+  ON public.user_product_localities FOR INSERT
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_update_user_product_localities"
+  ON public.user_product_localities FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_delete_user_product_localities"
+  ON public.user_product_localities FOR DELETE
+  USING (public.is_admin());
+
+CREATE OR REPLACE FUNCTION public.touch_user_product_localities_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS touch_user_product_localities_updated_at ON public.user_product_localities;
+CREATE TRIGGER touch_user_product_localities_updated_at
+  BEFORE UPDATE ON public.user_product_localities
+  FOR EACH ROW EXECUTE PROCEDURE public.touch_user_product_localities_updated_at();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication
+    WHERE pubname = 'supabase_realtime'
+  ) THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_product_localities;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Tabla public.user_product_localities ya estaba en supabase_realtime.';
+  END;
+END $$;
+</file>
+
 <file path="app/api/presence/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -3178,6 +3281,7 @@ FROM (
     ('designs'),
     ('localities'),
     ('price_tiers'),
+    ('user_product_localities'),
     ('admins'),
     ('orders'),
     ('settings'),
@@ -5100,13 +5204,23 @@ export default function Home() {
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
     setProfile(data);
-    if (data?.locality_id) {
-      const { data: tiers } = await supabase.from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
-      setPriceTiers(tiers || []);
-    } else {
-      const { data: tiers } = await supabase.from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
-      setPriceTiers(tiers || []);
+    const [{ data: assignments, error: assignmentError }, { data: allTiers }] = await Promise.all([
+      supabase.from('user_product_localities').select('product_id, locality_id').eq('user_id', userId),
+      supabase.from('price_tiers').select('*').order('min_quantity'),
+    ]);
+
+    if (assignmentError) {
+      console.error('Error loading product price scale assignments', assignmentError);
     }
+
+    const assignedByProduct = {};
+    (assignments || []).forEach(row => { assignedByProduct[row.product_id] = row.locality_id; });
+    const fallbackLocalityId = data?.locality_id || null;
+    const visibleTiers = (allTiers || []).filter(tier => {
+      const productLocalityId = assignedByProduct[tier.product_id] || fallbackLocalityId;
+      return productLocalityId ? tier.locality_id === productLocalityId : tier.locality_id === null;
+    });
+    setPriceTiers(visibleTiers);
   }
 
   async function loadAdminStatus(email) {
@@ -5676,7 +5790,12 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           {activeVariants.length > 1 && (
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', margin:'2px 0 14px'}}>
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              margin: '2px 0 14px',
+            }}>
               {activeVariants.map(variant => {
                 const isActive = activeProductId === variant.id;
                 return (
@@ -5684,16 +5803,22 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     key={variant.id}
                     onClick={() => switchProduct(variant.id)}
                     style={{
-                      border:'1.5px solid',
-                      borderColor: isActive ? '#1B2F5E' : '#dde1ef',
-                      borderRadius: 12,
-                      padding:'9px 16px',
-                      background: isActive ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)' : 'white',
+                      border: '1.5px solid',
+                      borderColor: isActive ? '#2D6BE4' : '#dde1ef',
+                      borderRadius: 999,
+                      padding: isMobile ? '9px 15px' : '10px 18px',
+                      background: isActive
+                        ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)'
+                        : 'rgba(255,255,255,0.92)',
                       color: isActive ? 'white' : '#1B2F5E',
-                      fontSize:13,
-                      fontWeight:800,
-                      cursor:'pointer',
-                      boxShadow: isActive ? '0 8px 20px rgba(27,47,94,0.18)' : '0 2px 8px rgba(27,47,94,0.06)',
+                      fontSize: isMobile ? 13 : 14,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: isActive
+                        ? '0 8px 18px rgba(45,107,228,0.20)'
+                        : '0 3px 10px rgba(27,47,94,0.06)',
+                      transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {variant.variant_name || 'Base'}
@@ -6598,6 +6723,10 @@ export default function Admin() {
 
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
+  const [userProductLocalities, setUserProductLocalities] = useState([]);
+  const [userScaleModal, setUserScaleModal] = useState(null);
+  const [savingUserScaleKey, setSavingUserScaleKey] = useState(null);
+  const [newScaleNames, setNewScaleNames] = useState({});
   const [newTiers, setNewTiers] = useState({});
   const [editingTiers, setEditingTiers] = useState({});
   const [savedTierId, setSavedTierId] = useState(null);
@@ -6660,19 +6789,21 @@ export default function Admin() {
         designs: designs.map(stripDesign),
         localities,
         price_tiers: priceTiers,
+        user_product_localities: userProductLocalities,
         settings,
         sellers,
         users,
         admins: admins.map(stripAdmin),
       },
     };
-  }, [admins, designs, localities, priceTiers, products, sellers, settings, users]);
+  }, [admins, designs, localities, priceTiers, products, sellers, settings, userProductLocalities, users]);
 
   const buildVersionSnapshotCounts = useCallback((payload) => ({
     products: payload.tables.products.length,
     designs: payload.tables.designs.length,
     localities: payload.tables.localities.length,
     price_tiers: payload.tables.price_tiers.length,
+    user_product_localities: payload.tables.user_product_localities.length,
     settings: Object.keys(payload.tables.settings || {}).length,
     sellers: payload.tables.sellers.length,
     users: payload.tables.users.length,
@@ -6761,6 +6892,7 @@ export default function Admin() {
         loadSettings(),
         loadSellers(),
         loadUsers(),
+        loadUserProductLocalities(),
         loadVersionSnapshots(),
       ]).finally(() => setAdminDataReadyForSnapshots(true));
     }
@@ -6897,6 +7029,7 @@ export default function Admin() {
       watch('designs', loadDesigns),
       watch('localities', () => { loadLocalities(); loadPriceTiers(); loadUsers(); }),
       watch('price_tiers', loadPriceTiers),
+      watch('user_product_localities', loadUserProductLocalities),
       watch('admins', loadAdmins),
       watch('orders', loadOrders),
       watch('settings', loadSettings),
@@ -7641,6 +7774,24 @@ export default function Admin() {
     loadLocalities();
   }
 
+  async function addScaleFromProduct(productId) {
+    const name = (newScaleNames[productId] || '').trim();
+    if (!name) return;
+    setSavingLocality(true);
+    const { data, error } = await supabase.from('localities').insert({ name, active: true }).select('*').single();
+    if (error) {
+      console.error('Error creating scale', error);
+      alert('No se pudo crear la escala.');
+    } else {
+      setLocalities(prev => [...prev, data]);
+      setNewScaleNames(prev => ({ ...prev, [productId]: '' }));
+      const product = products.find(p => p.id === productId);
+      trackAdminActivity('locality_create_from_product', { locality_id: data.id, locality_name: name, product_id: productId, product_name: product?.name }, 'localities');
+    }
+    setSavingLocality(false);
+    loadLocalities();
+  }
+
   async function toggleLocality(id, active) {
     await supabase.from('localities').update({ active: !active }).eq('id', id);
     const locality = localities.find(l => l.id === id);
@@ -7672,6 +7823,80 @@ export default function Admin() {
     const locality = localities.find(l => l.id === localityId);
     trackAdminActivity('user_locality_update', { user_id: userId, user_email: user?.email, locality_id: localityId || null, locality_name: locality?.name || null }, 'users');
     loadUsers();
+  }
+
+  async function loadUserProductLocalities() {
+    const { data, error } = await supabase.from('user_product_localities').select('*');
+    if (error) {
+      console.error('Error loading user product localities', error);
+      return;
+    }
+    setUserProductLocalities(data || []);
+  }
+
+  function getUserProductLocality(userId, productId) {
+    return userProductLocalities.find(row => row.user_id === userId && row.product_id === productId)?.locality_id || '';
+  }
+
+  async function updateUserProductLocality(userId, productId, localityId) {
+    const key = `${userId}_${productId}`;
+    setSavingUserScaleKey(key);
+    const user = users.find(u => u.id === userId);
+    const product = products.find(p => p.id === productId);
+    const locality = localities.find(l => l.id === localityId);
+
+    if (localityId) {
+      const { error } = await supabase.from('user_product_localities').upsert({
+        user_id: userId,
+        product_id: productId,
+        locality_id: localityId,
+      }, { onConflict: 'user_id,product_id' });
+      if (error) {
+        console.error('Error saving user product locality', error);
+        alert('No se pudo guardar la escala del producto. Revisá que hayas ejecutado el SQL de asignaciones.');
+      } else {
+        setUserProductLocalities(prev => {
+          const without = prev.filter(row => !(row.user_id === userId && row.product_id === productId));
+          return [...without, { user_id: userId, product_id: productId, locality_id: localityId }];
+        });
+        trackAdminActivity('user_product_locality_update', { user_id: userId, user_email: user?.email, product_id: productId, product_name: product?.name, locality_id: localityId, locality_name: locality?.name }, 'users');
+      }
+    } else {
+      const { error } = await supabase.from('user_product_localities').delete().eq('user_id', userId).eq('product_id', productId);
+      if (error) {
+        console.error('Error clearing user product locality', error);
+        alert('No se pudo quitar la escala del producto.');
+      } else {
+        setUserProductLocalities(prev => prev.filter(row => !(row.user_id === userId && row.product_id === productId)));
+        trackAdminActivity('user_product_locality_clear', { user_id: userId, user_email: user?.email, product_id: productId, product_name: product?.name }, 'users');
+      }
+    }
+
+    setSavingUserScaleKey(null);
+  }
+
+  async function applyUserScaleToAllProducts(userId, localityId) {
+    if (!localityId) return;
+    setSavingUserScaleKey(`${userId}_all`);
+    const activeProducts = products.filter(p => p.active);
+    const rows = activeProducts.map(product => ({ user_id: userId, product_id: product.id, locality_id: localityId }));
+    const { error } = await supabase.from('user_product_localities').upsert(rows, { onConflict: 'user_id,product_id' });
+    if (error) {
+      console.error('Error applying scale to all products', error);
+      alert('No se pudo aplicar la escala a todos los productos.');
+    } else {
+      setUserProductLocalities(prev => {
+        const activeProductIds = new Set(activeProducts.map(p => p.id));
+        return [
+          ...prev.filter(row => row.user_id !== userId || !activeProductIds.has(row.product_id)),
+          ...rows,
+        ];
+      });
+      const user = users.find(u => u.id === userId);
+      const locality = localities.find(l => l.id === localityId);
+      trackAdminActivity('user_product_locality_apply_all', { user_id: userId, user_email: user?.email, locality_id: localityId, locality_name: locality?.name, product_count: rows.length }, 'users');
+    }
+    setSavingUserScaleKey(null);
   }
 
   // ── Price tiers ──
@@ -9279,18 +9504,14 @@ export default function Admin() {
         {activeTab === 'localities' && (
           <>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Nueva escala</h2>
-              <div style={s.formGroup}>
-                <label style={s.label}>Nombre *</label>
-                <input style={s.input} value={newLocality.name} onChange={e => setNewLocality(l => ({...l, name: e.target.value}))} placeholder="ej: Posadas" />
-              </div>
-              <button style={{...s.btnPrimary, opacity: newLocality.name && !savingLocality ? 1 : 0.5}} disabled={!newLocality.name || savingLocality} onClick={addLocality}>
-                {savingLocality ? 'Guardando...' : 'Crear localidad'}
-              </button>
+              <h2 style={s.sectionTitle}>Escalas de precios</h2>
+              <p style={{...s.emptyMsg, margin:0}}>
+                Las escalas nuevas se crean desde Productos, abriendo el popup de Escalas de precio de cada producto.
+              </p>
             </div>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Localidades ({localities.length})</h2>
-              {localities.length === 0 && <p style={s.emptyMsg}>No hay localidades todavía.</p>}
+              <h2 style={s.sectionTitle}>Escalas existentes ({localities.length})</h2>
+              {localities.length === 0 && <p style={s.emptyMsg}>No hay escalas todavía.</p>}
               {localities.map(l => (
                 <div
                   key={l.id}
@@ -9351,7 +9572,19 @@ export default function Admin() {
                   <div style={s.productMeta}>{u.email}</div>
                 </div>
                 <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                  <select style={{...s.input, width: 180, fontSize: 13, padding: '6px 10px'}} value={u.locality_id || ''} onChange={e => updateUserLocality(u.id, e.target.value)}>
+                  <button
+                    onClick={() => setUserScaleModal(u)}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                  >
+                    Escalas por producto
+                  </button>
+                  <select
+                    title="Escala de respaldo para productos sin asignación específica"
+                    style={{...s.input, width: 150, fontSize: 12, padding: '6px 10px'}}
+                    value={u.locality_id || ''}
+                    onChange={e => updateUserLocality(u.id, e.target.value)}
+                  >
+                    <option value="">Sin respaldo</option>
                     {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>
                   <div style={{display:'flex', alignItems:'center', gap:6}}>
@@ -9694,6 +9927,76 @@ export default function Admin() {
 
       <footer style={s.footer}>INKORA® Admin</footer>
 
+      {/* MODAL DE ESCALAS POR CLIENTE */}
+      {userScaleModal && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setUserScaleModal(null)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth:780, maxHeight:'82vh', overflow:'hidden', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+              <div>
+                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Escalas por producto</div>
+                <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{userScaleModal.name || userScaleModal.email} · {userScaleModal.email}</div>
+              </div>
+              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setUserScaleModal(null)}>×</button>
+            </div>
+
+            <div style={{display:'flex', flexWrap:'wrap', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
+              <span style={{fontSize:11, color:'#5a6380', fontWeight:800, textTransform:'uppercase'}}>Aplicar a todos</span>
+              {localities.filter(l => l.active).map(l => (
+                <button
+                  key={l.id}
+                  disabled={savingUserScaleKey === `${userScaleModal.id}_all`}
+                  onClick={() => applyUserScaleToAllProducts(userScaleModal.id, l.id)}
+                  style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:700, cursor:'pointer', background:'white', color:'#2D6BE4', opacity: savingUserScaleKey === `${userScaleModal.id}_all` ? 0.5 : 1}}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
+
+            <div style={{overflowY:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}}>
+              <div style={{display:'grid', gridTemplateColumns:'minmax(180px, 1fr) minmax(180px, 240px) minmax(160px, 1fr)', background:'#f8faff', borderBottom:'1.5px solid #dde1ef'}}>
+                <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Producto</div>
+                <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Escala asignada</div>
+                <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Precios cargados</div>
+              </div>
+              {products.filter(p => p.active).map(product => {
+                const selectedLocalityId = getUserProductLocality(userScaleModal.id, product.id);
+                const fallbackLocality = localities.find(l => l.id === userScaleModal.locality_id);
+                const shownLocalityId = selectedLocalityId || userScaleModal.locality_id || '';
+                const tiers = priceTiers
+                  .filter(t => t.product_id === product.id && t.locality_id === shownLocalityId)
+                  .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                const saving = savingUserScaleKey === `${userScaleModal.id}_${product.id}`;
+                return (
+                  <div key={product.id} style={{display:'grid', gridTemplateColumns:'minmax(180px, 1fr) minmax(180px, 240px) minmax(160px, 1fr)', alignItems:'center', borderBottom:'1px solid #f0f2f8'}}>
+                    <div style={{padding:'9px 10px'}}>
+                      <div style={{fontSize:13, fontWeight:700, color:'#2d3352'}}>{productDisplayName(product)}</div>
+                      {!selectedLocalityId && fallbackLocality && <div style={{fontSize:10, color:'#9aa3bc', marginTop:2}}>usa respaldo: {fallbackLocality.name}</div>}
+                    </div>
+                    <div style={{padding:'7px 10px'}}>
+                      <select
+                        value={selectedLocalityId}
+                        disabled={saving}
+                        onChange={e => updateUserProductLocality(userScaleModal.id, product.id, e.target.value)}
+                        style={{...s.input, width:'100%', fontSize:12, padding:'6px 9px', opacity:saving ? 0.55 : 1}}
+                      >
+                        <option value="">Respaldo {fallbackLocality ? `(${fallbackLocality.name})` : '/ sin escala'}</option>
+                        {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                      </select>
+                    </div>
+                    <div style={{padding:'7px 10px', fontSize:12, color:'#5a6380'}}>
+                      {tiers.length > 0
+                        ? tiers.map(t => `${t.min_quantity}+ $${Number(t.price_per_unit).toLocaleString('es-AR')}`).join(' · ')
+                        : <span style={{color:'#c4c9d9'}}>Sin precios para esta escala</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
@@ -9797,16 +10100,29 @@ export default function Admin() {
             {productManageModal.type === 'tiers' && (() => {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
               const activeLocalities = localities.filter(l => l.active);
-              if (activeLocalities.length === 0) return <p style={s.emptyMsg}>No hay localidades activas.</p>;
+              const newScaleName = newScaleNames[modalProduct.id] || '';
 
               return (
-                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
-                  <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
-                    <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
-                    <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Precio/u</div>
-                    <div />
+                <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  <div style={{display:'flex', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
+                    <input
+                      style={{...s.tblInput, flex:1, padding:'6px 9px', fontSize:12}}
+                      placeholder="Nueva escala para este producto..."
+                      value={newScaleName}
+                      onChange={e => setNewScaleNames(prev => ({...prev, [modalProduct.id]: e.target.value}))}
+                      onKeyDown={e => { if (e.key === 'Enter') addScaleFromProduct(modalProduct.id); }}
+                      onKeyUp={e => e.stopPropagation()}
+                    />
+                    <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
                   </div>
-                  {activeLocalities.map((locality, li) => {
+                  {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera arriba.</p> : (
+                  <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
+                    <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
+                      <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
+                      <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Precio/u</div>
+                      <div />
+                    </div>
+                    {activeLocalities.map((locality, li) => {
                     const key = `${modalProduct.id}_${locality.id}`;
                     const tiers = productTiers
                       .filter(t => t.locality_id === locality.id)
@@ -9860,7 +10176,9 @@ export default function Admin() {
                         </table>
                       </div>
                     );
-                  })}
+                    })}
+                  </div>
+                  )}
                 </div>
               );
             })()}

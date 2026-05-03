@@ -611,13 +611,23 @@ export default function Home() {
   async function loadProfile(userId) {
     const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
     setProfile(data);
-    if (data?.locality_id) {
-      const { data: tiers } = await supabase.from('price_tiers').select('*').eq('locality_id', data.locality_id).order('min_quantity');
-      setPriceTiers(tiers || []);
-    } else {
-      const { data: tiers } = await supabase.from('price_tiers').select('*').is('locality_id', null).order('min_quantity');
-      setPriceTiers(tiers || []);
+    const [{ data: assignments, error: assignmentError }, { data: allTiers }] = await Promise.all([
+      supabase.from('user_product_localities').select('product_id, locality_id').eq('user_id', userId),
+      supabase.from('price_tiers').select('*').order('min_quantity'),
+    ]);
+
+    if (assignmentError) {
+      console.error('Error loading product price scale assignments', assignmentError);
     }
+
+    const assignedByProduct = {};
+    (assignments || []).forEach(row => { assignedByProduct[row.product_id] = row.locality_id; });
+    const fallbackLocalityId = data?.locality_id || null;
+    const visibleTiers = (allTiers || []).filter(tier => {
+      const productLocalityId = assignedByProduct[tier.product_id] || fallbackLocalityId;
+      return productLocalityId ? tier.locality_id === productLocalityId : tier.locality_id === null;
+    });
+    setPriceTiers(visibleTiers);
   }
 
   async function loadAdminStatus(email) {
