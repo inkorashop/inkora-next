@@ -53,7 +53,16 @@ export async function POST(req) {
       options: { redirectTo: siteUrl },
     });
 
-    const link = linkError ? null : linkData?.properties?.action_link;
+    let link = null;
+    if (!linkError) {
+      const rawLink = linkData?.properties?.action_link;
+      try {
+        const token = new URL(rawLink).searchParams.get('token');
+        link = token ? `${siteUrl}/invite?token=${token}` : rawLink;
+      } catch {
+        link = rawLink;
+      }
+    }
 
     return NextResponse.json({
       success: true,

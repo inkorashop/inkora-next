@@ -87,6 +87,32 @@ function GoogleIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+  );
+}
+
 function HoldButton({ onConfirm }) {
   const [progress, setProgress] = React.useState(0);
   const intervalRef = React.useRef(null);
@@ -252,12 +278,17 @@ export default function Admin() {
   const [userSearch, setUserSearch] = useState('');
   const [userFilterStatus, setUserFilterStatus] = useState('all');
   const [userFilterSeller, setUserFilterSeller] = useState('all');
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  const lastSelectedUserIdRef = useRef(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: '', phone: '', email: '', password: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
   const [showInvitePassword, setShowInvitePassword] = useState(false);
   const [revealedPasswords, setRevealedPasswords] = useState({});
+  const [userInviteLinks, setUserInviteLinks] = useState({});
+  const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
+  const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -1926,7 +1957,10 @@ export default function Admin() {
       if (data.error) {
         setInviteResult({ error: data.error });
       } else {
-        setInviteResult({ link: data.link, linkError: data.link_error });
+        if (data.link && data.user_id) {
+          setUserInviteLinks(prev => ({ ...prev, [data.user_id]: data.link }));
+        }
+        setInviteResult({ success: true, linkError: data.link_error });
         setInviteForm({ name: '', phone: '', email: '', password: '' });
         loadUsers();
         trackAdminActivity('user_invite', { email: inviteForm.email }, 'users');
@@ -1935,6 +1969,26 @@ export default function Admin() {
       setInviteResult({ error: e.message });
     }
     setInviteLoading(false);
+  }
+
+  async function handleRegenerateLink(userId, email) {
+    setRegenLoadingIds(prev => { const n = new Set(prev); n.add(userId); return n; });
+    try {
+      const res = await fetch('/api/generate-invite-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.link) setUserInviteLinks(prev => ({ ...prev, [userId]: data.link }));
+    } catch {}
+    setRegenLoadingIds(prev => { const n = new Set(prev); n.delete(userId); return n; });
+  }
+
+  function handleCopyLink(userId, link) {
+    navigator.clipboard.writeText(link).catch(() => {});
+    setCopiedLinkIds(prev => { const n = new Set(prev); n.add(userId); return n; });
+    setTimeout(() => setCopiedLinkIds(prev => { const n = new Set(prev); n.delete(userId); return n; }), 1500);
   }
 
   // ── Admins ──
@@ -3292,35 +3346,10 @@ export default function Admin() {
                     {inviteResult?.error && (
                       <span style={{fontSize:12, color:'#e53e3e', fontWeight:600}}>{inviteResult.error}</span>
                     )}
+                    {inviteResult?.success && (
+                      <span style={{fontSize:12, color:'#15803d', fontWeight:600}}>✓ Usuario creado. El link de acceso está en su fila.</span>
+                    )}
                   </div>
-                  {inviteResult?.link && (
-                    <div style={{background:'#f0f8ff', border:'1.5px solid #bde0fe', borderRadius:8, padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
-                      <span style={{fontSize:12, fontWeight:700, color:'#1B2F5E'}}>Link de invitación (único uso)</span>
-                      <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                        <input
-                          style={{...s.input, flex:1, fontSize:11, fontFamily:'monospace', background:'white', cursor:'text'}}
-                          readOnly
-                          value={inviteResult.link}
-                          onClick={e => e.target.select()}
-                        />
-                        <button
-                          style={{...s.editBtn, padding:'7px 14px', whiteSpace:'nowrap'}}
-                          onClick={() => navigator.clipboard.writeText(inviteResult.link)}
-                        >
-                          Copiar
-                        </button>
-                      </div>
-                      <span style={{fontSize:11, color:'#5a6380'}}>Link de uso único. Una vez que el cliente lo use, no podrá volver a ingresar con este link (pero sí con su email y contraseña).</span>
-                      {inviteResult.linkError && (
-                        <span style={{fontSize:11, color:'#f6a800'}}>Nota: {inviteResult.linkError}</span>
-                      )}
-                    </div>
-                  )}
-                  {inviteResult?.link === null && !inviteResult?.error && (
-                    <div style={{background:'#fff7e6', border:'1.5px solid #fde68a', borderRadius:8, padding:'10px 14px'}}>
-                      <span style={{fontSize:12, color:'#92400e'}}>Usuario creado pero no se pudo generar el link. El cliente puede ingresar con email y contraseña.</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -3443,44 +3472,71 @@ export default function Admin() {
                         return null;
                       })()}
                     </div>
-                    <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                      <button
-                        onClick={() => setUserScaleModal(u)}
-                        style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
-                      >
-                        Escalas por producto
-                      </button>
-                      <div style={{display:'flex', alignItems:'center', gap:6}}>
-                        <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
-                        <div
-                          onClick={() => {
-                            const newVal = u.send_confirmation_email === false ? true : false;
-                            userOverridesRef.current[u.id] = { ...userOverridesRef.current[u.id], send_confirmation_email: newVal };
-                            setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
-                            supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
-                          }}
-                          style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                        >
-                          <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                        </div>
-                      </div>
-                      <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                    <div style={{display:'flex', flexDirection:'column', gap:6, alignItems:'flex-end'}}>
+                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end'}}>
                         <button
-                          onClick={() => updateUserSeller(u.id, null)}
-                          style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
+                          onClick={() => setUserScaleModal(u)}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
                         >
-                          Sin vendedor
+                          Escalas por producto
                         </button>
-                        {sellers.filter(sel => sel.active).map(sel => (
-                          <button
-                            key={sel.id}
-                            onClick={() => updateUserSeller(u.id, sel.id)}
-                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
+                        <div style={{display:'flex', alignItems:'center', gap:6}}>
+                          <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
+                          <div
+                            onClick={() => {
+                              const newVal = u.send_confirmation_email === false ? true : false;
+                              userOverridesRef.current[u.id] = { ...userOverridesRef.current[u.id], send_confirmation_email: newVal };
+                              setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
+                              supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
+                            }}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                           >
-                            {sel.name}
+                            <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </div>
+                        </div>
+                        <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                          <button
+                            onClick={() => updateUserSeller(u.id, null)}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
+                          >
+                            Sin vendedor
                           </button>
-                        ))}
+                          {sellers.filter(sel => sel.active).map(sel => (
+                            <button
+                              key={sel.id}
+                              onClick={() => updateUserSeller(u.id, sel.id)}
+                              style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
+                            >
+                              {sel.name}
+                            </button>
+                          ))}
+                        </div>
+                        {u.registration_source === 'admin_invite' && (
+                          <button
+                            onClick={() => handleRegenerateLink(u.id, u.email)}
+                            title="Generar link de acceso único"
+                            style={{border:'1.5px solid #bde0fe', borderRadius:6, padding:'4px 8px', fontSize:12, cursor:'pointer', background:'#f0f8ff', color:'#2D6BE4', display:'flex', alignItems:'center', gap:4, opacity: regenLoadingIds.has(u.id) ? 0.5 : 1}}
+                            disabled={regenLoadingIds.has(u.id)}
+                          >
+                            <LinkIcon/>
+                            <span style={{fontSize:10, fontWeight:600}}>{regenLoadingIds.has(u.id) ? '...' : 'Link'}</span>
+                          </button>
+                        )}
                       </div>
+                      {userInviteLinks[u.id] && (
+                        <div style={{display:'flex', gap:5, alignItems:'center', background:'#f0f8ff', border:'1px solid #bde0fe', borderRadius:6, padding:'4px 8px', maxWidth:340}}>
+                          <span style={{fontSize:10, fontFamily:'monospace', color:'#1B2F5E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1}}>
+                            {userInviteLinks[u.id].replace('https://', '')}
+                          </span>
+                          <button
+                            onClick={() => handleCopyLink(u.id, userInviteLinks[u.id])}
+                            title="Copiar link"
+                            style={{background:'none', border:'none', cursor:'pointer', color: copiedLinkIds.has(u.id) ? '#22c55e' : '#2D6BE4', padding:'2px', display:'flex', alignItems:'center', flexShrink:0, transition:'color 0.2s'}}
+                          >
+                            {copiedLinkIds.has(u.id) ? <CheckIcon/> : <CopyIcon/>}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
