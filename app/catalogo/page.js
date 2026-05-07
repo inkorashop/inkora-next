@@ -137,7 +137,7 @@ export default function Home() {
   const [savingCategory, setSavingCategory] = useState(false);
   const [infoTagsPopup, setInfoTagsPopup] = useState(null); // { designId, x, y, tags }
   const footerRef = useRef(null);
-  const [cartBottom, setCartBottom] = useState(24);
+  const [cartBottom, setCartBottom] = useState(8);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -686,7 +686,7 @@ export default function Home() {
       if (!footerRef.current) return;
       const rect = footerRef.current.getBoundingClientRect();
       const overlap = Math.max(0, window.innerHeight - rect.top);
-      setCartBottom(Math.max(24, overlap + 8));
+      setCartBottom(Math.max(8, overlap + 8));
     };
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update, { passive: true });
@@ -1892,23 +1892,23 @@ const styles = {
   qtyNum: { flex: 1, textAlign: 'center', fontWeight: 700, color: '#1B2F5E' },
   emptyState: { textAlign: 'center', padding: 40, color: '#9aa3bc' },
   sidebar: { background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', overflow: 'hidden' },
-  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  sidebarTitle: { fontWeight: 700, fontSize: 16, letterSpacing: 1 },
-  badge: { background: '#2D6BE4', color: 'white', fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 10 },
-  sidebarBody: { padding: '16px 20px', flex: 1, overflowY: 'auto', minHeight: 0 },
-  cartEmpty: { textAlign: 'center', padding: '32px 16px', color: '#9aa3bc', fontSize: 14 },
-  cartItem: { display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#f7f8fc', borderRadius: 8, marginBottom: 8 },
+  sidebarHeader: { background: '#1B2F5E', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  sidebarTitle: { fontWeight: 700, fontSize: 15, letterSpacing: 1 },
+  badge: { background: '#2D6BE4', color: 'white', fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 10 },
+  sidebarBody: { padding: '10px 14px', flex: 1, overflowY: 'auto', minHeight: 0 },
+  cartEmpty: { textAlign: 'center', padding: '16px 12px', color: '#9aa3bc', fontSize: 13 },
+  cartItem: { display: 'flex', alignItems: 'center', gap: 7, padding: 7, background: '#f7f8fc', borderRadius: 8, marginBottom: 5 },
   cartItemInfo: { flex: 1, minWidth: 0 },
   cartItemName: { fontSize: 12, fontWeight: 600, color: '#2d3352' },
   cartItemUnitPrice: { fontSize: 10, color: '#2D6BE4', fontWeight: 600 },
   cartItemRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
-  cartQty: { fontSize: 12, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 8px' },
-  cartPrice: { fontSize: 12, color: '#5a6380' },
-  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 14 },
-  sidebarFooter: { padding: '16px 20px', borderTop: '1.5px solid #eef0f6' },
-  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontWeight: 700, color: '#1B2F5E', fontSize: 16 },
-  totalAmount: { fontSize: 20, fontWeight: 700 },
-  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '10px 12px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 12, boxSizing: 'border-box' },
+  cartQty: { fontSize: 11, fontWeight: 700, color: '#1B2F5E', background: '#e8eef9', borderRadius: 6, padding: '2px 7px' },
+  cartPrice: { fontSize: 11, color: '#5a6380' },
+  removeBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#9aa3bc', fontSize: 13 },
+  sidebarFooter: { padding: '10px 14px', borderTop: '1.5px solid #eef0f6' },
+  totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontWeight: 700, color: '#1B2F5E', fontSize: 15 },
+  totalAmount: { fontSize: 17, fontWeight: 700 },
+  notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '8px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 8, boxSizing: 'border-box' },
   confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
   modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'hidden', overflowX: 'hidden', display: 'flex', flexDirection: 'column' },
