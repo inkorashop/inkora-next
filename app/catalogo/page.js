@@ -1381,22 +1381,27 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       {(() => {
                         const tags = Array.isArray(activeProduct?.info_tags) ? activeProduct.info_tags : [];
                         if (tags.length === 0) return null;
-                        const first = tags[0];
                         return (
-                          <div
-                            style={{position:'absolute', bottom:6, right:6, display:'flex', alignItems:'center', gap:4, background: first.color ? first.color : 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:6, padding:'3px 8px', cursor:'pointer', zIndex:10, maxWidth:'85%'}}
-                            onClick={e => {
-                              e.stopPropagation();
-                              if (infoTagsPopup?.designId === d.id) {
-                                setInfoTagsPopup(null);
-                              } else {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
-                              }
-                            }}
-                          >
-                            <span style={{fontSize:10, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{first.title}</span>
-                            <span style={{fontSize:13, color:'rgba(255,255,255,0.85)', lineHeight:1, flexShrink:0, fontWeight:700}}>+</span>
+                          <div style={{position:'absolute', bottom:6, right:6, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, zIndex:10}}>
+                            {tags.map(tag => (
+                              <div key={tag.id} style={{display:'flex', alignItems:'center', gap:3, background: tag.color || 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', maxWidth:90}}>
+                                <span style={{fontSize:9, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{tag.title}</span>
+                              </div>
+                            ))}
+                            <div
+                              style={{background:'rgba(17,32,64,0.60)', backdropFilter:'blur(4px)', borderRadius:4, padding:'1px 8px', cursor:'pointer', marginTop:1}}
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (infoTagsPopup?.designId === d.id) {
+                                  setInfoTagsPopup(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
+                                }
+                              }}
+                            >
+                              <span style={{fontSize:13, fontWeight:700, color:'white', lineHeight:1}}>+</span>
+                            </div>
                           </div>
                         );
                       })()}
@@ -1597,8 +1602,6 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     <span>Total</span>
                     <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                   </div>
-                  <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
-                    placeholder="Notas adicionales..." rows={2} />
                   <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
                     disabled={cartItems.length === 0} onClick={openModal}>
                     Confirmar pedido →
@@ -1678,8 +1681,6 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 <span>Total</span>
                 <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
               </div>
-              <textarea style={s.notes} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Notas adicionales..." rows={2} />
               <button
                 style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
                 disabled={cartItems.length === 0}
@@ -1736,16 +1737,16 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
                     <div style={s.formGroup}>
                       <label style={s.label}>Nombre *</label>
-                      <input style={s.input} value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Tu nombre" />
+                      <input style={{...s.input, ...(user ? {background:'#f7f8fc', color:'#5a6380', cursor:'default'} : {})}} value={form.name} onChange={e => !user && setForm({...form, name: e.target.value})} readOnly={!!user} placeholder="Tu nombre" />
                     </div>
                     <div style={s.formGroup}>
                       <label style={s.label}>Telefono *</label>
-                      <input style={s.input} type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} placeholder="3764000000" />
+                      <input style={{...s.input, ...(user ? {background:'#f7f8fc', color:'#5a6380', cursor:'default'} : {})}} type="tel" inputMode="numeric" value={form.phone} onChange={e => !user && setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} readOnly={!!user} placeholder="3764000000" />
                     </div>
                   </div>
                   <div style={s.formGroup}>
                     <label style={s.label}>Email *</label>
-                    <input style={s.input} value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="tu@email.com" />
+                    <input style={{...s.input, ...(user ? {background:'#f7f8fc', color:'#5a6380', cursor:'default'} : {})}} value={form.email} onChange={e => !user && setForm({...form, email: e.target.value})} readOnly={!!user} placeholder="tu@email.com" />
                   </div>
                   <div style={s.orderSummary}>
                     {cartItems.map(i => (
@@ -1764,7 +1765,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
                     </div>
                   </div>
-                  <div style={{...s.modalActions, position:'sticky', bottom:0, background:'white', paddingTop:12, marginTop:8, borderTop:'1.5px solid #eef0f6', marginLeft:-24, marginRight:-24, paddingLeft:24, paddingRight:24, paddingBottom:24}}>
+                  <textarea style={{...s.notes, marginTop:8}} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notas adicionales..." rows={2} />
+                  <div style={{...s.modalActions, position:'sticky', bottom:0, background:'white', paddingTop:10, marginTop:4, borderTop:'1.5px solid #eef0f6', marginLeft:-16, marginRight:-16, paddingLeft:16, paddingRight:16, paddingBottom:16}}>
                     <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
                     <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
                       {loading ? 'Enviando...' : 'Enviar pedido'}
@@ -1909,12 +1911,12 @@ const styles = {
   totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontWeight: 700, color: '#1B2F5E', fontSize: 15 },
   totalAmount: { fontSize: 17, fontWeight: 700 },
   notes: { width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '8px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, resize: 'none', marginBottom: 8, boxSizing: 'border-box' },
-  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
+  confirmBtn: { width: '100%', background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 10, padding: '8px 13px', fontSize: 15, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
   modal: { background: 'white', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'hidden', overflowX: 'hidden', display: 'flex', flexDirection: 'column' },
   modalHeader: { background: '#1B2F5E', color: 'white', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700, fontSize: 16 },
   closeBtn: { background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 14 },
-  modalBody: { padding: '12px 16px', overflowY: 'auto', flex: 1 },
+  modalBody: { padding: '12px 16px', overflowY: 'auto', overflowX: 'hidden', flex: 1 },
   codeBanner: { background: '#e8eef9', border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 12px', textAlign: 'center', marginBottom: 8, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   codeLabel: { fontSize: 10, color: '#2D6BE4', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap' },
   codeValue: { fontSize: 18, fontWeight: 700, color: '#1B2F5E', letterSpacing: 2 },
