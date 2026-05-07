@@ -43,6 +43,13 @@ The content is organized as follows:
 .claude/settings.local.json
 .eslintrc.json
 .gitignore
+.vs/inkora-next.slnx/FileContentIndex/646baba6-7625-45b8-b2ee-d1947b3d6181.vsidx
+.vs/inkora-next.slnx/v18/.wsuo
+.vs/inkora-next.slnx/v18/DocumentLayout.json
+.vs/inkora-next/CopilotIndices/18.5.39187.10602/CodeChunks.db
+.vs/inkora-next/CopilotIndices/18.5.39187.10602/SemanticSymbols.db
+.vs/slnx.sqlite
+.vs/VSWorkspaceState.json
 app/admin/[tab]/page.js
 app/admin/[tab]/robots.txt
 app/admin/page.js
@@ -90,6 +97,15 @@ sql/production_rls_policies.sql
 sql/setup.sql
 sql/user_activity_events.sql
 sql/user_product_price_scales.sql
+supabase/.temp/cli-latest
+supabase/.temp/gotrue-version
+supabase/.temp/linked-project.json
+supabase/.temp/pooler-url
+supabase/.temp/postgres-version
+supabase/.temp/project-ref
+supabase/.temp/rest-version
+supabase/.temp/storage-migration
+supabase/.temp/storage-version
 </directory_structure>
 
 <files>
@@ -156,6 +172,41 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+</file>
+
+<file path=".vs/inkora-next.slnx/v18/DocumentLayout.json">
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Franco\\Desktop\\inkora-next\\",
+  "Documents": [],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+</file>
+
+<file path=".vs/VSWorkspaceState.json">
+{
+  "ExpandedNodes": [
+    ""
+  ],
+  "PreviewInSolutionExplorer": false
+}
 </file>
 
 <file path="app/admin/[tab]/page.js">
@@ -1458,28 +1509,111 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
 ## Supabase
 - URL: https://ylawwaoznxzxwetlkjel.supabase.co
-- Bucket storage: assets (carpetas: thumbnails, models)
-- Tabla designs tiene columna model_url (nullable) para archivos GLB
+- Project ID: ylawwaoznxzxwetlkjel
+- Bucket storage: assets
+- Carpetas principales del bucket: thumbnails, models
+- Tabla designs tiene columna model_url nullable para archivos GLB
 
 ## WhatsApp
 - Número: 5493765211017
 
 ## Deploy
-- git add . && git commit -m "mensaje" && git push
-- Vercel detecta el push y deploya automáticamente
-- Antes de pushear: CI=true npm run build
+- Vercel detecta los push a GitHub y despliega automáticamente.
+- Antes de pushear cambios importantes, ejecutar: CI=true npm run build
+- Flujo sugerido: git status, git add ., git commit -m "mensaje", git push
 
 ## Tablas principales Supabase
-- products, designs, orders, localities, price_tiers, profiles, admins, carts
+- products
+- designs
+- orders
+- localities
+- price_tiers
+- profiles
+- admins
+- carts
+- settings
+- sellers
+- user_product_localities
+- production_stock
+- production_status
+- production_stock_log
+- admin_activity_events
+- admin_version_snapshots
+- user_activity_events
+- user_presence
+- admin_presence
 
 ## Notas importantes
-- Google OAuth configurado en Supabase
-- Admin usa tabla "admins" para verificar acceso
-- Precios escalonados por localidad en price_tiers
-- "Sin localidad" es una localidad real en la tabla localities
-- Visor 3D implementado con Three.js (componente ModelViewer) para diseños con model_url
-- Productos con allow_glb=true permiten subir archivos GLB en lugar de imagen
-- Emails via Resend: al confirmar pedido se envían dos emails automáticos (confirmación al cliente + notificación a INKORA con CSV adjunto)
+- Google OAuth configurado en Supabase.
+- Admin usa tabla admins para verificar acceso.
+- Precios escalonados por localidad en price_tiers.
+- "Sin localidad" es una localidad real en la tabla localities.
+- Visor 3D implementado con Three.js usando el componente ModelViewer.
+- Productos con allow_glb=true permiten subir archivos GLB en lugar de imagen.
+- Emails vía Resend: al confirmar pedido se envían dos emails automáticos: confirmación al cliente y notificación a INKORA con CSV adjunto.
+
+## Variantes de productos
+- Existe soporte para variantes de productos.
+- La lógica relacionada está documentada en sql/product_variants.sql.
+- En catálogo, las variantes se muestran como tabs/botones simples, separados visualmente de las categorías.
+- Las variantes no deben confundirse con categorías.
+- Las variantes representan presentaciones o versiones de un mismo producto.
+
+## Escalas de precio por cliente y producto
+- Existe soporte para asignar una localidad/escala de precio específica por cliente y producto.
+- La tabla usada para esto es user_product_localities.
+- El script relacionado está en sql/user_product_price_scales.sql.
+- Si un cliente tiene una asignación específica para un producto, se usa esa localidad/escala para calcular el precio.
+- Si no tiene asignación específica, se mantiene el comportamiento normal del sistema.
+- Esta lógica no debe romper el uso general de price_tiers.
+
+## Realtime / Admin
+- Hay scripts SQL relacionados con realtime y actividad admin: sql/admin_realtime.sql, sql/admin_activity_events.sql, sql/admin_version_snapshots.sql y sql/user_activity_events.sql.
+- El panel admin puede tener varias sesiones abiertas.
+- Los cambios importantes deben intentar mantenerse sincronizados entre sesiones cuando corresponda.
+- No agregar tablas a realtime sin revisar si realmente hace falta.
+
+## Backup antes de ERP / cambios grandes
+- Se realizó un backup general antes de avanzar con el ERP y cambios importantes.
+- Ubicación local del backup: C:\Users\Franco\Desktop\BACKUP_ANTES_ERP
+- Copia local completa del proyecto: 01_codigo/inkora-next
+- Dump SQL de Supabase: 03_supabase/supabase_web_backup.sql
+- Copia de scripts SQL del proyecto: 03_supabase/sql_del_proyecto
+- Variables de entorno de Vercel: 04_vercel/.env.vercel.backup
+- Resumen general: RESUMEN_GENERAL_BACKUP.txt
+- La carpeta de backup debe quedar fuera del proyecto inkora-next.
+- No subir backups, dumps SQL ni variables de entorno al repo.
+- No compartir .env.vercel.backup ni dumps con IA si contienen datos reales o claves.
+- Repomix sirve como contexto de código, pero no reemplaza este backup.
+
+## Seguridad
+- No subir claves, tokens ni variables sensibles al repo.
+- No subir .env reales.
+- No subir .env.vercel.backup.
+- No subir backups SQL con datos reales.
+- No subir dumps de Supabase.
+- No subir carpetas de backup.
+- No pegar secrets en chats de IA.
+- No exponer service_role en frontend.
+- No usar claves sensibles en componentes client-side.
+- Validar especialmente cambios en Auth, RLS, funciones SQL y policies antes de ejecutar en Supabase.
+
+## Repomix
+- Repomix sirve para generar una foto del código para IA.
+- No editar el archivo Repomix manualmente.
+- Primero actualizar archivos reales del repo.
+- Luego generar un nuevo Repomix.
+- Verificar que Repomix no incluya backups, dumps, .env, variables ni archivos sensibles.
+- Repomix sirve como contexto para IA, pero no reemplaza el backup real del proyecto.
+
+## Recomendación antes de cambios importantes
+- Ejecutar build: CI=true npm run build
+- Revisar Git: git status
+- Confirmar que no se van a commitear archivos sensibles.
+- Confirmar que el backup sigue fuera del proyecto.
+- Hacer commit claro.
+- Pushear a GitHub.
+- Verificar deploy en Vercel.
 </file>
 
 <file path="jsconfig.json">
@@ -1708,228 +1842,40 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 </file>
 
-<file path="sql/setup.sql">
--- ============================================================
--- INKORA — Setup SQL
--- Ejecutar en Supabase SQL Editor
--- ============================================================
-
--- ── LOCALIDADES ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS localities (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name             text NOT NULL,
-  price_per_unit   integer NOT NULL DEFAULT 500,
-  active           boolean NOT NULL DEFAULT true,
-  created_at       timestamptz DEFAULT now()
-);
-
-ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
-
--- Cualquiera puede leer localidades activas
-CREATE POLICY "public_read_localities"
-  ON localities FOR SELECT
-  USING (active = true);
-
--- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
-CREATE POLICY "admin_all_localities"
-  ON localities FOR ALL
-  USING (true)
-  WITH CHECK (true);
-
-
--- ── PERFILES ─────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS profiles (
-  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email         text,
-  name          text,
-  locality_id   uuid REFERENCES localities(id),
-  created_at    timestamptz DEFAULT now()
-);
-
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-
--- Cada usuario solo ve y edita su propio perfil
-CREATE POLICY "users_select_own_profile"
-  ON profiles FOR SELECT
-  USING (auth.uid() = id);
-
-CREATE POLICY "users_insert_own_profile"
-  ON profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "users_update_own_profile"
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id);
-
-
--- ── TRIGGER: crear perfil al registrarse ─────────────────────
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, name)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
-  );
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
-
--- ── RPC ADMIN: listar todos los perfiles ─────────────────────
--- SECURITY DEFINER permite que el anon key llame esta función
--- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
-CREATE OR REPLACE FUNCTION admin_get_profiles()
-RETURNS TABLE (
-  id           uuid,
-  email        text,
-  name         text,
-  locality_id  uuid,
-  locality_name text,
-  created_at   timestamptz
-)
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT
-    p.id,
-    p.email,
-    p.name,
-    p.locality_id,
-    l.name AS locality_name,
-    p.created_at
-  FROM profiles p
-  LEFT JOIN localities l ON p.locality_id = l.id
-  ORDER BY p.created_at DESC;
-$$;
-
-
--- ── RPC ADMIN: asignar localidad a usuario ───────────────────
-CREATE OR REPLACE FUNCTION admin_update_user_locality(
-  p_user_id    uuid,
-  p_locality_id uuid
-)
-RETURNS void
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  UPDATE profiles
-  SET locality_id = p_locality_id
-  WHERE id = p_user_id;
-$$;
+<file path="supabase/.temp/cli-latest">
+v2.98.1
 </file>
 
-<file path="sql/user_product_price_scales.sql">
--- INKORA - Asignacion de escalas de precio por cliente y producto
--- Ejecutar en Supabase SQL Editor.
+<file path="supabase/.temp/gotrue-version">
+v2.189.0
+</file>
 
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.admins
-    WHERE email = auth.jwt() ->> 'email'
-  );
-$$;
+<file path="supabase/.temp/linked-project.json">
+{"ref":"ylawwaoznxzxwetlkjel","name":"inkora","organization_id":"xrskxcxwsotegknaihbn","organization_slug":"xrskxcxwsotegknaihbn"}
+</file>
 
-GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+<file path="supabase/.temp/pooler-url">
+postgresql://postgres.ylawwaoznxzxwetlkjel@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+</file>
 
-CREATE TABLE IF NOT EXISTS public.user_product_localities (
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-  locality_id uuid NOT NULL REFERENCES public.localities(id) ON DELETE RESTRICT,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  PRIMARY KEY (user_id, product_id)
-);
+<file path="supabase/.temp/postgres-version">
+17.6.1.104
+</file>
 
-CREATE INDEX IF NOT EXISTS user_product_localities_user_id_idx
-  ON public.user_product_localities (user_id);
+<file path="supabase/.temp/project-ref">
+ylawwaoznxzxwetlkjel
+</file>
 
-CREATE INDEX IF NOT EXISTS user_product_localities_product_id_idx
-  ON public.user_product_localities (product_id);
+<file path="supabase/.temp/rest-version">
+v14.5
+</file>
 
-CREATE INDEX IF NOT EXISTS user_product_localities_locality_id_idx
-  ON public.user_product_localities (locality_id);
+<file path="supabase/.temp/storage-migration">
+optimize-existing-functions-again
+</file>
 
-ALTER TABLE public.user_product_localities ENABLE ROW LEVEL SECURITY;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_product_localities TO authenticated;
-
-DROP POLICY IF EXISTS "users_read_own_product_localities" ON public.user_product_localities;
-DROP POLICY IF EXISTS "admins_read_user_product_localities" ON public.user_product_localities;
-DROP POLICY IF EXISTS "admins_insert_user_product_localities" ON public.user_product_localities;
-DROP POLICY IF EXISTS "admins_update_user_product_localities" ON public.user_product_localities;
-DROP POLICY IF EXISTS "admins_delete_user_product_localities" ON public.user_product_localities;
-
-CREATE POLICY "users_read_own_product_localities"
-  ON public.user_product_localities FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "admins_read_user_product_localities"
-  ON public.user_product_localities FOR SELECT
-  USING (public.is_admin());
-
-CREATE POLICY "admins_insert_user_product_localities"
-  ON public.user_product_localities FOR INSERT
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "admins_update_user_product_localities"
-  ON public.user_product_localities FOR UPDATE
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "admins_delete_user_product_localities"
-  ON public.user_product_localities FOR DELETE
-  USING (public.is_admin());
-
-CREATE OR REPLACE FUNCTION public.touch_user_product_localities_updated_at()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS touch_user_product_localities_updated_at ON public.user_product_localities;
-CREATE TRIGGER touch_user_product_localities_updated_at
-  BEFORE UPDATE ON public.user_product_localities
-  FOR EACH ROW EXECUTE PROCEDURE public.touch_user_product_localities_updated_at();
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_publication
-    WHERE pubname = 'supabase_realtime'
-  ) THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_product_localities;
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Tabla public.user_product_localities ya estaba en supabase_realtime.';
-  END;
-END $$;
+<file path="supabase/.temp/storage-version">
+v1.58.1
 </file>
 
 <file path="app/api/presence/route.js">
@@ -2918,6 +2864,137 @@ CREATE POLICY "admins_delete_production_stock_log"
   USING (public.is_admin());
 </file>
 
+<file path="sql/setup.sql">
+-- ============================================================
+-- INKORA — Setup SQL
+-- Ejecutar en Supabase SQL Editor
+-- ============================================================
+
+-- ── LOCALIDADES ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS localities (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text NOT NULL,
+  price_per_unit   integer NOT NULL DEFAULT 500,
+  active           boolean NOT NULL DEFAULT true,
+  sort_order       integer,
+  seller_id        uuid,
+  created_at       timestamptz DEFAULT now()
+);
+
+ALTER TABLE localities ENABLE ROW LEVEL SECURITY;
+
+-- Cualquiera puede leer localidades activas
+DROP POLICY IF EXISTS "public_read_localities" ON localities;
+CREATE POLICY "public_read_localities"
+  ON localities FOR SELECT
+  USING (active = true);
+
+-- Admin puede gestionar localidades (anon key, panel protegido por contraseña)
+DROP POLICY IF EXISTS "admin_all_localities" ON localities;
+CREATE POLICY "admin_all_localities"
+  ON localities FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+
+-- ── PERFILES ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS profiles (
+  id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         text,
+  name          text,
+  locality_id   uuid REFERENCES localities(id),
+  created_at    timestamptz DEFAULT now()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Cada usuario solo ve y edita su propio perfil
+DROP POLICY IF EXISTS "users_select_own_profile" ON profiles;
+CREATE POLICY "users_select_own_profile"
+  ON profiles FOR SELECT
+  USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "users_insert_own_profile" ON profiles;
+CREATE POLICY "users_insert_own_profile"
+  ON profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "users_update_own_profile" ON profiles;
+CREATE POLICY "users_update_own_profile"
+  ON profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+
+-- ── TRIGGER: crear perfil al registrarse ─────────────────────
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1))
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+
+-- ── RPC ADMIN: listar todos los perfiles ─────────────────────
+-- SECURITY DEFINER permite que el anon key llame esta función
+-- sin que los usuarios puedan hacer SELECT directo en profiles ajenos
+DROP FUNCTION IF EXISTS admin_get_profiles();
+CREATE OR REPLACE FUNCTION admin_get_profiles()
+RETURNS TABLE (
+  id           uuid,
+  email        text,
+  name         text,
+  locality_id  uuid,
+  locality_name text,
+  created_at   timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    p.id,
+    p.email,
+    p.name,
+    p.locality_id,
+    l.name AS locality_name,
+    p.created_at
+  FROM profiles p
+  LEFT JOIN localities l ON p.locality_id = l.id
+  ORDER BY p.created_at DESC;
+$$;
+
+
+-- ── RPC ADMIN: asignar localidad a usuario ───────────────────
+DROP FUNCTION IF EXISTS admin_update_user_locality(uuid, uuid);
+CREATE OR REPLACE FUNCTION admin_update_user_locality(
+  p_user_id    uuid,
+  p_locality_id uuid
+)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE profiles
+  SET locality_id = p_locality_id
+  WHERE id = p_user_id;
+$$;
+</file>
+
 <file path="hooks/useTrack.js">
 'use client';
 import { useCallback, useEffect, useRef } from 'react';
@@ -3169,6 +3246,140 @@ CREATE POLICY "Admins can read activity"
 CREATE POLICY "Admins can delete activity"
   ON public.user_activity_events FOR DELETE
   USING (public.is_admin());
+</file>
+
+<file path="sql/user_product_price_scales.sql">
+-- INKORA - Asignacion de escalas de precio por cliente y producto
+-- Ejecutar en Supabase SQL Editor.
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.admins
+    WHERE email = auth.jwt() ->> 'email'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
+ALTER TABLE public.localities
+  ADD COLUMN IF NOT EXISTS sort_order integer,
+  ADD COLUMN IF NOT EXISTS seller_id uuid REFERENCES public.sellers(id) ON DELETE SET NULL;
+
+UPDATE public.localities
+SET sort_order = ordered.row_num - 1
+FROM (
+  SELECT id, row_number() OVER (ORDER BY sort_order NULLS LAST, created_at, id) AS row_num
+  FROM public.localities
+) AS ordered
+WHERE public.localities.id = ordered.id
+  AND public.localities.sort_order IS NULL;
+
+CREATE INDEX IF NOT EXISTS localities_sort_order_idx
+  ON public.localities (sort_order);
+
+CREATE INDEX IF NOT EXISTS localities_seller_id_idx
+  ON public.localities (seller_id);
+
+CREATE OR REPLACE FUNCTION public.admin_clear_profiles_locality(p_locality_id uuid)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.profiles
+  SET locality_id = NULL
+  WHERE locality_id = p_locality_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_clear_profiles_locality(uuid) TO authenticated;
+
+CREATE TABLE IF NOT EXISTS public.user_product_localities (
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  locality_id uuid NOT NULL REFERENCES public.localities(id) ON DELETE RESTRICT,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_user_id_idx
+  ON public.user_product_localities (user_id);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_product_id_idx
+  ON public.user_product_localities (product_id);
+
+CREATE INDEX IF NOT EXISTS user_product_localities_locality_id_idx
+  ON public.user_product_localities (locality_id);
+
+ALTER TABLE public.user_product_localities ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_product_localities TO authenticated;
+
+DROP POLICY IF EXISTS "users_read_own_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_read_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_insert_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_update_user_product_localities" ON public.user_product_localities;
+DROP POLICY IF EXISTS "admins_delete_user_product_localities" ON public.user_product_localities;
+
+CREATE POLICY "users_read_own_product_localities"
+  ON public.user_product_localities FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "admins_read_user_product_localities"
+  ON public.user_product_localities FOR SELECT
+  USING (public.is_admin());
+
+CREATE POLICY "admins_insert_user_product_localities"
+  ON public.user_product_localities FOR INSERT
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_update_user_product_localities"
+  ON public.user_product_localities FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_delete_user_product_localities"
+  ON public.user_product_localities FOR DELETE
+  USING (public.is_admin());
+
+CREATE OR REPLACE FUNCTION public.touch_user_product_localities_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS touch_user_product_localities_updated_at ON public.user_product_localities;
+CREATE TRIGGER touch_user_product_localities_updated_at
+  BEFORE UPDATE ON public.user_product_localities
+  FOR EACH ROW EXECUTE PROCEDURE public.touch_user_product_localities_updated_at();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication
+    WHERE pubname = 'supabase_realtime'
+  ) THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_product_localities;
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Tabla public.user_product_localities ya estaba en supabase_realtime.';
+  END;
+END $$;
 </file>
 
 <file path="sql/admin_realtime.sql">
@@ -6451,7 +6662,8 @@ import ProductionTab from '@/components/ProductionTab';
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history'];
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -6590,7 +6802,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', localities: 'escalas', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -6614,11 +6826,11 @@ export default function Admin() {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
         const parsed = JSON.parse(saved);
-        const all = ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
-        if (Array.isArray(parsed) && parsed.length === all.length && all.every(t => parsed.includes(t))) return parsed;
+        const filtered = parsed.filter(t => ADMIN_TABS.includes(t));
+        if (Array.isArray(parsed) && ADMIN_TABS.every(t => filtered.includes(t))) return filtered;
       }
     } catch {}
-    return ['products','designs','orders','localities','users','sellers','admins','config','tracking','production','version_history'];
+    return ADMIN_TABS;
   });
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
@@ -6677,6 +6889,8 @@ export default function Admin() {
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
+  const [scaleSellerFilter, setScaleSellerFilter] = useState('all');
+  const [allScalesModalOpen, setAllScalesModalOpen] = useState(false);
 
   // Localities
   const [localities, setLocalities] = useState([]);
@@ -6698,7 +6912,7 @@ export default function Admin() {
 
   // Orders
   const [orders, setOrders] = useState([]);
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
@@ -6740,7 +6954,7 @@ export default function Admin() {
   const autoSnapshotSavingRef = useRef(false);
 
   useEffect(() => {
-    if (!productManageModal) return;
+    if (!productManageModal && !allScalesModalOpen) return;
     const originalOverflow = document.body.style.overflow;
     const originalPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -6753,13 +6967,7 @@ export default function Admin() {
       document.body.style.overflow = originalOverflow;
       document.body.style.paddingRight = originalPaddingRight;
     };
-  }, [productManageModal]);
-
-  useEffect(() => {
-    if ((settings.products_management_mode || 'table_modal') !== 'table_modal') {
-      setProductManageModal(null);
-    }
-  }, [settings.products_management_mode]);
+  }, [productManageModal, allScalesModalOpen]);
 
   useEffect(() => {
     if (!versionSnapshotViewer.open) return;
@@ -7728,6 +7936,65 @@ export default function Admin() {
     if (data) setLocalities(data);
   }
 
+  function orderedLocalities(list = localities) {
+    return [...list].sort((a, b) => {
+      const ao = a.sort_order ?? 999999;
+      const bo = b.sort_order ?? 999999;
+      if (ao !== bo) return ao - bo;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    });
+  }
+
+  function filteredLocalities(list = localities) {
+    const active = orderedLocalities(list).filter(l => l.active);
+    if (scaleSellerFilter === 'all') return active;
+    if (scaleSellerFilter === 'none') return active.filter(l => !l.seller_id);
+    return active.filter(l => l.seller_id === scaleSellerFilter);
+  }
+
+  function sellerName(id) {
+    if (!id) return 'Sin vendedor';
+    return sellers.find(s => s.id === id)?.name || 'Vendedor';
+  }
+
+  function adminPreferenceKey(baseKey) {
+    const safeEmail = String(currentUser || 'anon').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return `${baseKey}_${safeEmail || 'anon'}`;
+  }
+
+  function scaleSellerFilterSettingKey() {
+    return settings.admin_scale_seller_filter_individual !== 'false'
+      ? adminPreferenceKey('admin_scale_seller_filter')
+      : 'admin_scale_seller_filter_global';
+  }
+
+  useEffect(() => {
+    const key = scaleSellerFilterSettingKey();
+    const next = settings[key] || settings.admin_scale_seller_filter_global || 'all';
+    if (next !== scaleSellerFilter) setScaleSellerFilter(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, settings]);
+
+  async function updateScaleSellerFilter(value) {
+    setScaleSellerFilter(value);
+    await saveSetting(scaleSellerFilterSettingKey(), value);
+  }
+
+  function renderScaleSellerFilter() {
+    return (
+      <select
+        value={scaleSellerFilter}
+        onChange={e => updateScaleSellerFilter(e.target.value)}
+        onKeyUp={e => e.stopPropagation()}
+        style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 9px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', background:'white'}}
+      >
+        <option value="all">Todos los vendedores</option>
+        <option value="none">Sin vendedor</option>
+        {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+      </select>
+    );
+  }
+
   function handleLocalityDragStart(e, id) {
     localityDragSrcIdRef.current = id;
     setDraggingLocalityId(id);
@@ -7748,10 +8015,10 @@ export default function Admin() {
     const srcId = localityDragSrcIdRef.current;
     localityDragSrcIdRef.current = null;
     if (!srcId || srcId === targetId) return;
-    const srcIdx = localities.findIndex(l => l.id === srcId);
-    const tgtIdx = localities.findIndex(l => l.id === targetId);
+    const reordered = orderedLocalities(localities);
+    const srcIdx = reordered.findIndex(l => l.id === srcId);
+    const tgtIdx = reordered.findIndex(l => l.id === targetId);
     if (srcIdx === -1 || tgtIdx === -1) return;
-    const reordered = [...localities];
     const [removed] = reordered.splice(srcIdx, 1);
     reordered.splice(tgtIdx, 0, removed);
     await Promise.all(reordered.map((l, i) => supabase.from('localities').update({ sort_order: i }).eq('id', l.id)));
@@ -7778,7 +8045,9 @@ export default function Admin() {
     const name = (newScaleNames[productId] || '').trim();
     if (!name) return;
     setSavingLocality(true);
-    const { data, error } = await supabase.from('localities').insert({ name, active: true }).select('*').single();
+    const nextOrder = localities.reduce((max, l) => Math.max(max, Number(l.sort_order) || 0), -1) + 1;
+    const sellerId = scaleSellerFilter !== 'all' && scaleSellerFilter !== 'none' ? scaleSellerFilter : null;
+    const { data, error } = await supabase.from('localities').insert({ name, active: true, sort_order: nextOrder, seller_id: sellerId }).select('*').single();
     if (error) {
       console.error('Error creating scale', error);
       alert('No se pudo crear la escala.');
@@ -7786,7 +8055,7 @@ export default function Admin() {
       setLocalities(prev => [...prev, data]);
       setNewScaleNames(prev => ({ ...prev, [productId]: '' }));
       const product = products.find(p => p.id === productId);
-      trackAdminActivity('locality_create_from_product', { locality_id: data.id, locality_name: name, product_id: productId, product_name: product?.name }, 'localities');
+      trackAdminActivity('locality_create_from_product', { locality_id: data.id, locality_name: name, product_id: productId, product_name: product?.name, seller_id: sellerId }, 'localities');
     }
     setSavingLocality(false);
     loadLocalities();
@@ -7800,13 +8069,24 @@ export default function Admin() {
   }
 
   function deleteLocality(id) {
-    askConfirm('¿Seguro que querés eliminar esta localidad? Se eliminarán también todas sus escalas de precio.', async () => {
+    askConfirm('¿Seguro que querés eliminar esta escala? Se eliminarán sus precios en todos los productos y sus asignaciones a clientes.', async () => {
       const locality = localities.find(l => l.id === id);
+      await supabase.rpc('admin_clear_profiles_locality', { p_locality_id: id });
+      await supabase.from('user_product_localities').delete().eq('locality_id', id);
       await supabase.from('price_tiers').delete().eq('locality_id', id);
       await supabase.from('localities').delete().eq('id', id);
       trackAdminActivity('locality_delete', { locality_id: id, locality_name: locality?.name }, 'localities');
       loadLocalities(); loadPriceTiers();
     });
+  }
+
+  async function updateScaleSeller(localityId, sellerId) {
+    const value = sellerId || null;
+    await supabase.from('localities').update({ seller_id: value }).eq('id', localityId);
+    const locality = localities.find(l => l.id === localityId);
+    const seller = sellers.find(s => s.id === value);
+    trackAdminActivity('locality_seller_update', { locality_id: localityId, locality_name: locality?.name, seller_id: value, seller_name: seller?.name || null }, 'localities');
+    setLocalities(prev => prev.map(l => l.id === localityId ? { ...l, seller_id: value } : l));
   }
 
   // ── Users ──
@@ -8341,7 +8621,7 @@ export default function Admin() {
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
   const s = styles;
-  const useProductManagementModals = (settings.products_management_mode || 'table_modal') === 'table_modal';
+  const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
     : null;
@@ -8396,7 +8676,7 @@ export default function Admin() {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -9794,21 +10074,33 @@ export default function Admin() {
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
                 <div>
                   <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Edición de categorías y escalas</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Elegí si se administran desde la tabla de productos o en las secciones separadas.</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Las escalas se administran desde los popups de cada producto.</div>
                 </div>
-                <div style={{display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end'}}>
-                  <button
-                    onClick={() => saveSetting('products_management_mode', 'table_modal')}
-                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: useProductManagementModals ? '#1B2F5E' : 'white', color: useProductManagementModals ? 'white' : '#5a6380'}}
+                <span style={{padding:'5px 10px', borderRadius:7, background:'#eef4ff', color:'#1B2F5E', fontSize:12, fontWeight:700}}>Popups activos</span>
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Preferencias del admin</h2>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Filtro de vendedor en escalas</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>
+                    {settings.admin_scale_seller_filter_individual !== 'false'
+                      ? 'Cada administrador conserva su filtro entre sesiones.'
+                      : 'El filtro que se elija aplica globalmente para todos los administradores.'}
+                  </div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <span style={{fontSize:11, color:'#9aa3bc', fontWeight:700, whiteSpace:'nowrap'}}>
+                    {settings.admin_scale_seller_filter_individual !== 'false' ? 'Individual' : 'Global'}
+                  </span>
+                  <div
+                    onClick={() => saveSetting('admin_scale_seller_filter_individual', settings.admin_scale_seller_filter_individual === 'false' ? 'true' : 'false')}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: settings.admin_scale_seller_filter_individual !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
                   >
-                    Tabla con popups
-                  </button>
-                  <button
-                    onClick={() => saveSetting('products_management_mode', 'advanced_sections')}
-                    style={{padding:'6px 14px', borderRadius:8, border:'1.5px solid #dde1ef', fontSize:12, fontWeight:600, cursor:'pointer', background: !useProductManagementModals ? '#1B2F5E' : 'white', color: !useProductManagementModals ? 'white' : '#5a6380'}}
-                  >
-                    Secciones separadas
-                  </button>
+                    <div style={{ position: 'absolute', top: 2, left: settings.admin_scale_seller_filter_individual !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -9818,7 +10110,7 @@ export default function Admin() {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', localities:'Escalas de precios', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -9997,6 +10289,95 @@ export default function Admin() {
         </div>
       )}
 
+      {/* MODAL GLOBAL DE ESCALAS */}
+      {allScalesModalOpen && (
+        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:310, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setAllScalesModalOpen(false)}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'20px 20px 18px', width:'100%', maxWidth:1180, height:'min(86vh, 820px)', overflow:'hidden', display:'flex', flexDirection:'column', gap:12}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+              <div>
+                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Todas las escalas</div>
+                <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>Vista compacta por escala y producto</div>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                {renderScaleSellerFilter()}
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setAllScalesModalOpen(false)}>×</button>
+              </div>
+            </div>
+
+            <div style={{overflow:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}}>
+              {filteredLocalities().length === 0 ? (
+                <p style={{...s.emptyMsg, padding:14}}>No hay escalas para este filtro.</p>
+              ) : filteredLocalities().map(locality => (
+                <div key={locality.id} style={{borderBottom:'1px solid #eef0f6'}}>
+                  <div
+                    draggable
+                    onDragStart={e => handleLocalityDragStart(e, locality.id)}
+                    onDragOver={e => handleLocalityDragOver(e, locality.id)}
+                    onDragLeave={handleLocalityDragLeave}
+                    onDrop={e => handleLocalityDrop(e, locality.id)}
+                    onDragEnd={handleLocalityDragEnd}
+                    style={{position:'sticky', left:0, zIndex:2, background: dragOverLocalityId === locality.id ? '#eef4ff' : '#f8faff', borderBottom:'1px solid #dde1ef', padding:'7px 10px', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab'}}
+                  >
+                    <span style={{color:'#b0b8d0', fontSize:14, lineHeight:1}}>⠿</span>
+                    <span style={{fontSize:12, fontWeight:800, color:'#1B2F5E', textTransform:'uppercase', letterSpacing:0.5}}>{locality.name}</span>
+                    <span style={{fontSize:11, color:'#9aa3bc'}}>{sellerName(locality.seller_id)}</span>
+                    <select
+                      value={locality.seller_id || ''}
+                      onChange={e => updateScaleSeller(locality.id, e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      onDragStart={e => e.stopPropagation()}
+                      style={{marginLeft:'auto', border:'1.5px solid #dde1ef', borderRadius:5, padding:'3px 7px', fontSize:11, color:'#2d3352', background:'white', fontFamily:'Barlow, sans-serif'}}
+                    >
+                      <option value="">Sin vendedor</option>
+                      {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+                    </select>
+                    <button
+                      title="Eliminar escala"
+                      onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
+                      onDragStart={e => e.stopPropagation()}
+                      style={{border:'1.5px solid #fecaca', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:24, height:24, lineHeight:1, cursor:'pointer', fontSize:14, fontWeight:800}}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div style={{display:'grid', gridTemplateColumns:`repeat(${Math.max(1, products.filter(p => p.active).length)}, minmax(190px, 1fr))`, minWidth: Math.max(1, products.filter(p => p.active).length) * 190}}>
+                    {products.filter(p => p.active).map(product => {
+                      const key = `${product.id}_${locality.id}`;
+                      const tiers = priceTiers
+                        .filter(t => t.product_id === product.id && t.locality_id === locality.id)
+                        .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                      const emptyRowIdx = tiers.length;
+                      return (
+                        <div key={key} style={{borderRight:'1px solid #eef0f6', padding:'8px 9px'}}>
+                          <div style={{fontSize:11, fontWeight:800, color:'#2d3352', marginBottom:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{productDisplayName(product)}</div>
+                          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 24px', gap:4, alignItems:'center'}}>
+                            {tiers.map((t, tierRowIdx) => {
+                              const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                              return (
+                                <React.Fragment key={t.id}>
+                                  <input ref={setTierCellRef(key, tierRowIdx, 0)} className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)} />
+                                  <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
+                                  <button title="Eliminar precio" style={{border:'none', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:22, height:22, cursor:'pointer', fontSize:12, fontWeight:800}} onClick={() => deleteScale(t.id)}>×</button>
+                                </React.Fragment>
+                              );
+                            })}
+                            <input ref={setTierCellRef(key, emptyRowIdx, 0)} className="tier-input" type="number" min="1" placeholder="Cant." value={nt.min_quantity} onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 0)} />
+                            <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="$" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 1)} />
+                            <span />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
@@ -10022,7 +10403,20 @@ export default function Admin() {
                 </div>
                 <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{modalProduct.name}</div>
               </div>
-              <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
+              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                {productManageModal.type === 'tiers' && (
+                  <>
+                    {renderScaleSellerFilter()}
+                    <button
+                      onClick={() => setAllScalesModalOpen(true)}
+                      style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontWeight:700, cursor:'pointer', background:'#f8faff', color:'#1B2F5E', fontFamily:'Barlow, sans-serif'}}
+                    >
+                      Mostrar todas las escalas
+                    </button>
+                  </>
+                )}
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setProductManageModal(null)}>×</button>
+              </div>
             </div>
 
             <div style={{overflowY:'auto', minHeight:0, flex:1, paddingRight:4, overscrollBehavior:'contain'}} onWheel={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
@@ -10099,23 +10493,12 @@ export default function Admin() {
 
             {productManageModal.type === 'tiers' && (() => {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
-              const activeLocalities = localities.filter(l => l.active);
+              const activeLocalities = filteredLocalities();
               const newScaleName = newScaleNames[modalProduct.id] || '';
 
               return (
                 <div style={{display:'flex', flexDirection:'column', gap:10}}>
-                  <div style={{display:'flex', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
-                    <input
-                      style={{...s.tblInput, flex:1, padding:'6px 9px', fontSize:12}}
-                      placeholder="Nueva escala para este producto..."
-                      value={newScaleName}
-                      onChange={e => setNewScaleNames(prev => ({...prev, [modalProduct.id]: e.target.value}))}
-                      onKeyDown={e => { if (e.key === 'Enter') addScaleFromProduct(modalProduct.id); }}
-                      onKeyUp={e => e.stopPropagation()}
-                    />
-                    <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
-                  </div>
-                  {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera arriba.</p> : (
+                  {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera abajo.</p> : (
                   <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
                     <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
                       <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.7}}>Cantidad</div>
@@ -10133,7 +10516,37 @@ export default function Admin() {
 
                     return (
                       <div key={key} style={{borderTop: li > 0 ? '1px solid #f0f2f8' : 'none'}}>
-                        <div style={{background:'linear-gradient(90deg, #1B2F5E, #2D6BE4)', color:'white', padding:'7px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, textAlign:'center', textTransform:'uppercase', borderBottom:'1px solid #dde1ef'}}>{locality.name}</div>
+                        <div
+                          draggable
+                          onDragStart={e => handleLocalityDragStart(e, locality.id)}
+                          onDragOver={e => handleLocalityDragOver(e, locality.id)}
+                          onDragLeave={handleLocalityDragLeave}
+                          onDrop={e => handleLocalityDrop(e, locality.id)}
+                          onDragEnd={handleLocalityDragEnd}
+                          style={{background: dragOverLocalityId === locality.id ? '#2D6BE4' : '#1B2F5E', color:'white', padding:'6px 8px 6px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, borderBottom:'1px solid #dde1ef', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab', opacity: draggingLocalityId === locality.id ? 0.45 : 1}}
+                        >
+                          <span style={{color:'rgba(255,255,255,0.55)', fontSize:13, lineHeight:1}}>⠿</span>
+                          <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                          <select
+                            value={locality.seller_id || ''}
+                            onChange={e => updateScaleSeller(locality.id, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            onDragStart={e => e.stopPropagation()}
+                            onKeyUp={e => e.stopPropagation()}
+                            style={{marginLeft:'auto', border:'1px solid rgba(255,255,255,0.35)', borderRadius:5, padding:'2px 6px', fontSize:10, fontWeight:700, color:'#1B2F5E', background:'white', maxWidth:140, fontFamily:'Barlow, sans-serif'}}
+                          >
+                            <option value="">Sin vendedor</option>
+                            {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+                          </select>
+                          <button
+                            title="Eliminar escala"
+                            onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
+                            onDragStart={e => e.stopPropagation()}
+                            style={{border:'1px solid rgba(255,255,255,0.35)', background:'rgba(255,255,255,0.14)', color:'white', borderRadius:5, width:22, height:22, lineHeight:1, cursor:'pointer', fontSize:13, fontWeight:800}}
+                          >
+                            ×
+                          </button>
+                        </div>
                         <table style={{width:'100%', borderCollapse:'collapse'}}>
                           <colgroup>
                             <col style={{width:'calc((100% - 36px) / 2)'}} />
@@ -10179,6 +10592,17 @@ export default function Admin() {
                     })}
                   </div>
                   )}
+                  <div style={{display:'flex', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
+                    <input
+                      style={{...s.tblInput, flex:1, padding:'6px 9px', fontSize:12}}
+                      placeholder="Nueva escala para este producto..."
+                      value={newScaleName}
+                      onChange={e => setNewScaleNames(prev => ({...prev, [modalProduct.id]: e.target.value}))}
+                      onKeyDown={e => { if (e.key === 'Enter') addScaleFromProduct(modalProduct.id); }}
+                      onKeyUp={e => e.stopPropagation()}
+                    />
+                    <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
+                  </div>
                 </div>
               );
             })()}

@@ -2059,8 +2059,10 @@ export default function Admin() {
                 <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1320 : 1160 }}>
                   <colgroup>
                     <col style={{width:42}} />
-                    <col style={{width:240}} />
-                    <col style={{width:260}} />
+                    <col style={{width:200}} />
+                    <col style={{width:220}} />
+                    {useProductManagementModals && <col style={{width:78}} />}
+                    {useProductManagementModals && <col style={{width:72}} />}
                     <col style={{width:70}} />
                     <col style={{width:70}} />
                     <col style={{width:72}} />
@@ -2071,8 +2073,6 @@ export default function Admin() {
                     <col style={{width:72}} />
                     <col style={{width:72}} />
                     <col style={{width:86}} />
-                    {useProductManagementModals && <col style={{width:78}} />}
-                    {useProductManagementModals && <col style={{width:72}} />}
                     <col style={{width:34}} />
                     <col style={{width:34}} />
                   </colgroup>
@@ -2081,6 +2081,8 @@ export default function Admin() {
                       <th style={s.th}>Ver</th>
                       <th style={s.th}>Producto</th>
                       <th style={s.th}>Variante</th>
+                      {useProductManagementModals && <th style={s.th}>Categorías</th>}
+                      {useProductManagementModals && <th style={s.th}>Escalas</th>}
                       <th style={s.th}>Cat PC</th>
                       <th style={s.th}>Cat Cel</th>
                       <th style={s.th}>Land PC</th>
@@ -2091,8 +2093,6 @@ export default function Admin() {
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Land KB</th>
                       <th style={s.th}>Img</th>
-                      {useProductManagementModals && <th style={s.th}>Categorías</th>}
-                      {useProductManagementModals && <th style={s.th}>Escalas</th>}
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -2118,10 +2118,10 @@ export default function Admin() {
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(0)} style={{...s.tblInput, minWidth:220}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
                           </td>
                           <td style={s.td}>
-                            <div style={{display:'flex', alignItems:'center', gap:6, minWidth:250}}>
+                            <div style={{display:'flex', alignItems:'center', gap:6, minWidth:210}}>
                               <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12}}>{isVariant ? '↳' : ''}</span>
                               <input style={{...s.tblInput, flex:'1 1 150px', minWidth:150, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
                               {!isVariant && (
@@ -2135,6 +2135,26 @@ export default function Admin() {
                               )}
                             </div>
                           </td>
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          )}
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
+                              >
+                                Editar
+                              </button>
+                            </td>
+                          )}
                           <td style={s.td}>
                             <input ref={setRef(1)} style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={form.card_width_desktop ?? 180} onChange={e => updateProductForm(p.id, 'card_width_desktop', parseInt(e.target.value)||180)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
                           </td>
@@ -2377,26 +2397,6 @@ export default function Admin() {
                               ) : null}
                             </div>
                           </td>
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
-                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
-                              >
-                                Editar
-                              </button>
-                            </td>
-                          )}
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
-                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
-                              >
-                                Editar
-                              </button>
-                            </td>
-                          )}
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
                           </td>
