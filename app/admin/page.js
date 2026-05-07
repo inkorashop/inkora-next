@@ -567,6 +567,7 @@ export default function Admin() {
   }, [screen, activeTab]);
 
   const realtimeTimersRef = useRef({});
+  const pendingSellerRef = useRef({});
   useEffect(() => {
     if (screen !== 'panel') return;
 
@@ -1443,7 +1444,14 @@ export default function Admin() {
   async function loadUsers() {
     setLoadingUsers(true);
     const { data } = await supabase.rpc('admin_get_profiles');
-    if (data) setUsers(data);
+    if (data) {
+      const pending = pendingSellerRef.current;
+      if (Object.keys(pending).length > 0) {
+        setUsers(data.map(u => u.id in pending ? { ...u, seller_id: pending[u.id] } : u));
+      } else {
+        setUsers(data);
+      }
+    }
     setLoadingUsers(false);
   }
 
@@ -1883,17 +1891,18 @@ export default function Admin() {
 
   async function updateUserSeller(userId, sellerId) {
     const normalizedSellerId = sellerId || null;
+    pendingSellerRef.current[userId] = normalizedSellerId;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
     const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: normalizedSellerId });
     if (error) {
       console.error('Error al guardar vendedor:', error);
+      delete pendingSellerRef.current[userId];
       loadUsers();
     } else {
-      // Re-apply after RPC to override any realtime reload that may have fired before DB committed
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
       const user = users.find(u => u.id === userId);
       const seller = sellers.find(s => s.id === sellerId);
       trackAdminActivity('user_seller_update', { user_id: userId, user_email: user?.email, seller_id: normalizedSellerId, seller_name: seller?.name || null }, 'users');
+      setTimeout(() => { delete pendingSellerRef.current[userId]; }, 3000);
     }
   }
 

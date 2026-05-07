@@ -136,6 +136,8 @@ export default function Home() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [savingCategory, setSavingCategory] = useState(false);
   const [infoTagsPopup, setInfoTagsPopup] = useState(null); // { designId, x, y, tags }
+  const footerRef = useRef(null);
+  const [cartBottom, setCartBottom] = useState(24);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -677,6 +679,22 @@ export default function Home() {
     };
     document.addEventListener('scroll', handler, { passive: true });
     return () => document.removeEventListener('scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    const update = () => {
+      if (!footerRef.current) return;
+      const rect = footerRef.current.getBoundingClientRect();
+      const overlap = Math.max(0, window.innerHeight - rect.top);
+      setCartBottom(Math.max(24, overlap + 8));
+    };
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update, { passive: true });
+    update();
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
   const activeProductIdRef = useRef(activeProductId);
@@ -1470,19 +1488,18 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             : [];
           const hasScaleBox = scaleBoxTiers.length > 0;
           const headerOffset = headerVisible ? 64 : 0;
-          const scaleBoxH = hasScaleBox ? 'calc(33vh)' : '0px';
           const scaleGap = hasScaleBox ? 8 : 0;
-          const sidebarTop = hasScaleBox ? `calc(${headerOffset}px + 33vh + ${scaleGap}px)` : `${headerOffset}px`;
+          const sidebarTop = hasScaleBox ? `calc(${headerOffset}px + 22vh + ${scaleGap}px)` : `${headerOffset}px`;
           const currentQty = cartByProduct[activeProductId] || 0;
           return (
           <>
           {hasScaleBox && (
-            <div style={{position:'fixed', top: headerOffset, right: 24, width: 340, height: '33vh', zIndex: 98, background:'white', border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.10)', transition:'top 0.3s ease'}}>
-              <div style={{background:'#1B2F5E', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0}}>
+            <div style={{position:'fixed', top: headerOffset, right: 24, width: 340, maxHeight: '22vh', zIndex: 98, background:'white', border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.10)', transition:'top 0.3s ease'}}>
+              <div style={{background:'#1B2F5E', padding:'7px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0}}>
                 <span style={{fontSize:12, fontWeight:800, color:'white', letterSpacing:0.5}}>Escala de precios</span>
                 <span style={{fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.65)'}}>{activeProduct?.name}</span>
               </div>
-              <div style={{flex:1, overflowY:'auto', padding:'10px 14px', display:'flex', flexDirection:'column', gap:6}}>
+              <div style={{flex:1, overflowY:'auto', padding:'6px 10px', display:'flex', flexDirection:'column', gap:3}}>
                 {scaleBoxTiers.map((tier, i) => {
                   const qty = Number(tier.min_quantity);
                   const price = Number(tier.price_per_unit);
@@ -1490,24 +1507,19 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   const isActive = currentQty >= qty && (!nextTier || currentQty < Number(nextTier.min_quantity));
                   const isReached = currentQty >= qty;
                   return (
-                    <div key={tier.id} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', borderRadius:8, border:`1.5px solid ${isActive ? '#2D6BE4' : isReached ? '#bbf7d0' : '#eef0f6'}`, background: isActive ? '#e8f0fe' : isReached ? '#f0fdf4' : '#f8faff', transition:'all 0.15s'}}>
+                    <div key={tier.id} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'5px 10px', borderRadius:8, border:`1.5px solid ${isActive ? '#2D6BE4' : isReached ? '#bbf7d0' : '#eef0f6'}`, background: isActive ? '#e8f0fe' : isReached ? '#f0fdf4' : '#f8faff', transition:'all 0.15s'}}>
                       <div style={{display:'flex', alignItems:'center', gap:8}}>
-                        <span style={{width:8, height:8, borderRadius:'50%', background: isActive ? '#2D6BE4' : isReached ? '#22c55e' : '#d1d5db', flexShrink:0}} />
-                        <span style={{fontSize:13, fontWeight:700, color: isActive ? '#1B2F5E' : isReached ? '#15803d' : '#5a6380'}}>{qty}+ unidades</span>
+                        <span style={{width:7, height:7, borderRadius:'50%', background: isActive ? '#2D6BE4' : isReached ? '#22c55e' : '#d1d5db', flexShrink:0}} />
+                        <span style={{fontSize:12, fontWeight:700, color: isActive ? '#1B2F5E' : isReached ? '#15803d' : '#5a6380'}}>{qty}+ unidades</span>
                       </div>
-                      <span style={{fontSize:15, fontWeight:800, color: isActive ? '#2D6BE4' : isReached ? '#15803d' : '#9aa3bc'}}>${price.toLocaleString('es-AR')}/u</span>
+                      <span style={{fontSize:14, fontWeight:800, color: isActive ? '#2D6BE4' : isReached ? '#15803d' : '#9aa3bc'}}>${price.toLocaleString('es-AR')}/u</span>
                     </div>
                   );
                 })}
-                {currentQty > 0 && (
-                  <div style={{fontSize:11, color:'#9aa3bc', textAlign:'center', marginTop:4, padding:'4px 0', borderTop:'1px solid #f0f2f8'}}>
-                    Tenés <strong style={{color:'#1B2F5E'}}>{currentQty} u.</strong> de {activeProduct?.name} en el pedido
-                  </div>
-                )}
               </div>
             </div>
           )}
-          <div style={{...s.sidebar, position: 'fixed', top: sidebarTop, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+          <div style={{...s.sidebar, position: 'fixed', top: sidebarTop, right: 24, width: 340, transition: 'top 0.3s ease, bottom 0.2s ease', bottom: cartBottom, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
@@ -1800,7 +1812,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         </a>
       )}
 
-      <footer style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
+      <footer ref={footerRef} style={{...s.footer, paddingBottom: isMobile ? 84 : 20}}>
         <strong>INKORA</strong> Soluciones Graficas - Todos los derechos reservados 2026
       </footer>
 
