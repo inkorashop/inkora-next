@@ -1882,15 +1882,18 @@ export default function Admin() {
   }
 
   async function updateUserSeller(userId, sellerId) {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: sellerId || null } : u));
-    const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: sellerId || null });
+    const normalizedSellerId = sellerId || null;
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
+    const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: normalizedSellerId });
     if (error) {
       console.error('Error al guardar vendedor:', error);
-      loadUsers(); // revertir al estado real si falló
+      loadUsers();
     } else {
+      // Re-apply after RPC to override any realtime reload that may have fired before DB committed
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
       const user = users.find(u => u.id === userId);
       const seller = sellers.find(s => s.id === sellerId);
-      trackAdminActivity('user_seller_update', { user_id: userId, user_email: user?.email, seller_id: sellerId || null, seller_name: seller?.name || null }, 'users');
+      trackAdminActivity('user_seller_update', { user_id: userId, user_email: user?.email, seller_id: normalizedSellerId, seller_name: seller?.name || null }, 'users');
     }
   }
 
@@ -3836,8 +3839,16 @@ export default function Admin() {
                   <p style={{color:'#9aa3bc', fontSize:13, textAlign:'center', padding:'20px 0'}}>Sin tags. Agregá una para empezar.</p>
                 )}
                 {tags.map((tag, i) => (
-                  <div key={tag.id} style={{border:'1.5px solid #dde1ef', borderRadius:10, padding:'12px 14px', background:'#f8faff', display:'flex', flexDirection:'column', gap:8}}>
+                  <div key={tag.id} style={{border:`1.5px solid ${tag.color || '#dde1ef'}`, borderRadius:10, padding:'12px 14px', background: tag.color ? `${tag.color}18` : '#f8faff', display:'flex', flexDirection:'column', gap:8}}>
                     <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <input
+                        type="color"
+                        title="Color de la tag"
+                        value={tag.color || '#1B2F5E'}
+                        onChange={e => updateTag(tag.id, 'color', e.target.value)}
+                        onBlur={() => commitTagUpdate(tag.id)}
+                        style={{width:28, height:28, borderRadius:6, border:'1.5px solid #dde1ef', padding:2, cursor:'pointer', flexShrink:0, background:'white'}}
+                      />
                       <input
                         style={{...s.input, flex:1, fontSize:13, fontWeight:700}}
                         placeholder="Título de la tag"

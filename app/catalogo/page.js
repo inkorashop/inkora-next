@@ -135,7 +135,7 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [savingCategory, setSavingCategory] = useState(false);
-  const [infoTagsPopup, setInfoTagsPopup] = useState(null);
+  const [infoTagsPopup, setInfoTagsPopup] = useState(null); // { designId, x, y, tags }
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -1104,7 +1104,7 @@ const rawWA = profile?.sellers?.phone?.replace(/\D/g, '') || DEFAULT_WA;
 const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
   return (
-    <div id="catalogo-root" style={s.app} onClick={() => { if (infoTagsPopup) setInfoTagsPopup(null); }}>
+    <div id="catalogo-root" style={s.app} onClick={() => { if (infoTagsPopup) setInfoTagsPopup(null); }} onScroll={() => { if (infoTagsPopup) setInfoTagsPopup(null); }}>
       <style>{`
         @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
         @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
@@ -1366,24 +1366,19 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         const first = tags[0];
                         return (
                           <div
-                            style={{position:'absolute', bottom:6, right:6, display:'flex', alignItems:'center', gap:4, background:'rgba(17,32,64,0.75)', backdropFilter:'blur(4px)', borderRadius:6, padding:'3px 7px', cursor:'pointer', zIndex:10, maxWidth:'80%'}}
-                            onClick={e => { e.stopPropagation(); setInfoTagsPopup(infoTagsPopup === d.id ? null : d.id); }}
+                            style={{position:'absolute', bottom:6, right:6, display:'flex', alignItems:'center', gap:4, background: first.color ? first.color : 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:6, padding:'3px 8px', cursor:'pointer', zIndex:10, maxWidth:'85%'}}
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (infoTagsPopup?.designId === d.id) {
+                                setInfoTagsPopup(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
+                              }
+                            }}
                           >
                             <span style={{fontSize:10, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{first.title}</span>
-                            <span style={{fontSize:12, color:'rgba(255,255,255,0.8)', lineHeight:1, flexShrink:0}}>+</span>
-                            {infoTagsPopup === d.id && (
-                              <div
-                                style={{position:'absolute', bottom:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, padding:'12px 14px', minWidth:200, maxWidth:280, boxShadow:'0 8px 24px rgba(27,47,94,0.2)', zIndex:20, display:'flex', flexDirection:'column', gap:10}}
-                                onClick={e => e.stopPropagation()}
-                              >
-                                {tags.map(tag => (
-                                  <div key={tag.id}>
-                                    <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:3}}>{tag.title}</div>
-                                    {tag.description && <div style={{fontSize:11, color:'#5a6380', lineHeight:1.45}}>{tag.description}</div>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                            <span style={{fontSize:13, color:'rgba(255,255,255,0.85)', lineHeight:1, flexShrink:0, fontWeight:700}}>+</span>
                           </div>
                         );
                       })()}
@@ -1469,8 +1464,50 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           </div>
         </div>
 
-        {!isMobile && (
-          <div style={{...s.sidebar, position: 'fixed', top: headerVisible ? 64 : 0, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+        {!isMobile && (() => {
+          const scaleBoxTiers = showPrices && !sidebarCollapsed && activeProduct?.show_price !== false
+            ? priceTiers.filter(t => t.product_id === activeProductId).sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity))
+            : [];
+          const hasScaleBox = scaleBoxTiers.length > 0;
+          const headerOffset = headerVisible ? 64 : 0;
+          const scaleBoxH = hasScaleBox ? 'calc(33vh)' : '0px';
+          const scaleGap = hasScaleBox ? 8 : 0;
+          const sidebarTop = hasScaleBox ? `calc(${headerOffset}px + 33vh + ${scaleGap}px)` : `${headerOffset}px`;
+          const currentQty = cartByProduct[activeProductId] || 0;
+          return (
+          <>
+          {hasScaleBox && (
+            <div style={{position:'fixed', top: headerOffset, right: 24, width: 340, height: '33vh', zIndex: 98, background:'white', border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.10)', transition:'top 0.3s ease'}}>
+              <div style={{background:'#1B2F5E', padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0}}>
+                <span style={{fontSize:12, fontWeight:800, color:'white', letterSpacing:0.5}}>Escala de precios</span>
+                <span style={{fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.65)'}}>{activeProduct?.name}</span>
+              </div>
+              <div style={{flex:1, overflowY:'auto', padding:'10px 14px', display:'flex', flexDirection:'column', gap:6}}>
+                {scaleBoxTiers.map((tier, i) => {
+                  const qty = Number(tier.min_quantity);
+                  const price = Number(tier.price_per_unit);
+                  const nextTier = scaleBoxTiers[i + 1];
+                  const isActive = currentQty >= qty && (!nextTier || currentQty < Number(nextTier.min_quantity));
+                  const isReached = currentQty >= qty;
+                  return (
+                    <div key={tier.id} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', borderRadius:8, border:`1.5px solid ${isActive ? '#2D6BE4' : isReached ? '#bbf7d0' : '#eef0f6'}`, background: isActive ? '#e8f0fe' : isReached ? '#f0fdf4' : '#f8faff', transition:'all 0.15s'}}>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <span style={{width:8, height:8, borderRadius:'50%', background: isActive ? '#2D6BE4' : isReached ? '#22c55e' : '#d1d5db', flexShrink:0}} />
+                        <span style={{fontSize:13, fontWeight:700, color: isActive ? '#1B2F5E' : isReached ? '#15803d' : '#5a6380'}}>{qty}+ unidades</span>
+                      </div>
+                      <span style={{fontSize:15, fontWeight:800, color: isActive ? '#2D6BE4' : isReached ? '#15803d' : '#9aa3bc'}}>${price.toLocaleString('es-AR')}/u</span>
+                    </div>
+                  );
+                })}
+                {currentQty > 0 && (
+                  <div style={{fontSize:11, color:'#9aa3bc', textAlign:'center', marginTop:4, padding:'4px 0', borderTop:'1px solid #f0f2f8'}}>
+                    Tenés <strong style={{color:'#1B2F5E'}}>{currentQty} u.</strong> de {activeProduct?.name} en el pedido
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <div style={{...s.sidebar, position: 'fixed', top: sidebarTop, right: 24, width: 340, transition: 'top 0.3s ease', bottom: 'max(24px, min(100px, 8vh))', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
@@ -1489,56 +1526,19 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'producto' : 'productos'}</span>
                   </div>
                 </div>
-                {showPrices && activeProduct?.show_price !== false && (() => {
-                  const productTiers = priceTiers
-                    .filter(t => t.product_id === activeProductId)
-                    .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
-                  if (productTiers.length === 0) return null;
-                  const currentQty = cartByProduct[activeProductId] || 0;
-                  return (
-                    <div style={{flex:'0 0 auto', maxHeight:'33vh', overflowY:'auto', borderBottom:'1.5px solid #dde1ef', background:'#f8faff'}}>
-                      <div style={{padding:'10px 16px 6px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-                        <span style={{fontSize:11, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5}}>Escala de precios</span>
-                        <span style={{fontSize:11, fontWeight:600, color:'#9aa3bc'}}>{activeProduct.name}</span>
-                      </div>
-                      <div style={{padding:'0 16px 10px', display:'flex', flexDirection:'column', gap:4}}>
-                        {productTiers.map((tier, i) => {
-                          const qty = Number(tier.min_quantity);
-                          const price = Number(tier.price_per_unit);
-                          const nextTier = productTiers[i + 1];
-                          const isActive = currentQty >= qty && (!nextTier || currentQty < Number(nextTier.min_quantity));
-                          const isReached = currentQty >= qty;
-                          return (
-                            <div key={tier.id} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', borderRadius:7, border:`1.5px solid ${isActive ? '#2D6BE4' : isReached ? '#bbf7d0' : '#dde1ef'}`, background: isActive ? '#e8f0fe' : isReached ? '#f0fdf4' : 'white', transition:'all 0.15s'}}>
-                              <div style={{display:'flex', alignItems:'center', gap:6}}>
-                                {isActive && <span style={{width:6, height:6, borderRadius:'50%', background:'#2D6BE4', flexShrink:0}} />}
-                                {isReached && !isActive && <span style={{width:6, height:6, borderRadius:'50%', background:'#22c55e', flexShrink:0}} />}
-                                {!isReached && <span style={{width:6, height:6, borderRadius:'50%', background:'#dde1ef', flexShrink:0}} />}
-                                <span style={{fontSize:12, fontWeight:700, color: isActive ? '#1B2F5E' : isReached ? '#15803d' : '#5a6380'}}>{qty}+ u.</span>
-                              </div>
-                              <span style={{fontSize:13, fontWeight:800, color: isActive ? '#2D6BE4' : isReached ? '#15803d' : '#9aa3bc'}}>${price.toLocaleString('es-AR')}/u</span>
-                            </div>
-                          );
-                        })}
-                        {currentQty > 0 && (
-                          <div style={{fontSize:10, color:'#9aa3bc', textAlign:'center', marginTop:2}}>
-                            {currentQty} u. seleccionadas de {activeProduct.name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
                 <div style={s.sidebarBody}>
                   {cartItems.length === 0 ? (
                     <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega diseños del catalogo.</p></div>
                   ) : (
-                    cartItems.map(item => (
+                    cartItems.map(item => {
+                      const itemProduct = products.find(p => p.id === item.product_id);
+                      return (
                       <div key={item.id} style={s.cartItem}>
                         {item.image_url && (
                           <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                         )}
                         <div style={s.cartItemInfo}>
+                          {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}
                           <div style={s.cartItemName}>{item.name}</div>
                           {showPrices && item.showPrice !== false && (() => {
                             const price = getUnitPrice(item.product_id);
@@ -1559,7 +1559,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         </div>
                         <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
                 <div style={s.sidebarFooter}>
@@ -1594,7 +1595,9 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
               </>
             )}
           </div>
-        )}
+          </>
+          );
+        })()}
       </div>
 
       {isMobile && (
@@ -1611,12 +1614,15 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
               {cartItems.length === 0 ? (
                 <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega diseños del catalogo.</p></div>
               ) : (
-                cartItems.map(item => (
+                cartItems.map(item => {
+                  const itemProduct = products.find(p => p.id === item.product_id);
+                  return (
                   <div key={item.id} style={s.cartItem}>
                     {item.image_url && (
                       <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                     )}
                     <div style={s.cartItemInfo}>
+                      {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}
                       <div style={s.cartItemName}>{item.name}</div>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
@@ -1634,7 +1640,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     </div>
                     <button style={s.removeBtn} onClick={() => removeFromCart(item.id)}>X</button>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
             <div style={s.cartPanelFooter}>
@@ -1816,6 +1823,24 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           onClose={() => setAuthModalOpen(false)}
           onSuccess={() => setAuthModalOpen(false)}
         />
+      )}
+
+      {/* Popup global de info tags - fixed para no quedar recortado */}
+      {infoTagsPopup && (
+        <div
+          style={{position:'fixed', left: Math.min(infoTagsPopup.x, window.innerWidth - 260), top: Math.max(8, infoTagsPopup.y - 8), zIndex:500, background:'white', border:'1.5px solid #dde1ef', borderRadius:12, padding:'14px 16px', width:240, boxShadow:'0 8px 32px rgba(27,47,94,0.22)', display:'flex', flexDirection:'column', gap:12}}
+          onClick={e => e.stopPropagation()}
+        >
+          {infoTagsPopup.tags.map(tag => (
+            <div key={tag.id} style={{display:'flex', flexDirection:'column', gap:4}}>
+              <div style={{display:'flex', alignItems:'center', gap:6}}>
+                {tag.color && <span style={{width:8, height:8, borderRadius:'50%', background:tag.color, flexShrink:0}} />}
+                <span style={{fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{tag.title}</span>
+              </div>
+              {tag.description && <span style={{fontSize:11, color:'#5a6380', lineHeight:1.5}}>{tag.description}</span>}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

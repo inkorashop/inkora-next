@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev*)",
+      "Bash(npm run build*)",
+      "Bash(npm run lint*)",
+      "Bash(npm install*)",
+      "Bash(npm list*)",
+      "Bash(vercel*)",
+      "Bash(npx vercel*)",
+      "Bash(npx supabase*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git pull*)",
+      "Bash(git checkout*)",
+      "Bash(git merge*)",
+      "Bash(git stash*)",
+      "Bash(mkdir*)",
+      "PowerShell(npm run*)",
+      "PowerShell(Get-Content*)",
+      "PowerShell(Measure-Object*)",
+      "PowerShell((Get-Content*)",
+      "PowerShell(npm install*)",
+      "PowerShell(vercel*)",
+      "PowerShell(git add*)",
+      "PowerShell(git commit*)",
+      "PowerShell(git push*)",
+      "PowerShell(git pull*)",
+      "PowerShell(git checkout*)",
+      "PowerShell(git stash*)",
+      "PowerShell(mkdir*)",
+      "PowerShell(New-Item*)",
+      "PowerShell(Copy-Item*)",
+      "PowerShell(Remove-Item*)"
+    ]
+  }
+}

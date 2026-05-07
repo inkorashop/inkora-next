@@ -13,8 +13,17 @@
       "Bash(Select-Object -First 20)",
       "Bash(Format-Table FullName)",
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\catalogo\\\\page.js\" | Measure-Object -Line\\).Lines)"
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\catalogo\\\\page.js\" | Measure-Object -Line\\).Lines)",
+      "Bash(ls ~/.claude/projects/ 2>/dev/null | head -20)",
+      "Read(//c/Users/Franco/.claude/projects/**)",
+      "Bash(python3 -)",
+      "Read(//c/Users/Franco/.claude//**)",
+      "Read(//c/Users/Franco/.claude/**)",
+      "Bash(mkdir -p \"c:/Users/Franco/Desktop/inkora-next/.claude\")"
     ],
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "c:\\Users\\Franco\\Desktop\\inkora-next\\.claude"
+    ]
   }
 }
