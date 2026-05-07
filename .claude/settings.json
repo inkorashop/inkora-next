@@ -38,7 +38,11 @@
       "PowerShell(Remove-Item *)",
       "PowerShell(Set-Location *)",
       "PowerShell(cd *)",
-      "PowerShell(npx *)"
+      "PowerShell(npx *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(powershell *)",
+      "Bash(powershell -Command *)",
+      "Bash(powershell *)"
     ]
   },
   "hooks": {

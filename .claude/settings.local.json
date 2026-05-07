@@ -19,7 +19,9 @@
       "Bash(python3 -)",
       "Read(//c/Users/Franco/.claude//**)",
       "Read(//c/Users/Franco/.claude/**)",
-      "Bash(mkdir -p \"c:/Users/Franco/Desktop/inkora-next/.claude\")"
+      "Bash(mkdir -p \"c:/Users/Franco/Desktop/inkora-next/.claude\")",
+      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'table|thead|tbody|<th>|<td>' | Select-Object -First 30\")",
+      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'create.*user|invite|new.*user|add.*user|user.*modal' -AllMatches | Select-Object -First 30\")"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [

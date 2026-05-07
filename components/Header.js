@@ -180,12 +180,12 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                   <path d="M16 10a4 4 0 01-8 0"/>
                 </svg>
                 {cartItems.length > 0 && (
-                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ position: 'absolute', top: -6, left: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     1
                   </span>
                 )}
                 {pendingCount > 0 && (
-                  <span style={{ position: 'absolute', top: -6, left: -6, background: '#f6a800', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ position: 'absolute', top: -6, right: -6, background: '#f6a800', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {pendingCount}
                   </span>
                 )}

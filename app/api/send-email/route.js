@@ -9,48 +9,113 @@ function escapeCSV(value) {
   return str;
 }
 
+function buildTable(cartItems, hasPrice) {
+  const tdStyle = 'padding:5px 10px;border-bottom:1px solid #eef0f6;';
+  const thStyle = 'padding:7px 10px;text-align:left;';
+
+  const headers = hasPrice
+    ? `<tr style="background:#1B2F5E;color:white;font-size:13px">
+        <th style="${thStyle}">Producto</th>
+        <th style="${thStyle}">Diseño</th>
+        <th style="${thStyle}text-align:center">Planchas</th>
+        <th style="${thStyle}text-align:right">Precio/u</th>
+        <th style="${thStyle}text-align:right">Subtotal</th>
+      </tr>`
+    : `<tr style="background:#1B2F5E;color:white;font-size:13px">
+        <th style="${thStyle}">Producto</th>
+        <th style="${thStyle}">Diseño</th>
+        <th style="${thStyle}text-align:center">Planchas</th>
+      </tr>`;
+
+  const rows = cartItems.map(i => {
+    const rowStyle = 'font-size:13px;';
+    if (hasPrice) {
+      return `<tr style="${rowStyle}">
+        <td style="${tdStyle}">${i.productName || '—'}</td>
+        <td style="${tdStyle}">${i.name || '—'}</td>
+        <td style="${tdStyle}text-align:center">${i.qty}</td>
+        <td style="${tdStyle}text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+        <td style="${tdStyle}text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+      </tr>`;
+    }
+    return `<tr style="${rowStyle}">
+      <td style="${tdStyle}">${i.productName || '—'}</td>
+      <td style="${tdStyle}">${i.name || '—'}</td>
+      <td style="${tdStyle}text-align:center">${i.qty}</td>
+    </tr>`;
+  }).join('');
+
+  const totalPlanchas = cartItems.reduce((s, i) => s + (i.qty || 0), 0);
+  const totalAmount = cartItems.reduce((s, i) => s + (i.pricePerUnit ? i.qty * i.pricePerUnit : 0), 0);
+
+  const footerTd = 'padding:7px 10px;font-weight:700;font-size:13px;border-top:2px solid #1B2F5E;';
+  const footer = hasPrice
+    ? `<tr style="background:#f8faff">
+        <td colspan="2" style="${footerTd}">Total</td>
+        <td style="${footerTd}text-align:center">${totalPlanchas} pl.</td>
+        <td style="${footerTd}"></td>
+        <td style="${footerTd}text-align:right;color:#1B2F5E">$${totalAmount.toLocaleString('es-AR')}</td>
+      </tr>`
+    : `<tr style="background:#f8faff">
+        <td colspan="2" style="${footerTd}">Total</td>
+        <td style="${footerTd}text-align:center">${totalPlanchas} pl.</td>
+      </tr>`;
+
+  return `<table border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #dde1ef;border-radius:8px;overflow:hidden;margin-top:16px">
+    <thead>${headers}</thead>
+    <tbody>${rows}</tbody>
+    <tfoot>${footer}</tfoot>
+  </table>`;
+}
+
 export async function POST(request) {
   try {
-    const { orderCode, form, cartItems, total, notes, sellerName, sendConfirmation } = await request.json();
+    const { orderCode, form, cartItems, total, showPrice, notes, sellerName, sendConfirmation } = await request.json();
     const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
-    const itemsHtml = cartItems
-      .map((i, idx) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-      .join('');
+    const hasPrice = showPrice === true && cartItems.some(i => i.pricePerUnit !== null && i.pricePerUnit !== undefined && i.pricePerUnit > 0);
 
-    const html = `
-      <h2 style="color:#1B2F5E">Nuevo pedido INKORA</h2>
-      <p><strong>Código:</strong> ${orderCode}</p>
-      <p><strong>Cliente:</strong> ${form.name}</p>
-      <p><strong>Teléfono:</strong> ${form.phone}</p>
-      <p><strong>Email:</strong> ${form.email}</p>
-      ${sellerName ? `<p><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
-      ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-      <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-        <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-        <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-      </table>
+    const table = buildTable(cartItems, hasPrice);
+
+    const adminHtml = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
+        <div style="background:#1B2F5E;padding:20px 24px;border-radius:8px 8px 0 0">
+          <h2 style="color:white;margin:0;font-size:18px">Nuevo pedido INKORA</h2>
+        </div>
+        <div style="background:#f8faff;padding:20px 24px;border:1px solid #dde1ef;border-top:none">
+          <p style="margin:0 0 6px"><strong>Código:</strong> ${orderCode}</p>
+          <p style="margin:0 0 6px"><strong>Cliente:</strong> ${form.name}</p>
+          <p style="margin:0 0 6px"><strong>Teléfono:</strong> ${form.phone || '—'}</p>
+          <p style="margin:0 0 6px"><strong>Email:</strong> ${form.email}</p>
+          ${sellerName ? `<p style="margin:0 0 6px"><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
+          ${notes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${notes}</p>` : ''}
+          <p style="margin:6px 0 0;font-size:12px;color:#9aa3bc"><strong>Fecha:</strong> ${fecha}</p>
+        </div>
+        ${table}
+        ${hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : ''}
+      </div>
     `;
 
-    // CSV — una fila por item
-    const csvHeaders = ['Código', 'Nombre cliente', 'Email', 'Teléfono', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Fecha'];
+    // CSV
+    const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Planchas', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
     const csvRows = cartItems.map((item, idx) => [
       orderCode,
       form.name,
       form.email,
-      form.phone,
+      form.phone || '',
+      item.productName || '',
       item.name,
       item.qty,
-      item.pricePerUnit ?? '',
-      item.pricePerUnit ? item.qty * item.pricePerUnit : '',
-      idx === 0 ? total : '',   // total solo en la primera fila
+      hasPrice && item.pricePerUnit ? item.pricePerUnit : '',
+      hasPrice && item.pricePerUnit ? item.qty * item.pricePerUnit : '',
+      idx === 0 && hasPrice ? total : '',
       idx === 0 ? (notes || '') : '',
+      idx === 0 ? (sellerName || '') : '',
       idx === 0 ? fecha : '',
     ].map(escapeCSV).join(','));
 
     const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
-    const csvBase64 = Buffer.from('\uFEFF' + csvContent, 'utf-8').toString('base64');
+    const csvBase64 = Buffer.from('﻿' + csvContent, 'utf-8').toString('base64');
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -62,13 +127,8 @@ export async function POST(request) {
         from: 'INKORA <onboarding@resend.dev>',
         to: [process.env.EMAIL],
         subject: `Nuevo pedido ${orderCode} — ${form.name}`,
-        html,
-        attachments: [
-          {
-            filename: `pedido-${orderCode}.csv`,
-            content: csvBase64,
-          },
-        ],
+        html: adminHtml,
+        attachments: [{ filename: `pedido-${orderCode}.csv`, content: csvBase64 }],
       }),
     });
 
@@ -77,23 +137,22 @@ export async function POST(request) {
       return NextResponse.json({ error: err }, { status: 500 });
     }
 
-    // Email de confirmación al cliente
+    // Confirmation email to client
     if (form.email && sendConfirmation !== false) {
-      const clientItemsHtml = cartItems
-        .map((i) => `<tr><td style="padding:4px 8px">${i.productName || ''}</td><td style="padding:4px 8px">${i.name}</td><td style="padding:4px 8px;text-align:center">${i.qty}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString()}` : '—'}</td><td style="padding:4px 8px;text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString()}` : '—'}</td></tr>`)
-        .join('');
-
       const clientHtml = `
-        <h2 style="color:#1B2F5E">¡Recibimos tu pedido!</h2>
-        <p>Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
-        <p><strong>Código de pedido:</strong> ${orderCode}</p>
-        ${notes ? `<p><strong>Notas:</strong> ${notes}</p>` : ''}
-        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px">
-          <thead><tr style="background:#1B2F5E;color:white"><th style="padding:6px 12px">Producto</th><th style="padding:6px 12px">Diseño</th><th style="padding:6px 12px">Cant.</th><th style="padding:6px 12px">Precio unit.</th><th style="padding:6px 12px">Precio total</th></tr></thead>
-          <tbody>${clientItemsHtml}</tbody>
-          <tfoot><tr><td colspan="4" style="padding:6px 12px;font-weight:bold">Total</td><td style="padding:6px 12px;font-weight:bold;text-align:right">$${total.toLocaleString()}</td></tr></tfoot>
-        </table>
-        <p style="margin-top:16px;color:#5a6380;font-size:13px">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
+          <div style="background:#1B2F5E;padding:20px 24px;border-radius:8px 8px 0 0">
+            <h2 style="color:white;margin:0;font-size:18px">¡Recibimos tu pedido!</h2>
+          </div>
+          <div style="background:#f8faff;padding:20px 24px;border:1px solid #dde1ef;border-top:none">
+            <p style="margin:0 0 6px">Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
+            <p style="margin:0 0 6px"><strong>Código de pedido:</strong> ${orderCode}</p>
+            ${notes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${notes}</p>` : ''}
+          </div>
+          ${table}
+          ${hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : ''}
+          <p style="margin-top:16px;color:#5a6380;font-size:13px;text-align:center">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
+        </div>
       `;
 
       await fetch('https://api.resend.com/emails', {

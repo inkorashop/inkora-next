@@ -690,12 +690,26 @@ export default function Home() {
     };
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update, { passive: true });
+
     update();
     return () => {
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };
   }, []);
+
+  const infoTagsPopupOpen = !!infoTagsPopup;
+  useEffect(() => {
+    if (!infoTagsPopupOpen) return;
+    let prevScrollY = window.scrollY;
+    const onScroll = () => {
+      const dy = window.scrollY - prevScrollY;
+      prevScrollY = window.scrollY;
+      setInfoTagsPopup(prev => prev ? { ...prev, y: prev.y - dy } : null);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [infoTagsPopupOpen]);
 
   const activeProductIdRef = useRef(activeProductId);
   useEffect(() => { activeProductIdRef.current = activeProductId; }, [activeProductId]);
@@ -1102,7 +1116,7 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) ?? i.pricePerUnit })), total, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
+        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) })), total: showTotal ? total : 0, showPrice: showTotal, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
       });
 
       track('order_confirm', { order_code: orderCode, items_count: cartItems.length, total });
@@ -1122,7 +1136,7 @@ const rawWA = profile?.sellers?.phone?.replace(/\D/g, '') || DEFAULT_WA;
 const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
   return (
-    <div id="catalogo-root" style={s.app} onClick={() => { if (infoTagsPopup) setInfoTagsPopup(null); }} onScroll={() => { if (infoTagsPopup) setInfoTagsPopup(null); }}>
+    <div id="catalogo-root" style={s.app} onClick={() => { if (infoTagsPopup) setInfoTagsPopup(null); }}>
       <style>{`
         @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
         @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
@@ -1389,7 +1403,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                               </div>
                             ))}
                             <div
-                              style={{background:'rgba(17,32,64,0.60)', backdropFilter:'blur(4px)', borderRadius:4, padding:'1px 8px', cursor:'pointer', marginTop:1}}
+                              style={{display:'flex', alignItems:'center', gap:3, background:'rgba(17,32,64,0.60)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', cursor:'pointer'}}
                               onClick={e => {
                                 e.stopPropagation();
                                 if (infoTagsPopup?.designId === d.id) {
@@ -1400,7 +1414,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                                 }
                               }}
                             >
-                              <span style={{fontSize:13, fontWeight:700, color:'white', lineHeight:1}}>+</span>
+                              <span style={{fontSize:9, fontWeight:700, color:'white'}}>+</span>
                             </div>
                           </div>
                         );

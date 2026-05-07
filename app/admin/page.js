@@ -152,13 +152,15 @@ export default function Admin() {
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
-    const slug = window.location.pathname.split('/admin/')[1] || '';
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     if (slug === 'actividad' || slug === 'estadisticas') return 'tracking';
     return SLUG_TABS[slug] || 'products';
   };
   const initialTrackingSubtab = () => {
     if (typeof window === 'undefined') return 'activity';
-    const slug = window.location.pathname.split('/admin/')[1] || '';
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     return slug === 'estadisticas' ? 'stats' : 'activity';
   };
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -250,6 +252,12 @@ export default function Admin() {
   const [userSearch, setUserSearch] = useState('');
   const [userFilterStatus, setUserFilterStatus] = useState('all');
   const [userFilterSeller, setUserFilterSeller] = useState('all');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ name: '', phone: '', email: '', password: '' });
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteResult, setInviteResult] = useState(null);
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
+  const [revealedPasswords, setRevealedPasswords] = useState({});
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -389,7 +397,7 @@ export default function Admin() {
 
   // ── Auth listener ──
   useEffect(() => {
-    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, []);
 
   useEffect(() => {
@@ -1904,6 +1912,31 @@ export default function Admin() {
     }
   }
 
+  async function handleInviteUser() {
+    if (!inviteForm.name || !inviteForm.email || !inviteForm.password) return;
+    setInviteLoading(true);
+    setInviteResult(null);
+    try {
+      const res = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteForm),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setInviteResult({ error: data.error });
+      } else {
+        setInviteResult({ link: data.link, linkError: data.link_error });
+        setInviteForm({ name: '', phone: '', email: '', password: '' });
+        loadUsers();
+        trackAdminActivity('user_invite', { email: inviteForm.email }, 'users');
+      }
+    } catch (e) {
+      setInviteResult({ error: e.message });
+    }
+    setInviteLoading(false);
+  }
+
   // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
@@ -2044,7 +2077,7 @@ export default function Admin() {
                 onDragStart={undefined}
                 onDragOver={undefined}
                 onDragEnd={undefined}
-                onClick={() => { setActiveTab(id); window.history.replaceState(null, '', `/admin/${TAB_SLUGS[id]}`); }}
+                onClick={() => { setActiveTab(id); window.history.replaceState(null, '', `/admin?tab=${TAB_SLUGS[id]}`); }}
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
@@ -2137,18 +2170,21 @@ export default function Admin() {
                             <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
                           </td>
                           <td style={s.td}>
-                            <div style={{display:'flex', alignItems:'center', gap:6, minWidth:210}}>
-                              <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12}}>{isVariant ? '↳' : ''}</span>
-                              <input style={{...s.tblInput, flex:'1 1 150px', minWidth:150, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
-                              {!isVariant && (
-                                <button
-                                  style={{...s.editBtn, padding:'4px 7px', whiteSpace:'nowrap', opacity: addingVariantId === p.id ? 0.6 : 1}}
-                                  disabled={addingVariantId === p.id}
-                                  onClick={e => { e.stopPropagation(); addProductVariant(p); }}
-                                >
-                                  {addingVariantId === p.id ? '...' : `+ Variante${variantCount > 1 ? ` (${variantCount - 1})` : ''}`}
-                                </button>
-                              )}
+                            <div style={{display:'flex', alignItems:'center', gap:6}}>
+                              <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12, flexShrink:0}}>{isVariant ? '↳' : ''}</span>
+                              <div style={{position:'relative', width:150}}>
+                                <input style={{...s.tblInput, paddingRight: !isVariant ? 20 : undefined, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
+                                {!isVariant && (
+                                  <button
+                                    style={{position:'absolute', right:3, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:'#2D6BE4', fontWeight:700, fontSize:14, cursor:'pointer', padding:'0 2px', lineHeight:1, opacity: addingVariantId === p.id ? 0.4 : 1}}
+                                    disabled={addingVariantId === p.id}
+                                    onClick={e => { e.stopPropagation(); addProductVariant(p); }}
+                                    title={`Agregar variante${variantCount > 1 ? ` (${variantCount - 1} existentes)` : ''}`}
+                                  >
+                                    {addingVariantId === p.id ? '·' : '+'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </td>
                           {useProductManagementModals && (
@@ -3201,6 +3237,94 @@ export default function Admin() {
           <div style={s.card}>
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
 
+            {/* Invitar usuario */}
+            <div style={{marginBottom:18, border:'1.5px solid #dde1ef', borderRadius:10, overflow:'hidden'}}>
+              <button
+                style={{width:'100%', padding:'11px 16px', background:inviteOpen ? '#f0f4ff' : '#f8faff', border:'none', borderBottom: inviteOpen ? '1.5px solid #dde1ef' : 'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', fontFamily:'Barlow, sans-serif'}}
+                onClick={() => { setInviteOpen(v => !v); setInviteResult(null); }}
+              >
+                <span style={{fontSize:13, fontWeight:700, color:'#1B2F5E'}}>+ Invitar usuario</span>
+                <span style={{fontSize:11, color:'#9aa3bc'}}>{inviteOpen ? '▲' : '▼'}</span>
+              </button>
+              {inviteOpen && (
+                <div style={{padding:'16px', display:'flex', flexDirection:'column', gap:12}}>
+                  <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+                    <div style={{flex:'1 1 140px', display:'flex', flexDirection:'column', gap:4}}>
+                      <label style={{fontSize:11, fontWeight:600, color:'#5a6380'}}>Nombre *</label>
+                      <input style={s.input} placeholder="Nombre completo" value={inviteForm.name} onChange={e => setInviteForm(p => ({...p, name: e.target.value}))} />
+                    </div>
+                    <div style={{flex:'1 1 120px', display:'flex', flexDirection:'column', gap:4}}>
+                      <label style={{fontSize:11, fontWeight:600, color:'#5a6380'}}>Teléfono</label>
+                      <input style={s.input} placeholder="Teléfono" value={inviteForm.phone} onChange={e => setInviteForm(p => ({...p, phone: e.target.value}))} />
+                    </div>
+                    <div style={{flex:'1 1 180px', display:'flex', flexDirection:'column', gap:4}}>
+                      <label style={{fontSize:11, fontWeight:600, color:'#5a6380'}}>Email *</label>
+                      <input style={s.input} type="email" placeholder="email@ejemplo.com" value={inviteForm.email} onChange={e => setInviteForm(p => ({...p, email: e.target.value}))} />
+                    </div>
+                    <div style={{flex:'1 1 140px', display:'flex', flexDirection:'column', gap:4}}>
+                      <label style={{fontSize:11, fontWeight:600, color:'#5a6380'}}>Contraseña *</label>
+                      <div style={{position:'relative'}}>
+                        <input
+                          style={{...s.input, paddingRight:48, width:'100%', boxSizing:'border-box'}}
+                          type={showInvitePassword ? 'text' : 'password'}
+                          placeholder="Contraseña"
+                          value={inviteForm.password}
+                          onChange={e => setInviteForm(p => ({...p, password: e.target.value}))}
+                          onKeyDown={e => e.key === 'Enter' && handleInviteUser()}
+                        />
+                        <button
+                          style={{position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, fontWeight:600, padding:'2px 4px', fontFamily:'Barlow, sans-serif'}}
+                          onClick={() => setShowInvitePassword(v => !v)}
+                        >
+                          {showInvitePassword ? 'Ocultar' : 'Ver'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+                    <button
+                      style={{...s.btnPrimary, opacity: inviteForm.name && inviteForm.email && inviteForm.password && !inviteLoading ? 1 : 0.5, whiteSpace:'nowrap'}}
+                      disabled={!inviteForm.name || !inviteForm.email || !inviteForm.password || inviteLoading}
+                      onClick={handleInviteUser}
+                    >
+                      {inviteLoading ? 'Generando...' : 'Generar invitación'}
+                    </button>
+                    {inviteResult?.error && (
+                      <span style={{fontSize:12, color:'#e53e3e', fontWeight:600}}>{inviteResult.error}</span>
+                    )}
+                  </div>
+                  {inviteResult?.link && (
+                    <div style={{background:'#f0f8ff', border:'1.5px solid #bde0fe', borderRadius:8, padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
+                      <span style={{fontSize:12, fontWeight:700, color:'#1B2F5E'}}>Link de invitación (único uso)</span>
+                      <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                        <input
+                          style={{...s.input, flex:1, fontSize:11, fontFamily:'monospace', background:'white', cursor:'text'}}
+                          readOnly
+                          value={inviteResult.link}
+                          onClick={e => e.target.select()}
+                        />
+                        <button
+                          style={{...s.editBtn, padding:'7px 14px', whiteSpace:'nowrap'}}
+                          onClick={() => navigator.clipboard.writeText(inviteResult.link)}
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                      <span style={{fontSize:11, color:'#5a6380'}}>Link de uso único. Una vez que el cliente lo use, no podrá volver a ingresar con este link (pero sí con su email y contraseña).</span>
+                      {inviteResult.linkError && (
+                        <span style={{fontSize:11, color:'#f6a800'}}>Nota: {inviteResult.linkError}</span>
+                      )}
+                    </div>
+                  )}
+                  {inviteResult?.link === null && !inviteResult?.error && (
+                    <div style={{background:'#fff7e6', border:'1.5px solid #fde68a', borderRadius:8, padding:'10px 14px'}}>
+                      <span style={{fontSize:12, color:'#92400e'}}>Usuario creado pero no se pudo generar el link. El cliente puede ingresar con email y contraseña.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Buscador + filtros */}
             <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8'}}>
               <input
@@ -3240,7 +3364,7 @@ export default function Admin() {
               )}
             </div>
 
-            {loadingUsers && <p style={s.emptyMsg}>Cargando...</p>}
+            {loadingUsers && users.length === 0 && <p style={s.emptyMsg}>Cargando...</p>}
             {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
             {(() => {
               const q = userSearch.trim().toLowerCase();
@@ -3284,6 +3408,40 @@ export default function Admin() {
                     <div style={s.userInfo}>
                       <div style={s.productName}>{u.name || '—'}</div>
                       <div style={s.productMeta}>{u.email}</div>
+                      {(() => {
+                        const src = u.registration_source;
+                        if (src === 'self_google') return (
+                          <div style={{display:'inline-flex', alignItems:'center', gap:4, background:'#e8f0fe', borderRadius:5, padding:'2px 8px', marginTop:3}}>
+                            <span style={{fontSize:10, fontWeight:700, color:'#4285F4'}}>Google</span>
+                          </div>
+                        );
+                        if (!src || src === 'self_email') return (
+                          <div style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', borderRadius:5, padding:'2px 8px', marginTop:3}}>
+                            <span style={{fontSize:10, fontWeight:600, color:'#9aa3bc'}}>Registro propio</span>
+                          </div>
+                        );
+                        if (src === 'admin_invite') {
+                          if (u.password_changed_by_user) return (
+                            <div style={{display:'inline-flex', alignItems:'center', background:'#fff7e6', borderRadius:5, padding:'2px 8px', marginTop:3}}>
+                              <span style={{fontSize:10, fontWeight:600, color:'#f6a800'}}>Cambió su contraseña</span>
+                            </div>
+                          );
+                          if (u.admin_set_password) {
+                            const isRevealed = revealedPasswords[u.id];
+                            return (
+                              <div
+                                style={{display:'inline-flex', alignItems:'center', gap:6, background:'#e8eef9', borderRadius:5, padding:'2px 8px', marginTop:3, cursor:'pointer', userSelect:'none'}}
+                                onClick={() => setRevealedPasswords(prev => ({...prev, [u.id]: !prev[u.id]}))}
+                              >
+                                <span style={{fontSize:10, fontWeight:600, color:'#1B2F5E'}}>Clave:</span>
+                                <span style={{fontSize:10, fontWeight:700, color:'#2D6BE4', fontFamily:'monospace'}}>{isRevealed ? u.admin_set_password : '••••••'}</span>
+                                <span style={{fontSize:9, color:'#5a6380'}}>{isRevealed ? '[ocultar]' : '[ver]'}</span>
+                              </div>
+                            );
+                          }
+                        }
+                        return null;
+                      })()}
                     </div>
                     <div style={{display:'flex', gap:8, alignItems:'center'}}>
                       <button
