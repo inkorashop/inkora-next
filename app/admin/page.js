@@ -206,7 +206,7 @@ export default function Admin() {
   const productManageModalRef = useRef(null);
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
-  function askConfirm(message, onConfirm) { setConfirmModal({ open: true, message, onConfirm }); }
+  function askConfirm(message, onConfirm, opts = {}) { setConfirmModal({ open: true, message, onConfirm, requireHold: !!opts.requireHold }); }
   function closeConfirm() { setConfirmModal({ open: false, message: '', onConfirm: null }); }
 
   // Designs
@@ -1886,7 +1886,7 @@ export default function Admin() {
       await supabase.from('sellers').delete().eq('id', id);
       trackAdminActivity('seller_delete', { seller_id: id, seller_name: seller?.name, seller_email: seller?.email }, 'sellers');
       loadSellers();
-    });
+    }, { requireHold: true });
   }
 
   async function updateSellerField(id, field, value) {
