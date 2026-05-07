@@ -194,6 +194,7 @@ export default function Admin() {
   const [addingVariantId, setAddingVariantId] = useState(null);
   const [uploadingLandingImage, setUploadingLandingImage] = useState(null);
   const [productManageModal, setProductManageModal] = useState(null);
+  const [infoTagsModal, setInfoTagsModal] = useState(null);
   const [modelConfigPopup, setModelConfigPopup] = useState(null); // product id
   const [popupPreviewModel, setPopupPreviewModel] = useState(null); // model_url seleccionado
   const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
@@ -246,6 +247,9 @@ export default function Admin() {
   // Users
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [userFilterStatus, setUserFilterStatus] = useState('all');
+  const [userFilterSeller, setUserFilterSeller] = useState('all');
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -2063,6 +2067,7 @@ export default function Admin() {
                     <col style={{width:220}} />
                     {useProductManagementModals && <col style={{width:78}} />}
                     {useProductManagementModals && <col style={{width:72}} />}
+                    {useProductManagementModals && <col style={{width:64}} />}
                     <col style={{width:70}} />
                     <col style={{width:70}} />
                     <col style={{width:72}} />
@@ -2083,6 +2088,7 @@ export default function Admin() {
                       <th style={s.th}>Variante</th>
                       {useProductManagementModals && <th style={s.th}>Categorías</th>}
                       {useProductManagementModals && <th style={s.th}>Escalas</th>}
+                      {useProductManagementModals && <th style={s.th}>INFO</th>}
                       <th style={s.th}>Cat PC</th>
                       <th style={s.th}>Cat Cel</th>
                       <th style={s.th}>Land PC</th>
@@ -2152,6 +2158,19 @@ export default function Admin() {
                                 onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
                               >
                                 Editar
+                              </button>
+                            </td>
+                          )}
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative'}}
+                                onClick={e => { e.stopPropagation(); setInfoTagsModal({ productId: p.id, tags: Array.isArray(p.info_tags) ? p.info_tags : [] }); }}
+                              >
+                                INFO
+                                {Array.isArray(p.info_tags) && p.info_tags.length > 0 && (
+                                  <span style={{position:'absolute', top:-4, right:-4, width:14, height:14, borderRadius:'50%', background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{p.info_tags.length}</span>
+                                )}
                               </button>
                             </td>
                           )}
@@ -3171,81 +3190,133 @@ export default function Admin() {
         {activeTab === 'users' && (
           <div style={s.card}>
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
+
+            {/* Buscador + filtros */}
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8'}}>
+              <input
+                style={{...s.input, flex:'1 1 200px', minWidth:160, fontSize:13, padding:'7px 12px'}}
+                placeholder="Buscar por nombre o email..."
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+              />
+              <select
+                style={{...s.input, width:'auto', fontSize:12, padding:'7px 10px'}}
+                value={userFilterStatus}
+                onChange={e => setUserFilterStatus(e.target.value)}
+              >
+                <option value="all">Estado: todos</option>
+                <option value="online">En línea</option>
+                <option value="inactive">Inactivo</option>
+                <option value="never">Sin actividad</option>
+              </select>
+              <select
+                style={{...s.input, width:'auto', fontSize:12, padding:'7px 10px'}}
+                value={userFilterSeller}
+                onChange={e => setUserFilterSeller(e.target.value)}
+              >
+                <option value="all">Vendedor: todos</option>
+                <option value="none">Sin vendedor</option>
+                {sellers.filter(sel => sel.active).map(sel => (
+                  <option key={sel.id} value={sel.id}>{sel.name}</option>
+                ))}
+              </select>
+              {(userSearch || userFilterStatus !== 'all' || userFilterSeller !== 'all') && (
+                <button
+                  style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', background:'white', color:'#5a6380'}}
+                  onClick={() => { setUserSearch(''); setUserFilterStatus('all'); setUserFilterSeller('all'); }}
+                >
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+
             {loadingUsers && <p style={s.emptyMsg}>Cargando...</p>}
             {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
-            {users.map(u => {
-              const status = getStatus(u.id);
-              return (
-              <div key={u.id} style={s.userRow}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
-                    <span style={{ fontSize: 10, fontWeight: 600, color: status?.isActive ? '#15803d' : '#9aa3bc' }}>
-                      {status?.isActive ? 'En línea' : status ? 'Inactivo' : '—'}
-                    </span>
-                  </div>
-                  {status && (
-                    <>
-                      <span style={{ fontSize: 10, color: '#9aa3bc' }}>{status.pageLabel === '🏠' ? '🏠 Landing' : '🛍️ Catálogo'}</span>
-                      <span style={{ fontSize: 10, color: '#c4c9d9' }}>
-                        {new Date(status.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </>
-                  )}
-                </div>
-                <div style={s.userInfo}>
-                  <div style={s.productName}>{u.name || '—'}</div>
-                  <div style={s.productMeta}>{u.email}</div>
-                </div>
-                <div style={{display:'flex', gap:8, alignItems:'center'}}>
-                  <button
-                    onClick={() => setUserScaleModal(u)}
-                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
-                  >
-                    Escalas por producto
-                  </button>
-                  <select
-                    title="Escala de respaldo para productos sin asignación específica"
-                    style={{...s.input, width: 150, fontSize: 12, padding: '6px 10px'}}
-                    value={u.locality_id || ''}
-                    onChange={e => updateUserLocality(u.id, e.target.value)}
-                  >
-                    <option value="">Sin respaldo</option>
-                    {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                  <div style={{display:'flex', alignItems:'center', gap:6}}>
-                    <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
-                    <div
-                      onClick={() => {
-                        const newVal = u.send_confirmation_email === false ? true : false;
-                        setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
-                        supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
-                      }}
-                      style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
-                    >
-                      <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            {(() => {
+              const q = userSearch.trim().toLowerCase();
+              const filtered = users.filter(u => {
+                if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
+                if (userFilterSeller !== 'all') {
+                  if (userFilterSeller === 'none' && u.seller_id) return false;
+                  if (userFilterSeller !== 'none' && u.seller_id !== userFilterSeller) return false;
+                }
+                if (userFilterStatus !== 'all') {
+                  const st = getStatus(u.id);
+                  if (userFilterStatus === 'online' && !st?.isActive) return false;
+                  if (userFilterStatus === 'inactive' && (!st || st.isActive)) return false;
+                  if (userFilterStatus === 'never' && st) return false;
+                }
+                return true;
+              });
+              if (!loadingUsers && filtered.length === 0 && users.length > 0) {
+                return <p style={s.emptyMsg}>Sin usuarios para los filtros aplicados.</p>;
+              }
+              return filtered.map(u => {
+                const status = getStatus(u.id);
+                return (
+                  <div key={u.id} style={s.userRow}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
+                        <span style={{ fontSize: 10, fontWeight: 600, color: status?.isActive ? '#15803d' : '#9aa3bc' }}>
+                          {status?.isActive ? 'En línea' : status ? 'Inactivo' : '—'}
+                        </span>
+                      </div>
+                      {status && (
+                        <>
+                          <span style={{ fontSize: 10, color: '#9aa3bc' }}>{status.pageLabel === '🏠' ? '🏠 Landing' : '🛍️ Catálogo'}</span>
+                          <span style={{ fontSize: 10, color: '#c4c9d9' }}>
+                            {new Date(status.updated_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div style={s.userInfo}>
+                      <div style={s.productName}>{u.name || '—'}</div>
+                      <div style={s.productMeta}>{u.email}</div>
+                    </div>
+                    <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                      <button
+                        onClick={() => setUserScaleModal(u)}
+                        style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                      >
+                        Escalas por producto
+                      </button>
+                      <div style={{display:'flex', alignItems:'center', gap:6}}>
+                        <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
+                        <div
+                          onClick={() => {
+                            const newVal = u.send_confirmation_email === false ? true : false;
+                            setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
+                            supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
+                          }}
+                          style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                        >
+                          <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      </div>
+                      <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                        <button
+                          onClick={() => updateUserSeller(u.id, null)}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
+                        >
+                          Sin vendedor
+                        </button>
+                        {sellers.filter(sel => sel.active).map(sel => (
+                          <button
+                            key={sel.id}
+                            onClick={() => updateUserSeller(u.id, sel.id)}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
+                          >
+                            {sel.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
-                    <button
-                      onClick={() => updateUserSeller(u.id, null)}
-                      style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
-                    >
-                      Sin vendedor
-                    </button>
-                    {sellers.filter(sel => sel.active).map(sel => (
-                      <button
-                        key={sel.id}
-                        onClick={() => updateUserSeller(u.id, sel.id)}
-                        style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
-                      >
-                        {sel.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );})}
+                );
+              });
+            })()}
           </div>
         )}
 
@@ -3577,20 +3648,6 @@ export default function Admin() {
               <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setUserScaleModal(null)}>×</button>
             </div>
 
-            <div style={{display:'flex', flexWrap:'wrap', gap:8, alignItems:'center', padding:'10px 12px', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:8}}>
-              <span style={{fontSize:11, color:'#5a6380', fontWeight:800, textTransform:'uppercase'}}>Aplicar a todos</span>
-              {localities.filter(l => l.active).map(l => (
-                <button
-                  key={l.id}
-                  disabled={savingUserScaleKey === `${userScaleModal.id}_all`}
-                  onClick={() => applyUserScaleToAllProducts(userScaleModal.id, l.id)}
-                  style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:700, cursor:'pointer', background:'white', color:'#2D6BE4', opacity: savingUserScaleKey === `${userScaleModal.id}_all` ? 0.5 : 1}}
-                >
-                  {l.name}
-                </button>
-              ))}
-            </div>
-
             <div style={{overflowY:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}}>
               <div style={{display:'grid', gridTemplateColumns:'minmax(180px, 1fr) minmax(180px, 240px) minmax(160px, 1fr)', background:'#f8faff', borderBottom:'1.5px solid #dde1ef'}}>
                 <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Producto</div>
@@ -3723,6 +3780,98 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* MODAL INFO TAGS */}
+      {infoTagsModal && (() => {
+        const infoProduct = products.find(p => p.id === infoTagsModal.productId);
+        const tags = infoTagsModal.tags || [];
+
+        async function saveInfoTags(nextTags) {
+          setInfoTagsModal(prev => prev ? { ...prev, tags: nextTags } : prev);
+          await supabase.from('products').update({ info_tags: nextTags }).eq('id', infoTagsModal.productId);
+          loadProducts();
+        }
+
+        function addTag() {
+          const newTag = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), title: '', description: '' };
+          saveInfoTags([...tags, newTag]);
+        }
+
+        function updateTag(id, field, value) {
+          const next = tags.map(t => t.id === id ? { ...t, [field]: value } : t);
+          setInfoTagsModal(prev => prev ? { ...prev, tags: next } : prev);
+        }
+
+        function commitTagUpdate(id) {
+          saveInfoTags(infoTagsModal.tags);
+        }
+
+        function deleteTag(id) {
+          saveInfoTags(tags.filter(t => t.id !== id));
+        }
+
+        function moveTag(id, dir) {
+          const idx = tags.findIndex(t => t.id === id);
+          if (idx < 0) return;
+          const next = [...tags];
+          const swap = idx + dir;
+          if (swap < 0 || swap >= next.length) return;
+          [next[idx], next[swap]] = [next[swap], next[idx]];
+          saveInfoTags(next);
+        }
+
+        return (
+          <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:310, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setInfoTagsModal(null)}>
+            <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth:540, maxHeight:'82vh', overflow:'hidden', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+                <div>
+                  <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Tags INFO</div>
+                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{infoProduct?.name || ''}</div>
+                </div>
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setInfoTagsModal(null)}>×</button>
+              </div>
+
+              <div style={{overflowY:'auto', minHeight:0, flex:1, display:'flex', flexDirection:'column', gap:10}}>
+                {tags.length === 0 && (
+                  <p style={{color:'#9aa3bc', fontSize:13, textAlign:'center', padding:'20px 0'}}>Sin tags. Agregá una para empezar.</p>
+                )}
+                {tags.map((tag, i) => (
+                  <div key={tag.id} style={{border:'1.5px solid #dde1ef', borderRadius:10, padding:'12px 14px', background:'#f8faff', display:'flex', flexDirection:'column', gap:8}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <input
+                        style={{...s.input, flex:1, fontSize:13, fontWeight:700}}
+                        placeholder="Título de la tag"
+                        value={tag.title}
+                        onChange={e => updateTag(tag.id, 'title', e.target.value)}
+                        onBlur={() => commitTagUpdate(tag.id)}
+                      />
+                      <div style={{display:'flex', gap:4, flexShrink:0}}>
+                        <button style={{...s.iconBtn, fontSize:14, padding:'2px 6px'}} onClick={() => moveTag(tag.id, -1)} disabled={i === 0} title="Subir">↑</button>
+                        <button style={{...s.iconBtn, fontSize:14, padding:'2px 6px'}} onClick={() => moveTag(tag.id, 1)} disabled={i === tags.length - 1} title="Bajar">↓</button>
+                        <TrashBtn onClick={() => deleteTag(tag.id)} />
+                      </div>
+                    </div>
+                    <textarea
+                      style={{...s.input, resize:'vertical', fontFamily:'Barlow, sans-serif', fontSize:12, minHeight:56}}
+                      placeholder="Descripción de la tag..."
+                      value={tag.description}
+                      onChange={e => updateTag(tag.id, 'description', e.target.value)}
+                      onBlur={() => commitTagUpdate(tag.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <button
+                style={{...s.btnPrimary, padding:'9px 14px', fontSize:13, width:'100%'}}
+                onClick={addTag}
+              >
+                + Agregar tag
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
       {useProductManagementModals && productManageModal && modalProduct && (

@@ -135,6 +135,7 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [savingCategory, setSavingCategory] = useState(false);
+  const [infoTagsPopup, setInfoTagsPopup] = useState(null);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
@@ -1103,7 +1104,7 @@ const rawWA = profile?.sellers?.phone?.replace(/\D/g, '') || DEFAULT_WA;
 const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
   return (
-    <div id="catalogo-root" style={s.app}>
+    <div id="catalogo-root" style={s.app} onClick={() => { if (infoTagsPopup) setInfoTagsPopup(null); }}>
       <style>{`
         @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
         @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
@@ -1359,6 +1360,33 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         : d.image_url
                         ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
+                      {(() => {
+                        const tags = Array.isArray(activeProduct?.info_tags) ? activeProduct.info_tags : [];
+                        if (tags.length === 0) return null;
+                        const first = tags[0];
+                        return (
+                          <div
+                            style={{position:'absolute', bottom:6, right:6, display:'flex', alignItems:'center', gap:4, background:'rgba(17,32,64,0.75)', backdropFilter:'blur(4px)', borderRadius:6, padding:'3px 7px', cursor:'pointer', zIndex:10, maxWidth:'80%'}}
+                            onClick={e => { e.stopPropagation(); setInfoTagsPopup(infoTagsPopup === d.id ? null : d.id); }}
+                          >
+                            <span style={{fontSize:10, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{first.title}</span>
+                            <span style={{fontSize:12, color:'rgba(255,255,255,0.8)', lineHeight:1, flexShrink:0}}>+</span>
+                            {infoTagsPopup === d.id && (
+                              <div
+                                style={{position:'absolute', bottom:'calc(100% + 6px)', right:0, background:'white', border:'1.5px solid #dde1ef', borderRadius:10, padding:'12px 14px', minWidth:200, maxWidth:280, boxShadow:'0 8px 24px rgba(27,47,94,0.2)', zIndex:20, display:'flex', flexDirection:'column', gap:10}}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {tags.map(tag => (
+                                  <div key={tag.id}>
+                                    <div style={{fontSize:12, fontWeight:700, color:'#1B2F5E', marginBottom:3}}>{tag.title}</div>
+                                    {tag.description && <div style={{fontSize:11, color:'#5a6380', lineHeight:1.45}}>{tag.description}</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div style={s.cardBody}>
                       <div style={s.cardName}>{d.name}</div>
@@ -1461,6 +1489,46 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     <span style={s.badge}>{cartItems.length} {cartItems.length === 1 ? 'producto' : 'productos'}</span>
                   </div>
                 </div>
+                {showPrices && activeProduct?.show_price !== false && (() => {
+                  const productTiers = priceTiers
+                    .filter(t => t.product_id === activeProductId)
+                    .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
+                  if (productTiers.length === 0) return null;
+                  const currentQty = cartByProduct[activeProductId] || 0;
+                  return (
+                    <div style={{flex:'0 0 auto', maxHeight:'33vh', overflowY:'auto', borderBottom:'1.5px solid #dde1ef', background:'#f8faff'}}>
+                      <div style={{padding:'10px 16px 6px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                        <span style={{fontSize:11, fontWeight:800, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5}}>Escala de precios</span>
+                        <span style={{fontSize:11, fontWeight:600, color:'#9aa3bc'}}>{activeProduct.name}</span>
+                      </div>
+                      <div style={{padding:'0 16px 10px', display:'flex', flexDirection:'column', gap:4}}>
+                        {productTiers.map((tier, i) => {
+                          const qty = Number(tier.min_quantity);
+                          const price = Number(tier.price_per_unit);
+                          const nextTier = productTiers[i + 1];
+                          const isActive = currentQty >= qty && (!nextTier || currentQty < Number(nextTier.min_quantity));
+                          const isReached = currentQty >= qty;
+                          return (
+                            <div key={tier.id} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', borderRadius:7, border:`1.5px solid ${isActive ? '#2D6BE4' : isReached ? '#bbf7d0' : '#dde1ef'}`, background: isActive ? '#e8f0fe' : isReached ? '#f0fdf4' : 'white', transition:'all 0.15s'}}>
+                              <div style={{display:'flex', alignItems:'center', gap:6}}>
+                                {isActive && <span style={{width:6, height:6, borderRadius:'50%', background:'#2D6BE4', flexShrink:0}} />}
+                                {isReached && !isActive && <span style={{width:6, height:6, borderRadius:'50%', background:'#22c55e', flexShrink:0}} />}
+                                {!isReached && <span style={{width:6, height:6, borderRadius:'50%', background:'#dde1ef', flexShrink:0}} />}
+                                <span style={{fontSize:12, fontWeight:700, color: isActive ? '#1B2F5E' : isReached ? '#15803d' : '#5a6380'}}>{qty}+ u.</span>
+                              </div>
+                              <span style={{fontSize:13, fontWeight:800, color: isActive ? '#2D6BE4' : isReached ? '#15803d' : '#9aa3bc'}}>${price.toLocaleString('es-AR')}/u</span>
+                            </div>
+                          );
+                        })}
+                        {currentQty > 0 && (
+                          <div style={{fontSize:10, color:'#9aa3bc', textAlign:'center', marginTop:2}}>
+                            {currentQty} u. seleccionadas de {activeProduct.name}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div style={s.sidebarBody}>
                   {cartItems.length === 0 ? (
                     <div style={s.cartEmpty}><p>Tu pedido esta vacio.<br/>Agrega diseños del catalogo.</p></div>
