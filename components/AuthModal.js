@@ -45,26 +45,53 @@ export default function AuthModal({ onClose, onSuccess }) {
     setLoading(true);
     try {
       if (mode === 'login') {
-        const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        let { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        if (e?.message?.toLowerCase().includes('email not confirmed')) {
+          const res = await fetch('/api/auth/auto-confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: form.email }),
+          });
+          const result = await res.json();
+          if (result.confirmed) {
+            ({ data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password }));
+          }
+        }
         if (e) throw e;
         if (!data.user) throw new Error('invalid login credentials');
         onSuccess(data.user, { event_type: 'auth_login', method: 'email' });
       } else {
         if (!form.name.trim()) { setError('Ingresá el nombre de tu comercio.'); setLoading(false); return; }
         if (!form.phone.trim()) { setError('Ingresá tu teléfono.'); setLoading(false); return; }
-        const { data, error: e } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: { data: { full_name: form.name, phone: form.phone } },
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.email, password: form.password, name: form.name, phone: form.phone }),
         });
-        if (e) throw e;
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
-          setError('Ya existe una cuenta con ese email.');
-          setLoading(false);
-          return;
+        const result = await res.json();
+        if (result.error) { setError(result.error); setLoading(false); return; }
+        if (result.confirmationRequired) {
+          // Confirmation required — use standard signUp (sends confirmation email)
+          const { data, error: e } = await supabase.auth.signUp({
+            email: form.email,
+            password: form.password,
+            options: { data: { full_name: form.name, phone: form.phone } },
+          });
+          if (e) throw e;
+          if (data.user && data.user.identities && data.user.identities.length === 0) {
+            setError('Ya existe una cuenta con ese email.');
+            setLoading(false);
+            return;
+          }
+          if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
+          onSuccess(data.user, { event_type: 'auth_register', method: 'email' });
+        } else {
+          // User created confirmed — sign in directly
+          const { data, error: e } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+          if (e) throw e;
+          if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
+          onSuccess(data.user, { event_type: 'auth_register', method: 'email' });
         }
-        if (!data.user) { setError('Ocurrió un error. Intentá de nuevo.'); setLoading(false); return; }
-        onSuccess(data.user, { event_type: 'auth_register', method: 'email' });
       }
     } catch (e) {
       setError(translateError(e.message));
