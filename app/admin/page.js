@@ -567,7 +567,7 @@ export default function Admin() {
   }, [screen, activeTab]);
 
   const realtimeTimersRef = useRef({});
-  const confirmedSellersRef = useRef({});
+  const userOverridesRef = useRef({}); // { userId: { field: value, ... } } — protects optimistic updates from realtime
   useEffect(() => {
     if (screen !== 'panel') return;
 
@@ -1445,8 +1445,11 @@ export default function Admin() {
     setLoadingUsers(true);
     const { data } = await supabase.rpc('admin_get_profiles');
     if (data) {
-      const confirmed = confirmedSellersRef.current;
-      setUsers(data.map(u => u.id in confirmed ? { ...u, seller_id: confirmed[u.id] } : u));
+      const overrides = userOverridesRef.current;
+      setUsers(data.map(u => {
+        const override = overrides[u.id];
+        return override ? { ...u, ...override } : u;
+      }));
     }
     setLoadingUsers(false);
   }
@@ -1887,12 +1890,12 @@ export default function Admin() {
 
   async function updateUserSeller(userId, sellerId) {
     const normalizedSellerId = sellerId || null;
-    confirmedSellersRef.current[userId] = normalizedSellerId;
+    userOverridesRef.current[userId] = { ...userOverridesRef.current[userId], seller_id: normalizedSellerId };
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
     const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: normalizedSellerId });
     if (error) {
       console.error('Error al guardar vendedor:', error);
-      delete confirmedSellersRef.current[userId];
+      delete userOverridesRef.current[userId];
       loadUsers();
     } else {
       const user = users.find(u => u.id === userId);
@@ -3294,6 +3297,7 @@ export default function Admin() {
                         <div
                           onClick={() => {
                             const newVal = u.send_confirmation_email === false ? true : false;
+                            userOverridesRef.current[u.id] = { ...userOverridesRef.current[u.id], send_confirmation_email: newVal };
                             setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
                             supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
                           }}

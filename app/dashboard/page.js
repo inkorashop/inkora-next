@@ -26,6 +26,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('perfil');
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'mispedidos' || tab === 'pedidos') setActiveTab('pedidos');
+  }, []);
+
+  function switchTab(key) {
+    setActiveTab(key);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', key === 'pedidos' ? 'mispedidos' : 'miperfil');
+    window.history.replaceState(null, '', url.toString());
+  }
+
   // Profile form
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -117,8 +130,16 @@ const [savingProfile, setSavingProfile] = useState(false);
       {/* Header */}
       <header style={{ background: '#1B2F5E', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 16px rgba(27,47,94,0.25)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <a href="/" style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="INKORA" style={{ height: 36, filter: 'brightness(0) invert(1)' }} />
+          <a
+            href="#"
+            onClick={e => { e.preventDefault(); if (window.history.length > 1) window.history.back(); else router.replace('/'); }}
+            style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', transition: 'transform 0.3s ease, filter 0.3s ease' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.filter = 'drop-shadow(0 0 8px rgba(45,107,228,1))'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'none'; }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3851.7 5415.62" style={{ height: 36, width: 'auto', fill: 'white', fillRule: 'evenodd' }}>
+              <path d="M2716.33 2392.49l-395.78 595.37c104.16,158.12 210.84,282.15 210.95,500.49 0.14,332.45 -270.51,604.21 -604.21,604.21 -333.68,0 -604.2,-270.51 -604.2,-604.21 0,-110.21 29.53,-213.62 81.1,-302.66l1318.42 -1991.44c45.9,69.66 91.82,139.33 137.72,208.99 219.36,332.58 448.72,664.89 660.52,1001.6 107.52,170.93 183.37,342.58 247.33,533.71 95.44,302.36 100.58,561.17 57.96,872.87 -4.02,28.43 -8.92,55.75 -14.61,83.83 -193.2,899.02 -969.61,1506.15 -1884.24,1520.38 -1064.41,0 -1927.27,-862.86 -1927.27,-1927.27 0,-390.76 116.29,-754.35 316.16,-1058.06 199.85,-303.71 1619.83,-2430.3 1619.83,-2430.3l394.76 599.32 -1464.04 2175.48c-137.37,203.78 -217.56,449.31 -217.56,713.55 0,705.9 572.23,1278.13 1278.12,1278.13 705.9,0 1278.13,-572.23 1278.13,-1278.13 0,-252.97 -73.51,-488.77 -200.3,-687.23l-288.79 -408.63z"/>
+            </svg>
           </a>
           <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18 }}>|</span>
           <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>Mi Cuenta</span>
@@ -139,7 +160,7 @@ const [savingProfile, setSavingProfile] = useState(false);
           {[['perfil', 'Mi Perfil'], ['pedidos', 'Mis Pedidos']].map(([key, label]) => (
             <button key={key}
               style={{ flex: 1, padding: '13px 20px', border: 'none', background: activeTab === key ? '#1B2F5E' : 'white', color: activeTab === key ? 'white' : '#5a6380', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s, color 0.2s' }}
-              onClick={() => setActiveTab(key)}
+              onClick={() => switchTab(key)}
             >{label}</button>
           ))}
         </div>

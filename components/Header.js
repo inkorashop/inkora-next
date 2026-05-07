@@ -21,6 +21,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const historyRef = useRef(null);
+  const pendingCount = orders.filter(o => o.status === 'pending').length;
 
   useEffect(() => {
     const saved = localStorage.getItem('inkora_theme');
@@ -54,12 +55,12 @@ export default function Header({ headerVisible = true, showCart = false, page = 
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id);
+      if (u) { loadProfile(u.id); loadOrders(u.email); }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id); else setProfile(null);
+      if (u) { loadProfile(u.id); loadOrders(u.email); } else { setProfile(null); setOrders([]); }
       if (event === 'SIGNED_IN') track('auth_login', { method: 'supabase' });
     });
     function handleAuthSuccess() {
@@ -178,9 +179,14 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                   <line x1="3" y1="6" x2="21" y2="6"/>
                   <path d="M16 10a4 4 0 01-8 0"/>
                 </svg>
-                {totalItems > 0 && (
+                {cartItems.length > 0 && (
                   <span style={{ position: 'absolute', top: -6, right: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {totalItems}
+                    1
+                  </span>
+                )}
+                {pendingCount > 0 && (
+                  <span style={{ position: 'absolute', top: -6, left: -6, background: '#f6a800', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {pendingCount}
                   </span>
                 )}
               </button>
@@ -210,9 +216,26 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     )}
                   </div>
                   {cartItems.length > 0 && (
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                    <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <a href="/catalogo" style={{ display: 'block', background: '#2D6BE4', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
                         Ver pedido completo
+                      </a>
+                    </div>
+                  )}
+                  {pendingCount > 0 && (
+                    <div style={{ borderTop: darkMode ? '1px solid rgba(27,47,94,0.1)' : '1px solid rgba(255,255,255,0.1)', padding: '10px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ color: '#f6a800', fontWeight: 700, fontSize: 12 }}>Pedidos pendientes</span>
+                        <span style={{ background: '#f6a800', color: 'white', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 7px' }}>{pendingCount}</span>
+                      </div>
+                      {orders.filter(o => o.status === 'pending').slice(0, 2).map(o => (
+                        <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span style={{ color: darkMode ? '#1B2F5E' : 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 600, fontFamily: 'monospace' }}>{o.order_code}</span>
+                          <span style={{ color: darkMode ? '#5a6380' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>{o.total ? `$${Number(o.total).toLocaleString()}` : '—'}</span>
+                        </div>
+                      ))}
+                      <a href="/dashboard?tab=mispedidos" style={{ display: 'block', marginTop: 8, background: '#f6a800', color: 'white', textAlign: 'center', padding: '7px', borderRadius: 8, textDecoration: 'none', fontSize: 12, fontWeight: 700 }}>
+                        Ver todos los pedidos →
                       </a>
                     </div>
                   )}
@@ -241,7 +264,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                 <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 320, background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 32px rgba(27,47,94,0.18)', overflow: 'hidden', zIndex: 300 }}>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid #eef0f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#1B2F5E', fontWeight: 700, fontSize: 14 }}>Mis pedidos</span>
-                    <a href="/dashboard#pedidos" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
+                    <a href="/dashboard?tab=mispedidos" style={{ fontSize: 12, color: '#2D6BE4', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</a>
                   </div>
                   <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                     {loadingOrders ? (
@@ -269,7 +292,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     })}
                   </div>
                   <div style={{ padding: '10px 16px', borderTop: '1px solid #eef0f6' }}>
-                    <a href="/dashboard#pedidos" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+                    <a href="/dashboard?tab=mispedidos" style={{ display: 'block', background: '#1B2F5E', color: 'white', textAlign: 'center', padding: '9px', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
                       Ver historial completo
                     </a>
                   </div>
