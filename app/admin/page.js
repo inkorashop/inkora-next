@@ -4,12 +4,13 @@ import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
+import EmailsTab from '@/components/EmailsTab';
 
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history'];
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones' };
+const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history','emails'];
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -174,7 +175,7 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -3355,7 +3356,7 @@ export default function Admin() {
             </div>
 
             {/* Buscador + filtros */}
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8'}}>
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8', position:'sticky', top:38, zIndex:10, background:'white', paddingTop:10, marginTop:-10}}>
               <input
                 style={{...s.input, flex:'1 1 200px', minWidth:160, fontSize:13, padding:'7px 12px'}}
                 placeholder="Buscar por nombre o email..."
@@ -4435,6 +4436,11 @@ export default function Admin() {
             retentionDays={VERSION_SNAPSHOT_RETENTION_DAYS}
           />
         )}
+
+      {/* == EMAILS == */}
+      {activeTab === 'emails' && (
+        <EmailsTab supabase={supabase} />
+      )}
 
       {/* MODAL VER DATOS DE VERSION */}
       {versionSnapshotViewer.open && (

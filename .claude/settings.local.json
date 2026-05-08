@@ -28,7 +28,12 @@
       "Bash(Select-Object -ExpandProperty Line)",
       "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\api\\\\auth\\\\auto-confirm\")",
       "Bash(Out-Null)",
-      "Bash(Write-Output \"OK\")"
+      "Bash(Write-Output \"OK\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(ls \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.PSIsContainer } | Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\components\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [

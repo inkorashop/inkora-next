@@ -1,4 +1,38 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+async function loadEmailTemplates() {
+  try {
+    const sb = getAdminClient();
+    if (!sb) return {};
+    const { data } = await sb.from('settings').select('key,value').in('key', [
+      'email_template_admin', 'email_template_client',
+      'email_subject_admin', 'email_subject_client',
+    ]);
+    if (!data) return {};
+    return Object.fromEntries(data.map(r => [r.key, r.value]));
+  } catch { return {}; }
+}
+
+function applyTemplate(html, vars) {
+  return html
+    .replace(/\{\{orderCode\}\}/g, vars.orderCode || '')
+    .replace(/\{\{customerName\}\}/g, vars.customerName || '')
+    .replace(/\{\{customerEmail\}\}/g, vars.customerEmail || '')
+    .replace(/\{\{customerPhone\}\}/g, vars.customerPhone || '')
+    .replace(/\{\{sellerName\}\}/g, vars.sellerName || '')
+    .replace(/\{\{notes\}\}/g, vars.notes || '')
+    .replace(/\{\{fecha\}\}/g, vars.fecha || '')
+    .replace(/\{\{itemsTable\}\}/g, vars.itemsTable || '')
+    .replace(/\{\{totalSection\}\}/g, vars.totalSection || '');
+}
 
 function escapeCSV(value) {
   if (value === null || value === undefined) return '';
@@ -45,21 +79,45 @@ function buildTable(cartItems, hasPrice) {
     </tr>`;
   }).join('');
 
-  const totalPlanchas = cartItems.reduce((s, i) => s + (i.qty || 0), 0);
   const totalAmount = cartItems.reduce((s, i) => s + (i.pricePerUnit ? i.qty * i.pricePerUnit : 0), 0);
 
-  const footerTd = 'padding:7px 10px;font-weight:700;font-size:13px;border-top:2px solid #1B2F5E;';
-  const footer = hasPrice
-    ? `<tr style="background:#f8faff">
-        <td colspan="2" style="${footerTd}">Total</td>
-        <td style="${footerTd}text-align:center">${totalPlanchas} pl.</td>
+  // Group quantities by product name
+  const qtyByProduct = {};
+  for (const i of cartItems) {
+    const p = i.productName || '—';
+    qtyByProduct[p] = (qtyByProduct[p] || 0) + (i.qty || 0);
+  }
+  const productEntries = Object.entries(qtyByProduct);
+
+  const footerTd = 'padding:6px 10px;font-weight:700;font-size:12px;border-top:1px solid #dde1ef;';
+  const footerTdFirst = 'padding:6px 10px;font-weight:700;font-size:12px;border-top:2px solid #1B2F5E;';
+
+  const productRows = productEntries.map(([pName, pQty], idx) => {
+    const td = idx === 0 ? footerTdFirst : footerTd;
+    if (hasPrice) {
+      return `<tr style="background:#f8faff">
+        <td colspan="2" style="${td}">${pName}</td>
+        <td style="${td}text-align:center">${pQty}</td>
+        <td style="${td}"></td>
+        <td style="${td}"></td>
+      </tr>`;
+    }
+    return `<tr style="background:#f8faff">
+      <td colspan="2" style="${td}">${pName}</td>
+      <td style="${td}text-align:center">${pQty}</td>
+    </tr>`;
+  }).join('');
+
+  const totalRow = hasPrice
+    ? `<tr style="background:#eef4ff">
+        <td colspan="2" style="${footerTd}color:#1B2F5E">Total</td>
+        <td style="${footerTd}text-align:center;color:#1B2F5E"></td>
         <td style="${footerTd}"></td>
         <td style="${footerTd}text-align:right;color:#1B2F5E">$${totalAmount.toLocaleString('es-AR')}</td>
       </tr>`
-    : `<tr style="background:#f8faff">
-        <td colspan="2" style="${footerTd}">Total</td>
-        <td style="${footerTd}text-align:center">${totalPlanchas} pl.</td>
-      </tr>`;
+    : '';
+
+  const footer = productRows + totalRow;
 
   return `<table border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #dde1ef;border-radius:8px;overflow:hidden;margin-top:16px">
     <thead>${headers}</thead>
@@ -76,8 +134,23 @@ export async function POST(request) {
     const hasPrice = showPrice === true && cartItems.some(i => i.pricePerUnit !== null && i.pricePerUnit !== undefined && i.pricePerUnit > 0);
 
     const table = buildTable(cartItems, hasPrice);
+    const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : '';
 
-    const adminHtml = `
+    const tplVars = {
+      orderCode,
+      customerName: form.name,
+      customerEmail: form.email,
+      customerPhone: form.phone || '—',
+      sellerName: sellerName || '',
+      notes: notes || '',
+      fecha,
+      itemsTable: table,
+      totalSection,
+    };
+
+    const customTemplates = await loadEmailTemplates();
+
+    const defaultAdminHtml = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
         <div style="background:#1B2F5E;padding:20px 24px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0;font-size:18px">Nuevo pedido INKORA</h2>
@@ -92,9 +165,17 @@ export async function POST(request) {
           <p style="margin:6px 0 0;font-size:12px;color:#9aa3bc"><strong>Fecha:</strong> ${fecha}</p>
         </div>
         ${table}
-        ${hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : ''}
+        ${totalSection}
       </div>
     `;
+
+    const adminHtml = customTemplates['email_template_admin']
+      ? applyTemplate(customTemplates['email_template_admin'], tplVars)
+      : defaultAdminHtml;
+
+    const adminSubject = customTemplates['email_subject_admin']
+      ? applyTemplate(customTemplates['email_subject_admin'], tplVars)
+      : `Nuevo pedido ${orderCode} — ${form.name}`;
 
     // CSV
     const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Planchas', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
@@ -126,7 +207,7 @@ export async function POST(request) {
       body: JSON.stringify({
         from: 'INKORA <onboarding@resend.dev>',
         to: [process.env.EMAIL],
-        subject: `Nuevo pedido ${orderCode} — ${form.name}`,
+        subject: adminSubject,
         html: adminHtml,
         attachments: [{ filename: `pedido-${orderCode}.csv`, content: csvBase64 }],
       }),
@@ -139,7 +220,7 @@ export async function POST(request) {
 
     // Confirmation email to client
     if (form.email && sendConfirmation !== false) {
-      const clientHtml = `
+      const defaultClientHtml = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
           <div style="background:#1B2F5E;padding:20px 24px;border-radius:8px 8px 0 0">
             <h2 style="color:white;margin:0;font-size:18px">¡Recibimos tu pedido!</h2>
@@ -150,10 +231,18 @@ export async function POST(request) {
             ${notes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${notes}</p>` : ''}
           </div>
           ${table}
-          ${hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : ''}
+          ${totalSection}
           <p style="margin-top:16px;color:#5a6380;font-size:13px;text-align:center">Nos pondremos en contacto a la brevedad para confirmar tu pedido.</p>
         </div>
       `;
+
+      const clientHtml = customTemplates['email_template_client']
+        ? applyTemplate(customTemplates['email_template_client'], tplVars)
+        : defaultClientHtml;
+
+      const clientSubject = customTemplates['email_subject_client']
+        ? applyTemplate(customTemplates['email_subject_client'], tplVars)
+        : `Tu pedido ${orderCode} — INKORA`;
 
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -164,7 +253,7 @@ export async function POST(request) {
         body: JSON.stringify({
           from: 'INKORA <onboarding@resend.dev>',
           to: [form.email],
-          subject: `Tu pedido ${orderCode} — INKORA`,
+          subject: clientSubject,
           html: clientHtml,
         }),
       });

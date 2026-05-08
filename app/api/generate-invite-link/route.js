@@ -25,7 +25,7 @@ export async function POST(req) {
     const rawLink = linkData?.properties?.action_link;
     try {
       const token = new URL(rawLink).searchParams.get('token');
-      link = token ? `${siteUrl}/invite?token=${token}` : rawLink;
+      link = token ? `${siteUrl}/invite?token=${encodeURIComponent(token)}` : rawLink;
     } catch {
       link = rawLink;
     }

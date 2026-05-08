@@ -115,6 +115,7 @@ export default function Home() {
   const [form, setForm] = useState({ name: '', phone: '', email: '' });
   const [success, setSuccess] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
+  const [waCopied, setWaCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
@@ -1805,6 +1806,25 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     Listo ✓
                   </button>
                 </div>
+
+                {/* Caja opcional: copiar texto para WhatsApp */}
+                {(() => {
+                  const waText = "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (confirmedOrder.total > 0 ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '');
+                  return (
+                    <div style={{marginTop:24, borderTop:'1.5px dashed #dde1ef', paddingTop:18, textAlign:'left'}}>
+                      <p style={{fontSize:11, color:'#9aa3bc', margin:'0 0 8px', textAlign:'center', letterSpacing:0.3}}>También podés copiar el mensaje y mandarlo vos</p>
+                      <div style={{background:'#f4f9f4', border:'1.5px dashed #25D366', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.6, fontFamily:'monospace'}}>
+                        {waText}
+                      </div>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
+                        style={{marginTop:8, width:'100%', background: waCopied ? '#18a36a' : 'white', border:'1.5px solid #25D366', color: waCopied ? 'white' : '#18a36a', borderRadius:8, padding:'8px 0', fontSize:12, fontWeight:700, cursor:'pointer', transition:'all 0.2s', fontFamily:'Barlow, sans-serif'}}
+                      >
+                        {waCopied ? '¡Copiado!' : 'Copiar mensaje'}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
