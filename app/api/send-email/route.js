@@ -51,14 +51,14 @@ function buildTable(cartItems, hasPrice) {
     ? `<tr style="background:#1B2F5E;color:white;font-size:13px">
         <th style="${thStyle}">Producto</th>
         <th style="${thStyle}">Diseño</th>
-        <th style="${thStyle}text-align:center">Planchas</th>
+        <th style="${thStyle}text-align:center">Cantidad</th>
         <th style="${thStyle}text-align:right">Precio/u</th>
         <th style="${thStyle}text-align:right">Subtotal</th>
       </tr>`
     : `<tr style="background:#1B2F5E;color:white;font-size:13px">
         <th style="${thStyle}">Producto</th>
         <th style="${thStyle}">Diseño</th>
-        <th style="${thStyle}text-align:center">Planchas</th>
+        <th style="${thStyle}text-align:center">Cantidad</th>
       </tr>`;
 
   const rows = cartItems.map(i => {
@@ -178,7 +178,7 @@ export async function POST(request) {
       : `Nuevo pedido ${orderCode} — ${form.name}`;
 
     // CSV
-    const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Planchas', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
+    const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
     const csvRows = cartItems.map((item, idx) => [
       orderCode,
       form.name,
