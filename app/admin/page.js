@@ -2225,7 +2225,10 @@ export default function Admin() {
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            {isVariant
+                              ? <span style={{fontSize:12, color:'#9aa3bc', paddingLeft:4}}>{form.name || ''}</span>
+                              : <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            }
                           </td>
                           <td style={s.td}>
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
