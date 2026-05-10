@@ -267,6 +267,27 @@ export async function GET(request) {
 }
 </file>
 
+<file path="app/api/presence/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_KEY
+);
+
+export async function POST(request) {
+  try {
+    const { user_id } = await request.json();
+    if (!user_id) return NextResponse.json({ ok: false });
+    await supabase.from('user_presence').delete().eq('user_id', user_id);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false });
+  }
+}
+</file>
+
 <file path="app/api/upload-image/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -1371,27 +1392,6 @@ export async function POST(req) {
     return NextResponse.json({ confirmed: true });
   } catch {
     return NextResponse.json({ confirmed: false });
-  }
-}
-</file>
-
-<file path="app/api/presence/route.js">
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY
-);
-
-export async function POST(request) {
-  try {
-    const { user_id } = await request.json();
-    if (!user_id) return NextResponse.json({ ok: false });
-    await supabase.from('user_presence').delete().eq('user_id', user_id);
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false });
   }
 }
 </file>
@@ -4618,182 +4618,6 @@ export default function Header({ headerVisible = true, showCart = false, page = 
 }
 </file>
 
-<file path="sql/admin_realtime.sql">
--- INKORA - Admin realtime sync
--- Ejecutar en Supabase SQL Editor.
--- Habilita Postgres Changes para que todos los paneles admin abiertos
--- refresquen automaticamente cuando otra PC modifica datos.
-
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.admins
-    WHERE email = auth.jwt() ->> 'email'
-  );
-$$;
-
-GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
-
-DROP POLICY IF EXISTS "admins_read_profiles" ON public.profiles;
-CREATE POLICY "admins_read_profiles"
-  ON public.profiles FOR SELECT
-  USING (public.is_admin());
-
-CREATE TABLE IF NOT EXISTS public.admin_presence (
-  session_id text PRIMARY KEY,
-  email text NOT NULL,
-  tab text,
-  user_agent text,
-  updated_at timestamptz DEFAULT now(),
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS admin_presence_email_idx
-  ON public.admin_presence (email);
-
-CREATE INDEX IF NOT EXISTS admin_presence_updated_at_idx
-  ON public.admin_presence (updated_at DESC);
-
-ALTER TABLE public.admin_presence ENABLE ROW LEVEL SECURITY;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.admin_presence TO authenticated;
-
-DROP POLICY IF EXISTS "admins_read_admin_presence" ON public.admin_presence;
-DROP POLICY IF EXISTS "admins_insert_admin_presence" ON public.admin_presence;
-DROP POLICY IF EXISTS "admins_update_admin_presence" ON public.admin_presence;
-DROP POLICY IF EXISTS "admins_delete_admin_presence" ON public.admin_presence;
-
-CREATE POLICY "admins_read_admin_presence"
-  ON public.admin_presence FOR SELECT
-  USING (public.is_admin());
-
-CREATE POLICY "admins_insert_admin_presence"
-  ON public.admin_presence FOR INSERT
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "admins_update_admin_presence"
-  ON public.admin_presence FOR UPDATE
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "admins_delete_admin_presence"
-  ON public.admin_presence FOR DELETE
-  USING (public.is_admin());
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_publication
-    WHERE pubname = 'supabase_realtime'
-  ) THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-END $$;
-
-CREATE OR REPLACE FUNCTION public.add_table_to_supabase_realtime(table_name text)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  table_regclass regclass;
-BEGIN
-  table_regclass := to_regclass('public.' || quote_ident(table_name));
-
-  IF table_regclass IS NULL THEN
-    RAISE NOTICE 'Tabla public.% no existe, se omite realtime.', table_name;
-    RETURN;
-  END IF;
-
-  BEGIN
-    EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %s', table_regclass);
-  EXCEPTION
-    WHEN duplicate_object THEN
-      RAISE NOTICE 'Tabla public.% ya estaba en supabase_realtime.', table_name;
-  END;
-END;
-$$;
-
-SELECT public.add_table_to_supabase_realtime(table_name)
-FROM (
-  VALUES
-    ('products'),
-    ('designs'),
-    ('localities'),
-    ('price_tiers'),
-    ('user_product_localities'),
-    ('admins'),
-    ('orders'),
-    ('settings'),
-    ('sellers'),
-    ('profiles'),
-    ('click_events'),
-    ('user_activity_events'),
-    ('user_presence'),
-    ('production_stock'),
-    ('production_status'),
-    ('production_stock_log'),
-    ('admin_presence'),
-    ('admin_activity_events'),
-    ('admin_version_snapshots')
-) AS realtime_tables(table_name);
-
-DROP FUNCTION IF EXISTS public.add_table_to_supabase_realtime(text);
-</file>
-
-<file path=".claude/settings.local.json">
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run:*)",
-      "Bash(vercel:*)",
-      "Bash(npx vercel:*)",
-      "Bash(npx supabase:*)",
-      "Skill(keybindings-help)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)",
-      "Skill(update-config)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Recurse -Directory)",
-      "Bash(Select-Object -First 20)",
-      "Bash(Format-Table FullName)",
-      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\catalogo\\\\page.js\" | Measure-Object -Line\\).Lines)",
-      "Bash(ls ~/.claude/projects/ 2>/dev/null | head -20)",
-      "Read(//c/Users/Franco/.claude/projects/**)",
-      "Bash(python3 -)",
-      "Read(//c/Users/Franco/.claude//**)",
-      "Read(//c/Users/Franco/.claude/**)",
-      "Bash(mkdir -p \"c:/Users/Franco/Desktop/inkora-next/.claude\")",
-      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'table|thead|tbody|<th>|<td>' | Select-Object -First 30\")",
-      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'create.*user|invite|new.*user|add.*user|user.*modal' -AllMatches | Select-Object -First 30\")",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Directory -Depth 2 | Select-Object -ExpandProperty FullName | Where-Object {$_ -notmatch \"node_modules|\\\\.next|\\\\.git\"})",
-      "Bash(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\sql\\\\setup.sql\")",
-      "Bash(Select-String -Pattern \"CREATE TABLE\")",
-      "Bash(Select-Object -ExpandProperty Line)",
-      "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\api\\\\auth\\\\auto-confirm\")",
-      "Bash(Out-Null)",
-      "Bash(Write-Output \"OK\")",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Directory)",
-      "Bash(Select-Object Name)",
-      "PowerShell(ls \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.PSIsContainer } | Select-Object -ExpandProperty Name)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\components\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)"
-    ],
-    "defaultMode": "bypassPermissions",
-    "additionalDirectories": [
-      "c:\\Users\\Franco\\Desktop\\inkora-next\\.claude"
-    ]
-  }
-}
-</file>
-
 <file path="app/page.js">
 'use client';
 import { useState, useEffect } from 'react';
@@ -4830,7 +4654,7 @@ export default function Landing() {
     
 
     supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
+      .then(({ data }) => { if (data) setProducts(data.filter(p => !p.parent_product_id)); });
 
     supabase.from('settings').select('*')
       .then(({ data }) => {
@@ -5050,6 +4874,182 @@ export default function Landing() {
       </footer>
     </div>
   );
+}
+</file>
+
+<file path="sql/admin_realtime.sql">
+-- INKORA - Admin realtime sync
+-- Ejecutar en Supabase SQL Editor.
+-- Habilita Postgres Changes para que todos los paneles admin abiertos
+-- refresquen automaticamente cuando otra PC modifica datos.
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.admins
+    WHERE email = auth.jwt() ->> 'email'
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
+DROP POLICY IF EXISTS "admins_read_profiles" ON public.profiles;
+CREATE POLICY "admins_read_profiles"
+  ON public.profiles FOR SELECT
+  USING (public.is_admin());
+
+CREATE TABLE IF NOT EXISTS public.admin_presence (
+  session_id text PRIMARY KEY,
+  email text NOT NULL,
+  tab text,
+  user_agent text,
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS admin_presence_email_idx
+  ON public.admin_presence (email);
+
+CREATE INDEX IF NOT EXISTS admin_presence_updated_at_idx
+  ON public.admin_presence (updated_at DESC);
+
+ALTER TABLE public.admin_presence ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.admin_presence TO authenticated;
+
+DROP POLICY IF EXISTS "admins_read_admin_presence" ON public.admin_presence;
+DROP POLICY IF EXISTS "admins_insert_admin_presence" ON public.admin_presence;
+DROP POLICY IF EXISTS "admins_update_admin_presence" ON public.admin_presence;
+DROP POLICY IF EXISTS "admins_delete_admin_presence" ON public.admin_presence;
+
+CREATE POLICY "admins_read_admin_presence"
+  ON public.admin_presence FOR SELECT
+  USING (public.is_admin());
+
+CREATE POLICY "admins_insert_admin_presence"
+  ON public.admin_presence FOR INSERT
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_update_admin_presence"
+  ON public.admin_presence FOR UPDATE
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+CREATE POLICY "admins_delete_admin_presence"
+  ON public.admin_presence FOR DELETE
+  USING (public.is_admin());
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication
+    WHERE pubname = 'supabase_realtime'
+  ) THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.add_table_to_supabase_realtime(table_name text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  table_regclass regclass;
+BEGIN
+  table_regclass := to_regclass('public.' || quote_ident(table_name));
+
+  IF table_regclass IS NULL THEN
+    RAISE NOTICE 'Tabla public.% no existe, se omite realtime.', table_name;
+    RETURN;
+  END IF;
+
+  BEGIN
+    EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %s', table_regclass);
+  EXCEPTION
+    WHEN duplicate_object THEN
+      RAISE NOTICE 'Tabla public.% ya estaba en supabase_realtime.', table_name;
+  END;
+END;
+$$;
+
+SELECT public.add_table_to_supabase_realtime(table_name)
+FROM (
+  VALUES
+    ('products'),
+    ('designs'),
+    ('localities'),
+    ('price_tiers'),
+    ('user_product_localities'),
+    ('admins'),
+    ('orders'),
+    ('settings'),
+    ('sellers'),
+    ('profiles'),
+    ('click_events'),
+    ('user_activity_events'),
+    ('user_presence'),
+    ('production_stock'),
+    ('production_status'),
+    ('production_stock_log'),
+    ('admin_presence'),
+    ('admin_activity_events'),
+    ('admin_version_snapshots')
+) AS realtime_tables(table_name);
+
+DROP FUNCTION IF EXISTS public.add_table_to_supabase_realtime(text);
+</file>
+
+<file path=".claude/settings.local.json">
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(vercel:*)",
+      "Bash(npx vercel:*)",
+      "Bash(npx supabase:*)",
+      "Skill(keybindings-help)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Skill(update-config)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\catalogo\\\\page.js\" | Measure-Object -Line\\).Lines)",
+      "Bash(ls ~/.claude/projects/ 2>/dev/null | head -20)",
+      "Read(//c/Users/Franco/.claude/projects/**)",
+      "Bash(python3 -)",
+      "Read(//c/Users/Franco/.claude//**)",
+      "Read(//c/Users/Franco/.claude/**)",
+      "Bash(mkdir -p \"c:/Users/Franco/Desktop/inkora-next/.claude\")",
+      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'table|thead|tbody|<th>|<td>' | Select-Object -First 30\")",
+      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\admin\\\\page.js' -Pattern 'create.*user|invite|new.*user|add.*user|user.*modal' -AllMatches | Select-Object -First 30\")",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Directory -Depth 2 | Select-Object -ExpandProperty FullName | Where-Object {$_ -notmatch \"node_modules|\\\\.next|\\\\.git\"})",
+      "Bash(Get-Content \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\sql\\\\setup.sql\")",
+      "Bash(Select-String -Pattern \"CREATE TABLE\")",
+      "Bash(Select-Object -ExpandProperty Line)",
+      "Bash(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\\\\api\\\\auth\\\\auto-confirm\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"OK\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(ls \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.PSIsContainer } | Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\app\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Franco\\\\Desktop\\\\inkora-next\\\\components\" -Recurse | Where-Object { $_.Extension -eq '.js' -or $_.Extension -eq '.jsx' -or $_.Extension -eq '.ts' -or $_.Extension -eq '.tsx' } | Select-Object -ExpandProperty FullName | Sort-Object)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "c:\\Users\\Franco\\Desktop\\inkora-next\\.claude"
+    ]
+  }
 }
 </file>
 
@@ -7051,9 +7051,10 @@ export default function Home() {
   }, [searchQuery, fuse, designs]);
 
   
-  const categories = ['Todos', ...(Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
+  const productCats = Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
     ? activeProduct.categories
-    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))])];
+    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))];
+  const categories = productCats.length >= 1 ? ['Todos', ...productCats] : [];
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
@@ -7088,7 +7089,8 @@ export default function Home() {
   }, {});
 
   function getProductMinQty(productId) {
-    const tiers = priceTiers.filter(t => t.product_id === productId);
+    const effectiveTiersProductId = (() => { const p = products.find(pr => pr.id === productId); return p?.use_parent_tiers && p?.parent_product_id ? p.parent_product_id : productId; })();
+    const tiers = priceTiers.filter(t => t.product_id === effectiveTiersProductId);
     if (tiers.length === 0) return null;
     return Math.min(...tiers.map(t => Number(t.min_quantity)));
   }
@@ -7356,7 +7358,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           <div style={s.filters}>
-            {categories.map(cat => {
+            {categories.length > 0 && categories.map(cat => {
               const activeProd = products.find(p => p.id === activeProductId);
               const savedColor = activeProd?.category_colors?.[cat];
               const bg = savedColor || '#e8eef9';
@@ -7485,24 +7487,22 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         return (
                           <div style={{position:'absolute', bottom:6, right:6, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, zIndex:10}}>
                             {tags.map(tag => (
-                              <div key={tag.id} style={{display:'flex', alignItems:'center', gap:3, background: tag.color || 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', maxWidth:90}}>
+                              <div key={tag.id}
+                                style={{display:'flex', alignItems:'center', gap:3, background: tag.color || 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', maxWidth:110, cursor:'pointer'}}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (infoTagsPopup?.designId === d.id) {
+                                    setInfoTagsPopup(null);
+                                  } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
+                                  }
+                                }}
+                              >
                                 <span style={{fontSize:9, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{tag.title}</span>
+                                <span style={{fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.7)', flexShrink:0}}>+</span>
                               </div>
                             ))}
-                            <div
-                              style={{display:'flex', alignItems:'center', gap:3, background:'rgba(17,32,64,0.60)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', cursor:'pointer'}}
-                              onClick={e => {
-                                e.stopPropagation();
-                                if (infoTagsPopup?.designId === d.id) {
-                                  setInfoTagsPopup(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
-                                }
-                              }}
-                            >
-                              <span style={{fontSize:9, fontWeight:700, color:'white'}}>+</span>
-                            </div>
                           </div>
                         );
                       })()}
@@ -7590,7 +7590,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
         {!isMobile && (() => {
           const scaleBoxTiers = showPrices && !sidebarCollapsed && activeProduct?.show_price !== false
-            ? priceTiers.filter(t => t.product_id === activeProductId).sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity))
+            ? (() => { const ap = products.find(p => p.id === activeProductId); const effectiveId = ap?.use_parent_tiers && ap?.parent_product_id ? ap.parent_product_id : activeProductId; return priceTiers.filter(t => t.product_id === effectiveId).sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity)); })()
             : [];
           const hasScaleBox = scaleBoxTiers.length > 0;
           const headerOffset = headerVisible ? 64 : 0;
@@ -8083,7 +8083,7 @@ import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
 
-const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
+const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
 const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history','emails'];
@@ -8801,7 +8801,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 } };
+        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 }, use_parent_tiers: p.use_parent_tiers === true };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -9127,7 +9127,7 @@ export default function Admin() {
   function getProductCategories(productId) {
     const p = products.find(pr => pr.id === productId);
     const cats = p?.categories;
-    return (Array.isArray(cats) && cats.length > 0) ? cats : ['Todos'];
+    return (Array.isArray(cats) && cats.length > 0) ? cats : [];
   }
 
   async function saveDesignCategory(id, category) {
@@ -9260,7 +9260,7 @@ export default function Admin() {
 
   async function removeProductCategory(productId, cat) {
     const current = getProductCategories(productId);
-    if (current.length <= 1) return;
+    if (current.length === 0) return;
     const updated = current.filter(c => c !== cat);
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
     trackAdminActivity('product_category_delete', { product_id: productId, category: cat }, 'products');
@@ -9551,10 +9551,15 @@ export default function Admin() {
   async function updateScaleSeller(localityId, sellerId) {
     const value = sellerId || null;
     await supabase.from('localities').update({ seller_id: value }).eq('id', localityId);
-    const locality = localities.find(l => l.id === localityId);
-    const seller = sellers.find(s => s.id === value);
-    trackAdminActivity('locality_seller_update', { locality_id: localityId, locality_name: locality?.name, seller_id: value, seller_name: seller?.name || null }, 'localities');
-    setLocalities(prev => prev.map(l => l.id === localityId ? { ...l, seller_id: value } : l));
+  }
+
+  async function renameLocality(id, name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await supabase.from('localities').update({ name: trimmed }).eq('id', id);
+    setLocalities(prev => prev.map(l => l.id === id ? { ...l, name: trimmed } : l));
+    const locality = localities.find(l => l.id === id);
+    trackAdminActivity('locality_rename', { locality_id: id, locality_name: trimmed }, 'localities');
   }
 
   // ── Users ──
@@ -10162,6 +10167,7 @@ export default function Admin() {
     <div style={s.loginWrap}>
       {sessionBar}
       <div style={s.loginBox}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
         <h2 style={s.loginTitle}>Panel de Administración</h2>
         <button style={s.btnGoogle} onClick={signInWithGoogle}>
@@ -10180,6 +10186,7 @@ export default function Admin() {
     <div style={s.loginWrap}>
       {sessionBar}
       <div style={s.loginBox}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
         <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>Acceso denegado</div>
         <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>Tu cuenta no tiene permisos de administrador.</p>
@@ -10192,6 +10199,7 @@ export default function Admin() {
   return (
     <div style={s.wrap}>
       <header style={s.header}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
         <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
@@ -10299,7 +10307,10 @@ export default function Admin() {
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
                           <td style={s.td}>
-                            <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            {isVariant
+                              ? <span style={{fontSize:12, color:'#9aa3bc', paddingLeft:4}}>{form.name || ''}</span>
+                              : <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
+                            }
                           </td>
                           <td style={s.td}>
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
@@ -10550,7 +10561,8 @@ export default function Admin() {
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               {form.landing_image ? (
                                 <>
-                                  <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={form.landing_image} alt="" style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
                                   <button
                                     onClick={() => { updateProductForm(p.id, 'landing_image', ''); saveProduct(p.id, {landing_image: null}); }}
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
@@ -10970,6 +10982,7 @@ export default function Admin() {
                       return (
                         <div key={i} style={s.fileRow}>
                           {entry.preview
+                            // eslint-disable-next-line @next/next/no-img-element
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
@@ -11065,7 +11078,9 @@ export default function Admin() {
                 >
                   <div style={s.designInfo}>
                     {d.model_url
+                      // eslint-disable-next-line @next/next/no-img-element
                       ? <img src={d.image_url} alt={d.name} style={s.designThumb} />
+                      // eslint-disable-next-line @next/next/no-img-element
                       : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
                     }
                     <div>
@@ -12315,9 +12330,28 @@ export default function Admin() {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
               const activeLocalities = filteredLocalities();
               const newScaleName = newScaleNames[modalProduct.id] || '';
+              const isVariant = !!modalProduct.parent_product_id;
+              const useParentTiers = productForms[modalProduct.id]?.use_parent_tiers === true;
 
               return (
                 <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  {isVariant && (
+                    <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: useParentTiers ? '#eef4ff' : '#f8faff', border:`1.5px solid ${useParentTiers ? '#2D6BE4' : '#dde1ef'}`, borderRadius:8}}>
+                      <span style={{flex:1, fontSize:12, color:'#2d3352', fontWeight:600}}>Usar escalas del producto padre</span>
+                      <button
+                        onClick={async () => {
+                          const next = !useParentTiers;
+                          updateProductForm(modalProduct.id, 'use_parent_tiers', next);
+                          await supabase.from('products').update({ use_parent_tiers: next }).eq('id', modalProduct.id);
+                        }}
+                        style={{border:`1.5px solid ${useParentTiers ? '#2D6BE4' : '#dde1ef'}`, borderRadius:20, padding:'4px 14px', fontSize:12, fontWeight:700, cursor:'pointer', background: useParentTiers ? '#2D6BE4' : 'white', color: useParentTiers ? 'white' : '#9aa3bc', fontFamily:'Barlow, sans-serif'}}
+                      >
+                        {useParentTiers ? 'Activado' : 'Desactivado'}
+                      </button>
+                    </div>
+                  )}
+                  {useParentTiers && <div style={{fontSize:12, color:'#9aa3bc', padding:'0 2px'}}>Las escalas propias quedan guardadas pero inactivas. Se usan las del producto padre.</div>}
+                  <div style={{opacity: useParentTiers ? 0.4 : 1, pointerEvents: useParentTiers ? 'none' : 'auto'}}>
                   {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera abajo.</p> : (
                   <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
                     <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
@@ -12346,7 +12380,17 @@ export default function Admin() {
                           style={{background: dragOverLocalityId === locality.id ? '#2D6BE4' : '#1B2F5E', color:'white', padding:'6px 8px 6px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, borderBottom:'1px solid #dde1ef', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab', opacity: draggingLocalityId === locality.id ? 0.45 : 1}}
                         >
                           <span style={{color:'rgba(255,255,255,0.55)', fontSize:13, lineHeight:1}}>⠿</span>
-                          <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                          {useParentTiers
+                            ? <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                            : <input
+                                defaultValue={locality.name}
+                                onBlur={e => renameLocality(locality.id, e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); e.stopPropagation(); }}
+                                onClick={e => e.stopPropagation()}
+                                onDragStart={e => e.stopPropagation()}
+                                style={{background:'transparent', border:'none', borderBottom:'1px solid rgba(255,255,255,0.35)', color:'white', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:800, letterSpacing:0.5, textTransform:'uppercase', outline:'none', width:120, minWidth:60, padding:'1px 2px'}}
+                              />
+                          }
                           <select
                             value={locality.seller_id || ''}
                             onChange={e => updateScaleSeller(locality.id, e.target.value)}
@@ -12422,6 +12466,7 @@ export default function Admin() {
                       onKeyUp={e => e.stopPropagation()}
                     />
                     <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
+                  </div>
                   </div>
                 </div>
               );
