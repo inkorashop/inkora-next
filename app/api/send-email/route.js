@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -63,15 +64,18 @@ function buildTable(cartItems, hasPrice) {
 
   const rows = cartItems.map(i => {
     const rowStyle = 'font-size:13px;';
+    const pricing = getOrderItemPricing(i);
+
     if (hasPrice) {
       return `<tr style="${rowStyle}">
         <td style="${tdStyle}">${i.productName || '—'}</td>
         <td style="${tdStyle}">${i.name || '—'}</td>
         <td style="${tdStyle}text-align:center">${i.qty}</td>
-        <td style="${tdStyle}text-align:right">${i.pricePerUnit ? `$${Number(i.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
-        <td style="${tdStyle}text-align:right">${i.pricePerUnit ? `$${(i.qty * i.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
+        <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}</td>
+        <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.subtotal) : '—'}</td>
       </tr>`;
     }
+
     return `<tr style="${rowStyle}">
       <td style="${tdStyle}">${i.productName || '—'}</td>
       <td style="${tdStyle}">${i.name || '—'}</td>
@@ -79,14 +83,14 @@ function buildTable(cartItems, hasPrice) {
     </tr>`;
   }).join('');
 
-  const totalAmount = cartItems.reduce((s, i) => s + (i.pricePerUnit ? i.qty * i.pricePerUnit : 0), 0);
+  const totalAmount = getOrderItemsTotal(cartItems);
 
-  // Group quantities by product name
   const qtyByProduct = {};
   for (const i of cartItems) {
     const p = i.productName || '—';
-    qtyByProduct[p] = (qtyByProduct[p] || 0) + (i.qty || 0);
+    qtyByProduct[p] = (qtyByProduct[p] || 0) + (Number(i.qty) || 0);
   }
+
   const productEntries = Object.entries(qtyByProduct);
 
   const footerTd = 'padding:6px 10px;font-weight:700;font-size:12px;border-top:1px solid #dde1ef;';
@@ -94,6 +98,7 @@ function buildTable(cartItems, hasPrice) {
 
   const productRows = productEntries.map(([pName, pQty], idx) => {
     const td = idx === 0 ? footerTdFirst : footerTd;
+
     if (hasPrice) {
       return `<tr style="background:#f8faff">
         <td colspan="2" style="${td}">${pName}</td>
@@ -102,6 +107,7 @@ function buildTable(cartItems, hasPrice) {
         <td style="${td}"></td>
       </tr>`;
     }
+
     return `<tr style="background:#f8faff">
       <td colspan="2" style="${td}">${pName}</td>
       <td style="${td}text-align:center">${pQty}</td>
@@ -113,7 +119,7 @@ function buildTable(cartItems, hasPrice) {
         <td colspan="2" style="${footerTd}color:#1B2F5E">Total</td>
         <td style="${footerTd}text-align:center;color:#1B2F5E"></td>
         <td style="${footerTd}"></td>
-        <td style="${footerTd}text-align:right;color:#1B2F5E">$${totalAmount.toLocaleString('es-AR')}</td>
+        <td style="${footerTd}text-align:right;color:#1B2F5E">${formatOrderMoney(totalAmount)}</td>
       </tr>`
     : '';
 
@@ -128,13 +134,14 @@ function buildTable(cartItems, hasPrice) {
 
 export async function POST(request) {
   try {
-    const { orderCode, form, cartItems, total, showPrice, notes, sellerName, sendConfirmation } = await request.json();
+    const { orderCode, form, cartItems, showPrice, notes, sellerName, sendConfirmation } = await request.json();
     const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
-    const hasPrice = showPrice === true && cartItems.some(i => i.pricePerUnit !== null && i.pricePerUnit !== undefined && i.pricePerUnit > 0);
+    const hasPrice = showPrice === true && cartItems.some(i => getOrderItemPricing(i).hasPrice);
+    const emailTotal = hasPrice ? getOrderItemsTotal(cartItems) : 0;
 
     const table = buildTable(cartItems, hasPrice);
-    const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : '';
+    const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: ${formatOrderMoney(emailTotal)}</div>` : '';
 
     const tplVars = {
       orderCode,
@@ -179,21 +186,25 @@ export async function POST(request) {
 
     // CSV
     const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
-    const csvRows = cartItems.map((item, idx) => [
-      orderCode,
-      form.name,
-      form.email,
-      form.phone || '',
-      item.productName || '',
-      item.name,
-      item.qty,
-      hasPrice && item.pricePerUnit ? item.pricePerUnit : '',
-      hasPrice && item.pricePerUnit ? item.qty * item.pricePerUnit : '',
-      idx === 0 && hasPrice ? total : '',
-      idx === 0 ? (notes || '') : '',
-      idx === 0 ? (sellerName || '') : '',
-      idx === 0 ? fecha : '',
-    ].map(escapeCSV).join(','));
+    const csvRows = cartItems.map((item, idx) => {
+      const pricing = getOrderItemPricing(item);
+
+      return [
+        orderCode,
+        form.name,
+        form.email,
+        form.phone || '',
+        item.productName || '',
+        item.name,
+        item.qty,
+        hasPrice && pricing.hasPrice ? Math.round(pricing.unitPrice) : '',
+        hasPrice && pricing.hasPrice ? Math.round(pricing.subtotal) : '',
+        idx === 0 && hasPrice ? emailTotal : '',
+        idx === 0 ? (notes || '') : '',
+        idx === 0 ? (sellerName || '') : '',
+        idx === 0 ? fecha : '',
+      ].map(escapeCSV).join(',');
+    });
 
     const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
     const csvBase64 = Buffer.from('﻿' + csvContent, 'utf-8').toString('base64');

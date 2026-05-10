@@ -81,6 +81,7 @@ app/page.js
 app/page.module.css
 components/AuthModal.js
 components/EmailsTab.js
+components/GoogleOneTap.js
 components/Header.js
 components/ModelViewer.js
 components/ProductionTab.js
@@ -90,6 +91,7 @@ contexts/CartContext.js
 hooks/useTrack.js
 jsconfig.json
 lib/auth.js
+lib/order-pricing.js
 lib/supabase-browser.js
 lib/supabase-server.js
 lib/supabase.js
@@ -270,6 +272,7 @@ export async function GET(request) {
 <file path="app/api/presence/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -291,6 +294,7 @@ export async function POST(request) {
 <file path="app/api/upload-image/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -1145,6 +1149,208 @@ export async function getUserProfile(userId) {
 }
 </file>
 
+<file path="lib/order-pricing.js">
+function toMoneyNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeQty(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+export function formatOrderMoney(value) {
+  const number = toMoneyNumber(value);
+  if (number === null) return '—';
+  return `$${Math.round(number).toLocaleString('es-AR')}`;
+}
+
+export function getStoredUnitPrice(item) {
+  return toMoneyNumber(
+    item?.pricePerUnit ??
+    item?.unitPrice ??
+    item?.price_per_unit ??
+    item?.unit_price ??
+    item?.price
+  );
+}
+
+export function getStoredItemSubtotal(item) {
+  return toMoneyNumber(
+    item?.subtotal ??
+    item?.lineTotal ??
+    item?.line_total ??
+    item?.total
+  );
+}
+
+export function getStoredItemsTotal(items) {
+  if (!Array.isArray(items)) return 0;
+
+  return items.reduce((sum, item) => {
+    if (item?.showPrice === false) return sum;
+
+    const qty = normalizeQty(item?.qty);
+    const storedSubtotal = getStoredItemSubtotal(item);
+
+    if (storedSubtotal !== null && storedSubtotal > 0) {
+      return sum + storedSubtotal;
+    }
+
+    const storedUnit = getStoredUnitPrice(item);
+
+    if (storedUnit !== null && storedUnit > 0) {
+      return sum + qty * storedUnit;
+    }
+
+    return sum;
+  }, 0);
+}
+
+export function canInferSingleProductUnitPrice(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const visibleItems = items.filter(item => item?.showPrice !== false && normalizeQty(item?.qty) > 0);
+
+  if (visibleItems.length === 0) return false;
+
+  const productKeys = visibleItems.map(item =>
+    item?.product_id ||
+    item?.productId ||
+    item?.productName ||
+    item?.product_name ||
+    ''
+  );
+
+  if (productKeys.some(key => !key)) return false;
+
+  return new Set(productKeys).size === 1;
+}
+
+export function getLegacySingleProductUnitPrice(order) {
+  if (!canInferSingleProductUnitPrice(order)) return null;
+
+  const total = toMoneyNumber(order?.total);
+  if (total === null || total <= 0) return null;
+
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const totalQty = items.reduce((sum, item) => {
+    if (item?.showPrice === false) return sum;
+    return sum + normalizeQty(item?.qty);
+  }, 0);
+
+  if (totalQty <= 0) return null;
+
+  return total / totalQty;
+}
+
+export function orderHasStoredPriceMismatch(order) {
+  const total = toMoneyNumber(order?.total);
+  if (total === null || total <= 0) return false;
+
+  const storedItemsTotal = getStoredItemsTotal(order?.items);
+  if (!storedItemsTotal || storedItemsTotal <= 0) return false;
+
+  return Math.abs(storedItemsTotal - total) > 1;
+}
+
+export function getOrderItemPricing(item, order = null) {
+  const qty = normalizeQty(item?.qty);
+
+  if (item?.showPrice === false) {
+    return {
+      unitPrice: null,
+      subtotal: null,
+      hasPrice: false,
+      source: 'hidden',
+    };
+  }
+
+  const shouldInferLegacySingleProductPrice =
+    order &&
+    orderHasStoredPriceMismatch(order) &&
+    canInferSingleProductUnitPrice(order);
+
+  if (shouldInferLegacySingleProductPrice) {
+    const inferredUnitPrice = getLegacySingleProductUnitPrice(order);
+
+    if (inferredUnitPrice !== null && inferredUnitPrice > 0) {
+      return {
+        unitPrice: inferredUnitPrice,
+        subtotal: qty * inferredUnitPrice,
+        hasPrice: true,
+        source: 'legacy_single_product_total',
+      };
+    }
+  }
+
+  const storedSubtotal = getStoredItemSubtotal(item);
+
+  if (storedSubtotal !== null && storedSubtotal > 0) {
+    return {
+      unitPrice: qty > 0 ? storedSubtotal / qty : getStoredUnitPrice(item),
+      subtotal: storedSubtotal,
+      hasPrice: true,
+      source: 'stored_subtotal',
+    };
+  }
+
+  const storedUnitPrice = getStoredUnitPrice(item);
+
+  if (storedUnitPrice !== null && storedUnitPrice > 0) {
+    return {
+      unitPrice: storedUnitPrice,
+      subtotal: qty * storedUnitPrice,
+      hasPrice: true,
+      source: 'stored_unit',
+    };
+  }
+
+  return {
+    unitPrice: null,
+    subtotal: null,
+    hasPrice: false,
+    source: 'missing',
+  };
+}
+
+export function buildOrderItemsSnapshot(cartItems, getUnitPrice) {
+  if (!Array.isArray(cartItems)) return [];
+
+  return cartItems.map(item => {
+    const qty = normalizeQty(item?.qty);
+    const rawUnitPrice = item?.showPrice === false ? null : getUnitPrice(item?.product_id);
+    const unitPrice = toMoneyNumber(rawUnitPrice);
+    const hasPrice = item?.showPrice !== false && unitPrice !== null && unitPrice > 0;
+    const subtotal = hasPrice ? qty * unitPrice : null;
+
+    return {
+      ...item,
+      qty,
+      pricePerUnit: hasPrice ? unitPrice : null,
+      unitPrice: hasPrice ? unitPrice : null,
+      price_per_unit: hasPrice ? unitPrice : null,
+      subtotal,
+      lineTotal: subtotal,
+      pricing_snapshot_version: 1,
+      pricing_snapshot_source: 'checkout',
+    };
+  });
+}
+
+export function getOrderItemsTotal(items) {
+  if (!Array.isArray(items)) return 0;
+
+  const total = items.reduce((sum, item) => {
+    const pricing = getOrderItemPricing(item);
+    return sum + (pricing.hasPrice ? pricing.subtotal : 0);
+  }, 0);
+
+  return Math.round(total);
+}
+</file>
+
 <file path="lib/supabase-browser.js">
 'use client';
 
@@ -1347,6 +1553,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 <file path="app/api/auth/auto-confirm/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -1399,6 +1606,7 @@ export async function POST(req) {
 <file path="app/api/register/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -1803,6 +2011,113 @@ export default function RootLayout({ children }) {
         </CartProvider>
       </body>
     </html>
+  );
+}
+</file>
+
+<file path="components/GoogleOneTap.js">
+'use client';
+
+import Script from 'next/script';
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+async function generateNonce() {
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
+
+  const nonce = btoa(String.fromCharCode(...randomBytes));
+  const encoder = new TextEncoder();
+  const encodedNonce = encoder.encode(nonce);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encodedNonce);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashedNonce = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+  return { nonce, hashedNonce };
+}
+
+export default function GoogleOneTap({ enabled = true, onSuccess }) {
+  const initializedRef = useRef(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user) return;
+
+      const previousGoogleEmail = localStorage.getItem('inkora_login_hint');
+
+      // Esto hace que aparezca solo para usuarios que ya usaron Google antes.
+      if (!previousGoogleEmail) return;
+
+      setShouldLoad(true);
+    });
+  }, [enabled]);
+
+  async function initializeGoogleOneTap() {
+    if (initializedRef.current) return;
+    if (!enabled) return;
+    if (!window.google?.accounts?.id) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    const previousGoogleEmail = localStorage.getItem('inkora_login_hint');
+
+    if (!clientId || !previousGoogleEmail) return;
+
+    initializedRef.current = true;
+
+    const { nonce, hashedNonce } = await generateNonce();
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async (response) => {
+        if (!response?.credential) return;
+
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: response.credential,
+          nonce,
+        });
+
+        if (error) {
+          console.error('Google One Tap error:', error.message);
+          return;
+        }
+
+        if (data?.user?.email) {
+          localStorage.setItem('inkora_login_hint', data.user.email);
+          localStorage.setItem('inkora_google_hint_enabled', 'true');
+        }
+
+        window.dispatchEvent(new CustomEvent('inkora_auth_success'));
+
+        if (onSuccess) {
+          onSuccess(data?.user || null);
+        }
+      },
+      nonce: hashedNonce,
+      login_hint: previousGoogleEmail,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+      context: 'signin',
+      itp_support: true,
+    });
+
+    window.google.accounts.id.prompt();
+  }
+
+  if (!shouldLoad) return null;
+
+  return (
+    <Script
+      src="https://accounts.google.com/gsi/client"
+      strategy="afterInteractive"
+      onReady={initializeGoogleOneTap}
+    />
   );
 }
 </file>
@@ -2632,6 +2947,7 @@ v1.58.1
 <file path="app/api/generate-invite-link/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 export async function POST(req) {
   try {
@@ -3924,6 +4240,7 @@ END $$;
 <file path="app/api/invite-user/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -4004,6 +4321,7 @@ export async function POST(req) {
 <file path="app/api/send-email/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -4135,10 +4453,11 @@ export async function POST(request) {
     const { orderCode, form, cartItems, total, showPrice, notes, sellerName, sendConfirmation } = await request.json();
     const fecha = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
-    const hasPrice = showPrice === true && cartItems.some(i => i.pricePerUnit !== null && i.pricePerUnit !== undefined && i.pricePerUnit > 0);
+    const hasPrice = showPrice === true && cartItems.some(i => getOrderItemPricing(i).hasPrice);
+    const emailTotal = hasPrice ? getOrderItemsTotal(cartItems) : 0;
 
     const table = buildTable(cartItems, hasPrice);
-    const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: $${total.toLocaleString('es-AR')}</div>` : '';
+    const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: ${formatOrderMoney(emailTotal)}</div>` : '';
 
     const tplVars = {
       orderCode,
@@ -4183,21 +4502,25 @@ export async function POST(request) {
 
     // CSV
     const csvHeaders = ['Código', 'Cliente', 'Email', 'Teléfono', 'Producto', 'Diseño', 'Cantidad', 'Precio unitario', 'Subtotal', 'Total', 'Notas', 'Vendedor', 'Fecha'];
-    const csvRows = cartItems.map((item, idx) => [
-      orderCode,
-      form.name,
-      form.email,
-      form.phone || '',
-      item.productName || '',
-      item.name,
-      item.qty,
-      hasPrice && item.pricePerUnit ? item.pricePerUnit : '',
-      hasPrice && item.pricePerUnit ? item.qty * item.pricePerUnit : '',
-      idx === 0 && hasPrice ? total : '',
-      idx === 0 ? (notes || '') : '',
-      idx === 0 ? (sellerName || '') : '',
-      idx === 0 ? fecha : '',
-    ].map(escapeCSV).join(','));
+    const csvRows = cartItems.map((item, idx) => {
+      const pricing = getOrderItemPricing(item);
+
+      return [
+        orderCode,
+        form.name,
+        form.email,
+        form.phone || '',
+        item.productName || '',
+        item.name,
+        item.qty,
+        hasPrice && pricing.hasPrice ? Math.round(pricing.unitPrice) : '',
+        hasPrice && pricing.hasPrice ? Math.round(pricing.subtotal) : '',
+        idx === 0 && hasPrice ? emailTotal : '',
+        idx === 0 ? (notes || '') : '',
+        idx === 0 ? (sellerName || '') : '',
+        idx === 0 ? fecha : '',
+      ].map(escapeCSV).join(',');
+    });
 
     const csvContent = [csvHeaders.join(','), ...csvRows].join('\r\n');
     const csvBase64 = Buffer.from('﻿' + csvContent, 'utf-8').toString('base64');
@@ -4276,6 +4599,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
+import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
@@ -4493,7 +4817,15 @@ export default function Landing() {
               }
             </div>
 
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+            <div
+  className="card-overlay"
+  style={{
+    position: 'absolute',
+    inset: 0,
+    background: 'linear-gradient(to top, rgba(8,16,36,0.96) 0%, rgba(8,16,36,0.88) 14%, rgba(8,16,36,0.68) 24%, rgba(8,16,36,0.34) 36%, rgba(8,16,36,0.10) 48%, rgba(8,16,36,0.02) 56%, rgba(8,16,36,0) 64%)',
+    transition: 'opacity 0.3s ease',
+  }}
+/>
 
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
               <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
@@ -4535,8 +4867,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 import AuthModal from '@/components/AuthModal';
+import GoogleOneTap from '@/components/GoogleOneTap';
 import { signInWithGoogle } from '@/lib/auth';
 import { useTrack } from '@/hooks/useTrack';
+import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
 
 export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
   const { track } = useTrack();
@@ -4599,7 +4933,10 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       supabase.auth.getSession().then(({ data: { session } }) => {
         const u = session?.user ?? null;
         setUser(u);
-        if (u) loadProfile(u.id);
+        if (u) {
+          loadProfile(u.id);
+          loadOrders(u.email);
+        }
       });
     }
     window.addEventListener('inkora_auth_success', handleAuthSuccess);
@@ -4869,7 +5206,31 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       {authModalOpen && (
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
-          onSuccess={(u, meta) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } if (meta?.event_type) track(meta.event_type, { method: meta.method }); }}
+          onSuccess={(u, meta) => {
+            setAuthModalOpen(false);
+            if (u) {
+              setUser(u);
+              loadProfile(u.id);
+              loadOrders(u.email);
+            }
+            if (meta?.event_type) {
+              track(meta.event_type, { method: meta.method });
+            }
+          }}
+        />
+      )}
+
+      {uiSettings[`${page}_show_account`] !== 'false' && uiSettings['google_login_hint'] !== 'false' && !user && (
+        <GoogleOneTap
+          enabled={!authModalOpen}
+          onSuccess={(u) => {
+            if (u) {
+              setUser(u);
+              loadProfile(u.id);
+              loadOrders(u.email);
+            }
+            track('auth_login', { method: 'google_one_tap' });
+          }}
         />
       )}
     </>
@@ -6093,6 +6454,7 @@ import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
+import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -7193,6 +7555,21 @@ export default function Home() {
       alert('Por favor completa todos los campos.');
       return;
     }
+
+    const pricedCartItems = cartItems.map(item => {
+      const price = item.showPrice !== false ? getUnitPrice(item.product_id) : null;
+      const qty = Number(item.qty) || 0;
+
+      return {
+        ...item,
+        pricePerUnit: price,
+        unitPrice: price,
+        subtotal: price !== null ? qty * price : null,
+      };
+    });
+
+    const orderTotal = showTotal ? total : 0;
+
     setLoading(true);
     try {
       await supabase.from('orders').insert({
@@ -7200,8 +7577,8 @@ export default function Home() {
         customer_name: form.name,
         customer_phone: form.phone,
         customer_email: form.email,
-        items: cartItems,
-        total,
+        items: pricedCartItems,
+        total: orderTotal,
         notes,
         status: 'pending',
         seller_id: profile?.sellers?.id || null,
@@ -7210,11 +7587,20 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) })), total: showTotal ? total : 0, showPrice: showTotal, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
+        body: JSON.stringify({
+          orderCode,
+          form,
+          cartItems: pricedCartItems,
+          total: orderTotal,
+          showPrice: showTotal,
+          notes,
+          sellerName: profile?.sellers?.name || null,
+          sendConfirmation: profile?.send_confirmation_email !== false,
+        }),
       });
 
-      track('order_confirm', { order_code: orderCode, items_count: cartItems.length, total });
-      setConfirmedOrder({ items: cartItems, total, form });
+      track('order_confirm', { order_code: orderCode, items_count: pricedCartItems.length, total: orderTotal });
+      setConfirmedOrder({ items: pricedCartItems, total: orderTotal, form });
       setSuccess(true);
       clearCart();
       setNotes('');
@@ -8087,6 +8473,12 @@ import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
+import {
+  canInferSingleProductUnitPrice,
+  formatOrderMoney,
+  getOrderItemPricing,
+  orderHasStoredPriceMismatch,
+} from '@/lib/order-pricing';
 
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
@@ -8257,6 +8649,15 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
+const [adminDarkMode, setAdminDarkMode] = useState(() => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('inkora_admin_theme') === 'dark';
+});
+
+useEffect(() => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
+}, [adminDarkMode]);
   const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
@@ -9962,15 +10363,75 @@ export default function Admin() {
     return ORDER_STATUSES.find(s => s.value === value) || ORDER_STATUSES[0];
   }
 
-  function summarizeItems(items) {
-    if (!Array.isArray(items) || items.length === 0) return '—';
-    const byProduct = {};
-    items.forEach(i => {
-      const p = i.productName || 'Sin producto';
-      if (!byProduct[p]) byProduct[p] = [];
-      byProduct[p].push(`${i.name} x${i.qty}`);
-    });
-    return Object.entries(byProduct).map(([product, designs]) => `${product} — ${designs.join(', ')}`).join(' | ');
+  function getOrderItemPriceData(order, item) {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const qty = Number(item?.qty) || 0;
+    const orderTotal = Number(order?.total) || 0;
+
+    const storedUnit = Number(
+      item?.pricePerUnit ??
+      item?.unitPrice ??
+      item?.price_per_unit ??
+      item?.price ??
+      0
+    );
+
+    const storedSubtotal = Number(
+      item?.subtotal ??
+      item?.total ??
+      0
+    );
+
+    const storedItemsTotal = items.reduce((sum, currentItem) => {
+      const currentQty = Number(currentItem?.qty) || 0;
+      const currentUnit = Number(
+        currentItem?.pricePerUnit ??
+        currentItem?.unitPrice ??
+        currentItem?.price_per_unit ??
+        currentItem?.price ??
+        0
+      );
+      const currentSubtotal = Number(
+        currentItem?.subtotal ??
+        currentItem?.total ??
+        0
+      );
+
+      return sum + (currentSubtotal > 0 ? currentSubtotal : currentQty * currentUnit);
+    }, 0);
+
+    const totalQty = items.reduce((sum, currentItem) => {
+      return sum + (Number(currentItem?.qty) || 0);
+    }, 0);
+
+    const storedTotalDoesNotMatchOrderTotal =
+      orderTotal > 0 &&
+      storedItemsTotal > 0 &&
+      Math.abs(storedItemsTotal - orderTotal) > 1;
+
+    if (storedTotalDoesNotMatchOrderTotal && totalQty > 0) {
+      const inferredUnit = orderTotal / totalQty;
+
+      return {
+        unit: inferredUnit,
+        subtotal: qty * inferredUnit,
+        inferred: true,
+      };
+    }
+
+    if (storedSubtotal > 0) {
+      return {
+        unit: qty > 0 ? storedSubtotal / qty : storedUnit,
+        subtotal: storedSubtotal,
+        inferred: false,
+      };
+    }
+
+    return {
+      unit: storedUnit,
+      subtotal: storedUnit > 0 ? qty * storedUnit : 0,
+      inferred: false,
+    };
   }
 
   const filteredOrders = orders.filter(o => {
@@ -10169,7 +10630,7 @@ export default function Admin() {
     pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
-  const s = styles;
+  const s = getAdminStyles(adminDarkMode);
   const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
@@ -10216,12 +10677,148 @@ export default function Admin() {
 
   // ── PANEL ──
   return (
-    <div style={s.wrap}>
+    <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
+      {adminDarkMode && (
+        <style jsx global>{`
+          [data-admin-theme="dark"] input,
+          [data-admin-theme="dark"] select,
+          [data-admin-theme="dark"] textarea {
+            background-color: #0d172d !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.14) !important;
+            color-scheme: dark;
+          }
+
+          [data-admin-theme="dark"] input::placeholder,
+          [data-admin-theme="dark"] textarea::placeholder {
+            color: rgba(231,236,248,0.42) !important;
+          }
+
+          [data-admin-theme="dark"] option {
+            background-color: #0d172d;
+            color: #e7ecf8;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #2d3352"],
+          [data-admin-theme="dark"] [style*="color:#2d3352"],
+          [data-admin-theme="dark"] [style*="color: rgb(45, 51, 82)"] {
+            color: #e7ecf8 !important;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #1B2F5E"],
+          [data-admin-theme="dark"] [style*="color:#1B2F5E"],
+          [data-admin-theme="dark"] [style*="color: rgb(27, 47, 94)"] {
+            color: #dbeafe !important;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #5a6380"],
+          [data-admin-theme="dark"] [style*="color:#5a6380"],
+          [data-admin-theme="dark"] [style*="color: rgb(90, 99, 128)"] {
+            color: #aeb9d3 !important;
+          }
+
+          [data-admin-theme="dark"] button[style*="background: white"],
+          [data-admin-theme="dark"] button[style*="background:white"],
+          [data-admin-theme="dark"] button[style*="background-color: white"],
+          [data-admin-theme="dark"] button[style*="background-color:white"],
+          [data-admin-theme="dark"] button[style*="background: rgb(255, 255, 255)"],
+          [data-admin-theme="dark"] button[style*="background-color: rgb(255, 255, 255)"] {
+            background: #172444 !important;
+            color: #dbeafe !important;
+            border-color: rgba(255,255,255,0.14) !important;
+          }
+
+          [data-admin-theme="dark"] button[style*="background: #eef0f6"],
+          [data-admin-theme="dark"] button[style*="background:#eef0f6"],
+          [data-admin-theme="dark"] button[style*="background: rgb(238, 240, 246)"] {
+            background: #172444 !important;
+            color: #dbeafe !important;
+            border-color: rgba(255,255,255,0.14) !important;
+          }
+
+          [data-admin-theme="dark"] span[style*="background: #f0f2f8"],
+          [data-admin-theme="dark"] span[style*="background:#f0f2f8"],
+          [data-admin-theme="dark"] span[style*="background: rgb(240, 242, 248)"],
+          [data-admin-theme="dark"] div[style*="background: #f0f2f8"],
+          [data-admin-theme="dark"] div[style*="background:#f0f2f8"],
+          [data-admin-theme="dark"] div[style*="background: rgb(240, 242, 248)"] {
+            background: #172444 !important;
+            color: #cfe0ff !important;
+            border-color: rgba(255,255,255,0.10) !important;
+          }
+
+          [data-admin-theme="dark"] span[style*="background: #e8eef9"],
+          [data-admin-theme="dark"] span[style*="background:#e8eef9"],
+          [data-admin-theme="dark"] span[style*="background: rgb(232, 238, 249)"],
+          [data-admin-theme="dark"] div[style*="background: #e8eef9"],
+          [data-admin-theme="dark"] div[style*="background:#e8eef9"],
+          [data-admin-theme="dark"] div[style*="background: rgb(232, 238, 249)"] {
+            background: rgba(45,107,228,0.18) !important;
+            color: #93b7ff !important;
+            border-color: rgba(147,183,255,0.18) !important;
+          }
+
+          [data-admin-theme="dark"] div[style*="background: #f8faff"],
+          [data-admin-theme="dark"] div[style*="background:#f8faff"],
+          [data-admin-theme="dark"] div[style*="background: rgb(248, 250, 255)"],
+          [data-admin-theme="dark"] button[style*="background: #f8faff"],
+          [data-admin-theme="dark"] button[style*="background:#f8faff"],
+          [data-admin-theme="dark"] button[style*="background: rgb(248, 250, 255)"] {
+            background: #101a32 !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.10) !important;
+          }
+
+          [data-admin-theme="dark"] div[style*="background: #f0f4ff"],
+          [data-admin-theme="dark"] div[style*="background:#f0f4ff"],
+          [data-admin-theme="dark"] div[style*="background: rgb(240, 244, 255)"],
+          [data-admin-theme="dark"] button[style*="background: #f0f4ff"],
+          [data-admin-theme="dark"] button[style*="background:#f0f4ff"],
+          [data-admin-theme="dark"] button[style*="background: rgb(240, 244, 255)"] {
+            background: #172444 !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.12) !important;
+          }
+
+          [data-admin-theme="dark"] input[type="file"] {
+            background: transparent !important;
+            color: #cbd5e1 !important;
+            border-color: transparent !important;
+          }
+
+          [data-admin-theme="dark"] input[type="range"] {
+            accent-color: #2D6BE4;
+          }
+
+          [data-admin-theme="dark"] ::selection {
+            background: rgba(45,107,228,0.45);
+            color: white;
+          }
+        `}</style>
+      )}
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
-        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
+        <button
+  type="button"
+  onClick={() => setAdminDarkMode(v => !v)}
+  title={adminDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+  style={s.themeToggle}
+>
+  <span style={s.themeToggleIconLeft}>☀</span>
+  <span style={s.themeToggleIconRight}>☾</span>
+  <span
+    style={{
+      ...s.themeToggleKnob,
+      transform: adminDarkMode ? 'translateX(28px)' : 'translateX(0)',
+    }}
+  >
+    {adminDarkMode ? '☾' : '☀'}
+  </span>
+</button>
+
+<span style={s.headerUser}>{currentUser}</span>
         <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
@@ -10321,7 +10918,19 @@ export default function Admin() {
                           onDragOver={e => { e.preventDefault(); setDragOverProductId(p.id); }}
                           onDrop={() => handleProductDrop(p.id)}
                           onDragEnd={() => { setDraggingProductId(null); setDragOverProductId(null); dragSrcProductIdRef.current = null; }}
-                          style={{opacity: p.active ? 1 : 0.5, cursor: 'grab', background: dragOverProductId === p.id ? '#eef4ff' : isVariant ? '#fbfcff' : 'transparent', outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none', boxShadow: isVariant ? 'inset 4px 0 0 #dbe7ff' : 'none'}}>
+                          style={{
+                            opacity: p.active ? 1 : 0.5,
+                            cursor: 'grab',
+                            background: dragOverProductId === p.id
+                              ? (adminDarkMode ? 'rgba(45,107,228,0.22)' : '#eef4ff')
+                              : isVariant
+                                ? (adminDarkMode ? 'rgba(45,107,228,0.07)' : '#fbfcff')
+                                : 'transparent',
+                            outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none',
+                            boxShadow: isVariant
+                              ? `inset 4px 0 0 ${adminDarkMode ? 'rgba(45,107,228,0.45)' : '#dbe7ff'}`
+                              : 'none'
+                          }}>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
@@ -10335,7 +10944,20 @@ export default function Admin() {
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12, flexShrink:0}}>{isVariant ? '↳' : ''}</span>
                               <div style={{position:'relative', width:150}}>
-                                <input style={{...s.tblInput, paddingRight: !isVariant ? 20 : undefined, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
+                                <input
+                                  style={{
+                                    ...s.tblInput,
+                                    paddingRight: !isVariant ? 20 : undefined,
+                                    background: isVariant
+                                      ? (adminDarkMode ? '#0d172d' : 'white')
+                                      : (adminDarkMode ? '#0b1224' : '#f7f8fc'),
+                                    color: adminDarkMode ? '#e7ecf8' : '#2d3352',
+                                  }}
+                                  value={form.variant_name || ''}
+                                  placeholder={isVariant ? 'Variante' : 'Base'}
+                                  onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)}
+                                  onBlur={() => saveProduct(p.id)}
+                                />
                                 {!isVariant && (
                                   <button
                                     style={{position:'absolute', right:3, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:'#2D6BE4', fontWeight:700, fontSize:14, cursor:'pointer', padding:'0 2px', lineHeight:1, opacity: addingVariantId === p.id ? 0.4 : 1}}
@@ -11089,7 +11711,11 @@ export default function Admin() {
                   style={{
                     ...s.designRow,
                     opacity: !d.active ? 0.45 : (draggingId && selectedIds.has(draggingId) && selectedIds.has(d.id) ? 0.35 : 1),
-                    background: dragOverId === d.id ? '#eef4ff' : selectedIds.has(d.id) ? '#f0f5ff' : undefined,
+                    background: dragOverId === d.id
+                      ? (adminDarkMode ? 'rgba(45,107,228,0.22)' : '#eef4ff')
+                      : selectedIds.has(d.id)
+                        ? (adminDarkMode ? 'rgba(45,107,228,0.16)' : '#f0f5ff')
+                        : undefined,
                     borderLeft: dragOverId === d.id ? '3px solid #2D6BE4' : selectedIds.has(d.id) ? '3px solid #2D6BE4' : '3px solid transparent',
                     transition: 'background 0.12s, border-left 0.12s',
                     cursor: draggingId === d.id ? 'grabbing' : 'grab',
@@ -11104,7 +11730,17 @@ export default function Admin() {
                     }
                     <div>
                       <input
-                        style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: adminDarkMode ? '#e7ecf8' : '#2d3352',
+                          border: '1px solid transparent',
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                          fontFamily: 'Barlow, sans-serif',
+                          background: 'transparent',
+                          width: '100%',
+                        }}
                         value={d.name}
                         onFocus={e => { e.target.style.borderColor = '#dde1ef'; e.target.dataset.originalName = d.name; }}
                         onBlur={async e => {
@@ -11404,12 +12040,35 @@ export default function Admin() {
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
 
             {/* Invitar usuario */}
-            <div style={{marginBottom:18, border:'1.5px solid #dde1ef', borderRadius:10, overflow:'hidden'}}>
+            <div
+              style={{
+                marginBottom:18,
+                border: adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef',
+                borderRadius:10,
+                overflow:'hidden',
+                background: adminDarkMode ? '#101a32' : 'white',
+              }}
+            >
               <button
-                style={{width:'100%', padding:'11px 16px', background:inviteOpen ? '#f0f4ff' : '#f8faff', border:'none', borderBottom: inviteOpen ? '1.5px solid #dde1ef' : 'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', fontFamily:'Barlow, sans-serif'}}
+                style={{
+                  width:'100%',
+                  padding:'11px 16px',
+                  background: inviteOpen
+                    ? (adminDarkMode ? '#172444' : '#f0f4ff')
+                    : (adminDarkMode ? '#101a32' : '#f8faff'),
+                  border:'none',
+                  borderBottom: inviteOpen
+                    ? (adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef')
+                    : 'none',
+                  cursor:'pointer',
+                  display:'flex',
+                  justifyContent:'space-between',
+                  alignItems:'center',
+                  fontFamily:'Barlow, sans-serif'
+                }}
                 onClick={() => { setInviteOpen(v => !v); setInviteResult(null); }}
               >
-                <span style={{fontSize:13, fontWeight:700, color:'#1B2F5E'}}>+ Invitar usuario</span>
+                <span style={{fontSize:13, fontWeight:700, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>+ Invitar usuario</span>
                 <span style={{fontSize:11, color:'#9aa3bc'}}>{inviteOpen ? '▲' : '▼'}</span>
               </button>
               {inviteOpen && (
@@ -11467,7 +12126,23 @@ export default function Admin() {
             </div>
 
             {/* Buscador + filtros */}
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8', position:'sticky', top:38, zIndex:10, background:'white', paddingTop:10, marginTop:-10}}>
+            <div
+              style={{
+                display:'flex',
+                gap:8,
+                flexWrap:'wrap',
+                alignItems:'center',
+                marginBottom:14,
+                paddingBottom:14,
+                borderBottom: adminDarkMode ? '1.5px solid rgba(255,255,255,0.08)' : '1.5px solid #f0f2f8',
+                position:'sticky',
+                top:38,
+                zIndex:10,
+                background: adminDarkMode ? '#111b34' : 'white',
+                paddingTop:10,
+                marginTop:-10,
+              }}
+            >
               <input
                 style={{...s.input, flex:'1 1 200px', minWidth:160, fontSize:13, padding:'7px 12px'}}
                 placeholder="Buscar por nombre o email..."
@@ -12539,6 +13214,20 @@ export default function Admin() {
             </div>
             <div>
               <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
+              {getOrderPriceWarning(orderDetail) && (
+                <div style={{
+                  background: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#fff7ed' : '#fee2e2',
+                  color: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#9a3412' : '#b91c1c',
+                  border: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '1px solid #fed7aa' : '1px solid #fecaca',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                }}>
+                  {getOrderPriceWarning(orderDetail)}
+                </div>
+              )}
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead>
                   <tr>
@@ -12549,14 +13238,24 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => (
-                    <tr key={i}>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
-                    </tr>
-                  ))}
+                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => {
+                    const priceData = getOrderItemPriceData(orderDetail, item);
+                    const unit = Number(priceData.unit) || 0;
+                    const subtotal = Number(priceData.subtotal) || 0;
+
+                    return (
+                      <tr key={i}>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
+                          {unit > 0 ? `$${Math.round(unit).toLocaleString('es-AR')}` : '—'}
+                        </td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>
+                          {subtotal > 0 ? `$${Math.round(subtotal).toLocaleString('es-AR')}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -14371,7 +15070,311 @@ const styles = {
   userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6', gap: 10 },
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
+  checkingWrap: { minHeight: '100vh', background: '#f7f8fc' },
+  headerUser: { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8 },
+  themeToggle: {
+    width: 58,
+    height: 30,
+    borderRadius: 999,
+    background: 'rgba(255,255,255,0.14)',
+    border: '1.5px solid rgba(255,255,255,0.22)',
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 8px',
+    flexShrink: 0,
+    transition: 'background 0.25s ease, border-color 0.25s ease',
+  },
+  themeToggleKnob: {
+    position: 'absolute',
+    left: 2,
+    top: 2,
+    width: 24,
+    height: 24,
+    borderRadius: '50%',
+    background: '#2D6BE4',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    fontWeight: 800,
+    boxShadow: '0 2px 7px rgba(0,0,0,0.28)',
+    transition: 'transform 0.25s ease',
+    zIndex: 2,
+  },
+  themeToggleIconLeft: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    lineHeight: 1,
+    zIndex: 1,
+  },
+  themeToggleIconRight: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    lineHeight: 1,
+    zIndex: 1,
+  },
 };
+
+function getAdminStyles(adminDarkMode) {
+  if (!adminDarkMode) return styles;
+
+  return {
+    ...styles,
+
+    loginWrap: {
+      ...styles.loginWrap,
+      background: '#0b1224',
+    },
+    loginBox: {
+      ...styles.loginBox,
+      background: '#111b34',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.38)',
+    },
+    loginTitle: {
+      ...styles.loginTitle,
+      color: 'white',
+    },
+    btnGoogle: {
+      ...styles.btnGoogle,
+      background: '#172444',
+      color: 'white',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      boxShadow: '0 2px 14px rgba(0,0,0,0.28)',
+    },
+
+    checkingWrap: {
+      ...styles.checkingWrap,
+      background: '#0b1224',
+    },
+
+    wrap: {
+      ...styles.wrap,
+      background: '#0b1224',
+      color: '#e7ecf8',
+    },
+    header: {
+      ...styles.header,
+      background: '#081126',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 2px 18px rgba(0,0,0,0.25)',
+    },
+    headerTitle: {
+      ...styles.headerTitle,
+      color: 'rgba(255,255,255,0.72)',
+    },
+    headerUser: {
+      ...styles.headerUser,
+      color: 'rgba(255,255,255,0.58)',
+    },
+    btnLogout: {
+      ...styles.btnLogout,
+      background: 'rgba(255,255,255,0.10)',
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+
+    tabBar: {
+      ...styles.tabBar,
+      background: '#101a32',
+      borderBottom: '1.5px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 5px 18px rgba(0,0,0,0.22)',
+    },
+    tab: {
+      ...styles.tab,
+      color: 'rgba(231,236,248,0.48)',
+    },
+    tabActive: {
+      ...styles.tabActive,
+      color: 'white',
+      boxShadow: 'inset 0 -3px 0 #2D6BE4',
+    },
+
+    content: {
+      ...styles.content,
+      color: '#e7ecf8',
+    },
+    card: {
+      ...styles.card,
+      background: '#111b34',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+      color: '#e7ecf8',
+    },
+    productWorkspace: {
+      ...styles.productWorkspace,
+      background: '#0b1224',
+      color: '#e7ecf8',
+    },
+    productWorkspaceHeader: {
+      ...styles.productWorkspaceHeader,
+      background: '#101a32',
+      borderBottom: '1.5px solid rgba(255,255,255,0.08)',
+      color: '#e7ecf8',
+    },
+    sectionTitle: {
+      ...styles.sectionTitle,
+      color: 'white',
+    },
+    emptyMsg: {
+      ...styles.emptyMsg,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    label: {
+      ...styles.label,
+      color: 'rgba(231,236,248,0.64)',
+    },
+    input: {
+      ...styles.input,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      color: '#e7ecf8',
+    },
+    tblInput: {
+      ...styles.tblInput,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      color: '#e7ecf8',
+    },
+    th: {
+      ...styles.th,
+      background: '#101a32',
+      color: 'rgba(231,236,248,0.62)',
+      borderBottom: '2px solid rgba(255,255,255,0.10)',
+    },
+    td: {
+      ...styles.td,
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      color: '#e7ecf8',
+    },
+    productRow: {
+      ...styles.productRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    productName: {
+      ...styles.productName,
+      color: '#e7ecf8',
+    },
+    productMeta: {
+      ...styles.productMeta,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    fileRow: {
+      ...styles.fileRow,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+    },
+    designRow: {
+      ...styles.designRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    designName: {
+      ...styles.designName,
+      color: '#e7ecf8',
+    },
+    designCat: {
+      ...styles.designCat,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    userRow: {
+      ...styles.userRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    adminPresenceDot: {
+      ...styles.adminPresenceDot,
+      border: '1.5px solid #101a32',
+    },
+    adminPresenceMore: {
+      ...styles.adminPresenceMore,
+      color: 'rgba(231,236,248,0.55)',
+    },
+    footer: {
+      ...styles.footer,
+      color: 'rgba(255,255,255,0.18)',
+    },
+    editBtn: {
+      ...styles.editBtn,
+      background: 'rgba(45,107,228,0.16)',
+      color: '#93b7ff',
+    },
+    btnWarning: {
+      ...styles.btnWarning,
+      background: 'rgba(246,194,0,0.12)',
+      color: '#facc15',
+      border: '1.5px solid rgba(246,194,0,0.35)',
+    },
+    userBadge: {
+      ...styles.userBadge,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    productTag: {
+      ...styles.productTag,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    orphanTag: {
+      ...styles.orphanTag,
+      background: 'rgba(229,62,62,0.14)',
+      color: '#fca5a5',
+    },
+    orphanBadge: {
+      ...styles.orphanBadge,
+      background: 'rgba(229,62,62,0.16)',
+      color: '#fca5a5',
+    },
+    userBadge: {
+      ...styles.userBadge,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    designName: {
+      ...styles.designName,
+      color: '#e7ecf8',
+    },
+    designCat: {
+      ...styles.designCat,
+      color: 'rgba(231,236,248,0.50)',
+    },
+    designThumb: {
+      ...styles.designThumb,
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+    fileThumb: {
+      ...styles.fileThumb,
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+    errorMsg: {
+      ...styles.errorMsg,
+      color: '#fca5a5',
+    },
+    removePendingBtn: {
+      ...styles.removePendingBtn,
+      color: 'rgba(231,236,248,0.55)',
+    },
+    btnPrimary: {
+      ...styles.btnPrimary,
+      background: '#2D6BE4',
+      color: 'white',
+    },
+    iconBtn: {
+      ...styles.iconBtn,
+      color: '#93b7ff',
+    },
+
+    themeToggle: {
+      ...styles.themeToggle,
+      background: 'rgba(255,255,255,0.10)',
+      border: '1.5px solid rgba(255,255,255,0.18)',
+    },
+    themeToggleKnob: {
+      ...styles.themeToggleKnob,
+      background: '#2D6BE4',
+    },
+  };
+}
 </file>
 
 </files>

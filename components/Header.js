@@ -7,6 +7,7 @@ import GoogleOneTap from '@/components/GoogleOneTap';
 import { signInWithGoogle } from '@/lib/auth';
 import { useTrack } from '@/hooks/useTrack';
 
+
 export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
   const { track } = useTrack();
   const [user, setUser] = useState(null);

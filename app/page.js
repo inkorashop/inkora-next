@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
 
+
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
 
 function toSlug(name) {

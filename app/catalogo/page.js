@@ -7,6 +7,7 @@ import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
+import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1108,19 +1109,8 @@ export default function Home() {
       return;
     }
 
-    const pricedCartItems = cartItems.map(item => {
-      const price = item.showPrice !== false ? getUnitPrice(item.product_id) : null;
-      const qty = Number(item.qty) || 0;
-
-      return {
-        ...item,
-        pricePerUnit: price,
-        unitPrice: price,
-        subtotal: price !== null ? qty * price : null,
-      };
-    });
-
-    const orderTotal = showTotal ? total : 0;
+    const pricedCartItems = buildOrderItemsSnapshot(cartItems, getUnitPrice);
+    const orderTotal = showTotal ? getOrderItemsTotal(pricedCartItems) : 0;
 
     setLoading(true);
     try {
@@ -1151,7 +1141,12 @@ export default function Home() {
         }),
       });
 
-      track('order_confirm', { order_code: orderCode, items_count: pricedCartItems.length, total: orderTotal });
+      track('order_confirm', {
+        order_code: orderCode,
+        items_count: pricedCartItems.length,
+        total: orderTotal,
+      });
+
       setConfirmedOrder({ items: pricedCartItems, total: orderTotal, form });
       setSuccess(true);
       clearCart();

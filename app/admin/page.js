@@ -5,6 +5,12 @@ import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
+import {
+  canInferSingleProductUnitPrice,
+  formatOrderMoney,
+  getOrderItemPricing,
+  orderHasStoredPriceMismatch,
+} from '@/lib/order-pricing';
 
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
@@ -1889,75 +1895,33 @@ useEffect(() => {
     return ORDER_STATUSES.find(s => s.value === value) || ORDER_STATUSES[0];
   }
 
-  function getOrderItemPriceData(order, item) {
-    const items = Array.isArray(order?.items) ? order.items : [];
-    const qty = Number(item?.qty) || 0;
-    const orderTotal = Number(order?.total) || 0;
+  function summarizeItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return '—';
 
-    const storedUnit = Number(
-      item?.pricePerUnit ??
-      item?.unitPrice ??
-      item?.price_per_unit ??
-      item?.price ??
-      0
-    );
+    const byProduct = {};
 
-    const storedSubtotal = Number(
-      item?.subtotal ??
-      item?.total ??
-      0
-    );
+    items.forEach(item => {
+      const productName = item?.productName || item?.product_name || 'Sin producto';
+      const designName = item?.name || item?.designName || item?.design_name || 'Sin diseño';
+      const qty = item?.qty ?? 0;
 
-    const storedItemsTotal = items.reduce((sum, currentItem) => {
-      const currentQty = Number(currentItem?.qty) || 0;
-      const currentUnit = Number(
-        currentItem?.pricePerUnit ??
-        currentItem?.unitPrice ??
-        currentItem?.price_per_unit ??
-        currentItem?.price ??
-        0
-      );
-      const currentSubtotal = Number(
-        currentItem?.subtotal ??
-        currentItem?.total ??
-        0
-      );
+      if (!byProduct[productName]) byProduct[productName] = [];
+      byProduct[productName].push(`${designName} x${qty}`);
+    });
 
-      return sum + (currentSubtotal > 0 ? currentSubtotal : currentQty * currentUnit);
-    }, 0);
+    return Object.entries(byProduct)
+      .map(([product, designs]) => `${product} — ${designs.join(', ')}`)
+      .join(' | ');
+  }
 
-    const totalQty = items.reduce((sum, currentItem) => {
-      return sum + (Number(currentItem?.qty) || 0);
-    }, 0);
+  function getOrderPriceWarning(order) {
+    if (!orderHasStoredPriceMismatch(order)) return '';
 
-    const storedTotalDoesNotMatchOrderTotal =
-      orderTotal > 0 &&
-      storedItemsTotal > 0 &&
-      Math.abs(storedItemsTotal - orderTotal) > 1;
-
-    if (storedTotalDoesNotMatchOrderTotal && totalQty > 0) {
-      const inferredUnit = orderTotal / totalQty;
-
-      return {
-        unit: inferredUnit,
-        subtotal: qty * inferredUnit,
-        inferred: true,
-      };
+    if (canInferSingleProductUnitPrice(order)) {
+      return 'Pedido histórico: el precio de los ítems fue corregido visualmente usando el total guardado del pedido.';
     }
 
-    if (storedSubtotal > 0) {
-      return {
-        unit: qty > 0 ? storedSubtotal / qty : storedUnit,
-        subtotal: storedSubtotal,
-        inferred: false,
-      };
-    }
-
-    return {
-      unit: storedUnit,
-      subtotal: storedUnit > 0 ? qty * storedUnit : 0,
-      inferred: false,
-    };
+    return 'Pedido histórico a revisar: el detalle de precios de los ítems no coincide con el total guardado.';
   }
 
   const filteredOrders = orders.filter(o => {
@@ -4740,6 +4704,20 @@ useEffect(() => {
             </div>
             <div>
               <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
+              {getOrderPriceWarning(orderDetail) && (
+                <div style={{
+                  background: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#fff7ed' : '#fee2e2',
+                  color: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#9a3412' : '#b91c1c',
+                  border: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '1px solid #fed7aa' : '1px solid #fecaca',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                }}>
+                  {getOrderPriceWarning(orderDetail)}
+                </div>
+              )}
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead>
                   <tr>
@@ -4751,19 +4729,17 @@ useEffect(() => {
                 </thead>
                 <tbody>
                   {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => {
-                    const priceData = getOrderItemPriceData(orderDetail, item);
-                    const unit = Number(priceData.unit) || 0;
-                    const subtotal = Number(priceData.subtotal) || 0;
+                    const pricing = getOrderItemPricing(item, orderDetail);
 
                     return (
                       <tr key={i}>
-                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name || item.designName || '—'}</td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
-                          {unit > 0 ? `$${Math.round(unit).toLocaleString('es-AR')}` : '—'}
+                          {pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}
                         </td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>
-                          {subtotal > 0 ? `$${Math.round(subtotal).toLocaleString('es-AR')}` : '—'}
+                          {pricing.hasPrice ? formatOrderMoney(pricing.subtotal) : '—'}
                         </td>
                       </tr>
                     );
