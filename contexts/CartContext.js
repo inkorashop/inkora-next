@@ -30,19 +30,22 @@ export function CartProvider({ children }) {
     } catch { return; }
   }, []);
 
-  function addToCart(design, product) {
+  function addToCart(design, product, qty = 1) {
+    const safeQty = Math.max(1, Number(qty) || 1);
+
     track('cart_add', {
       design_id: design.id,
       design_name: design.name,
       product_name: product?.name,
-      qty: 1,
+      qty: safeqty,
       price: product?.price_per_unit ?? 0,
     });
+
     setCart(prev => ({
       ...prev,
       [design.id]: {
         ...design,
-        qty: 1,
+        qty: safeQty,
         pricePerUnit: product?.price_per_unit ?? 0,
         showPrice: product?.show_price !== false,
         productName: product?.name ?? '',

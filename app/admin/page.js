@@ -376,6 +376,7 @@ useEffect(() => {
   const [userInviteLinks, setUserInviteLinks] = useState({});
   const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
   const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
+  const [deletingUserIds, setDeletingUserIds] = useState(new Set());
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -2180,6 +2181,54 @@ useEffect(() => {
     setTimeout(() => setCopiedLinkIds(prev => { const n = new Set(prev); n.delete(userId); return n; }), 1500);
   }
 
+  function isInvitedUserDeletable(user) {
+    return user?.registration_source === 'admin_invite' && !user?.deleted_at;
+  }
+
+  async function softDeleteInvitedUser(user) {
+    if (!isInvitedUserDeletable(user)) return;
+
+    setDeletingUserIds(prev => {
+      const next = new Set(prev);
+      next.add(user.id);
+      return next;
+    });
+
+    const deletedAt = new Date().toISOString();
+
+    const { error } = await supabase.rpc('admin_soft_delete_invited_profile', {
+      p_user_id: user.id,
+    });
+
+    if (error) {
+      alert(`No se pudo eliminar el registro: ${error.message}`);
+      setDeletingUserIds(prev => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
+      return;
+    }
+
+    setUsers(prev => prev.map(u => u.id === user.id ? {
+      ...u,
+      deleted_at: deletedAt,
+      deleted_by: currentUser,
+      deleted_reason: 'deleted_by_admin_for_reinvite',
+    } : u));
+
+    trackAdminActivity('user_soft_delete_invited', {
+      user_id: user.id,
+      user_email: user.email,
+    }, 'users');
+
+    setDeletingUserIds(prev => {
+      const next = new Set(prev);
+      next.delete(user.id);
+      return next;
+    });
+  }
+
   // ── Admins ──
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('email').order('email');
@@ -3924,8 +3973,22 @@ useEffect(() => {
               }
               return filtered.map(u => {
                 const status = getStatus(u.id);
+                const isDeleted = Boolean(u.deleted_at);
+
                 return (
-                  <div key={u.id} style={s.userRow}>
+                  <div
+                    key={u.id}
+                    style={{
+                      ...s.userRow,
+                      opacity: isDeleted ? 0.58 : 1,
+                      background: isDeleted
+                        ? (adminDarkMode ? 'rgba(229,62,62,0.08)' : '#fff5f5')
+                        : 'transparent',
+                      borderRadius: isDeleted ? 8 : undefined,
+                      paddingLeft: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
+                      paddingRight: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
+                    }}
+                  >
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
@@ -3943,8 +4006,23 @@ useEffect(() => {
                       )}
                     </div>
                     <div style={s.userInfo}>
-                      <div style={s.productName}>{u.name || '—'}</div>
-                      <div style={s.productMeta}>{u.email}</div>
+                      <div
+                        style={{
+                          ...s.productName,
+                          textDecoration: isDeleted ? 'line-through' : 'none',
+                          color: isDeleted ? '#9aa3bc' : s.productName.color,
+                        }}
+                      >
+                        {u.name || '—'}
+                      </div>
+                      <div
+                        style={{
+                          ...s.productMeta,
+                          textDecoration: isDeleted ? 'line-through' : 'none',
+                        }}
+                      >
+                        {u.email}
+                      </div>
                       {(() => {
                         const src = u.registration_source;
                         if (src === 'self_google') return (
@@ -3979,6 +4057,22 @@ useEffect(() => {
                         }
                         return null;
                       })()}
+
+                      {isDeleted && (
+                        <div style={{
+                          display:'inline-flex',
+                          alignItems:'center',
+                          background:'#fee2e2',
+                          border:'1px solid #fecaca',
+                          borderRadius:5,
+                          padding:'2px 8px',
+                          marginTop:4,
+                        }}>
+                          <span style={{fontSize:10, fontWeight:700, color:'#b91c1c'}}>
+                            Registro eliminado
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div style={{display:'flex', flexDirection:'column', gap:6, alignItems:'flex-end'}}>
                       <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end'}}>
@@ -4028,6 +4122,74 @@ useEffect(() => {
                           >
                             <LinkIcon/>
                             <span style={{fontSize:10, fontWeight:600}}>{regenLoadingIds.has(u.id) ? '...' : 'Link'}</span>
+                          </button>
+                        )}
+
+                        {isInvitedUserDeletable(u) ? (
+                          <HoldButton
+                            label="Eliminar registro"
+                            holdingLabel="Eliminando..."
+                            doneLabel="✓ Eliminado"
+                            variant="danger"
+                            minWidth={132}
+                            onConfirm={() => softDeleteInvitedUser(u)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            title={u.deleted_at
+                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
+                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
+                            }
+                            style={{
+                              border:'1.5px solid #dde1ef',
+                              borderRadius:8,
+                              padding:'8px 12px',
+                              fontSize:12,
+                              fontWeight:700,
+                              fontFamily:'Barlow, sans-serif',
+                              background:'#f0f2f8',
+                              color:'#9aa3bc',
+                              cursor:'not-allowed',
+                              opacity:0.75,
+                            }}
+                          >
+                            Eliminar registro
+                          </button>
+                        )}
+
+                        {isInvitedUserDeletable(u) ? (
+                          <HoldButton
+                            label="Eliminar registro"
+                            holdingLabel="Eliminando..."
+                            doneLabel="✓ Eliminado"
+                            variant="danger"
+                            minWidth={132}
+                            onConfirm={() => softDeleteInvitedUser(u)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            title={u.deleted_at
+                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
+                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
+                            }
+                            style={{
+                              border:'1.5px solid #dde1ef',
+                              borderRadius:8,
+                              padding:'8px 12px',
+                              fontSize:12,
+                              fontWeight:700,
+                              fontFamily:'Barlow, sans-serif',
+                              background:'#f0f2f8',
+                              color:'#9aa3bc',
+                              cursor:'not-allowed',
+                              opacity:0.75,
+                            }}
+                          >
+                            Eliminar registro
                           </button>
                         )}
                       </div>

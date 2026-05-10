@@ -1051,10 +1051,10 @@ export default function Home() {
   const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
-  function addToCart(design) {
+  function addToCart(design, qty = 1) {
     const product = products.find(p => p.id === design.product_id);
     track('design_view', { design_id: design.id, design_name: design.name, product_name: product?.name });
-    addToCartCtx(design, product);
+    addToCartCtx(design, product, qty);
     triggerQtyAnim(design.id, 'pop');
     triggerCardPulse(design.id);
   }
@@ -1493,24 +1493,39 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>-</button>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
-                          value={inCart ? inCart.qty : ''}
+                          value={inCart ? String(inCart.qty) : ''}
                           placeholder="0"
-                          onFocus={e => { if (!inCart) e.target.value = ''; else e.target.select(); }}
+                          onFocus={e => e.target.select()}
                           onChange={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
-                            else if (!inCart) addToCart(d);
-                            else setCartItem(d.id, val);
+                            const raw = e.target.value.replace(/\D/g, '');
+
+                            if (!raw) {
+                              removeFromCart(d.id);
+                              return;
+                            }
+
+                            const val = Math.max(1, parseInt(raw, 10));
+
+                            if (!inCart) {
+                              addToCart(d, val);
+                            } else {
+                              setCartItem(d.id, val);
+                            }
                           }}
                           onBlur={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                            const raw = e.target.value.replace(/\D/g, '');
+                            const val = parseInt(raw, 10);
+
+                            if (!raw || isNaN(val) || val <= 0) {
+                              removeFromCart(d.id);
+                            }
                           }}
                           onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-                          min="0"
                         />
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
                           if (inCart) changeQty(d.id, 1);
