@@ -198,7 +198,7 @@ export default function Admin() {
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     return slug === 'estadisticas' ? 'stats' : 'activity';
-  };
+  }; 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [trackingSubtab, setTrackingSubtab] = useState(initialTrackingSubtab);
   const screenRef = useRef(screen);
