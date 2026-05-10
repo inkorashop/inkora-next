@@ -968,7 +968,7 @@ export default function Home() {
   const productCats = Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
     ? activeProduct.categories
     : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))];
-  const categories = productCats.length >= 2 ? ['Todos', ...productCats] : [];
+  const categories = productCats.length >= 1 ? ['Todos', ...productCats] : [];
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
