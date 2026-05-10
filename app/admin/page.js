@@ -120,40 +120,111 @@ function LinkIcon() {
   );
 }
 
-function HoldButton({ onConfirm }) {
+function HoldButton({
+  onConfirm,
+  label = 'Mantené para eliminar',
+  holdingLabel = 'Manteniendo...',
+  doneLabel = '✓ Listo',
+  variant = 'danger',
+  minWidth = 140,
+}) {
   const [progress, setProgress] = React.useState(0);
   const intervalRef = React.useRef(null);
+  const doneRef = React.useRef(false);
 
-  function startHold() {
-    intervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current);
-          onConfirm();
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 100);
+  const palettes = {
+    danger: {
+      bg: 'linear-gradient(135deg, #e53e3e, #c53030)',
+      shadow: '0 4px 12px rgba(229,62,62,0.4)',
+    },
+    warning: {
+      bg: 'linear-gradient(135deg, #f6a800, #d97706)',
+      shadow: '0 4px 12px rgba(246,168,0,0.35)',
+    },
+    primary: {
+      bg: 'linear-gradient(135deg, #2D6BE4, #1B2F5E)',
+      shadow: '0 4px 12px rgba(45,107,228,0.35)',
+    },
+    success: {
+      bg: 'linear-gradient(135deg, #18a36a, #15803d)',
+      shadow: '0 4px 12px rgba(24,163,106,0.35)',
+    },
+  };
+
+  const palette = palettes[variant] || palettes.danger;
+
+  function clearHold() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
   }
 
-  function stopHold() {
-    clearInterval(intervalRef.current);
+  function startHold(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (intervalRef.current || doneRef.current) return;
+
+    intervalRef.current = setInterval(() => {
+      setProgress(prev => {
+        const next = Math.min(100, prev + 10);
+
+        if (next >= 100) {
+          clearHold();
+          doneRef.current = true;
+          onConfirm?.();
+
+          setTimeout(() => {
+            doneRef.current = false;
+            setProgress(0);
+          }, 650);
+
+          return 100;
+        }
+
+        return next;
+      });
+    }, 70);
+  }
+
+  function stopHold(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
+    if (doneRef.current) return;
+
+    clearHold();
     setProgress(0);
   }
 
   return (
     <button
+      type="button"
+      onClick={e => e.stopPropagation()}
       onMouseDown={startHold}
       onMouseUp={stopHold}
       onMouseLeave={stopHold}
       onTouchStart={startHold}
       onTouchEnd={stopHold}
-      style={{position:'relative', background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)', overflow:'hidden', minWidth:140, userSelect:'none'}}
+      style={{
+        position:'relative',
+        background: palette.bg,
+        color:'white',
+        border:'none',
+        borderRadius:10,
+        padding:'8px 20px',
+        fontSize:13,
+        fontWeight:700,
+        cursor:'pointer',
+        boxShadow: palette.shadow,
+        overflow:'hidden',
+        minWidth,
+        userSelect:'none',
+        fontFamily:'Barlow, sans-serif',
+      }}
     >
       <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', width: progress + '%', transition:'width 0.05s linear'}} />
       <span style={{position:'relative', zIndex:1}}>
-        {progress === 0 ? 'Mantené para eliminar' : progress >= 100 ? '✓ Eliminado' : `${Math.round(progress)}%`}
+        {progress === 0 ? label : progress >= 100 ? doneLabel : `${holdingLabel} ${Math.round(progress)}%`}
       </span>
     </button>
   );
@@ -321,6 +392,7 @@ useEffect(() => {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [ordersView, setOrdersView] = useState('active'); // 'active' | 'archived'
   const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
   const lastSelectedOrderIdRef = useRef(null);
   const [orderFilterStatus, setOrderFilterStatus] = useState('all');
@@ -1865,15 +1937,75 @@ useEffect(() => {
 
   // ── Orders ──
   async function loadOrders() {
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (data) setOrders(data);
   }
 
-  async function deleteOrders(ids) {
-    await Promise.all([...ids].map(id => supabase.from('orders').delete().eq('id', id)));
-    trackAdminActivity('order_delete_bulk', { order_ids: [...ids], count: ids.size }, 'orders');
-    setOrders(prev => prev.filter(o => !ids.has(o.id)));
+  function normalizeOrderIds(idsInput) {
+    return idsInput instanceof Set ? [...idsInput] : Array.isArray(idsInput) ? idsInput : [idsInput];
+  }
+
+  async function archiveOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const archivedAt = new Date().toISOString();
+    const archivedBy = userData?.user?.email || currentUser || null;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ archived_at: archivedAt, archived_by: archivedBy })
+      .in('id', ids);
+
+    if (error) {
+      alert(`No se pudo archivar: ${error.message}`);
+      return;
+    }
+
+    trackAdminActivity('order_archive_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, archived_at: archivedAt, archived_by: archivedBy } : o));
     setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
+  }
+
+  async function unarchiveOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ archived_at: null, archived_by: null })
+      .in('id', ids);
+
+    if (error) {
+      alert(`No se pudo desarchivar: ${error.message}`);
+      return;
+    }
+
+    trackAdminActivity('order_unarchive_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, archived_at: null, archived_by: null } : o));
+    setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
+  }
+
+  async function deleteOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    await Promise.all(ids.map(id => supabase.from('orders').delete().eq('id', id)));
+
+    trackAdminActivity('order_delete_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.filter(o => !ids.includes(o.id)));
+    setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
   }
 
   async function updateOrderStatus(id, status) {
@@ -1924,7 +2056,11 @@ useEffect(() => {
     return 'Pedido histórico a revisar: el detalle de precios de los ítems no coincide con el total guardado.';
   }
 
-  const filteredOrders = orders.filter(o => {
+  const activeOrders = orders.filter(o => !o.archived_at);
+  const archivedOrders = orders.filter(o => Boolean(o.archived_at));
+  const ordersForCurrentView = ordersView === 'archived' ? archivedOrders : activeOrders;
+
+  const filteredOrders = ordersForCurrentView.filter(o => {
     const q = orderSearch.toLowerCase();
     if (q && !(o.order_code || '').toLowerCase().includes(q) && !(o.customer_name || '').toLowerCase().includes(q) && !(o.customer_email || '').toLowerCase().includes(q)) return false;
     if (orderFilterStatus !== 'all' && o.status !== orderFilterStatus) return false;
@@ -2328,7 +2464,7 @@ useEffect(() => {
               >
                 {ALL_TABS[id]}
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
-                {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
                 {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
                 {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
                 {renderAdminTabPresence(id)}
@@ -3314,13 +3450,96 @@ useEffect(() => {
 
         {/* == PEDIDOS == */}
         {activeTab === 'orders' && (
-          <div style={s.card} onClick={() => setSelectedOrderIds(new Set())}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ ...s.sectionTitle, marginBottom: 0 }}>Pedidos ({filteredOrders.length})</h2>
+          <div style={s.card} data-orders-table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+              <div>
+                <h2 style={{ ...s.sectionTitle, marginBottom: 8 }}>
+                  {ordersView === 'archived' ? 'Pedidos archivados' : 'Pedidos'} ({filteredOrders.length})
+                </h2>
+
+                <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrdersView('active');
+                      setSelectedOrderIds(new Set());
+                      lastSelectedOrderIdRef.current = null;
+                    }}
+                    style={{
+                      border:'1.5px solid #2D6BE4',
+                      background: ordersView === 'active' ? '#2D6BE4' : 'white',
+                      color: ordersView === 'active' ? 'white' : '#2D6BE4',
+                      borderRadius:8,
+                      padding:'5px 12px',
+                      fontSize:12,
+                      fontWeight:700,
+                      cursor:'pointer',
+                      fontFamily:'Barlow, sans-serif',
+                    }}
+                  >
+                    Activos ({activeOrders.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrdersView('archived');
+                      setSelectedOrderIds(new Set());
+                      lastSelectedOrderIdRef.current = null;
+                    }}
+                    style={{
+                      border:'1.5px solid #9aa3bc',
+                      background: ordersView === 'archived' ? '#5a6380' : 'white',
+                      color: ordersView === 'archived' ? 'white' : '#5a6380',
+                      borderRadius:8,
+                      padding:'5px 12px',
+                      fontSize:12,
+                      fontWeight:700,
+                      cursor:'pointer',
+                      fontFamily:'Barlow, sans-serif',
+                    }}
+                  >
+                    Archivados ({archivedOrders.length})
+                  </button>
+                </div>
+              </div>
+
               {selectedOrderIds.size > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ background: '#2D6BE4', color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>{selectedOrderIds.size} seleccionados</span>
-                  <HoldButton onConfirm={() => deleteOrders(selectedOrderIds)} />
+                <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                  <span style={{ background: '#2D6BE4', color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>
+                    {selectedOrderIds.size} seleccionados
+                  </span>
+
+                  {ordersView === 'active' ? (
+                    <HoldButton
+                      label="Mantené para archivar"
+                      holdingLabel="Archivando..."
+                      doneLabel="✓ Archivado"
+                      variant="warning"
+                      minWidth={156}
+                      onConfirm={() => archiveOrders(selectedOrderIds)}
+                    />
+                  ) : (
+                    <>
+                      <HoldButton
+                        label="Mantené para desarchivar"
+                        holdingLabel="Desarchivando..."
+                        doneLabel="✓ Desarchivado"
+                        variant="success"
+                        minWidth={176}
+                        onConfirm={() => unarchiveOrders(selectedOrderIds)}
+                      />
+
+                      <HoldButton
+                        label="Mantené para eliminar"
+                        holdingLabel="Eliminando..."
+                        doneLabel="✓ Eliminado"
+                        variant="danger"
+                        minWidth={156}
+                        onConfirm={() => deleteOrders(selectedOrderIds)}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -3361,7 +3580,11 @@ useEffect(() => {
                 </button>
               )}
             </div>
-            {filteredOrders.length === 0 && <p style={s.emptyMsg}>No hay pedidos.</p>}
+            {filteredOrders.length === 0 && (
+              <p style={s.emptyMsg}>
+                {ordersView === 'archived' ? 'No hay pedidos archivados.' : 'No hay pedidos activos.'}
+              </p>
+            )}
             {filteredOrders.length > 0 && (
               <div style={{overflowX: 'auto'}}>
                 <table style={s.tbl}>
@@ -3395,16 +3618,24 @@ useEffect(() => {
                               const currIdx = ids.indexOf(o.id);
                               const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
                               setSelectedOrderIds(new Set(ids.slice(start, end + 1)));
-                            } else if (e.ctrlKey || e.metaKey) {
+                            } else if (e.ctrlKey || e.metaKey || selectedOrderIds.has(o.id)) {
                               setSelectedOrderIds(prev => {
                                 const next = new Set(prev);
-                                if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+
+                                if (next.has(o.id)) {
+                                  next.delete(o.id);
+                                } else {
+                                  next.add(o.id);
+                                }
+
+                                if (next.size === 0) {
+                                  lastSelectedOrderIdRef.current = null;
+                                } else {
+                                  lastSelectedOrderIdRef.current = o.id;
+                                }
+
                                 return next;
                               });
-                              lastSelectedOrderIdRef.current = o.id;
-                            } else if (selectedOrderIds.has(o.id) && selectedOrderIds.size === 1) {
-                              setSelectedOrderIds(new Set());
-                              lastSelectedOrderIdRef.current = null;
                             } else {
                               setSelectedOrderIds(new Set([o.id]));
                               lastSelectedOrderIdRef.current = o.id;
@@ -4761,7 +4992,7 @@ useEffect(() => {
             supabase={supabase}
             products={products}
             sellers={sellers}
-            orders={orders}
+            orders={activeOrders}
             activeSubtab={trackingSubtab}
             onChangeSubtab={setTrackingSubtab}
           />
@@ -4773,7 +5004,7 @@ useEffect(() => {
             supabase={supabase}
             sellers={sellers}
             products={products}
-            orders={orders}
+            orders={activeOrders}
           />
         )}
 
@@ -5099,12 +5330,26 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   const STATUS_COLORS = { pending: '#f59e0b', confirmed: '#3b82f6', in_production: '#8b5cf6', ready: '#22c55e', cancelled: '#ef4444' };
 
   const designMap = {};
-  allItems.forEach(i => {
-    if (!i.name) return;
-    if (!designMap[i.name]) designMap[i.name] = { name: i.name, qty: 0, revenue: 0 };
-    designMap[i.name].qty += Number(i.qty) || 0;
-    designMap[i.name].revenue += (Number(i.qty) || 0) * (Number(i.pricePerUnit) || 0);
+
+  filtered.forEach(order => {
+    const orderItems = Array.isArray(order.items) ? order.items : [];
+
+    orderItems.forEach(item => {
+      const designName = item?.name || item?.designName || item?.design_name;
+      if (!designName) return;
+
+      const qty = Number(item.qty) || 0;
+      const pricing = getOrderItemPricing(item, order);
+
+      if (!designMap[designName]) {
+        designMap[designName] = { name: designName, qty: 0, revenue: 0 };
+      }
+
+      designMap[designName].qty += qty;
+      designMap[designName].revenue += pricing.hasPrice ? Number(pricing.subtotal) || 0 : 0;
+    });
   });
+
   const topDesigns = Object.values(designMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
 
   const productMap = {};
