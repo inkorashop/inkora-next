@@ -1050,7 +1050,7 @@ export default function Admin() {
   function getProductCategories(productId) {
     const p = products.find(pr => pr.id === productId);
     const cats = p?.categories;
-    return (Array.isArray(cats) && cats.length > 0) ? cats : ['Todos'];
+    return (Array.isArray(cats) && cats.length > 0) ? cats : [];
   }
 
   async function saveDesignCategory(id, category) {
