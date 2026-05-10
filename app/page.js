@@ -225,7 +225,7 @@ export default function Landing() {
   style={{
     position: 'absolute',
     inset: 0,
-    background: 'linear-gradient(to top, rgba(8,16,36,0.96) 0%, rgba(8,16,36,0.88) 16%, rgba(8,16,36,0.72) 30%, rgba(8,16,36,0.42) 46%, rgba(8,16,36,0.16) 62%, rgba(8,16,36,0.04) 76%, rgba(8,16,36,0) 100%)',
+    background: 'linear-gradient(to top, rgba(8,16,36,0.96) 0%, rgba(8,16,36,0.88) 14%, rgba(8,16,36,0.68) 24%, rgba(8,16,36,0.34) 36%, rgba(8,16,36,0.10) 48%, rgba(8,16,36,0.02) 56%, rgba(8,16,36,0) 64%)',
     transition: 'opacity 0.3s ease',
   }}
 />
