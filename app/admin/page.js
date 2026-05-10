@@ -1889,15 +1889,75 @@ useEffect(() => {
     return ORDER_STATUSES.find(s => s.value === value) || ORDER_STATUSES[0];
   }
 
-  function summarizeItems(items) {
-    if (!Array.isArray(items) || items.length === 0) return '—';
-    const byProduct = {};
-    items.forEach(i => {
-      const p = i.productName || 'Sin producto';
-      if (!byProduct[p]) byProduct[p] = [];
-      byProduct[p].push(`${i.name} x${i.qty}`);
-    });
-    return Object.entries(byProduct).map(([product, designs]) => `${product} — ${designs.join(', ')}`).join(' | ');
+  function getOrderItemPriceData(order, item) {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const qty = Number(item?.qty) || 0;
+    const orderTotal = Number(order?.total) || 0;
+
+    const storedUnit = Number(
+      item?.pricePerUnit ??
+      item?.unitPrice ??
+      item?.price_per_unit ??
+      item?.price ??
+      0
+    );
+
+    const storedSubtotal = Number(
+      item?.subtotal ??
+      item?.total ??
+      0
+    );
+
+    const storedItemsTotal = items.reduce((sum, currentItem) => {
+      const currentQty = Number(currentItem?.qty) || 0;
+      const currentUnit = Number(
+        currentItem?.pricePerUnit ??
+        currentItem?.unitPrice ??
+        currentItem?.price_per_unit ??
+        currentItem?.price ??
+        0
+      );
+      const currentSubtotal = Number(
+        currentItem?.subtotal ??
+        currentItem?.total ??
+        0
+      );
+
+      return sum + (currentSubtotal > 0 ? currentSubtotal : currentQty * currentUnit);
+    }, 0);
+
+    const totalQty = items.reduce((sum, currentItem) => {
+      return sum + (Number(currentItem?.qty) || 0);
+    }, 0);
+
+    const storedTotalDoesNotMatchOrderTotal =
+      orderTotal > 0 &&
+      storedItemsTotal > 0 &&
+      Math.abs(storedItemsTotal - orderTotal) > 1;
+
+    if (storedTotalDoesNotMatchOrderTotal && totalQty > 0) {
+      const inferredUnit = orderTotal / totalQty;
+
+      return {
+        unit: inferredUnit,
+        subtotal: qty * inferredUnit,
+        inferred: true,
+      };
+    }
+
+    if (storedSubtotal > 0) {
+      return {
+        unit: qty > 0 ? storedSubtotal / qty : storedUnit,
+        subtotal: storedSubtotal,
+        inferred: false,
+      };
+    }
+
+    return {
+      unit: storedUnit,
+      subtotal: storedUnit > 0 ? qty * storedUnit : 0,
+      inferred: false,
+    };
   }
 
   const filteredOrders = orders.filter(o => {
@@ -4690,14 +4750,24 @@ useEffect(() => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => (
-                    <tr key={i}>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.pricePerUnit ? `$${Number(item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
-                      <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>{item.pricePerUnit ? `$${(item.qty * item.pricePerUnit).toLocaleString('es-AR')}` : '—'}</td>
-                    </tr>
-                  ))}
+                  {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => {
+                    const priceData = getOrderItemPriceData(orderDetail, item);
+                    const unit = Number(priceData.unit) || 0;
+                    const subtotal = Number(priceData.subtotal) || 0;
+
+                    return (
+                      <tr key={i}>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
+                          {unit > 0 ? `$${Math.round(unit).toLocaleString('es-AR')}` : '—'}
+                        </td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, fontWeight:600, textAlign:'right'}}>
+                          {subtotal > 0 ? `$${Math.round(subtotal).toLocaleString('es-AR')}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

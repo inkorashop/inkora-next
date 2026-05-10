@@ -1107,6 +1107,21 @@ export default function Home() {
       alert('Por favor completa todos los campos.');
       return;
     }
+
+    const pricedCartItems = cartItems.map(item => {
+      const price = item.showPrice !== false ? getUnitPrice(item.product_id) : null;
+      const qty = Number(item.qty) || 0;
+
+      return {
+        ...item,
+        pricePerUnit: price,
+        unitPrice: price,
+        subtotal: price !== null ? qty * price : null,
+      };
+    });
+
+    const orderTotal = showTotal ? total : 0;
+
     setLoading(true);
     try {
       await supabase.from('orders').insert({
@@ -1114,8 +1129,8 @@ export default function Home() {
         customer_name: form.name,
         customer_phone: form.phone,
         customer_email: form.email,
-        items: cartItems,
-        total,
+        items: pricedCartItems,
+        total: orderTotal,
         notes,
         status: 'pending',
         seller_id: profile?.sellers?.id || null,
@@ -1124,11 +1139,20 @@ export default function Home() {
       await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderCode, form, cartItems: cartItems.map(i => ({ ...i, pricePerUnit: getUnitPrice(i.product_id) })), total: showTotal ? total : 0, showPrice: showTotal, notes, sellerName: profile?.sellers?.name || null, sendConfirmation: profile?.send_confirmation_email !== false })
+        body: JSON.stringify({
+          orderCode,
+          form,
+          cartItems: pricedCartItems,
+          total: orderTotal,
+          showPrice: showTotal,
+          notes,
+          sellerName: profile?.sellers?.name || null,
+          sendConfirmation: profile?.send_confirmation_email !== false,
+        }),
       });
 
-      track('order_confirm', { order_code: orderCode, items_count: cartItems.length, total });
-      setConfirmedOrder({ items: cartItems, total, form });
+      track('order_confirm', { order_code: orderCode, items_count: pricedCartItems.length, total: orderTotal });
+      setConfirmedOrder({ items: pricedCartItems, total: orderTotal, form });
       setSuccess(true);
       clearCart();
       setNotes('');
