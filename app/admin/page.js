@@ -2099,7 +2099,7 @@ export default function Admin() {
     pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
-  const s = getadminstyles(admindarkmode);
+  const s = getAdminstyles(adminDarkMode);
   const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
