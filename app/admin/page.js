@@ -4127,41 +4127,7 @@ useEffect(() => {
 
                         {isInvitedUserDeletable(u) ? (
                           <HoldButton
-                            label="Eliminar registro"
-                            holdingLabel="Eliminando..."
-                            doneLabel="✓ Eliminado"
-                            variant="danger"
-                            minWidth={132}
-                            onConfirm={() => softDeleteInvitedUser(u)}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            title={u.deleted_at
-                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
-                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
-                            }
-                            style={{
-                              border:'1.5px solid #dde1ef',
-                              borderRadius:8,
-                              padding:'8px 12px',
-                              fontSize:12,
-                              fontWeight:700,
-                              fontFamily:'Barlow, sans-serif',
-                              background:'#f0f2f8',
-                              color:'#9aa3bc',
-                              cursor:'not-allowed',
-                              opacity:0.75,
-                            }}
-                          >
-                            Eliminar registro
-                          </button>
-                        )}
-
-                        {isInvitedUserDeletable(u) ? (
-                          <HoldButton
-                            label="Eliminar registro"
+                            label={deletingUserIds.has(u.id) ? 'Eliminando...' : 'Eliminar registro'}
                             holdingLabel="Eliminando..."
                             doneLabel="✓ Eliminado"
                             variant="danger"

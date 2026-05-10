@@ -37,7 +37,7 @@ export function CartProvider({ children }) {
       design_id: design.id,
       design_name: design.name,
       product_name: product?.name,
-      qty: safeqty,
+      qty: safeQty,
       price: product?.price_per_unit ?? 0,
     });
 

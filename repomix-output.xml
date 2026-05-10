@@ -1935,124 +1935,6 @@ export default function TrackBootstrap() {
 - Verificar deploy en Vercel.
 </file>
 
-<file path="contexts/CartContext.js">
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const CartContext = createContext(null);
-
-function track(eventType, metadata = {}) {
-  if (typeof window !== 'undefined') window.__inkora_track?.(eventType, metadata);
-}
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('inkora_cart');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('inkora_cart', JSON.stringify(cart));
-    } catch { }
-  }, [cart]);
-
-  // Bloquear sincronización de auth de Supabase dentro del iframe
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      if (window.self !== window.top) return;
-    } catch { return; }
-  }, []);
-
-  function addToCart(design, product) {
-    track('cart_add', {
-      design_id: design.id,
-      design_name: design.name,
-      product_name: product?.name,
-      qty: 1,
-      price: product?.price_per_unit ?? 0,
-    });
-    setCart(prev => ({
-      ...prev,
-      [design.id]: {
-        ...design,
-        qty: 1,
-        pricePerUnit: product?.price_per_unit ?? 0,
-        showPrice: product?.show_price !== false,
-        productName: product?.name ?? '',
-      },
-    }));
-  }
-
-  function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      track('cart_qty_change', {
-        design_id: id,
-        design_name: item.name,
-        product_name: item.productName,
-        old_qty: item.qty,
-        new_qty: Math.max(0, newQty),
-        delta,
-      });
-      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...item, qty: newQty } };
-    });
-  }
-
-  function removeFromCart(id) {
-    setCart(prev => {
-      const item = prev[id];
-      if (item) track('cart_remove', { design_id: id, design_name: item.name, product_name: item.productName });
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }
-
-  function clearCart() {
-    setCart({});
-  }
-
-  function setCartItem(id, qty) {
-    setCart(prev => {
-      const item = prev[id];
-      if (item) {
-        track('cart_qty_change', {
-          design_id: id,
-          design_name: item.name,
-          product_name: item.productName,
-          old_qty: item.qty,
-          new_qty: Math.max(0, qty),
-          delta: qty - item.qty,
-        });
-      }
-      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
-      return { ...prev, [id]: { ...prev[id], qty } };
-    });
-  }
-
-  const cartItems = Object.values(cart);
-  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
-
-  return (
-    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem, track }}>
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  return useContext(CartContext);
-}
-</file>
-
 <file path="lib/order-pricing.js">
 function toMoneyNumber(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -3746,6 +3628,127 @@ export default function EmailsTab({ supabase }) {
 }
 </file>
 
+<file path="contexts/CartContext.js">
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const CartContext = createContext(null);
+
+function track(eventType, metadata = {}) {
+  if (typeof window !== 'undefined') window.__inkora_track?.(eventType, metadata);
+}
+
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('inkora_cart');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('inkora_cart', JSON.stringify(cart));
+    } catch { }
+  }, [cart]);
+
+  // Bloquear sincronización de auth de Supabase dentro del iframe
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (window.self !== window.top) return;
+    } catch { return; }
+  }, []);
+
+  function addToCart(design, product, qty = 1) {
+    const safeQty = Math.max(1, Number(qty) || 1);
+
+    track('cart_add', {
+      design_id: design.id,
+      design_name: design.name,
+      product_name: product?.name,
+      qty: safeqty,
+      price: product?.price_per_unit ?? 0,
+    });
+
+    setCart(prev => ({
+      ...prev,
+      [design.id]: {
+        ...design,
+        qty: safeQty,
+        pricePerUnit: product?.price_per_unit ?? 0,
+        showPrice: product?.show_price !== false,
+        productName: product?.name ?? '',
+      },
+    }));
+  }
+
+  function changeQty(id, delta) {
+    setCart(prev => {
+      const item = prev[id];
+      if (!item) return prev;
+      const newQty = item.qty + delta;
+      track('cart_qty_change', {
+        design_id: id,
+        design_name: item.name,
+        product_name: item.productName,
+        old_qty: item.qty,
+        new_qty: Math.max(0, newQty),
+        delta,
+      });
+      if (newQty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...item, qty: newQty } };
+    });
+  }
+
+  function removeFromCart(id) {
+    setCart(prev => {
+      const item = prev[id];
+      if (item) track('cart_remove', { design_id: id, design_name: item.name, product_name: item.productName });
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function clearCart() {
+    setCart({});
+  }
+
+  function setCartItem(id, qty) {
+    setCart(prev => {
+      const item = prev[id];
+      if (item) {
+        track('cart_qty_change', {
+          design_id: id,
+          design_name: item.name,
+          product_name: item.productName,
+          old_qty: item.qty,
+          new_qty: Math.max(0, qty),
+          delta: qty - item.qty,
+        });
+      }
+      if (qty <= 0) { const next = { ...prev }; delete next[id]; return next; }
+      return { ...prev, [id]: { ...prev[id], qty } };
+    });
+  }
+
+  const cartItems = Object.values(cart);
+  const totalItems = cartItems.reduce((s, i) => s + i.qty, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, cartItems, totalItems, addToCart, changeQty, removeFromCart, clearCart, setCartItem, track }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  return useContext(CartContext);
+}
+</file>
+
 <file path="hooks/useTrack.js">
 'use client';
 import { useCallback, useEffect, useRef } from 'react';
@@ -4237,87 +4240,6 @@ export async function POST(req) {
 }
 </file>
 
-<file path="app/api/invite-user/route.js">
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Faltan variables NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el servidor');
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
-
-export async function POST(req) {
-  try {
-    const { name, phone, email, password } = await req.json();
-
-    if (!email?.trim() || !password || !name?.trim()) {
-      return NextResponse.json({ error: 'Nombre, email y contraseña son obligatorios' }, { status: 400 });
-    }
-
-    const supabaseAdmin = getAdminClient();
-
-    // 1. Create user in auth without sending confirmation email
-    const { data: { user }, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: name.trim() },
-    });
-
-    if (createError) {
-      return NextResponse.json({ error: createError.message }, { status: 400 });
-    }
-
-    // 2. Upsert profile with admin-set data
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
-      id: user.id,
-      email: email.trim().toLowerCase(),
-      name: name.trim(),
-      phone: phone?.trim() || null,
-      admin_set_password: password,
-      registration_source: 'admin_invite',
-      password_changed_by_user: false,
-    });
-
-    if (profileError) {
-      console.error('Error updating profile:', profileError);
-    }
-
-    // 3. Generate one-time magic link for auto-login
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://inkora.com.ar';
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: email.trim().toLowerCase(),
-      options: { redirectTo: siteUrl },
-    });
-
-    let link = null;
-    if (!linkError) {
-      const rawLink = linkData?.properties?.action_link;
-      try {
-        const token = new URL(rawLink).searchParams.get('token');
-        link = token ? `${siteUrl}/invite?token=${encodeURIComponent(token)}` : rawLink;
-      } catch {
-        link = rawLink;
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      user_id: user.id,
-      link,
-      link_error: linkError?.message || null,
-    });
-
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-</file>
-
 <file path="app/api/send-email/route.js">
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -4770,6 +4692,170 @@ DROP FUNCTION IF EXISTS public.add_table_to_supabase_realtime(text);
     "additionalDirectories": [
       "c:\\Users\\Franco\\Desktop\\inkora-next\\.claude"
     ]
+  }
+}
+</file>
+
+<file path="app/api/invite-user/route.js">
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error('Faltan variables NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el servidor');
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+async function generateInviteLink(supabaseAdmin, email) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://inkora.com.ar';
+
+  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+    options: { redirectTo: siteUrl },
+  });
+
+  let link = null;
+
+  if (!linkError) {
+    const rawLink = linkData?.properties?.action_link;
+
+    try {
+      const token = new URL(rawLink).searchParams.get('token');
+      link = token ? `${siteUrl}/invite?token=${encodeURIComponent(token)}` : rawLink;
+    } catch {
+      link = rawLink;
+    }
+  }
+
+  return {
+    link,
+    link_error: linkError?.message || null,
+  };
+}
+
+export async function POST(req) {
+  try {
+    const { name, phone, email, password } = await req.json();
+
+    const normalizedEmail = email?.trim().toLowerCase();
+    const trimmedName = name?.trim();
+    const trimmedPhone = phone?.trim() || null;
+
+    if (!normalizedEmail || !password || !trimmedName) {
+      return NextResponse.json(
+        { error: 'Nombre, email y contraseña son obligatorios' },
+        { status: 400 }
+      );
+    }
+
+    const supabaseAdmin = getAdminClient();
+
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, registration_source, deleted_at')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (
+      existingProfile?.id &&
+      existingProfile.registration_source === 'admin_invite' &&
+      existingProfile.deleted_at
+    ) {
+      const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(
+        existingProfile.id,
+        {
+          email: normalizedEmail,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: trimmedName },
+        }
+      );
+
+      if (updateUserError) {
+        return NextResponse.json({ error: updateUserError.message }, { status: 400 });
+      }
+
+      const { error: reactivateProfileError } = await supabaseAdmin
+        .from('profiles')
+        .update({
+          email: normalizedEmail,
+          name: trimmedName,
+          phone: trimmedPhone,
+          admin_set_password: password,
+          registration_source: 'admin_invite',
+          password_changed_by_user: false,
+          deleted_at: null,
+          deleted_by: null,
+          deleted_reason: null,
+        })
+        .eq('id', existingProfile.id);
+
+      if (reactivateProfileError) {
+        return NextResponse.json({ error: reactivateProfileError.message }, { status: 400 });
+      }
+
+      const { link, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail);
+
+      return NextResponse.json({
+        success: true,
+        reactivated: true,
+        user_id: existingProfile.id,
+        link,
+        link_error,
+      });
+    }
+
+    const { data: { user }, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: trimmedName },
+    });
+
+    if (createError) {
+      return NextResponse.json({ error: createError.message }, { status: 400 });
+    }
+
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+      id: user.id,
+      email: normalizedEmail,
+      name: trimmedName,
+      phone: trimmedPhone,
+      admin_set_password: password,
+      registration_source: 'admin_invite',
+      password_changed_by_user: false,
+      deleted_at: null,
+      deleted_by: null,
+      deleted_reason: null,
+    });
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError);
+    }
+
+    const { link, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail);
+
+    return NextResponse.json({
+      success: true,
+      reactivated: false,
+      user_id: user.id,
+      link,
+      link_error,
+    });
+
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 </file>
@@ -7503,10 +7589,10 @@ export default function Home() {
   const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
-  function addToCart(design) {
+  function addToCart(design, qty = 1) {
     const product = products.find(p => p.id === design.product_id);
     track('design_view', { design_id: design.id, design_name: design.name, product_name: product?.name });
-    addToCartCtx(design, product);
+    addToCartCtx(design, product, qty);
     triggerQtyAnim(design.id, 'pop');
     triggerCardPulse(design.id);
   }
@@ -7945,24 +8031,39 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>-</button>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
-                          value={inCart ? inCart.qty : ''}
+                          value={inCart ? String(inCart.qty) : ''}
                           placeholder="0"
-                          onFocus={e => { if (!inCart) e.target.value = ''; else e.target.select(); }}
+                          onFocus={e => e.target.select()}
                           onChange={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
-                            else if (!inCart) addToCart(d);
-                            else setCartItem(d.id, val);
+                            const raw = e.target.value.replace(/\D/g, '');
+
+                            if (!raw) {
+                              removeFromCart(d.id);
+                              return;
+                            }
+
+                            const val = Math.max(1, parseInt(raw, 10));
+
+                            if (!inCart) {
+                              addToCart(d, val);
+                            } else {
+                              setCartItem(d.id, val);
+                            }
                           }}
                           onBlur={e => {
-                            const val = parseInt(e.target.value);
-                            if (isNaN(val) || val <= 0) removeFromCart(d.id);
+                            const raw = e.target.value.replace(/\D/g, '');
+                            const val = parseInt(raw, 10);
+
+                            if (!raw || isNaN(val) || val <= 0) {
+                              removeFromCart(d.id);
+                            }
                           }}
                           onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-                          min="0"
                         />
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => {
                           if (inCart) changeQty(d.id, 1);
@@ -8587,40 +8688,111 @@ function LinkIcon() {
   );
 }
 
-function HoldButton({ onConfirm }) {
+function HoldButton({
+  onConfirm,
+  label = 'Mantené para eliminar',
+  holdingLabel = 'Manteniendo...',
+  doneLabel = '✓ Listo',
+  variant = 'danger',
+  minWidth = 140,
+}) {
   const [progress, setProgress] = React.useState(0);
   const intervalRef = React.useRef(null);
+  const doneRef = React.useRef(false);
 
-  function startHold() {
-    intervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current);
-          onConfirm();
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 100);
+  const palettes = {
+    danger: {
+      bg: 'linear-gradient(135deg, #e53e3e, #c53030)',
+      shadow: '0 4px 12px rgba(229,62,62,0.4)',
+    },
+    warning: {
+      bg: 'linear-gradient(135deg, #f6a800, #d97706)',
+      shadow: '0 4px 12px rgba(246,168,0,0.35)',
+    },
+    primary: {
+      bg: 'linear-gradient(135deg, #2D6BE4, #1B2F5E)',
+      shadow: '0 4px 12px rgba(45,107,228,0.35)',
+    },
+    success: {
+      bg: 'linear-gradient(135deg, #18a36a, #15803d)',
+      shadow: '0 4px 12px rgba(24,163,106,0.35)',
+    },
+  };
+
+  const palette = palettes[variant] || palettes.danger;
+
+  function clearHold() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
   }
 
-  function stopHold() {
-    clearInterval(intervalRef.current);
+  function startHold(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (intervalRef.current || doneRef.current) return;
+
+    intervalRef.current = setInterval(() => {
+      setProgress(prev => {
+        const next = Math.min(100, prev + 10);
+
+        if (next >= 100) {
+          clearHold();
+          doneRef.current = true;
+          onConfirm?.();
+
+          setTimeout(() => {
+            doneRef.current = false;
+            setProgress(0);
+          }, 650);
+
+          return 100;
+        }
+
+        return next;
+      });
+    }, 70);
+  }
+
+  function stopHold(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
+    if (doneRef.current) return;
+
+    clearHold();
     setProgress(0);
   }
 
   return (
     <button
+      type="button"
+      onClick={e => e.stopPropagation()}
       onMouseDown={startHold}
       onMouseUp={stopHold}
       onMouseLeave={stopHold}
       onTouchStart={startHold}
       onTouchEnd={stopHold}
-      style={{position:'relative', background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)', overflow:'hidden', minWidth:140, userSelect:'none'}}
+      style={{
+        position:'relative',
+        background: palette.bg,
+        color:'white',
+        border:'none',
+        borderRadius:10,
+        padding:'8px 20px',
+        fontSize:13,
+        fontWeight:700,
+        cursor:'pointer',
+        boxShadow: palette.shadow,
+        overflow:'hidden',
+        minWidth,
+        userSelect:'none',
+        fontFamily:'Barlow, sans-serif',
+      }}
     >
       <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', width: progress + '%', transition:'width 0.05s linear'}} />
       <span style={{position:'relative', zIndex:1}}>
-        {progress === 0 ? 'Mantené para eliminar' : progress >= 100 ? '✓ Eliminado' : `${Math.round(progress)}%`}
+        {progress === 0 ? label : progress >= 100 ? doneLabel : `${holdingLabel} ${Math.round(progress)}%`}
       </span>
     </button>
   );
@@ -8772,6 +8944,7 @@ useEffect(() => {
   const [userInviteLinks, setUserInviteLinks] = useState({});
   const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
   const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
+  const [deletingUserIds, setDeletingUserIds] = useState(new Set());
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -8788,6 +8961,7 @@ useEffect(() => {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [ordersView, setOrdersView] = useState('active'); // 'active' | 'archived'
   const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
   const lastSelectedOrderIdRef = useRef(null);
   const [orderFilterStatus, setOrderFilterStatus] = useState('all');
@@ -10332,15 +10506,75 @@ useEffect(() => {
 
   // ── Orders ──
   async function loadOrders() {
-    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (data) setOrders(data);
   }
 
-  async function deleteOrders(ids) {
-    await Promise.all([...ids].map(id => supabase.from('orders').delete().eq('id', id)));
-    trackAdminActivity('order_delete_bulk', { order_ids: [...ids], count: ids.size }, 'orders');
-    setOrders(prev => prev.filter(o => !ids.has(o.id)));
+  function normalizeOrderIds(idsInput) {
+    return idsInput instanceof Set ? [...idsInput] : Array.isArray(idsInput) ? idsInput : [idsInput];
+  }
+
+  async function archiveOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const archivedAt = new Date().toISOString();
+    const archivedBy = userData?.user?.email || currentUser || null;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ archived_at: archivedAt, archived_by: archivedBy })
+      .in('id', ids);
+
+    if (error) {
+      alert(`No se pudo archivar: ${error.message}`);
+      return;
+    }
+
+    trackAdminActivity('order_archive_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, archived_at: archivedAt, archived_by: archivedBy } : o));
     setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
+  }
+
+  async function unarchiveOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ archived_at: null, archived_by: null })
+      .in('id', ids);
+
+    if (error) {
+      alert(`No se pudo desarchivar: ${error.message}`);
+      return;
+    }
+
+    trackAdminActivity('order_unarchive_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.map(o => ids.includes(o.id) ? { ...o, archived_at: null, archived_by: null } : o));
+    setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
+  }
+
+  async function deleteOrders(idsInput) {
+    const ids = normalizeOrderIds(idsInput);
+    if (ids.length === 0) return;
+
+    await Promise.all(ids.map(id => supabase.from('orders').delete().eq('id', id)));
+
+    trackAdminActivity('order_delete_bulk', { order_ids: ids, count: ids.length }, 'orders');
+
+    setOrders(prev => prev.filter(o => !ids.includes(o.id)));
+    setSelectedOrderIds(new Set());
+    lastSelectedOrderIdRef.current = null;
   }
 
   async function updateOrderStatus(id, status) {
@@ -10391,7 +10625,11 @@ useEffect(() => {
     return 'Pedido histórico a revisar: el detalle de precios de los ítems no coincide con el total guardado.';
   }
 
-  const filteredOrders = orders.filter(o => {
+  const activeOrders = orders.filter(o => !o.archived_at);
+  const archivedOrders = orders.filter(o => Boolean(o.archived_at));
+  const ordersForCurrentView = ordersView === 'archived' ? archivedOrders : activeOrders;
+
+  const filteredOrders = ordersForCurrentView.filter(o => {
     const q = orderSearch.toLowerCase();
     if (q && !(o.order_code || '').toLowerCase().includes(q) && !(o.customer_name || '').toLowerCase().includes(q) && !(o.customer_email || '').toLowerCase().includes(q)) return false;
     if (orderFilterStatus !== 'all' && o.status !== orderFilterStatus) return false;
@@ -10509,6 +10747,54 @@ useEffect(() => {
     navigator.clipboard.writeText(link).catch(() => {});
     setCopiedLinkIds(prev => { const n = new Set(prev); n.add(userId); return n; });
     setTimeout(() => setCopiedLinkIds(prev => { const n = new Set(prev); n.delete(userId); return n; }), 1500);
+  }
+
+  function isInvitedUserDeletable(user) {
+    return user?.registration_source === 'admin_invite' && !user?.deleted_at;
+  }
+
+  async function softDeleteInvitedUser(user) {
+    if (!isInvitedUserDeletable(user)) return;
+
+    setDeletingUserIds(prev => {
+      const next = new Set(prev);
+      next.add(user.id);
+      return next;
+    });
+
+    const deletedAt = new Date().toISOString();
+
+    const { error } = await supabase.rpc('admin_soft_delete_invited_profile', {
+      p_user_id: user.id,
+    });
+
+    if (error) {
+      alert(`No se pudo eliminar el registro: ${error.message}`);
+      setDeletingUserIds(prev => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
+      return;
+    }
+
+    setUsers(prev => prev.map(u => u.id === user.id ? {
+      ...u,
+      deleted_at: deletedAt,
+      deleted_by: currentUser,
+      deleted_reason: 'deleted_by_admin_for_reinvite',
+    } : u));
+
+    trackAdminActivity('user_soft_delete_invited', {
+      user_id: user.id,
+      user_email: user.email,
+    }, 'users');
+
+    setDeletingUserIds(prev => {
+      const next = new Set(prev);
+      next.delete(user.id);
+      return next;
+    });
   }
 
   // ── Admins ──
@@ -10795,7 +11081,7 @@ useEffect(() => {
               >
                 {ALL_TABS[id]}
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
-                {id === 'orders' && orders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{orders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
                 {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
                 {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
                 {renderAdminTabPresence(id)}
@@ -11781,13 +12067,96 @@ useEffect(() => {
 
         {/* == PEDIDOS == */}
         {activeTab === 'orders' && (
-          <div style={s.card} onClick={() => setSelectedOrderIds(new Set())}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ ...s.sectionTitle, marginBottom: 0 }}>Pedidos ({filteredOrders.length})</h2>
+          <div style={s.card} data-orders-table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+              <div>
+                <h2 style={{ ...s.sectionTitle, marginBottom: 8 }}>
+                  {ordersView === 'archived' ? 'Pedidos archivados' : 'Pedidos'} ({filteredOrders.length})
+                </h2>
+
+                <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrdersView('active');
+                      setSelectedOrderIds(new Set());
+                      lastSelectedOrderIdRef.current = null;
+                    }}
+                    style={{
+                      border:'1.5px solid #2D6BE4',
+                      background: ordersView === 'active' ? '#2D6BE4' : 'white',
+                      color: ordersView === 'active' ? 'white' : '#2D6BE4',
+                      borderRadius:8,
+                      padding:'5px 12px',
+                      fontSize:12,
+                      fontWeight:700,
+                      cursor:'pointer',
+                      fontFamily:'Barlow, sans-serif',
+                    }}
+                  >
+                    Activos ({activeOrders.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrdersView('archived');
+                      setSelectedOrderIds(new Set());
+                      lastSelectedOrderIdRef.current = null;
+                    }}
+                    style={{
+                      border:'1.5px solid #9aa3bc',
+                      background: ordersView === 'archived' ? '#5a6380' : 'white',
+                      color: ordersView === 'archived' ? 'white' : '#5a6380',
+                      borderRadius:8,
+                      padding:'5px 12px',
+                      fontSize:12,
+                      fontWeight:700,
+                      cursor:'pointer',
+                      fontFamily:'Barlow, sans-serif',
+                    }}
+                  >
+                    Archivados ({archivedOrders.length})
+                  </button>
+                </div>
+              </div>
+
               {selectedOrderIds.size > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ background: '#2D6BE4', color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>{selectedOrderIds.size} seleccionados</span>
-                  <HoldButton onConfirm={() => deleteOrders(selectedOrderIds)} />
+                <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                  <span style={{ background: '#2D6BE4', color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>
+                    {selectedOrderIds.size} seleccionados
+                  </span>
+
+                  {ordersView === 'active' ? (
+                    <HoldButton
+                      label="Mantené para archivar"
+                      holdingLabel="Archivando..."
+                      doneLabel="✓ Archivado"
+                      variant="warning"
+                      minWidth={156}
+                      onConfirm={() => archiveOrders(selectedOrderIds)}
+                    />
+                  ) : (
+                    <>
+                      <HoldButton
+                        label="Mantené para desarchivar"
+                        holdingLabel="Desarchivando..."
+                        doneLabel="✓ Desarchivado"
+                        variant="success"
+                        minWidth={176}
+                        onConfirm={() => unarchiveOrders(selectedOrderIds)}
+                      />
+
+                      <HoldButton
+                        label="Mantené para eliminar"
+                        holdingLabel="Eliminando..."
+                        doneLabel="✓ Eliminado"
+                        variant="danger"
+                        minWidth={156}
+                        onConfirm={() => deleteOrders(selectedOrderIds)}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -11828,7 +12197,11 @@ useEffect(() => {
                 </button>
               )}
             </div>
-            {filteredOrders.length === 0 && <p style={s.emptyMsg}>No hay pedidos.</p>}
+            {filteredOrders.length === 0 && (
+              <p style={s.emptyMsg}>
+                {ordersView === 'archived' ? 'No hay pedidos archivados.' : 'No hay pedidos activos.'}
+              </p>
+            )}
             {filteredOrders.length > 0 && (
               <div style={{overflowX: 'auto'}}>
                 <table style={s.tbl}>
@@ -11862,16 +12235,24 @@ useEffect(() => {
                               const currIdx = ids.indexOf(o.id);
                               const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
                               setSelectedOrderIds(new Set(ids.slice(start, end + 1)));
-                            } else if (e.ctrlKey || e.metaKey) {
+                            } else if (e.ctrlKey || e.metaKey || selectedOrderIds.has(o.id)) {
                               setSelectedOrderIds(prev => {
                                 const next = new Set(prev);
-                                if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+
+                                if (next.has(o.id)) {
+                                  next.delete(o.id);
+                                } else {
+                                  next.add(o.id);
+                                }
+
+                                if (next.size === 0) {
+                                  lastSelectedOrderIdRef.current = null;
+                                } else {
+                                  lastSelectedOrderIdRef.current = o.id;
+                                }
+
                                 return next;
                               });
-                              lastSelectedOrderIdRef.current = o.id;
-                            } else if (selectedOrderIds.has(o.id) && selectedOrderIds.size === 1) {
-                              setSelectedOrderIds(new Set());
-                              lastSelectedOrderIdRef.current = null;
                             } else {
                               setSelectedOrderIds(new Set([o.id]));
                               lastSelectedOrderIdRef.current = o.id;
@@ -12160,8 +12541,22 @@ useEffect(() => {
               }
               return filtered.map(u => {
                 const status = getStatus(u.id);
+                const isDeleted = Boolean(u.deleted_at);
+
                 return (
-                  <div key={u.id} style={s.userRow}>
+                  <div
+                    key={u.id}
+                    style={{
+                      ...s.userRow,
+                      opacity: isDeleted ? 0.58 : 1,
+                      background: isDeleted
+                        ? (adminDarkMode ? 'rgba(229,62,62,0.08)' : '#fff5f5')
+                        : 'transparent',
+                      borderRadius: isDeleted ? 8 : undefined,
+                      paddingLeft: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
+                      paddingRight: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
+                    }}
+                  >
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{ width: 7, height: 7, borderRadius: '50%', background: status?.isActive ? '#22c55e' : status ? '#d1d5db' : 'transparent' }} />
@@ -12179,8 +12574,23 @@ useEffect(() => {
                       )}
                     </div>
                     <div style={s.userInfo}>
-                      <div style={s.productName}>{u.name || '—'}</div>
-                      <div style={s.productMeta}>{u.email}</div>
+                      <div
+                        style={{
+                          ...s.productName,
+                          textDecoration: isDeleted ? 'line-through' : 'none',
+                          color: isDeleted ? '#9aa3bc' : s.productName.color,
+                        }}
+                      >
+                        {u.name || '—'}
+                      </div>
+                      <div
+                        style={{
+                          ...s.productMeta,
+                          textDecoration: isDeleted ? 'line-through' : 'none',
+                        }}
+                      >
+                        {u.email}
+                      </div>
                       {(() => {
                         const src = u.registration_source;
                         if (src === 'self_google') return (
@@ -12215,6 +12625,22 @@ useEffect(() => {
                         }
                         return null;
                       })()}
+
+                      {isDeleted && (
+                        <div style={{
+                          display:'inline-flex',
+                          alignItems:'center',
+                          background:'#fee2e2',
+                          border:'1px solid #fecaca',
+                          borderRadius:5,
+                          padding:'2px 8px',
+                          marginTop:4,
+                        }}>
+                          <span style={{fontSize:10, fontWeight:700, color:'#b91c1c'}}>
+                            Registro eliminado
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div style={{display:'flex', flexDirection:'column', gap:6, alignItems:'flex-end'}}>
                       <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end'}}>
@@ -12264,6 +12690,74 @@ useEffect(() => {
                           >
                             <LinkIcon/>
                             <span style={{fontSize:10, fontWeight:600}}>{regenLoadingIds.has(u.id) ? '...' : 'Link'}</span>
+                          </button>
+                        )}
+
+                        {isInvitedUserDeletable(u) ? (
+                          <HoldButton
+                            label="Eliminar registro"
+                            holdingLabel="Eliminando..."
+                            doneLabel="✓ Eliminado"
+                            variant="danger"
+                            minWidth={132}
+                            onConfirm={() => softDeleteInvitedUser(u)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            title={u.deleted_at
+                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
+                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
+                            }
+                            style={{
+                              border:'1.5px solid #dde1ef',
+                              borderRadius:8,
+                              padding:'8px 12px',
+                              fontSize:12,
+                              fontWeight:700,
+                              fontFamily:'Barlow, sans-serif',
+                              background:'#f0f2f8',
+                              color:'#9aa3bc',
+                              cursor:'not-allowed',
+                              opacity:0.75,
+                            }}
+                          >
+                            Eliminar registro
+                          </button>
+                        )}
+
+                        {isInvitedUserDeletable(u) ? (
+                          <HoldButton
+                            label="Eliminar registro"
+                            holdingLabel="Eliminando..."
+                            doneLabel="✓ Eliminado"
+                            variant="danger"
+                            minWidth={132}
+                            onConfirm={() => softDeleteInvitedUser(u)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            title={u.deleted_at
+                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
+                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
+                            }
+                            style={{
+                              border:'1.5px solid #dde1ef',
+                              borderRadius:8,
+                              padding:'8px 12px',
+                              fontSize:12,
+                              fontWeight:700,
+                              fontFamily:'Barlow, sans-serif',
+                              background:'#f0f2f8',
+                              color:'#9aa3bc',
+                              cursor:'not-allowed',
+                              opacity:0.75,
+                            }}
+                          >
+                            Eliminar registro
                           </button>
                         )}
                       </div>
@@ -13228,7 +13722,7 @@ useEffect(() => {
             supabase={supabase}
             products={products}
             sellers={sellers}
-            orders={orders}
+            orders={activeOrders}
             activeSubtab={trackingSubtab}
             onChangeSubtab={setTrackingSubtab}
           />
@@ -13240,7 +13734,7 @@ useEffect(() => {
             supabase={supabase}
             sellers={sellers}
             products={products}
-            orders={orders}
+            orders={activeOrders}
           />
         )}
 
@@ -13566,12 +14060,26 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   const STATUS_COLORS = { pending: '#f59e0b', confirmed: '#3b82f6', in_production: '#8b5cf6', ready: '#22c55e', cancelled: '#ef4444' };
 
   const designMap = {};
-  allItems.forEach(i => {
-    if (!i.name) return;
-    if (!designMap[i.name]) designMap[i.name] = { name: i.name, qty: 0, revenue: 0 };
-    designMap[i.name].qty += Number(i.qty) || 0;
-    designMap[i.name].revenue += (Number(i.qty) || 0) * (Number(i.pricePerUnit) || 0);
+
+  filtered.forEach(order => {
+    const orderItems = Array.isArray(order.items) ? order.items : [];
+
+    orderItems.forEach(item => {
+      const designName = item?.name || item?.designName || item?.design_name;
+      if (!designName) return;
+
+      const qty = Number(item.qty) || 0;
+      const pricing = getOrderItemPricing(item, order);
+
+      if (!designMap[designName]) {
+        designMap[designName] = { name: designName, qty: 0, revenue: 0 };
+      }
+
+      designMap[designName].qty += qty;
+      designMap[designName].revenue += pricing.hasPrice ? Number(pricing.subtotal) || 0 : 0;
+    });
   });
+
   const topDesigns = Object.values(designMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
 
   const productMap = {};
