@@ -965,9 +965,10 @@ export default function Home() {
   }, [searchQuery, fuse, designs]);
 
   
-  const categories = ['Todos', ...(Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
+  const productCats = Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
     ? activeProduct.categories
-    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))])];
+    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))];
+  const categories = productCats.length > 0 ? ['Todos', ...productCats] : [];
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
@@ -1270,7 +1271,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           <div style={s.filters}>
-            {categories.map(cat => {
+            {categories.length > 0 && categories.map(cat => {
               const activeProd = products.find(p => p.id === activeProductId);
               const savedColor = activeProd?.category_colors?.[cat];
               const bg = savedColor || '#e8eef9';

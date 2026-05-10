@@ -6,7 +6,7 @@ import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
 
-const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false };
+const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [] };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
 const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history','emails'];
@@ -2085,6 +2085,7 @@ export default function Admin() {
     <div style={s.loginWrap}>
       {sessionBar}
       <div style={s.loginBox}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 8}} />
         <h2 style={s.loginTitle}>Panel de Administración</h2>
         <button style={s.btnGoogle} onClick={signInWithGoogle}>
@@ -2103,6 +2104,7 @@ export default function Admin() {
     <div style={s.loginWrap}>
       {sessionBar}
       <div style={s.loginBox}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
         <div style={{background: '#fee2e2', color: '#dc2626', borderRadius: 8, padding: '12px 20px', fontSize: 15, fontWeight: 700}}>Acceso denegado</div>
         <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>Tu cuenta no tiene permisos de administrador.</p>
@@ -2115,6 +2117,7 @@ export default function Admin() {
   return (
     <div style={s.wrap}>
       <header style={s.header}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
         <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
@@ -2473,7 +2476,8 @@ export default function Admin() {
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               {form.landing_image ? (
                                 <>
-                                  <img src={form.landing_image} style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={form.landing_image} alt="" style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
                                   <button
                                     onClick={() => { updateProductForm(p.id, 'landing_image', ''); saveProduct(p.id, {landing_image: null}); }}
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
@@ -2893,6 +2897,7 @@ export default function Admin() {
                       return (
                         <div key={i} style={s.fileRow}>
                           {entry.preview
+                            // eslint-disable-next-line @next/next/no-img-element
                             ? <img src={entry.preview} alt="" style={s.fileThumb} />
                             : entry.modelPreview
                               ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
@@ -2988,7 +2993,9 @@ export default function Admin() {
                 >
                   <div style={s.designInfo}>
                     {d.model_url
+                      // eslint-disable-next-line @next/next/no-img-element
                       ? <img src={d.image_url} alt={d.name} style={s.designThumb} />
+                      // eslint-disable-next-line @next/next/no-img-element
                       : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
                     }
                     <div>
