@@ -206,6 +206,8 @@ export default function Admin() {
   const adminScrollPositionsRef = useRef({});
   const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
+    if (typeof window === 'undefined') return ADMIN_TABS;
+
     try {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
@@ -214,6 +216,7 @@ export default function Admin() {
         if (Array.isArray(parsed) && ADMIN_TABS.every(t => filtered.includes(t))) return filtered;
       }
     } catch {}
+
     return ADMIN_TABS;
   });
   const [draggingTab, setDraggingTab] = useState(null);
