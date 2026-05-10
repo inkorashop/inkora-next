@@ -220,7 +220,15 @@ export default function Landing() {
               }
             </div>
 
-            <div className="card-overlay" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,20,50,0.85) 30%, rgba(10,20,50,0.1) 100%)', transition: 'opacity 0.3s ease' }} />
+            <div
+  className="card-overlay"
+  style={{
+    position: 'absolute',
+    inset: 0,
+    background: 'linear-gradient(to top, rgba(8,16,36,0.96) 0%, rgba(8,16,36,0.88) 16%, rgba(8,16,36,0.72) 30%, rgba(8,16,36,0.42) 46%, rgba(8,16,36,0.16) 62%, rgba(8,16,36,0.04) 76%, rgba(8,16,36,0) 100%)',
+    transition: 'opacity 0.3s ease',
+  }}
+/>
 
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '28px 24px' }}>
               <h2 style={{ color: 'white', fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>{p.name}</h2>
