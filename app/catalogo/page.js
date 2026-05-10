@@ -1003,7 +1003,8 @@ export default function Home() {
   }, {});
 
   function getProductMinQty(productId) {
-    const tiers = priceTiers.filter(t => t.product_id === productId);
+    const effectiveTiersProductId = (() => { const p = products.find(pr => pr.id === productId); return p?.use_parent_tiers && p?.parent_product_id ? p.parent_product_id : productId; })();
+    const tiers = priceTiers.filter(t => t.product_id === effectiveTiersProductId);
     if (tiers.length === 0) return null;
     return Math.min(...tiers.map(t => Number(t.min_quantity)));
   }
@@ -1503,7 +1504,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
         {!isMobile && (() => {
           const scaleBoxTiers = showPrices && !sidebarCollapsed && activeProduct?.show_price !== false
-            ? priceTiers.filter(t => t.product_id === activeProductId).sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity))
+            ? (() => { const ap = products.find(p => p.id === activeProductId); const effectiveId = ap?.use_parent_tiers && ap?.parent_product_id ? ap.parent_product_id : activeProductId; return priceTiers.filter(t => t.product_id === effectiveId).sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity)); })()
             : [];
           const hasScaleBox = scaleBoxTiers.length > 0;
           const headerOffset = headerVisible ? 64 : 0;

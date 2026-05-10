@@ -6,7 +6,7 @@ import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
 
-const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [] };
+const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
 const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history','emails'];
@@ -724,7 +724,7 @@ export default function Admin() {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 } };
+        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 }, use_parent_tiers: p.use_parent_tiers === true };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -4248,9 +4248,28 @@ export default function Admin() {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
               const activeLocalities = filteredLocalities();
               const newScaleName = newScaleNames[modalProduct.id] || '';
+              const isVariant = !!modalProduct.parent_product_id;
+              const useParentTiers = productForms[modalProduct.id]?.use_parent_tiers === true;
 
               return (
                 <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  {isVariant && (
+                    <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: useParentTiers ? '#eef4ff' : '#f8faff', border:`1.5px solid ${useParentTiers ? '#2D6BE4' : '#dde1ef'}`, borderRadius:8}}>
+                      <span style={{flex:1, fontSize:12, color:'#2d3352', fontWeight:600}}>Usar escalas del producto padre</span>
+                      <button
+                        onClick={async () => {
+                          const next = !useParentTiers;
+                          updateProductForm(modalProduct.id, 'use_parent_tiers', next);
+                          await supabase.from('products').update({ use_parent_tiers: next }).eq('id', modalProduct.id);
+                        }}
+                        style={{border:`1.5px solid ${useParentTiers ? '#2D6BE4' : '#dde1ef'}`, borderRadius:20, padding:'4px 14px', fontSize:12, fontWeight:700, cursor:'pointer', background: useParentTiers ? '#2D6BE4' : 'white', color: useParentTiers ? 'white' : '#9aa3bc', fontFamily:'Barlow, sans-serif'}}
+                      >
+                        {useParentTiers ? 'Activado' : 'Desactivado'}
+                      </button>
+                    </div>
+                  )}
+                  {useParentTiers && <div style={{fontSize:12, color:'#9aa3bc', padding:'0 2px'}}>Las escalas propias quedan guardadas pero inactivas. Se usan las del producto padre.</div>}
+                  <div style={{opacity: useParentTiers ? 0.4 : 1, pointerEvents: useParentTiers ? 'none' : 'auto'}}>
                   {activeLocalities.length === 0 ? <p style={s.emptyMsg}>No hay escalas activas. Creá la primera abajo.</p> : (
                   <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
                     <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', gap:0, position:'sticky', top:0, zIndex:4, background:'#f8faff', borderBottom:'2px solid #dde1ef', boxShadow:'0 2px 8px rgba(27,47,94,0.05)', borderRadius:'7px 7px 0 0'}}>
@@ -4356,6 +4375,7 @@ export default function Admin() {
                     />
                     <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
                   </div>
+                </div>
                 </div>
               );
             })()}
