@@ -1399,24 +1399,22 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         return (
                           <div style={{position:'absolute', bottom:6, right:6, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, zIndex:10}}>
                             {tags.map(tag => (
-                              <div key={tag.id} style={{display:'flex', alignItems:'center', gap:3, background: tag.color || 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', maxWidth:90}}>
+                              <div key={tag.id}
+                                style={{display:'flex', alignItems:'center', gap:3, background: tag.color || 'rgba(17,32,64,0.78)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', maxWidth:110, cursor:'pointer'}}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (infoTagsPopup?.designId === d.id) {
+                                    setInfoTagsPopup(null);
+                                  } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
+                                  }
+                                }}
+                              >
                                 <span style={{fontSize:9, fontWeight:700, color:'white', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{tag.title}</span>
+                                <span style={{fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.7)', flexShrink:0}}>+</span>
                               </div>
                             ))}
-                            <div
-                              style={{display:'flex', alignItems:'center', gap:3, background:'rgba(17,32,64,0.60)', backdropFilter:'blur(4px)', borderRadius:4, padding:'2px 7px', cursor:'pointer'}}
-                              onClick={e => {
-                                e.stopPropagation();
-                                if (infoTagsPopup?.designId === d.id) {
-                                  setInfoTagsPopup(null);
-                                } else {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setInfoTagsPopup({ designId: d.id, x: rect.right + 8, y: rect.top, tags });
-                                }
-                              }}
-                            >
-                              <span style={{fontSize:9, fontWeight:700, color:'white'}}>+</span>
-                            </div>
                           </div>
                         );
                       })()}
