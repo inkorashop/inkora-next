@@ -2266,7 +2266,25 @@ useEffect(() => {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
-        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
+        <button
+  type="button"
+  onClick={() => setAdminDarkMode(v => !v)}
+  title={adminDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+  style={s.themeToggle}
+>
+  <span style={s.themeToggleIconLeft}>☀</span>
+  <span style={s.themeToggleIconRight}>☾</span>
+  <span
+    style={{
+      ...s.themeToggleKnob,
+      transform: adminDarkMode ? 'translateX(28px)' : 'translateX(0)',
+    }}
+  >
+    {adminDarkMode ? '☾' : '☀'}
+  </span>
+</button>
+
+<span style={s.headerUser}>{currentUser}</span>
         <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
