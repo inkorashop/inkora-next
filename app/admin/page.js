@@ -1183,7 +1183,7 @@ export default function Admin() {
 
   async function removeProductCategory(productId, cat) {
     const current = getProductCategories(productId);
-    if (current.length <= 1) return;
+    if (current.length === 0) return;
     const updated = current.filter(c => c !== cat);
     await supabase.from('products').update({ categories: updated }).eq('id', productId);
     trackAdminActivity('product_category_delete', { product_id: productId, category: cat }, 'products');
