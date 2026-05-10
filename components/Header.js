@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 import AuthModal from '@/components/AuthModal';
+import GoogleOneTap from '@/components/GoogleOneTap';
 import { signInWithGoogle } from '@/lib/auth';
 import { useTrack } from '@/hooks/useTrack';
 
@@ -67,7 +68,10 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       supabase.auth.getSession().then(({ data: { session } }) => {
         const u = session?.user ?? null;
         setUser(u);
-        if (u) loadProfile(u.id);
+        if (u) {
+          loadProfile(u.id);
+          loadOrders(u.email);
+        }
       });
     }
     window.addEventListener('inkora_auth_success', handleAuthSuccess);
@@ -337,7 +341,31 @@ export default function Header({ headerVisible = true, showCart = false, page = 
       {authModalOpen && (
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
-          onSuccess={(u, meta) => { setAuthModalOpen(false); if (u) { setUser(u); loadProfile(u.id); } if (meta?.event_type) track(meta.event_type, { method: meta.method }); }}
+          onSuccess={(u, meta) => {
+            setAuthModalOpen(false);
+            if (u) {
+              setUser(u);
+              loadProfile(u.id);
+              loadOrders(u.email);
+            }
+            if (meta?.event_type) {
+              track(meta.event_type, { method: meta.method });
+            }
+          }}
+        />
+      )}
+
+      {uiSettings[`${page}_show_account`] !== 'false' && uiSettings['google_login_hint'] !== 'false' && !user && (
+        <GoogleOneTap
+          enabled={!authModalOpen}
+          onSuccess={(u) => {
+            if (u) {
+              setUser(u);
+              loadProfile(u.id);
+              loadOrders(u.email);
+            }
+            track('auth_login', { method: 'google_one_tap' });
+          }}
         />
       )}
     </>
