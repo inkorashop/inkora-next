@@ -187,7 +187,7 @@ export default function Admin() {
   const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
-    if (typeof window ==s= 'undefined') return 'products';
+    if (typeof window === 'undefined') return 'products';
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     if (slug === 'actividad' || slug === 'estadisticas') return 'tracking';
