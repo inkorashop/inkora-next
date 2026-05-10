@@ -175,10 +175,19 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
+  const [adminDarkMode, setAdminDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('inkora_admin_theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
+  }, [adminDarkMode]);
   const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
-    if (typeof window === 'undefined') return 'products';
+    if (typeof window ==s= 'undefined') return 'products';
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     if (slug === 'actividad' || slug === 'estadisticas') return 'tracking';
@@ -2087,7 +2096,7 @@ export default function Admin() {
     pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
 
-  const s = styles;
+  const s = getadminstyles(admindarkmode);
   const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
@@ -2116,7 +2125,7 @@ export default function Admin() {
   );
 
   if (screen === 'checking') return (
-    <div style={{ minHeight: '100vh', background: '#f7f8fc' }} />
+    <div style={s.checkingWrap} />
   );
 
   if (screen === 'denied') return (
@@ -2139,7 +2148,26 @@ export default function Admin() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
-        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
+
+        <button
+          type="button"
+          onClick={() => setAdminDarkMode(v => !v)}
+          title={adminDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          style={s.themeToggle}
+        >
+          <span style={s.themeToggleIconLeft}>☀</span>
+          <span style={s.themeToggleIconRight}>☾</span>
+          <span
+            style={{
+              ...s.themeToggleKnob,
+              transform: adminDarkMode ? 'translateX(28px)' : 'translateX(0)',
+            }}
+          >
+            {adminDarkMode ? '☾' : '☀'}
+          </span>
+        </button>
+
+        <span style={s.headerUser}>{currentUser}</span>
         <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
@@ -6289,4 +6317,260 @@ const styles = {
   userRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6', gap: 10 },
   userInfo: { flex: 1, minWidth: 0 },
   formRow2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 },
+  checkingWrap: { minHeight: '100vh', background: '#f7f8fc' },
+  headerUser: { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8 },
+  themeToggle: {
+    width: 58,
+    height: 30,
+    borderRadius: 999,
+    background: 'rgba(255,255,255,0.14)',
+    border: '1.5px solid rgba(255,255,255,0.22)',
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 8px',
+    flexShrink: 0,
+    transition: 'background 0.25s ease, border-color 0.25s ease',
+  },
+  themeToggleKnob: {
+    position: 'absolute',
+    left: 2,
+    top: 2,
+    width: 24,
+    height: 24,
+    borderRadius: '50%',
+    background: '#2D6BE4',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    fontWeight: 800,
+    boxShadow: '0 2px 7px rgba(0,0,0,0.28)',
+    transition: 'transform 0.25s ease',
+    zIndex: 2,
+  },
+  themeToggleIconLeft: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    lineHeight: 1,
+    zIndex: 1,
+  },
+  themeToggleIconRight: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    lineHeight: 1,
+    zIndex: 1,
+  },
 };
+
+function getAdminStyles(adminDarkMode) {
+  if (!adminDarkMode) return styles;
+
+  return {
+    ...styles,
+
+    loginWrap: {
+      ...styles.loginWrap,
+      background: '#0b1224',
+    },
+    loginBox: {
+      ...styles.loginBox,
+      background: '#111b34',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.38)',
+    },
+    loginTitle: {
+      ...styles.loginTitle,
+      color: 'white',
+    },
+    btnGoogle: {
+      ...styles.btnGoogle,
+      background: '#172444',
+      color: 'white',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      boxShadow: '0 2px 14px rgba(0,0,0,0.28)',
+    },
+
+    checkingWrap: {
+      ...styles.checkingWrap,
+      background: '#0b1224',
+    },
+
+    wrap: {
+      ...styles.wrap,
+      background: '#0b1224',
+      color: '#e7ecf8',
+    },
+    header: {
+      ...styles.header,
+      background: '#081126',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 2px 18px rgba(0,0,0,0.25)',
+    },
+    headerTitle: {
+      ...styles.headerTitle,
+      color: 'rgba(255,255,255,0.72)',
+    },
+    headerUser: {
+      ...styles.headerUser,
+      color: 'rgba(255,255,255,0.58)',
+    },
+    btnLogout: {
+      ...styles.btnLogout,
+      background: 'rgba(255,255,255,0.10)',
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+
+    tabBar: {
+      ...styles.tabBar,
+      background: '#101a32',
+      borderBottom: '1.5px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 5px 18px rgba(0,0,0,0.22)',
+    },
+    tab: {
+      ...styles.tab,
+      color: 'rgba(231,236,248,0.48)',
+    },
+    tabActive: {
+      ...styles.tabActive,
+      color: 'white',
+      boxShadow: 'inset 0 -3px 0 #2D6BE4',
+    },
+
+    content: {
+      ...styles.content,
+      color: '#e7ecf8',
+    },
+    card: {
+      ...styles.card,
+      background: '#111b34',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+      color: '#e7ecf8',
+    },
+    productWorkspace: {
+      ...styles.productWorkspace,
+      background: '#0b1224',
+      color: '#e7ecf8',
+    },
+    productWorkspaceHeader: {
+      ...styles.productWorkspaceHeader,
+      background: '#101a32',
+      borderBottom: '1.5px solid rgba(255,255,255,0.08)',
+      color: '#e7ecf8',
+    },
+    sectionTitle: {
+      ...styles.sectionTitle,
+      color: 'white',
+    },
+    emptyMsg: {
+      ...styles.emptyMsg,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    label: {
+      ...styles.label,
+      color: 'rgba(231,236,248,0.64)',
+    },
+    input: {
+      ...styles.input,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      color: '#e7ecf8',
+    },
+    tblInput: {
+      ...styles.tblInput,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.12)',
+      color: '#e7ecf8',
+    },
+    th: {
+      ...styles.th,
+      background: '#101a32',
+      color: 'rgba(231,236,248,0.62)',
+      borderBottom: '2px solid rgba(255,255,255,0.10)',
+    },
+    td: {
+      ...styles.td,
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      color: '#e7ecf8',
+    },
+    productRow: {
+      ...styles.productRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    productName: {
+      ...styles.productName,
+      color: '#e7ecf8',
+    },
+    productMeta: {
+      ...styles.productMeta,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    fileRow: {
+      ...styles.fileRow,
+      background: '#0d172d',
+      border: '1.5px solid rgba(255,255,255,0.08)',
+    },
+    designRow: {
+      ...styles.designRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    designName: {
+      ...styles.designName,
+      color: '#e7ecf8',
+    },
+    designCat: {
+      ...styles.designCat,
+      color: 'rgba(231,236,248,0.45)',
+    },
+    userRow: {
+      ...styles.userRow,
+      borderBottom: '1px solid rgba(255,255,255,0.07)',
+    },
+    adminPresenceDot: {
+      ...styles.adminPresenceDot,
+      border: '1.5px solid #101a32',
+    },
+    adminPresenceMore: {
+      ...styles.adminPresenceMore,
+      color: 'rgba(231,236,248,0.55)',
+    },
+    footer: {
+      ...styles.footer,
+      color: 'rgba(255,255,255,0.18)',
+    },
+    editBtn: {
+      ...styles.editBtn,
+      background: 'rgba(45,107,228,0.16)',
+      color: '#93b7ff',
+    },
+    btnWarning: {
+      ...styles.btnWarning,
+      background: 'rgba(246,194,0,0.12)',
+      color: '#facc15',
+      border: '1.5px solid rgba(246,194,0,0.35)',
+    },
+    userBadge: {
+      ...styles.userBadge,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    productTag: {
+      ...styles.productTag,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+
+    themeToggle: {
+      ...styles.themeToggle,
+      background: 'rgba(255,255,255,0.10)',
+      border: '1.5px solid rgba(255,255,255,0.18)',
+    },
+    themeToggleKnob: {
+      ...styles.themeToggleKnob,
+      background: '#2D6BE4',
+    },
+  };
+}
