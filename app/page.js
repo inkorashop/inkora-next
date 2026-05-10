@@ -33,7 +33,7 @@ export default function Landing() {
     
 
     supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data); });
+      .then(({ data }) => { if (data) setProducts(data.filter(p => !p.parent_product_id)); });
 
     supabase.from('settings').select('*')
       .then(({ data }) => {
