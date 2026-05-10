@@ -175,15 +175,15 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
-  const [adminDarkMode, setAdminDarkMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('inkora_admin_theme') === 'dark';
-  });
+const [adminDarkMode, setAdminDarkMode] = useState(() => {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('inkora_admin_theme') === 'dark';
+});
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
-  }, [adminDarkMode]);
+useEffect(() => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
+}, [adminDarkMode]);
   const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
@@ -206,8 +206,6 @@ export default function Admin() {
   const adminScrollPositionsRef = useRef({});
   const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
-    if (typeof window === 'undefined') return ADMIN_TABS;
-
     try {
       const saved = localStorage.getItem('admin_tab_order');
       if (saved) {
@@ -216,7 +214,6 @@ export default function Admin() {
         if (Array.isArray(parsed) && ADMIN_TABS.every(t => filtered.includes(t))) return filtered;
       }
     } catch {}
-
     return ADMIN_TABS;
   });
   const [draggingTab, setDraggingTab] = useState(null);
@@ -2128,7 +2125,7 @@ export default function Admin() {
   );
 
   if (screen === 'checking') return (
-    <div style={s.checkingWrap} />
+    <div style={{ minHeight: '100vh', background: '#f7f8fc' }} />
   );
 
   if (screen === 'denied') return (
@@ -2146,31 +2143,130 @@ export default function Admin() {
 
   // ── PANEL ──
   return (
-    <div style={s.wrap}>
+    <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
+      {adminDarkMode && (
+        <style jsx global>{`
+          [data-admin-theme="dark"] input,
+          [data-admin-theme="dark"] select,
+          [data-admin-theme="dark"] textarea {
+            background-color: #0d172d !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.14) !important;
+            color-scheme: dark;
+          }
+
+          [data-admin-theme="dark"] input::placeholder,
+          [data-admin-theme="dark"] textarea::placeholder {
+            color: rgba(231,236,248,0.42) !important;
+          }
+
+          [data-admin-theme="dark"] option {
+            background-color: #0d172d;
+            color: #e7ecf8;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #2d3352"],
+          [data-admin-theme="dark"] [style*="color:#2d3352"],
+          [data-admin-theme="dark"] [style*="color: rgb(45, 51, 82)"] {
+            color: #e7ecf8 !important;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #1B2F5E"],
+          [data-admin-theme="dark"] [style*="color:#1B2F5E"],
+          [data-admin-theme="dark"] [style*="color: rgb(27, 47, 94)"] {
+            color: #dbeafe !important;
+          }
+
+          [data-admin-theme="dark"] [style*="color: #5a6380"],
+          [data-admin-theme="dark"] [style*="color:#5a6380"],
+          [data-admin-theme="dark"] [style*="color: rgb(90, 99, 128)"] {
+            color: #aeb9d3 !important;
+          }
+
+          [data-admin-theme="dark"] button[style*="background: white"],
+          [data-admin-theme="dark"] button[style*="background:white"],
+          [data-admin-theme="dark"] button[style*="background-color: white"],
+          [data-admin-theme="dark"] button[style*="background-color:white"],
+          [data-admin-theme="dark"] button[style*="background: rgb(255, 255, 255)"],
+          [data-admin-theme="dark"] button[style*="background-color: rgb(255, 255, 255)"] {
+            background: #172444 !important;
+            color: #dbeafe !important;
+            border-color: rgba(255,255,255,0.14) !important;
+          }
+
+          [data-admin-theme="dark"] button[style*="background: #eef0f6"],
+          [data-admin-theme="dark"] button[style*="background:#eef0f6"],
+          [data-admin-theme="dark"] button[style*="background: rgb(238, 240, 246)"] {
+            background: #172444 !important;
+            color: #dbeafe !important;
+            border-color: rgba(255,255,255,0.14) !important;
+          }
+
+          [data-admin-theme="dark"] span[style*="background: #f0f2f8"],
+          [data-admin-theme="dark"] span[style*="background:#f0f2f8"],
+          [data-admin-theme="dark"] span[style*="background: rgb(240, 242, 248)"],
+          [data-admin-theme="dark"] div[style*="background: #f0f2f8"],
+          [data-admin-theme="dark"] div[style*="background:#f0f2f8"],
+          [data-admin-theme="dark"] div[style*="background: rgb(240, 242, 248)"] {
+            background: #172444 !important;
+            color: #cfe0ff !important;
+            border-color: rgba(255,255,255,0.10) !important;
+          }
+
+          [data-admin-theme="dark"] span[style*="background: #e8eef9"],
+          [data-admin-theme="dark"] span[style*="background:#e8eef9"],
+          [data-admin-theme="dark"] span[style*="background: rgb(232, 238, 249)"],
+          [data-admin-theme="dark"] div[style*="background: #e8eef9"],
+          [data-admin-theme="dark"] div[style*="background:#e8eef9"],
+          [data-admin-theme="dark"] div[style*="background: rgb(232, 238, 249)"] {
+            background: rgba(45,107,228,0.18) !important;
+            color: #93b7ff !important;
+            border-color: rgba(147,183,255,0.18) !important;
+          }
+
+          [data-admin-theme="dark"] div[style*="background: #f8faff"],
+          [data-admin-theme="dark"] div[style*="background:#f8faff"],
+          [data-admin-theme="dark"] div[style*="background: rgb(248, 250, 255)"],
+          [data-admin-theme="dark"] button[style*="background: #f8faff"],
+          [data-admin-theme="dark"] button[style*="background:#f8faff"],
+          [data-admin-theme="dark"] button[style*="background: rgb(248, 250, 255)"] {
+            background: #101a32 !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.10) !important;
+          }
+
+          [data-admin-theme="dark"] div[style*="background: #f0f4ff"],
+          [data-admin-theme="dark"] div[style*="background:#f0f4ff"],
+          [data-admin-theme="dark"] div[style*="background: rgb(240, 244, 255)"],
+          [data-admin-theme="dark"] button[style*="background: #f0f4ff"],
+          [data-admin-theme="dark"] button[style*="background:#f0f4ff"],
+          [data-admin-theme="dark"] button[style*="background: rgb(240, 244, 255)"] {
+            background: #172444 !important;
+            color: #e7ecf8 !important;
+            border-color: rgba(255,255,255,0.12) !important;
+          }
+
+          [data-admin-theme="dark"] input[type="file"] {
+            background: transparent !important;
+            color: #cbd5e1 !important;
+            border-color: transparent !important;
+          }
+
+          [data-admin-theme="dark"] input[type="range"] {
+            accent-color: #2D6BE4;
+          }
+
+          [data-admin-theme="dark"] ::selection {
+            background: rgba(45,107,228,0.45);
+            color: white;
+          }
+        `}</style>
+      )}
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
         <span style={s.headerTitle}>Panel de Administración</span>
-
-        <button
-          type="button"
-          onClick={() => setAdminDarkMode(v => !v)}
-          title={adminDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-          style={s.themeToggle}
-        >
-          <span style={s.themeToggleIconLeft}>☀</span>
-          <span style={s.themeToggleIconRight}>☾</span>
-          <span
-            style={{
-              ...s.themeToggleKnob,
-              transform: adminDarkMode ? 'translateX(28px)' : 'translateX(0)',
-            }}
-          >
-            {adminDarkMode ? '☾' : '☀'}
-          </span>
-        </button>
-
-        <span style={s.headerUser}>{currentUser}</span>
+        <span style={{color: 'rgba(255,255,255,0.45)', fontSize: 12, marginRight: 8}}>{currentUser}</span>
         <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
 
@@ -2270,7 +2366,19 @@ export default function Admin() {
                           onDragOver={e => { e.preventDefault(); setDragOverProductId(p.id); }}
                           onDrop={() => handleProductDrop(p.id)}
                           onDragEnd={() => { setDraggingProductId(null); setDragOverProductId(null); dragSrcProductIdRef.current = null; }}
-                          style={{opacity: p.active ? 1 : 0.5, cursor: 'grab', background: dragOverProductId === p.id ? '#eef4ff' : isVariant ? '#fbfcff' : 'transparent', outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none', boxShadow: isVariant ? 'inset 4px 0 0 #dbe7ff' : 'none'}}>
+                          style={{
+                            opacity: p.active ? 1 : 0.5,
+                            cursor: 'grab',
+                            background: dragOverProductId === p.id
+                              ? (adminDarkMode ? 'rgba(45,107,228,0.22)' : '#eef4ff')
+                              : isVariant
+                                ? (adminDarkMode ? 'rgba(45,107,228,0.07)' : '#fbfcff')
+                                : 'transparent',
+                            outline: dragOverProductId === p.id ? '2px solid #2D6BE4' : 'none',
+                            boxShadow: isVariant
+                              ? `inset 4px 0 0 ${adminDarkMode ? 'rgba(45,107,228,0.45)' : '#dbe7ff'}`
+                              : 'none'
+                          }}>
                           <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
@@ -2284,7 +2392,20 @@ export default function Admin() {
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               <span style={{fontSize:12, color:isVariant ? '#2D6BE4' : '#9aa3bc', fontWeight:800, width:12, flexShrink:0}}>{isVariant ? '↳' : ''}</span>
                               <div style={{position:'relative', width:150}}>
-                                <input style={{...s.tblInput, paddingRight: !isVariant ? 20 : undefined, background:isVariant ? 'white' : '#f7f8fc'}} value={form.variant_name || ''} placeholder={isVariant ? 'Variante' : 'Base'} onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)} onBlur={() => saveProduct(p.id)} />
+                                <input
+                                  style={{
+                                    ...s.tblInput,
+                                    paddingRight: !isVariant ? 20 : undefined,
+                                    background: isVariant
+                                      ? (adminDarkMode ? '#0d172d' : 'white')
+                                      : (adminDarkMode ? '#0b1224' : '#f7f8fc'),
+                                    color: adminDarkMode ? '#e7ecf8' : '#2d3352',
+                                  }}
+                                  value={form.variant_name || ''}
+                                  placeholder={isVariant ? 'Variante' : 'Base'}
+                                  onChange={e => updateProductForm(p.id, 'variant_name', e.target.value)}
+                                  onBlur={() => saveProduct(p.id)}
+                                />
                                 {!isVariant && (
                                   <button
                                     style={{position:'absolute', right:3, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:'#2D6BE4', fontWeight:700, fontSize:14, cursor:'pointer', padding:'0 2px', lineHeight:1, opacity: addingVariantId === p.id ? 0.4 : 1}}
@@ -3038,7 +3159,11 @@ export default function Admin() {
                   style={{
                     ...s.designRow,
                     opacity: !d.active ? 0.45 : (draggingId && selectedIds.has(draggingId) && selectedIds.has(d.id) ? 0.35 : 1),
-                    background: dragOverId === d.id ? '#eef4ff' : selectedIds.has(d.id) ? '#f0f5ff' : undefined,
+                    background: dragOverId === d.id
+                      ? (adminDarkMode ? 'rgba(45,107,228,0.22)' : '#eef4ff')
+                      : selectedIds.has(d.id)
+                        ? (adminDarkMode ? 'rgba(45,107,228,0.16)' : '#f0f5ff')
+                        : undefined,
                     borderLeft: dragOverId === d.id ? '3px solid #2D6BE4' : selectedIds.has(d.id) ? '3px solid #2D6BE4' : '3px solid transparent',
                     transition: 'background 0.12s, border-left 0.12s',
                     cursor: draggingId === d.id ? 'grabbing' : 'grab',
@@ -3053,7 +3178,17 @@ export default function Admin() {
                     }
                     <div>
                       <input
-                        style={{ fontSize: 13, fontWeight: 600, color: '#2d3352', border: '1px solid transparent', borderRadius: 4, padding: '2px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: '100%' }}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: adminDarkMode ? '#e7ecf8' : '#2d3352',
+                          border: '1px solid transparent',
+                          borderRadius: 4,
+                          padding: '2px 6px',
+                          fontFamily: 'Barlow, sans-serif',
+                          background: 'transparent',
+                          width: '100%',
+                        }}
                         value={d.name}
                         onFocus={e => { e.target.style.borderColor = '#dde1ef'; e.target.dataset.originalName = d.name; }}
                         onBlur={async e => {
@@ -3353,12 +3488,35 @@ export default function Admin() {
             <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
 
             {/* Invitar usuario */}
-            <div style={{marginBottom:18, border:'1.5px solid #dde1ef', borderRadius:10, overflow:'hidden'}}>
+            <div
+              style={{
+                marginBottom:18,
+                border: adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef',
+                borderRadius:10,
+                overflow:'hidden',
+                background: adminDarkMode ? '#101a32' : 'white',
+              }}
+            >
               <button
-                style={{width:'100%', padding:'11px 16px', background:inviteOpen ? '#f0f4ff' : '#f8faff', border:'none', borderBottom: inviteOpen ? '1.5px solid #dde1ef' : 'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', fontFamily:'Barlow, sans-serif'}}
+                style={{
+                  width:'100%',
+                  padding:'11px 16px',
+                  background: inviteOpen
+                    ? (adminDarkMode ? '#172444' : '#f0f4ff')
+                    : (adminDarkMode ? '#101a32' : '#f8faff'),
+                  border:'none',
+                  borderBottom: inviteOpen
+                    ? (adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef')
+                    : 'none',
+                  cursor:'pointer',
+                  display:'flex',
+                  justifyContent:'space-between',
+                  alignItems:'center',
+                  fontFamily:'Barlow, sans-serif'
+                }}
                 onClick={() => { setInviteOpen(v => !v); setInviteResult(null); }}
               >
-                <span style={{fontSize:13, fontWeight:700, color:'#1B2F5E'}}>+ Invitar usuario</span>
+                <span style={{fontSize:13, fontWeight:700, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>+ Invitar usuario</span>
                 <span style={{fontSize:11, color:'#9aa3bc'}}>{inviteOpen ? '▲' : '▼'}</span>
               </button>
               {inviteOpen && (
@@ -3416,7 +3574,23 @@ export default function Admin() {
             </div>
 
             {/* Buscador + filtros */}
-            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14, paddingBottom:14, borderBottom:'1.5px solid #f0f2f8', position:'sticky', top:38, zIndex:10, background:'white', paddingTop:10, marginTop:-10}}>
+            <div
+              style={{
+                display:'flex',
+                gap:8,
+                flexWrap:'wrap',
+                alignItems:'center',
+                marginBottom:14,
+                paddingBottom:14,
+                borderBottom: adminDarkMode ? '1.5px solid rgba(255,255,255,0.08)' : '1.5px solid #f0f2f8',
+                position:'sticky',
+                top:38,
+                zIndex:10,
+                background: adminDarkMode ? '#111b34' : 'white',
+                paddingTop:10,
+                marginTop:-10,
+              }}
+            >
               <input
                 style={{...s.input, flex:'1 1 200px', minWidth:160, fontSize:13, padding:'7px 12px'}}
                 placeholder="Buscar por nombre o email..."
@@ -6563,6 +6737,54 @@ function getAdminStyles(adminDarkMode) {
     productTag: {
       ...styles.productTag,
       background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    orphanTag: {
+      ...styles.orphanTag,
+      background: 'rgba(229,62,62,0.14)',
+      color: '#fca5a5',
+    },
+    orphanBadge: {
+      ...styles.orphanBadge,
+      background: 'rgba(229,62,62,0.16)',
+      color: '#fca5a5',
+    },
+    userBadge: {
+      ...styles.userBadge,
+      background: 'rgba(45,107,228,0.18)',
+      color: '#93b7ff',
+    },
+    designName: {
+      ...styles.designName,
+      color: '#e7ecf8',
+    },
+    designCat: {
+      ...styles.designCat,
+      color: 'rgba(231,236,248,0.50)',
+    },
+    designThumb: {
+      ...styles.designThumb,
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+    fileThumb: {
+      ...styles.fileThumb,
+      border: '1px solid rgba(255,255,255,0.12)',
+    },
+    errorMsg: {
+      ...styles.errorMsg,
+      color: '#fca5a5',
+    },
+    removePendingBtn: {
+      ...styles.removePendingBtn,
+      color: 'rgba(231,236,248,0.55)',
+    },
+    btnPrimary: {
+      ...styles.btnPrimary,
+      background: '#2D6BE4',
+      color: 'white',
+    },
+    iconBtn: {
+      ...styles.iconBtn,
       color: '#93b7ff',
     },
 
