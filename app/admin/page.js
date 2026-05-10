@@ -1474,10 +1474,15 @@ export default function Admin() {
   async function updateScaleSeller(localityId, sellerId) {
     const value = sellerId || null;
     await supabase.from('localities').update({ seller_id: value }).eq('id', localityId);
-    const locality = localities.find(l => l.id === localityId);
-    const seller = sellers.find(s => s.id === value);
-    trackAdminActivity('locality_seller_update', { locality_id: localityId, locality_name: locality?.name, seller_id: value, seller_name: seller?.name || null }, 'localities');
-    setLocalities(prev => prev.map(l => l.id === localityId ? { ...l, seller_id: value } : l));
+  }
+
+  async function renameLocality(id, name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await supabase.from('localities').update({ name: trimmed }).eq('id', id);
+    setLocalities(prev => prev.map(l => l.id === id ? { ...l, name: trimmed } : l));
+    const locality = localities.find(l => l.id === id);
+    trackAdminActivity('locality_rename', { locality_id: id, locality_name: trimmed }, 'localities');
   }
 
   // ── Users ──
@@ -4298,7 +4303,17 @@ export default function Admin() {
                           style={{background: dragOverLocalityId === locality.id ? '#2D6BE4' : '#1B2F5E', color:'white', padding:'6px 8px 6px 12px', fontSize:11, fontWeight:800, letterSpacing:0.5, borderBottom:'1px solid #dde1ef', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab', opacity: draggingLocalityId === locality.id ? 0.45 : 1}}
                         >
                           <span style={{color:'rgba(255,255,255,0.55)', fontSize:13, lineHeight:1}}>⠿</span>
-                          <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                          {useParentTiers
+                            ? <span style={{textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{locality.name}</span>
+                            : <input
+                                defaultValue={locality.name}
+                                onBlur={e => renameLocality(locality.id, e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); e.stopPropagation(); }}
+                                onClick={e => e.stopPropagation()}
+                                onDragStart={e => e.stopPropagation()}
+                                style={{background:'transparent', border:'none', borderBottom:'1px solid rgba(255,255,255,0.35)', color:'white', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:800, letterSpacing:0.5, textTransform:'uppercase', outline:'none', width:120, minWidth:60, padding:'1px 2px'}}
+                              />
+                          }
                           <select
                             value={locality.seller_id || ''}
                             onChange={e => updateScaleSeller(locality.id, e.target.value)}
@@ -4375,7 +4390,7 @@ export default function Admin() {
                     />
                     <button style={{...s.editBtn, whiteSpace:'nowrap', opacity: newScaleName.trim() && !savingLocality ? 1 : 0.55}} disabled={!newScaleName.trim() || savingLocality} onClick={() => addScaleFromProduct(modalProduct.id)}>+ Crear escala</button>
                   </div>
-                </div>
+                  </div>
                 </div>
               );
             })()}
