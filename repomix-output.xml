@@ -6712,10 +6712,11 @@ export default function Home() {
 
     const assignedByProduct = {};
     (assignments || []).forEach(row => { assignedByProduct[row.product_id] = row.locality_id; });
-    const fallbackLocalityId = data?.locality_id || null;
+    // Post-migración: las localities son per-product; no hay fallback global.
+    // Solo se muestran tiers para productos con asignación explícita en user_product_localities.
     const visibleTiers = (allTiers || []).filter(tier => {
-      const productLocalityId = assignedByProduct[tier.product_id] || fallbackLocalityId;
-      return productLocalityId ? tier.locality_id === productLocalityId : tier.locality_id === null;
+      const productLocalityId = assignedByProduct[tier.product_id] || null;
+      return productLocalityId ? tier.locality_id === productLocalityId : false;
     });
     setPriceTiers(visibleTiers);
   }
@@ -7097,8 +7098,12 @@ export default function Home() {
 
   function getUnitPrice(productId) {
     const totalQty = cartByProduct[productId] || 0;
+    const effectiveProductId = (() => {
+      const p = products.find(pr => pr.id === productId);
+      return p?.use_parent_tiers && p?.parent_product_id ? p.parent_product_id : productId;
+    })();
     const productTiers = priceTiers
-      .filter(t => t.product_id === productId)
+      .filter(t => t.product_id === effectiveProductId)
       .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
     if (productTiers.length > 0) {
       const minRequired = Number(productTiers[0].min_quantity);
@@ -9413,8 +9418,11 @@ export default function Admin() {
     });
   }
 
-  function filteredLocalities(list = localities) {
-    const active = orderedLocalities(list).filter(l => l.active);
+  function filteredLocalities(list = localities, productId = null) {
+    let active = orderedLocalities(list).filter(l => l.active);
+    if (productId) {
+      active = active.filter(l => l.product_id === productId);
+    }
     if (scaleSellerFilter === 'all') return active;
     if (scaleSellerFilter === 'none') return active.filter(l => !l.seller_id);
     return active.filter(l => l.seller_id === scaleSellerFilter);
@@ -9483,7 +9491,11 @@ export default function Admin() {
     const srcId = localityDragSrcIdRef.current;
     localityDragSrcIdRef.current = null;
     if (!srcId || srcId === targetId) return;
-    const reordered = orderedLocalities(localities);
+    const srcLocality = localities.find(l => l.id === srcId);
+    const tgtLocality = localities.find(l => l.id === targetId);
+    // Solo reordenar localities del mismo producto
+    if (!srcLocality || !tgtLocality || srcLocality.product_id !== tgtLocality.product_id) return;
+    const reordered = orderedLocalities(localities.filter(l => l.product_id === srcLocality.product_id));
     const srcIdx = reordered.findIndex(l => l.id === srcId);
     const tgtIdx = reordered.findIndex(l => l.id === targetId);
     if (srcIdx === -1 || tgtIdx === -1) return;
@@ -9513,9 +9525,16 @@ export default function Admin() {
     const name = (newScaleNames[productId] || '').trim();
     if (!name) return;
     setSavingLocality(true);
-    const nextOrder = localities.reduce((max, l) => Math.max(max, Number(l.sort_order) || 0), -1) + 1;
+    const productLocalities = localities.filter(l => l.product_id === productId);
+    const nextOrder = productLocalities.reduce((max, l) => Math.max(max, Number(l.sort_order) || 0), -1) + 1;
     const sellerId = scaleSellerFilter !== 'all' && scaleSellerFilter !== 'none' ? scaleSellerFilter : null;
-    const { data, error } = await supabase.from('localities').insert({ name, active: true, sort_order: nextOrder, seller_id: sellerId }).select('*').single();
+    const { data, error } = await supabase.from('localities').insert({
+      name,
+      active: true,
+      sort_order: nextOrder,
+      seller_id: sellerId,
+      product_id: productId,
+    }).select('*').single();
     if (error) {
       console.error('Error creating scale', error);
       alert('No se pudo crear la escala.');
@@ -12008,7 +12027,7 @@ export default function Admin() {
                         style={{...s.input, width:'100%', fontSize:12, padding:'6px 9px', opacity:saving ? 0.55 : 1}}
                       >
                         <option value="">Respaldo {fallbackLocality ? `(${fallbackLocality.name})` : '/ sin escala'}</option>
-                        {localities.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        {localities.filter(l => l.active && l.product_id === product.id).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </select>
                     </div>
                     <div style={{padding:'7px 10px', fontSize:12, color:'#5a6380'}}>
@@ -12040,74 +12059,101 @@ export default function Admin() {
             </div>
 
             <div style={{overflow:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}}>
-              {filteredLocalities().length === 0 ? (
-                <p style={{...s.emptyMsg, padding:14}}>No hay escalas para este filtro.</p>
-              ) : filteredLocalities().map(locality => (
-                <div key={locality.id} style={{borderBottom:'1px solid #eef0f6'}}>
-                  <div
-                    draggable
-                    onDragStart={e => handleLocalityDragStart(e, locality.id)}
-                    onDragOver={e => handleLocalityDragOver(e, locality.id)}
-                    onDragLeave={handleLocalityDragLeave}
-                    onDrop={e => handleLocalityDrop(e, locality.id)}
-                    onDragEnd={handleLocalityDragEnd}
-                    style={{position:'sticky', left:0, zIndex:2, background: dragOverLocalityId === locality.id ? '#eef4ff' : '#f8faff', borderBottom:'1px solid #dde1ef', padding:'7px 10px', display:'flex', alignItems:'center', gap:8, cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab'}}
-                  >
-                    <span style={{color:'#b0b8d0', fontSize:14, lineHeight:1}}>⠿</span>
-                    <span style={{fontSize:12, fontWeight:800, color:'#1B2F5E', textTransform:'uppercase', letterSpacing:0.5}}>{locality.name}</span>
-                    <span style={{fontSize:11, color:'#9aa3bc'}}>{sellerName(locality.seller_id)}</span>
-                    <select
-                      value={locality.seller_id || ''}
-                      onChange={e => updateScaleSeller(locality.id, e.target.value)}
-                      onClick={e => e.stopPropagation()}
-                      onDragStart={e => e.stopPropagation()}
-                      style={{marginLeft:'auto', border:'1.5px solid #dde1ef', borderRadius:5, padding:'3px 7px', fontSize:11, color:'#2d3352', background:'white', fontFamily:'Barlow, sans-serif'}}
-                    >
-                      <option value="">Sin vendedor</option>
-                      {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
-                    </select>
-                    <button
-                      title="Eliminar escala"
-                      onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
-                      onDragStart={e => e.stopPropagation()}
-                      style={{border:'1.5px solid #fecaca', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:24, height:24, lineHeight:1, cursor:'pointer', fontSize:14, fontWeight:800}}
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div style={{display:'grid', gridTemplateColumns:`repeat(${Math.max(1, products.filter(p => p.active).length)}, minmax(190px, 1fr))`, minWidth: Math.max(1, products.filter(p => p.active).length) * 190}}>
-                    {products.filter(p => p.active).map(product => {
-                      const key = `${product.id}_${locality.id}`;
-                      const tiers = priceTiers
-                        .filter(t => t.product_id === product.id && t.locality_id === locality.id)
-                        .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
-                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
-                      const emptyRowIdx = tiers.length;
-                      return (
-                        <div key={key} style={{borderRight:'1px solid #eef0f6', padding:'8px 9px'}}>
-                          <div style={{fontSize:11, fontWeight:800, color:'#2d3352', marginBottom:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{productDisplayName(product)}</div>
-                          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 24px', gap:4, alignItems:'center'}}>
-                            {tiers.map((t, tierRowIdx) => {
-                              const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
-                              return (
-                                <React.Fragment key={t.id}>
-                                  <input ref={setTierCellRef(key, tierRowIdx, 0)} className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)} />
-                                  <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
-                                  <button title="Eliminar precio" style={{border:'none', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:22, height:22, cursor:'pointer', fontSize:12, fontWeight:800}} onClick={() => deleteScale(t.id)}>×</button>
-                                </React.Fragment>
-                              );
-                            })}
-                            <input ref={setTierCellRef(key, emptyRowIdx, 0)} className="tier-input" type="number" min="1" placeholder="Cant." value={nt.min_quantity} onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 0)} />
-                            <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="$" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 1)} />
-                            <span />
-                          </div>
+              {products.filter(p => p.active).length === 0 ? (
+                <p style={{...s.emptyMsg, padding:14}}>No hay productos activos.</p>
+              ) : products.filter(p => p.active).map(product => {
+                const productLocalities = filteredLocalities(localities, product.id);
+                return (
+                  <div key={product.id} style={{borderBottom:'2px solid #dde1ef'}}>
+                    <div style={{padding:'8px 12px', background:'#1B2F5E', color:'white', fontSize:12, fontWeight:800, letterSpacing:0.5, textTransform:'uppercase'}}>
+                      {productDisplayName(product)}
+                      <span style={{fontWeight:400, opacity:0.65, marginLeft:8, fontSize:11}}>
+                        {productLocalities.length} escala{productLocalities.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {productLocalities.length === 0 ? (
+                      <p style={{...s.emptyMsg, padding:'8px 14px', fontSize:11}}>Sin escalas para este producto/filtro.</p>
+                    ) : (
+                      <div style={{overflowX:'auto'}}>
+                        <div style={{display:'grid', gridTemplateColumns:'minmax(200px, 240px) 1fr'}}>
+                          {productLocalities.map(locality => {
+                            const key = `${product.id}_${locality.id}`;
+                            const tiers = priceTiers
+                              .filter(t => t.product_id === product.id && t.locality_id === locality.id)
+                              .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
+                            const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
+                            const emptyRowIdx = tiers.length;
+                            return (
+                              <React.Fragment key={locality.id}>
+                                <div
+                                  draggable
+                                  onDragStart={e => handleLocalityDragStart(e, locality.id)}
+                                  onDragOver={e => handleLocalityDragOver(e, locality.id)}
+                                  onDragLeave={handleLocalityDragLeave}
+                                  onDrop={e => handleLocalityDrop(e, locality.id)}
+                                  onDragEnd={handleLocalityDragEnd}
+                                  style={{
+                                    background: dragOverLocalityId === locality.id ? '#eef4ff' : '#f8faff',
+                                    borderBottom:'1px solid #eef0f6',
+                                    borderRight:'1px solid #eef0f6',
+                                    padding:'7px 10px',
+                                    display:'flex', alignItems:'center', gap:6,
+                                    cursor: draggingLocalityId === locality.id ? 'grabbing' : 'grab',
+                                    opacity: draggingLocalityId === locality.id ? 0.45 : 1,
+                                  }}
+                                >
+                                  <span style={{color:'#b0b8d0', fontSize:14, lineHeight:1}}>⠿</span>
+                                  <input
+                                    defaultValue={locality.name}
+                                    onBlur={e => renameLocality(locality.id, e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); e.stopPropagation(); }}
+                                    onClick={e => e.stopPropagation()}
+                                    onDragStart={e => e.stopPropagation()}
+                                    style={{background:'transparent', border:'none', borderBottom:'1px solid #dde1ef', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:700, color:'#1B2F5E', textTransform:'uppercase', letterSpacing:0.5, outline:'none', flex:1, minWidth:60, padding:'1px 2px'}}
+                                  />
+                                  <select
+                                    value={locality.seller_id || ''}
+                                    onChange={e => updateScaleSeller(locality.id, e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    onDragStart={e => e.stopPropagation()}
+                                    style={{border:'1.5px solid #dde1ef', borderRadius:5, padding:'2px 5px', fontSize:10, color:'#2d3352', background:'white', fontFamily:'Barlow, sans-serif', maxWidth:120}}
+                                  >
+                                    <option value="">Sin vendedor</option>
+                                    {sellers.filter(sel => sel.active).map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+                                  </select>
+                                  <button
+                                    title="Eliminar escala"
+                                    onClick={e => { e.stopPropagation(); deleteLocality(locality.id); }}
+                                    onDragStart={e => e.stopPropagation()}
+                                    style={{border:'1.5px solid #fecaca', background:'#fff5f5', color:'#dc2626', borderRadius:5, width:22, height:22, lineHeight:1, cursor:'pointer', fontSize:13, fontWeight:800}}
+                                  >×</button>
+                                </div>
+                                <div style={{borderBottom:'1px solid #eef0f6', padding:'7px 9px'}}>
+                                  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 22px', gap:4, alignItems:'center'}}>
+                                    {tiers.map((t, tierRowIdx) => {
+                                      const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
+                                      return (
+                                        <React.Fragment key={t.id}>
+                                          <input ref={setTierCellRef(key, tierRowIdx, 0)} className="tier-input" type="number" min="1" value={ef.min_quantity} onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)} />
+                                          <input ref={setTierCellRef(key, tierRowIdx, 1)} className="tier-input" type="number" min="0" value={ef.price_per_unit} onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)} onBlur={() => saveTierAuto(t.id)} onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)} />
+                                          <button title="Eliminar precio" style={{border:'none', background:'#fff5f5', color:'#dc2626', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, fontWeight:800}} onClick={() => deleteScale(t.id)}>×</button>
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                    <input ref={setTierCellRef(key, emptyRowIdx, 0)} className="tier-input" type="number" min="1" placeholder="Cant." value={nt.min_quantity} onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 0)} />
+                                    <input ref={setTierCellRef(key, emptyRowIdx, 1)} className="tier-input" type="number" min="0" placeholder="$" value={nt.price_per_unit} onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)} onBlur={() => commitNewTierIfReady(product.id, locality.id, key)} onKeyDown={e => handleNewTierKeyDown(e, product.id, locality.id, key, emptyRowIdx, 1)} />
+                                    <span />
+                                  </div>
+                                </div>
+                              </React.Fragment>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -12328,7 +12374,7 @@ export default function Admin() {
 
             {productManageModal.type === 'tiers' && (() => {
               const productTiers = priceTiers.filter(t => t.product_id === modalProduct.id);
-              const activeLocalities = filteredLocalities();
+              const activeLocalities = filteredLocalities(localities, modalProduct.id);
               const newScaleName = newScaleNames[modalProduct.id] || '';
               const isVariant = !!modalProduct.parent_product_id;
               const useParentTiers = productForms[modalProduct.id]?.use_parent_tiers === true;
