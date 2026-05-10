@@ -626,10 +626,11 @@ export default function Home() {
 
     const assignedByProduct = {};
     (assignments || []).forEach(row => { assignedByProduct[row.product_id] = row.locality_id; });
-    const fallbackLocalityId = data?.locality_id || null;
+    // Post-migración: las localities son per-product; no hay fallback global.
+    // Solo se muestran tiers para productos con asignación explícita en user_product_localities.
     const visibleTiers = (allTiers || []).filter(tier => {
-      const productLocalityId = assignedByProduct[tier.product_id] || fallbackLocalityId;
-      return productLocalityId ? tier.locality_id === productLocalityId : tier.locality_id === null;
+      const productLocalityId = assignedByProduct[tier.product_id] || null;
+      return productLocalityId ? tier.locality_id === productLocalityId : false;
     });
     setPriceTiers(visibleTiers);
   }
@@ -1011,8 +1012,12 @@ export default function Home() {
 
   function getUnitPrice(productId) {
     const totalQty = cartByProduct[productId] || 0;
+    const effectiveProductId = (() => {
+      const p = products.find(pr => pr.id === productId);
+      return p?.use_parent_tiers && p?.parent_product_id ? p.parent_product_id : productId;
+    })();
     const productTiers = priceTiers
-      .filter(t => t.product_id === productId)
+      .filter(t => t.product_id === effectiveProductId)
       .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity));
     if (productTiers.length > 0) {
       const minRequired = Number(productTiers[0].min_quantity);
