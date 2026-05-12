@@ -1104,7 +1104,13 @@ export default function Home() {
   }
 
   async function submitOrder() {
-    if (!form.name || !form.phone || !form.email) {
+    const normalizedForm = {
+      name: (form.name || '').trim(),
+      phone: (form.phone || '').replace(/[^0-9]/g, ''),
+      email: (form.email || '').trim().toLowerCase(),
+    };
+
+    if (!normalizedForm.name || !normalizedForm.phone || !normalizedForm.email) {
       alert('Por favor completa todos los campos.');
       return;
     }
@@ -1113,12 +1119,38 @@ export default function Home() {
     const orderTotal = showTotal ? getOrderItemsTotal(pricedCartItems) : 0;
 
     setLoading(true);
+
     try {
+      if (user?.id) {
+        const { data: updatedProfile, error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            name: normalizedForm.name,
+            phone: normalizedForm.phone,
+          })
+          .eq('id', user.id)
+          .select('*, localities(*), sellers(id, name, phone)')
+          .maybeSingle();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        setProfile(prev => ({
+          ...(prev || {}),
+          ...(updatedProfile || {}),
+          name: normalizedForm.name,
+          phone: normalizedForm.phone,
+        }));
+      }
+
+      setForm(normalizedForm);
+
       await supabase.from('orders').insert({
         order_code: orderCode,
-        customer_name: form.name,
-        customer_phone: form.phone,
-        customer_email: form.email,
+        customer_name: normalizedform.name,
+        customer_phone: normalizedform.phone,
+        customer_email: normalizedForm.email,
         items: pricedCartItems,
         total: orderTotal,
         notes,
@@ -1131,7 +1163,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderCode,
-          form,
+          form: normalizedForm,
           cartItems: pricedCartItems,
           total: orderTotal,
           showPrice: showTotal,
@@ -1147,13 +1179,14 @@ export default function Home() {
         total: orderTotal,
       });
 
-      setConfirmedOrder({ items: pricedCartItems, total: orderTotal, form });
+      setConfirmedOrder({ items: pricedCartItems, total: orderTotal, form: normalizedForm });
       setSuccess(true);
       clearCart();
       setNotes('');
     } catch (e) {
-      alert('Hubo un error. Intenta de nuevo.');
+      alert(`Hubo un error al guardar el pedido: ${e?.message || 'Intenta de nuevo.'}`);
     }
+
     setLoading(false);
   }
 
@@ -1790,12 +1823,24 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   )}
                   <div style={{...s.formRow, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr'}}>
                     <div style={s.formGroup}>
-                      <label style={s.label}>Nombre *</label>
-                      <input style={{...s.input, ...(user ? {background:'#f7f8fc', color:'#5a6380', cursor:'default'} : {})}} value={form.name} onChange={e => !user && setForm({...form, name: e.target.value})} readOnly={!!user} placeholder="Tu nombre" />
+                      <label style={s.label}>Nombre de comercio *</label>
+                      <input
+                        style={s.input}
+                        value={form.name}
+                        onChange={e => setForm({...form, name: e.target.value})}
+                        placeholder="Nombre de tu comercio"
+                      />
                     </div>
                     <div style={s.formGroup}>
-                      <label style={s.label}>Telefono *</label>
-                      <input style={{...s.input, ...(user ? {background:'#f7f8fc', color:'#5a6380', cursor:'default'} : {})}} type="tel" inputMode="numeric" value={form.phone} onChange={e => !user && setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})} readOnly={!!user} placeholder="3764000000" />
+                      <label style={s.label}>Teléfono *</label>
+                      <input
+                        style={s.input}
+                        type="tel"
+                        inputMode="numeric"
+                        value={form.phone}
+                        onChange={e => setForm({...form, phone: e.target.value.replace(/[^0-9]/g, '')})}
+                        placeholder="3764000000"
+                      />
                     </div>
                   </div>
                   <div style={s.formGroup}>

@@ -8960,6 +8960,10 @@ useEffect(() => {
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
+  const [orderContactForm, setOrderContactForm] = useState({ name: '', phone: '' });
+  const [savingOrderContact, setSavingOrderContact] = useState(false);
+  const [savedOrderContact, setSavedOrderContact] = useState(false);
+  const [orderContactMsg, setOrderContactMsg] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [ordersView, setOrdersView] = useState('active'); // 'active' | 'archived'
   const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
@@ -8980,6 +8984,23 @@ useEffect(() => {
     document.addEventListener('mousedown', handleOutsideOrderClick);
     return () => document.removeEventListener('mousedown', handleOutsideOrderClick);
   }, []);
+
+  useEffect(() => {
+    if (!orderDetail) {
+      setOrderContactForm({ name: '', phone: '' });
+      setSavingOrderContact(false);
+      setSavedOrderContact(false);
+      setOrderContactMsg('');
+      return;
+    }
+
+    setOrderContactForm({
+      name: orderDetail.customer_name || '',
+      phone: orderDetail.customer_phone || '',
+    });
+    setSavedOrderContact(false);
+    setOrderContactMsg('');
+  }, [orderDetail?.id]);
 
   // Price tiers
   const [priceTiers, setPriceTiers] = useState([]);
@@ -10582,6 +10603,90 @@ useEffect(() => {
     const order = orders.find(o => o.id === id);
     trackAdminActivity('order_status_update', { order_id: id, order_code: order?.order_code, status }, 'orders');
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+  }
+
+  async function saveOrderCustomerContact() {
+    if (!orderDetail) return;
+
+    const email = (orderDetail.customer_email || '').trim().toLowerCase();
+    const name = (orderContactForm.name || '').trim();
+    const phone = (orderContactForm.phone || '').replace(/[^0-9]/g, '');
+
+    if (!email) {
+      setOrderContactMsg('Este pedido no tiene email asociado.');
+      return;
+    }
+
+    if (!name) {
+      setOrderContactMsg('El nombre de comercio no puede quedar vacío.');
+      return;
+    }
+
+    setSavingOrderContact(true);
+    setSavedOrderContact(false);
+    setOrderContactMsg('');
+
+    const { data: profileUpdated, error: profileError } = await supabase.rpc('admin_update_customer_contact', {
+      p_email: email,
+      p_name: name,
+      p_phone: phone,
+    });
+
+    if (profileError) {
+      setSavingOrderContact(false);
+      setOrderContactMsg(`No se pudo actualizar el usuario: ${profileError.message}`);
+      return;
+    }
+
+    const { error: orderError } = await supabase
+      .from('orders')
+      .update({
+        customer_name: name,
+        customer_phone: phone || null,
+      })
+      .eq('id', orderDetail.id);
+
+    if (orderError) {
+      setSavingOrderContact(false);
+      setOrderContactMsg(`Se actualizó el usuario, pero no el pedido actual: ${orderError.message}`);
+      return;
+    }
+
+    const updatedOrder = {
+      ...orderDetail,
+      customer_name: name,
+      customer_phone: phone || null,
+    };
+
+    setOrderDetail(updatedOrder);
+
+    setOrders(prev => prev.map(order => (
+      order.id === orderDetail.id
+        ? { ...order, customer_name: name, customer_phone: phone || null }
+        : order
+    )));
+
+    setUsers(prev => prev.map(user => (
+      String(user.email || '').toLowerCase() === email
+        ? { ...user, name, phone: phone || null }
+        : user
+    )));
+
+    trackAdminActivity('order_customer_contact_update', {
+      order_id: orderDetail.id,
+      order_code: orderDetail.order_code,
+      customer_email: email,
+      profile_updated: Boolean(profileUpdated),
+    }, 'orders');
+
+    setSavingOrderContact(false);
+    setSavedOrderContact(true);
+    setOrderContactMsg(profileUpdated
+      ? 'Datos guardados en el usuario y en el pedido actual.'
+      : 'Pedido actualizado. No se encontró un perfil de usuario con ese email.'
+    );
+
+    setTimeout(() => setSavedOrderContact(false), 1800);
   }
 
   const ORDER_STATUSES = [
@@ -13622,12 +13727,120 @@ useEffect(() => {
               <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Pedido {orderDetail.order_code}</div>
               <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>✕</button>
             </div>
-            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 16px', fontSize:13}}>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Cliente</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_name || '—'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || '—'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div></div>
-              <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div></div>
-              {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', fontSize:13}}>
+              <div>
+                <span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Nombre de comercio</span>
+                <input
+                  style={{
+                    width:'100%',
+                    border:'1.5px solid #dde1ef',
+                    borderRadius:7,
+                    padding:'6px 9px',
+                    fontFamily:'Barlow, sans-serif',
+                    fontSize:13,
+                    fontWeight:600,
+                    color:'#2d3352',
+                    marginTop:3,
+                    boxSizing:'border-box',
+                  }}
+                  value={orderContactForm.name}
+                  disabled={savingOrderContact}
+                  onChange={e => setOrderContactForm(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveOrderCustomerContact();
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span>
+                <input
+                  style={{
+                    width:'100%',
+                    border:'1.5px solid #dde1ef',
+                    borderRadius:7,
+                    padding:'6px 9px',
+                    fontFamily:'Barlow, sans-serif',
+                    fontSize:13,
+                    fontWeight:600,
+                    color:'#2d3352',
+                    marginTop:3,
+                    boxSizing:'border-box',
+                  }}
+                  type="tel"
+                  inputMode="numeric"
+                  value={orderContactForm.phone}
+                  disabled={savingOrderContact}
+                  onChange={e => setOrderContactForm(prev => ({
+                    ...prev,
+                    phone: e.target.value.replace(/[^0-9]/g, ''),
+                  }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveOrderCustomerContact();
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span>
+                <div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div>
+              </div>
+
+              <div>
+                <span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span>
+                <div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div>
+              </div>
+
+              <div style={{gridColumn:'1/-1', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                <button
+                  type="button"
+                  onClick={saveOrderCustomerContact}
+                  disabled={savingOrderContact || !orderContactForm.name.trim() || !orderDetail.customer_email}
+                  style={{
+                    border:'none',
+                    borderRadius:8,
+                    padding:'7px 12px',
+                    background:'#2D6BE4',
+                    color:'white',
+                    fontFamily:'Barlow, sans-serif',
+                    fontSize:12,
+                    fontWeight:700,
+                    cursor: savingOrderContact || !orderContactForm.name.trim() || !orderDetail.customer_email ? 'not-allowed' : 'pointer',
+                    opacity: savingOrderContact || !orderContactForm.name.trim() || !orderDetail.customer_email ? 0.55 : 1,
+                  }}
+                >
+                  {savingOrderContact ? 'Guardando...' : 'Guardar datos del cliente'}
+                </button>
+
+                {savedOrderContact && (
+                  <span style={{fontSize:12, fontWeight:700, color:'#15803d'}}>✓ Guardado</span>
+                )}
+
+                {orderContactMsg && (
+                  <span style={{
+                    fontSize:12,
+                    fontWeight:600,
+                    color: orderContactMsg.includes('No se pudo') || orderContactMsg.includes('no puede') || orderContactMsg.includes('no tiene')
+                      ? '#b91c1c'
+                      : '#5a6380',
+                  }}>
+                    {orderContactMsg}
+                  </span>
+                )}
+              </div>
+
+              {orderDetail.notes && (
+                <div style={{gridColumn:'1/-1'}}>
+                  <span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span>
+                  <div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div>
+                </div>
+              )}
             </div>
             <div>
               <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
