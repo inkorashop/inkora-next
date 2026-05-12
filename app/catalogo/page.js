@@ -1148,8 +1148,8 @@ export default function Home() {
 
       await supabase.from('orders').insert({
         order_code: orderCode,
-        customer_name: normalizedform.name,
-        customer_phone: normalizedform.phone,
+        customer_name: normalizedForm.name,
+        customer_phone: normalizedForm.phone,
         customer_email: normalizedForm.email,
         items: pricedCartItems,
         total: orderTotal,
