@@ -90,8 +90,9 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Once visible, stay visible — avoids re-renders and flicker when switching tabs
     const observer = new IntersectionObserver(
-      ([entry]) => { setVisible(entry.isIntersecting); },
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
       { rootMargin: '400px' }
     );
     observer.observe(el);
@@ -1928,9 +1929,18 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       const itemProduct = products.find(p => p.id === item.product_id);
                       return (
                       <div key={item.id} style={s.cartItem}>
-                        {item.image_url && (
-                          <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                        )}
+                        {item.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                        ) : item.model_url && is3dModelUrl(item.model_url) ? (
+                          // 3MF without thumbnail: static one-shot render
+                          <div style={{width:36, height:36, borderRadius:6, overflow:'hidden', border:'1px solid #dde1ef', flexShrink:0}}>
+                            <ModelViewer url={item.model_url} autoRotate={false} hideHint={true} modelConfig={{mode:'static'}} oneShot={true} />
+                          </div>
+                        ) : item.model_url && !is3dModelUrl(item.model_url) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.model_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                        ) : null}
                         <div style={s.cartItemInfo}>
                           {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}
                           <div style={s.cartItemName}>{item.name}</div>

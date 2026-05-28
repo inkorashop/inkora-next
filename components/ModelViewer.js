@@ -130,7 +130,7 @@ function applyBambuColorsToModel(model, colorData, THREE) {
 
 // ─── ModelViewer component ────────────────────────────────────────────────────
 
-export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null }) {
+export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null, oneShot = false }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');
@@ -325,7 +325,8 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
         let animId;
         const animate = () => {
-          animId = requestAnimationFrame(animate);
+          // oneShot: render once then stop — saves GPU/WebGL resources (e.g. cart thumbnails)
+          if (!oneShot) animId = requestAnimationFrame(animate);
 
           if (mode === 'pendulum' && pendulumDist !== null) {
             if (isDragging) {
