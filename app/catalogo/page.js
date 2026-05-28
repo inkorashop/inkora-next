@@ -1708,7 +1708,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 const isPulsing = cardPulse[d.id];
                 const isBlocked = blockedDesignId === d.id;
                 const qtyDraft = Object.prototype.hasOwnProperty.call(qtyDrafts, d.id) ? qtyDrafts[d.id] : null;
-                const isFirstRow3d = idx < colCount && !!d.model_url && is3dModelUrl(d.model_url) && activeProduct?.allow_3d === true;
+                const isFirstRow3d = idx < colCount && !!d.model_url && is3dModelUrl(d.model_url);
                 return (
                   <div
                     key={d.id}
@@ -1729,7 +1729,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url && is3dModelUrl(d.model_url)
-                        ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
                         : (d.image_url || d.model_url)
                         ? <img src={d.image_url || d.model_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}

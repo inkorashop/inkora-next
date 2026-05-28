@@ -4221,15 +4221,23 @@ useEffect(() => {
                       const hasError = (entry.nameExists && !entry.overwriteExisting) || dupInBatch || entry.sizeError;
                       return (
                         <div key={i} style={s.fileRow}>
-                          {entry.preview
-                            // eslint-disable-next-line @next/next/no-img-element
-                            ? <img src={entry.preview} alt="" style={s.fileThumb} />
-                            : entry.modelPreview
-                              ? <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
+                          {(() => {
+                            const fname = entry.file?.name || entry.modelFile?.name || '';
+                            const isImageFile = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fname);
+                            if (entry.preview && isImageFile) {
+                              // eslint-disable-next-line @next/next/no-img-element
+                              return <img src={entry.preview} alt="" style={s.fileThumb} />;
+                            }
+                            if (entry.modelPreview) {
+                              return (
+                                <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
                                   <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} onCapture={blob => { if (!entry.capturedThumb) updateEntry(i, 'capturedThumb', blob); }} />
                                 </div>
-                              : <div style={{...s.fileThumb, background:'#e8eef9', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#2D6BE4', fontWeight:700}}>?</div>
-                          }
+                              );
+                            }
+                            const ext = fname.split('.').pop().toUpperCase() || '?';
+                            return <div style={{...s.fileThumb, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color:'#2D6BE4', fontWeight:700}}>{ext}</div>;
+                          })()}
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
                             {entry.nameExists && (
@@ -4362,12 +4370,11 @@ useEffect(() => {
                   }}
                 >
                   <div style={s.designInfo}>
-                    {d.model_url
+                    {(() => {
+                      const thumbSrc = d.image_url || (!is3dModelUrl(d.model_url) ? d.model_url : null);
                       // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={d.image_url} alt={d.name} style={s.designThumb} />
-                      // eslint-disable-next-line @next/next/no-img-element
-                      : d.image_url && <img src={d.image_url} alt={d.name} style={s.designThumb} />
-                    }
+                      return thumbSrc ? <img src={thumbSrc} alt={d.name} style={s.designThumb} /> : null;
+                    })()}
                     <div>
                       <input
                         style={{
@@ -8421,7 +8428,7 @@ const styles = {
   productMeta: { fontSize: 11, color: '#9aa3bc' },
   fileList: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 },
   fileRow: { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 10px', background: '#f7f8fc', borderRadius: 8, border: '1.5px solid #dde1ef' },
-  fileThumb: { width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid #dde1ef', flexShrink: 0 },
+  fileThumb: { width: 44, height: 44, objectFit: 'contain', background: '#f0f2f8', borderRadius: 6, border: '1px solid #dde1ef', flexShrink: 0 },
   fileFields: { flex: 1, minWidth: 0 },
   removePendingBtn: { background: 'none', border: 'none', color: '#9aa3bc', fontSize: 15, cursor: 'pointer', padding: '0 4px', flexShrink: 0, lineHeight: 1, marginTop: 8 },
   btnPrimary: { background: '#1B2F5E', color: 'white', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
@@ -8430,7 +8437,7 @@ const styles = {
   iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center', borderRadius: 5 },
   designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6' },
   designInfo: { display: 'flex', alignItems: 'center', gap: 10 },
-  designThumb: { width: 36, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid #dde1ef' },
+  designThumb: { width: 36, height: 36, objectFit: 'contain', background: '#f0f2f8', borderRadius: 6, border: '1px solid #dde1ef' },
   designName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
   designCat: { fontSize: 11, color: '#9aa3bc', marginTop: 1 },
   productTag: { background: '#e8eef9', color: '#2D6BE4', borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600, marginRight: 3 },
