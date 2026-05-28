@@ -293,8 +293,14 @@ export default function Home() {
     const { data: { subscription } } = isIframe
       ? { data: { subscription: { unsubscribe: () => {} } } }
       : supabase.auth.onAuthStateChange((event, session) => {
+          // TOKEN_REFRESHED fires silently on tab focus / background refresh —
+          // it doesn't change who the user is, so skip it entirely to prevent
+          // re-rendering the entire catalog grid (which causes visible flicker).
+          if (event === 'TOKEN_REFRESHED') return;
+
           const u = session?.user ?? null;
-          setUser(u);
+          // Use stable user reference to avoid unnecessary re-renders
+          setUser(prev => (prev?.id === u?.id && prev !== null) ? prev : u);
           if (u) {
             loadProfile(u.id);
             loadAdminStatus(u.email);
@@ -303,8 +309,6 @@ export default function Home() {
             setPriceTiers([]);
             setIsAdmin(false);
           }
-          // Only reload products on real auth changes — not TOKEN_REFRESHED or USER_UPDATED
-          // (those fire on tab focus and cause unnecessary full re-renders → flicker)
           if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
             loadVisibilityRulesForUser(u?.id || null);
           }
@@ -1713,7 +1717,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 const isPulsing = cardPulse[d.id];
                 const isBlocked = blockedDesignId === d.id;
                 const qtyDraft = Object.prototype.hasOwnProperty.call(qtyDrafts, d.id) ? qtyDrafts[d.id] : null;
-                const isFirstRow3d = idx < colCount && !!d.model_url && is3dModelUrl(d.model_url);
+                // Only the very first 3D design auto-renders (saves WebGL contexts)
+                const isFirstRow3d = idx === 0 && !!d.model_url && is3dModelUrl(d.model_url);
                 return (
                   <div
                     key={d.id}

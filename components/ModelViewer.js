@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 // ─── Global WebGL context pool ────────────────────────────────────────────────
 // Browsers limit WebGL contexts to ~16. This pool prevents overflow.
-const MAX_GL_CONTEXTS = 10;
+const MAX_GL_CONTEXTS = 6; // Chrome/Brave warn/kill at ~8; keep well under that
 let _activeGlContexts = 0;
 function acquireGlContext() {
   if (_activeGlContexts >= MAX_GL_CONTEXTS) return false;
