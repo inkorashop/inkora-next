@@ -2,6 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+// ─── Global WebGL context pool ────────────────────────────────────────────────
+// Browsers limit WebGL contexts to ~16. This pool prevents overflow.
+const MAX_GL_CONTEXTS = 10;
+let _activeGlContexts = 0;
+function acquireGlContext() {
+  if (_activeGlContexts >= MAX_GL_CONTEXTS) return false;
+  _activeGlContexts++;
+  return true;
+}
+function releaseGlContext() {
+  if (_activeGlContexts > 0) _activeGlContexts--;
+}
+
 // ─── BambuStudio ZIP helpers ──────────────────────────────────────────────────
 
 async function readZipEntry(arrayBuf, filename) {
@@ -137,6 +150,12 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
   useEffect(() => {
     if (!url || !mountRef.current) return;
+
+    // Respect global WebGL context limit
+    if (!acquireGlContext()) {
+      setStatus('error');
+      return;
+    }
 
     let cancelled = false;
     setStatus('loading');
@@ -427,6 +446,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
       cancelled = true;
       cleanupRef.current?.();
       cleanupRef.current = null;
+      releaseGlContext();
     };
   }, [url, modelConfig?.mode, modelConfig?.speed, modelConfig?.pendulum_amplitude]);
 

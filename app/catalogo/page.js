@@ -303,7 +303,11 @@ export default function Home() {
             setPriceTiers([]);
             setIsAdmin(false);
           }
-          loadVisibilityRulesForUser(u?.id || null);
+          // Only reload products on real auth changes — not TOKEN_REFRESHED or USER_UPDATED
+          // (those fire on tab focus and cause unnecessary full re-renders → flicker)
+          if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+            loadVisibilityRulesForUser(u?.id || null);
+          }
         });
 
     supabase.from('settings').select('*')
@@ -1932,14 +1936,15 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         {item.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                        ) : item.model_url && is3dModelUrl(item.model_url) ? (
-                          // 3MF without thumbnail: static one-shot render
-                          <div style={{width:36, height:36, borderRadius:6, overflow:'hidden', border:'1px solid #dde1ef', flexShrink:0}}>
-                            <ModelViewer url={item.model_url} autoRotate={false} hideHint={true} modelConfig={{mode:'static'}} oneShot={true} />
-                          </div>
                         ) : item.model_url && !is3dModelUrl(item.model_url) ? (
+                          // Non-3D file in model_url (e.g. PNG stored there)
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={item.model_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                        ) : item.model_url ? (
+                          // 3MF without captured thumbnail — show 3D icon placeholder
+                          <div style={{width:36, height:36, borderRadius:6, border:'1px solid #dde1ef', flexShrink:0, background:'#eef0f6', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a6380" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                          </div>
                         ) : null}
                         <div style={s.cartItemInfo}>
                           {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}
