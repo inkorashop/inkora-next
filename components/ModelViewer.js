@@ -2,6 +2,134 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+// ─── BambuStudio ZIP helpers ──────────────────────────────────────────────────
+
+async function readZipEntry(arrayBuf, filename) {
+  try {
+    const b = new Uint8Array(arrayBuf);
+    const dv = new DataView(arrayBuf);
+    // Find End of Central Directory (scan backwards from end)
+    let eocd = -1;
+    const limit = Math.max(0, b.length - 65558 - 22);
+    for (let i = b.length - 22; i >= limit; i--) {
+      if (b[i] === 0x50 && b[i+1] === 0x4b && b[i+2] === 0x05 && b[i+3] === 0x06) {
+        eocd = i; break;
+      }
+    }
+    if (eocd === -1) return null;
+    const cdSize   = dv.getUint32(eocd + 12, true);
+    const cdOffset = dv.getUint32(eocd + 16, true);
+    const dec = new TextDecoder('utf-8');
+    let p = cdOffset;
+    while (p + 46 <= cdOffset + cdSize) {
+      if (b[p] !== 0x50 || b[p+1] !== 0x4b || b[p+2] !== 0x01 || b[p+3] !== 0x02) break;
+      const method  = dv.getUint16(p + 10, true);
+      const compSz  = dv.getUint32(p + 20, true);
+      const fnLen   = dv.getUint16(p + 28, true);
+      const extLen  = dv.getUint16(p + 30, true);
+      const cmtLen  = dv.getUint16(p + 32, true);
+      const lhOff   = dv.getUint32(p + 42, true);
+      const name    = dec.decode(b.subarray(p + 46, p + 46 + fnLen));
+      if (name === filename) {
+        const lhFnLen  = dv.getUint16(lhOff + 26, true);
+        const lhExtLen = dv.getUint16(lhOff + 28, true);
+        const dataOff  = lhOff + 30 + lhFnLen + lhExtLen;
+        const raw      = b.slice(dataOff, dataOff + compSz); // slice = copy, safe to pass around
+        if (method === 0) return raw;
+        if (method === 8 && typeof DecompressionStream !== 'undefined') {
+          const ds = new DecompressionStream('deflate-raw');
+          const w = ds.writable.getWriter();
+          w.write(raw); w.close();
+          const r = ds.readable.getReader();
+          const chunks = [];
+          for (;;) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
+          const total = chunks.reduce((s, c) => s + c.length, 0);
+          const out = new Uint8Array(total);
+          let off = 0;
+          for (const c of chunks) { out.set(c, off); off += c.length; }
+          return out;
+        }
+        return null;
+      }
+      p += 46 + fnLen + extLen + cmtLen;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function parseBambuColorData(arrayBuf) {
+  const dec = new TextDecoder('utf-8');
+
+  // 1. Filament colors from Metadata/project_settings.config
+  const psBytes = await readZipEntry(arrayBuf, 'Metadata/project_settings.config');
+  if (!psBytes) return null;
+  let filamentColours;
+  try {
+    const ps = JSON.parse(dec.decode(psBytes));
+    const fc = ps.filament_colour;
+    filamentColours = (Array.isArray(fc) ? [...fc] : String(fc || '').split(/[\s,]+/))
+      .map(c => String(c).trim())
+      .filter(c => /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(c));
+  } catch { return null; }
+  if (!filamentColours.length) return null;
+
+  // 2. Part → extruder mapping from Metadata/model_settings.config
+  const msBytes = await readZipEntry(arrayBuf, 'Metadata/model_settings.config');
+  if (!msBytes) return null;
+  const msXml = dec.decode(msBytes);
+  const colorByPartId = {};
+  // Extract each <part> block individually to avoid cross-boundary matches
+  for (const block of msXml.matchAll(/<part id="(\d+)"[^>]*>([\s\S]*?)<\/part>/g)) {
+    const partId = parseInt(block[1]);
+    const extM = block[2].match(/<metadata key="extruder" value="(\d+)"/);
+    if (extM) {
+      const hex = filamentColours[parseInt(extM[1]) - 1];
+      if (hex) colorByPartId[partId] = hex;
+    }
+  }
+  if (!Object.keys(colorByPartId).length) return null;
+
+  // 3. Component order from 3D/3dmodel.model (explicit objectid ordering)
+  let componentOrder = null;
+  const mdBytes = await readZipEntry(arrayBuf, '3D/3dmodel.model');
+  if (mdBytes) {
+    const mdXml = dec.decode(mdBytes);
+    // Find the <components> block inside the assembly object
+    const compSection = mdXml.match(/<components>([\s\S]*?)<\/components>/);
+    if (compSection) {
+      componentOrder = [...compSection[1].matchAll(/\bobjectid="(\d+)"/g)]
+        .map(m => parseInt(m[1]));
+    }
+  }
+
+  return { colorByPartId, componentOrder };
+}
+
+function applyBambuColorsToModel(model, colorData, THREE) {
+  const { colorByPartId, componentOrder } = colorData;
+  const meshes = [];
+  model.traverse(n => { if (n.isMesh) meshes.push(n); });
+  if (!meshes.length) return;
+
+  const matCache = {};
+  const getMat = hex => {
+    if (!matCache[hex]) matCache[hex] = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(hex), roughness: 0.65, metalness: 0.0,
+    });
+    return matCache[hex];
+  };
+
+  meshes.forEach((mesh, idx) => {
+    // Map mesh position to BambuStudio part/objectid
+    // If we parsed the component order, use it; otherwise assume sequential (1-based)
+    const objectId = componentOrder ? componentOrder[idx] : (idx + 1);
+    const hex = objectId != null ? colorByPartId[objectId] : undefined;
+    if (hex) mesh.material = getMat(hex);
+  });
+}
+
+// ─── ModelViewer component ────────────────────────────────────────────────────
+
 export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null }) {
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
@@ -71,7 +199,6 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         controls.autoRotate = mode === 'rotate';
         controls.autoRotateSpeed = speed * 2;
 
-        // Estado del péndulo
         let pendulumDist = null;
         let pendulumAngle = 0;
         let pendulumDir = 1;
@@ -91,134 +218,57 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
 
         if (mode === 'pendulum') {
           controls.autoRotate = false;
-
           el.addEventListener('pointerdown', () => {
-            isDragging = true;
-            isBlending = false;
-            clearTimeout(returnTimeout);
+            isDragging = true; isBlending = false; clearTimeout(returnTimeout);
           });
-
           el.addEventListener('pointerup', () => {
             returnTimeout = setTimeout(() => {
               const rawTheta = controls._spherical.theta;
               blendFromAngle = Math.atan2(Math.sin(rawTheta), Math.cos(rawTheta));
               blendFromPhi = controls._spherical.phi;
-              pendulumAngle = 0;
-              pendulumDir = 1;
-              blendProgress = 0;
-              isBlending = true;
-              isDragging = false;
+              pendulumAngle = 0; pendulumDir = 1; blendProgress = 0;
+              isBlending = true; isDragging = false;
             }, 200);
           });
         }
 
-        // Reads a single file from a ZIP buffer using only built-in browser APIs
-        async function readFromZip(arrayBuf, filename) {
-          const b = new Uint8Array(arrayBuf);
-          const dv = new DataView(arrayBuf);
-          let eocd = -1;
-          for (let i = b.length - 22; i >= Math.max(0, b.length - 65580); i--) {
-            if (dv.getUint32(i, false) === 0x504b0506) { eocd = i; break; }
-          }
-          if (eocd === -1) return null;
-          const cdSize = dv.getUint32(eocd + 12, true);
-          const cdOffset = dv.getUint32(eocd + 16, true);
-          const enc = new TextDecoder();
-          let p = cdOffset;
-          while (p < cdOffset + cdSize) {
-            if (dv.getUint32(p, false) !== 0x504b0102) break;
-            const method = dv.getUint16(p + 10, true);
-            const compSize = dv.getUint32(p + 20, true);
-            const fnLen = dv.getUint16(p + 28, true);
-            const extLen = dv.getUint16(p + 30, true);
-            const cmtLen = dv.getUint16(p + 32, true);
-            const lhOffset = dv.getUint32(p + 42, true);
-            const name = enc.decode(b.slice(p + 46, p + 46 + fnLen));
-            if (name === filename) {
-              const lhFnLen = dv.getUint16(lhOffset + 26, true);
-              const lhExtLen = dv.getUint16(lhOffset + 28, true);
-              const dataStart = lhOffset + 30 + lhFnLen + lhExtLen;
-              const data = b.slice(dataStart, dataStart + compSize);
-              if (method === 0) return data;
-              if (method === 8 && typeof DecompressionStream !== 'undefined') {
-                const ds = new DecompressionStream('deflate-raw');
-                const w = ds.writable.getWriter();
-                w.write(data); w.close();
-                const chunks = [];
-                const r = ds.readable.getReader();
-                for (;;) { const { done, value } = await r.read(); if (done) break; chunks.push(value); }
-                const total = chunks.reduce((s, c) => s + c.length, 0);
-                const out = new Uint8Array(total);
-                let off = 0;
-                for (const c of chunks) { out.set(c, off); off += c.length; }
-                return out;
-              }
-              return null;
-            }
-            p += 46 + fnLen + extLen + cmtLen;
-          }
-          return null;
-        }
-
-        async function applyBambuColors(modelUrl, model) {
-          try {
-            const resp = await fetch(modelUrl);
-            if (!resp.ok) return;
-            const buf = await resp.arrayBuffer();
-            const dec = new TextDecoder();
-
-            const psBytes = await readFromZip(buf, 'Metadata/project_settings.config');
-            if (!psBytes) return;
-            const ps = JSON.parse(dec.decode(psBytes));
-            const fc = ps.filament_colour;
-            const colours = (Array.isArray(fc) ? fc : String(fc || '').split(/[\s,]+/))
-              .map(c => String(c).trim())
-              .filter(c => /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(c));
-            if (!colours.length) return;
-
-            const msBytes = await readFromZip(buf, 'Metadata/model_settings.config');
-            if (!msBytes) return;
-            const msXml = dec.decode(msBytes);
-
-            const partToExtruder = {};
-            for (const m of msXml.matchAll(/<part id="(\d+)"[\s\S]*?<metadata key="extruder" value="(\d+)"/g)) {
-              partToExtruder[m[1]] = parseInt(m[2]);
-            }
-            if (!Object.keys(partToExtruder).length) return;
-
-            // Collect meshes in traversal order (matches component order in 3dmodel.model)
-            const meshes = [];
-            model.traverse(n => { if (n.isMesh) meshes.push(n); });
-
-            const matCache = {};
-            const getMat = hex => {
-              if (!matCache[hex]) matCache[hex] = new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.6, metalness: 0.1 });
-              return matCache[hex];
-            };
-
-            // Parts in model_settings are ordered 1..N → match positionally to meshes
-            const sortedParts = Object.keys(partToExtruder).sort((a, b) => parseInt(a) - parseInt(b));
-            sortedParts.forEach((partId, idx) => {
-              if (idx >= meshes.length) return;
-              const extruder = partToExtruder[partId];
-              const hex = colours[extruder - 1];
-              if (hex) meshes[idx].material = getMat(hex);
-            });
-          } catch (e) {
-            // Silently ignore - model still shows without BambuStudio colors
-          }
-        }
-
+        // ── Pre-fetch 3MF and parse BambuStudio colors before loading ──
         const is3MF = url.toLowerCase().includes('.3mf') || modelConfig?._fileType === '3mf';
+        let bambuColorData = null;
+        let loaderUrl = url;
+        let blobUrl = null;
+
+        if (is3MF) {
+          try {
+            const resp = await fetch(url);
+            if (resp.ok) {
+              const buf = await resp.arrayBuffer();
+              bambuColorData = await parseBambuColorData(buf);
+              // Give THREE.js the same buffer via blob URL → no second download
+              const blob = new Blob([buf], { type: 'application/octet-stream' });
+              blobUrl = URL.createObjectURL(blob);
+              loaderUrl = blobUrl;
+            }
+          } catch { /* fall back to original url */ }
+        }
+
+        if (cancelled) {
+          if (blobUrl) URL.revokeObjectURL(blobUrl);
+          return;
+        }
+
         const loader = is3MF ? new ThreeMFLoader() : new GLTFLoader();
         loader.load(
-          url,
+          loaderUrl,
           (result) => {
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
             if (cancelled) return;
             const model = is3MF ? result : result.scene;
             loadedModel = model;
             scene.add(model);
-            if (is3MF) applyBambuColors(url, model).catch(() => {});
+
+            // Apply BambuStudio colors synchronously — before setStatus and onCapture
+            if (bambuColorData) applyBambuColorsToModel(model, bambuColorData, THREE);
 
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
@@ -266,6 +316,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           },
           undefined,
           (err) => {
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
             if (cancelled) return;
             console.error('Model load error:', err);
             setStatus('error');
@@ -342,6 +393,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           clearTimeout(returnTimeout);
           ro.disconnect();
           controls.dispose();
+          if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
           if (loadedModel) {
             loadedModel.traverse?.((object) => {
               if (object.geometry) object.geometry.dispose?.();
