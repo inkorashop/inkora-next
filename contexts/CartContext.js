@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 
 const CartContext = createContext(null);
 const ANON_CART_SESSION_KEY = 'inkora_cart_session_id';
+const CART_CLEARED_KEY = 'inkora_cart_cleared';
+const CART_CLEARED_TTL = 15 * 60 * 1000; // 15 minutes
 
 function getAnonymousCartSessionId() {
   if (typeof window === 'undefined') return '';
@@ -17,6 +19,21 @@ function getAnonymousCartSessionId() {
   } catch {
     return '';
   }
+}
+
+function wasCartRecentlyCleared() {
+  try {
+    const ts = parseInt(localStorage.getItem(CART_CLEARED_KEY) || '0', 10);
+    return ts > 0 && (Date.now() - ts) < CART_CLEARED_TTL;
+  } catch { return false; }
+}
+
+function markCartCleared() {
+  try { localStorage.setItem(CART_CLEARED_KEY, Date.now().toString()); } catch {}
+}
+
+function unmarkCartCleared() {
+  try { localStorage.removeItem(CART_CLEARED_KEY); } catch {}
 }
 
 function itemsToCartMap(items) {
@@ -65,27 +82,24 @@ export function CartProvider({ children }) {
     let authSubscription = null;
     anonSessionIdRef.current = getAnonymousCartSessionId();
 
-    const syncCart = async () => {
+    // syncItems: pushes explicit item array to Supabase (does not read from ref)
+    const syncItems = async (items) => {
       if (!hydratedRef.current) return;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (cancelled) return;
 
-        const items = Object.values(cartRef.current || {}).filter(item => Number(item.qty) > 0);
-
         const { error: rpcError } = await supabase.rpc('save_current_cart', {
           p_session_id: anonSessionIdRef.current,
           p_items: items,
         });
         if (!rpcError || cancelled) return;
-
         if (rpcError.code !== 'PGRST202') {
           console.warn('No se pudo guardar el carrito con RPC:', rpcError.message);
         }
 
         if (!user) return;
-
         const fallback = items.length === 0
           ? await supabase.from('carts').delete().eq('user_id', user.id)
           : await supabase.from('carts').upsert({
@@ -94,7 +108,6 @@ export function CartProvider({ children }) {
             items,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'id' });
-
         if (fallback.error) {
           console.warn('No se pudo guardar el carrito:', fallback.error.message);
         }
@@ -102,6 +115,11 @@ export function CartProvider({ children }) {
         console.warn('No se pudo sincronizar el carrito:', err?.message || err);
       }
     };
+
+    // syncCart: syncs current cart state from cartRef
+    const syncCart = () => syncItems(
+      Object.values(cartRef.current || {}).filter(item => Number(item.qty) > 0)
+    );
     syncCartRef.current = syncCart;
 
     const hydrateCart = async () => {
@@ -115,8 +133,11 @@ export function CartProvider({ children }) {
         const localItems = Object.values(cartRef.current || {}).filter(item => Number(item?.qty) > 0);
 
         if (!error && savedItems.length > 0 && localItems.length === 0 && !cancelled) {
-          setCart(itemsToCartMap(savedItems));
-          restoredSavedCart = true;
+          // Only restore if the cart was NOT recently and intentionally cleared
+          if (!wasCartRecentlyCleared()) {
+            setCart(itemsToCartMap(savedItems));
+            restoredSavedCart = true;
+          }
         } else if (error && error.code !== 'PGRST202') {
           console.warn('No se pudo cargar el carrito guardado:', error.message);
         }
@@ -172,6 +193,8 @@ export function CartProvider({ children }) {
 
   function addToCart(design, product, qty = 1) {
     const safeQty = Math.max(1, Number(qty) || 1);
+    // Adding an item means the user is actively using the cart — clear the "cleared" flag
+    unmarkCartCleared();
 
     track('cart_add', {
       design_id: design.id,
@@ -222,7 +245,15 @@ export function CartProvider({ children }) {
   }
 
   function clearCart() {
+    // Update ref immediately so the sync below reads the right data
+    cartRef.current = {};
     setCart({});
+    markCartCleared();
+    // Sync immediately (bypass debounce) to push empty cart to Supabase right away
+    if (hydratedRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncCartRef.current?.();
+    }
   }
 
   function setCartItem(id, qty) {
