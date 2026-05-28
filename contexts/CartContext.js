@@ -159,6 +159,9 @@ export function CartProvider({ children }) {
     document.addEventListener('visibilitychange', handleResume);
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED is a silent background operation — no cart state needs to change.
+      // hydrateCart on every refresh is unnecessary and can cause flicker via setCart.
+      if (event === 'TOKEN_REFRESHED') return;
       if (session?.user && event !== 'SIGNED_OUT') hydrateCart();
       if (event === 'SIGNED_OUT') syncCart();
     });

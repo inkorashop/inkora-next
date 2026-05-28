@@ -408,11 +408,19 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         });
         ro.observe(el);
 
+        // Force an immediate render when tab becomes visible again —
+        // prevents the brief transparent-canvas flash on Chrome/Brave tab resume.
+        const handleVisibilityChange = () => {
+          if (!document.hidden && !cancelled) renderer.render(scene, camera);
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         cleanupRef.current = () => {
           cancelAnimationFrame(animId);
           clearTimeout(returnTimeout);
           ro.disconnect();
           controls.dispose();
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
           if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
           if (loadedModel) {
             loadedModel.traverse?.((object) => {

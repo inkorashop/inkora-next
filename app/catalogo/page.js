@@ -157,6 +157,7 @@ export default function Home() {
   const pendingCategorySlugRef = useRef(null);
   const checkoutOpenedAtRef = useRef(null);
   const inlineSearchRef = useRef(null);
+  const handledUserIdRef = useRef(null); // tracks last processed auth userId to skip re-fires
   const [qtyAnim, setQtyAnim] = useState({});
   const [cardPulse, setCardPulse] = useState({});
   const [hoveredDesignId, setHoveredDesignId] = useState(null);
@@ -293,14 +294,20 @@ export default function Home() {
     const { data: { subscription } } = isIframe
       ? { data: { subscription: { unsubscribe: () => {} } } }
       : supabase.auth.onAuthStateChange((event, session) => {
-          // TOKEN_REFRESHED fires silently on tab focus / background refresh —
-          // it doesn't change who the user is, so skip it entirely to prevent
-          // re-rendering the entire catalog grid (which causes visible flicker).
+          // Silent token refreshes (TOKEN_REFRESHED) and any re-fire of the same
+          // user session must not trigger state updates — they cause the entire
+          // catalog grid to re-render, producing visible flicker on tab switch.
           if (event === 'TOKEN_REFRESHED') return;
 
           const u = session?.user ?? null;
-          // Use stable user reference to avoid unnecessary re-renders
-          setUser(prev => (prev?.id === u?.id && prev !== null) ? prev : u);
+          const newId = u?.id ?? null;
+
+          // Skip if same user — covers SIGNED_IN re-fires, USER_UPDATED, etc.
+          // SIGNED_OUT always proceeds (newId = null ≠ previous userId).
+          if (newId !== null && newId === handledUserIdRef.current) return;
+          handledUserIdRef.current = newId;
+
+          setUser(u);
           if (u) {
             loadProfile(u.id);
             loadAdminStatus(u.email);
