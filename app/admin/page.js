@@ -35,6 +35,10 @@ const DESIGN_FORMAT_OPTIONS = [
 ];
 const IMAGE_DESIGN_FORMATS = ['jpg', 'png'];
 const MODEL_DESIGN_FORMATS = ['3mf', 'obj'];
+function is3dModelUrl(url) {
+  if (!url) return false;
+  return /\.(3mf|glb|gltf|obj)(\?|$)/i.test(url.split('?')[0]);
+}
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], design_formats: IMAGE_DESIGN_FORMATS, use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
@@ -3718,7 +3722,7 @@ useEffect(() => {
                                   </div>
                                 )}
                                 {(() => {
-                                  const productModels = designs.filter(d => d.product_id === p.id && d.model_url);
+                                  const productModels = designs.filter(d => d.product_id === p.id && d.model_url && is3dModelUrl(d.model_url));
                                   const previewUrl = popupPreviewModel ?? productModels[0]?.model_url ?? null;
                                   return (
                                     <>

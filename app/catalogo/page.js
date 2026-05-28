@@ -50,6 +50,11 @@ function toSlug(name) {
   return String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
+function is3dModelUrl(url) {
+  if (!url) return false;
+  return /\.(3mf|glb|gltf|obj)(\?|$)/i.test(url.split('?')[0]);
+}
+
 function productUrlSlug(product) {
   return toSlug(product?.name);
 }
@@ -1703,7 +1708,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 const isPulsing = cardPulse[d.id];
                 const isBlocked = blockedDesignId === d.id;
                 const qtyDraft = Object.prototype.hasOwnProperty.call(qtyDrafts, d.id) ? qtyDrafts[d.id] : null;
-                const isFirstRow3d = idx < colCount && !!d.model_url && activeProduct?.allow_3d === true;
+                const isFirstRow3d = idx < colCount && !!d.model_url && is3dModelUrl(d.model_url) && activeProduct?.allow_3d === true;
                 return (
                   <div
                     key={d.id}
@@ -1718,15 +1723,15 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     }}
                     onMouseEnter={() => {
                       setHoveredDesignId(d.id);
-                      if (d.model_url) track('model_view', { design_id: d.id, design_name: d.name, product_name: activeProduct?.name });
+                      if (d.model_url && is3dModelUrl(d.model_url)) track('model_view', { design_id: d.id, design_name: d.name, product_name: activeProduct?.name });
                     }}
                     onMouseLeave={() => setHoveredDesignId(current => current === d.id ? null : current)}
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
-                      {d.model_url
+                      {d.model_url && is3dModelUrl(d.model_url)
                         ? <LazyModelViewer url={d.model_url} autoRotate={activeProduct?.allow_3d === true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
-                        : d.image_url
-                        ? <img src={d.image_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
+                        : (d.image_url || d.model_url)
+                        ? <img src={d.image_url || d.model_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
                       {(() => {
                         const tags = Array.isArray(activeProduct?.info_tags) ? activeProduct.info_tags : [];
