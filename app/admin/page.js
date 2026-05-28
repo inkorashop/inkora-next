@@ -5,18 +5,47 @@ import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import EmailsTab from '@/components/EmailsTab';
+import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import {
   canInferSingleProductUnitPrice,
   formatOrderMoney,
   getOrderItemPricing,
   orderHasStoredPriceMismatch,
 } from '@/lib/order-pricing';
+import {
+  ANONYMOUS_VISIBILITY_KEY,
+  parseVisibilityRules,
+  serializeVisibilityRules,
+  userVisibilityKey,
+  visibilityCounts,
+} from '@/lib/visibility-rules';
+import {
+  DESIGN_LIMITS_SETTING_KEY,
+  getDesignLimitConfig,
+  parseDesignLimitRules,
+  serializeDesignLimitRules,
+} from '@/lib/design-limits';
 
-const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], use_parent_tiers: false };
+const DESIGN_FORMAT_OPTIONS = [
+  { value: 'jpg', label: '.jpg', accept: 'image/jpeg,.jpg,.jpeg' },
+  { value: 'png', label: '.png', accept: 'image/png,.png' },
+  { value: '3mf', label: '.3mf', accept: '.3mf' },
+  { value: 'obj', label: '.obj', accept: '.obj' },
+  { value: 'dxf', label: '.dxf', accept: '.dxf' },
+];
+const IMAGE_DESIGN_FORMATS = ['jpg', 'png'];
+const MODEL_DESIGN_FORMATS = ['3mf', 'obj'];
+const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], design_formats: IMAGE_DESIGN_FORMATS, use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TABS = ['products','designs','orders','users','sellers','admins','config','tracking','production','version_history','emails'];
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const ADMIN_TABS = ['products','designs','orders','carts','database','users','sellers','admins','config','tracking','production','version_history','emails'];
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const INVITE_DESTINATIONS = [
+  { label: 'Inicio', value: '/' },
+  { label: 'Catalogo', value: '/catalogo' },
+  { label: 'Mis pedidos', value: '/dashboard-mispedidos' },
+  { label: 'Mi perfil', value: '/dashboard-miperfil' },
+];
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
@@ -261,7 +290,7 @@ useEffect(() => {
   if (typeof window === 'undefined') return;
   localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
 }, [adminDarkMode]);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', carts: 'carritos', database: 'base-de-datos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -301,6 +330,7 @@ useEffect(() => {
 
   // Products
   const [products, setProducts] = useState([]);
+  const [productDesignFormatsAvailable, setProductDesignFormatsAvailable] = useState(false);
   const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT);
   const [savingProduct, setSavingProduct] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -317,6 +347,7 @@ useEffect(() => {
   const cellRefs = useRef([]);
   const tierCellRefs = useRef({});
   const productManageModalRef = useRef(null);
+  const adminSearchCycleRef = useRef({ tab: null, index: -1 });
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
   function askConfirm(message, onConfirm, opts = {}) { setConfirmModal({ open: true, message, onConfirm, requireHold: !!opts.requireHold }); }
@@ -329,6 +360,8 @@ useEffect(() => {
   const [uploading, setUploading] = useState(false);
   const [orphanCount, setOrphanCount] = useState(0);
   const [migrating, setMigrating] = useState(false);
+  const [designUploadProductSearch, setDesignUploadProductSearch] = useState('');
+  const designFileInputRef = useRef(null);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
   const [dragOverId, setDragOverId] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
@@ -374,6 +407,14 @@ useEffect(() => {
   const [showInvitePassword, setShowInvitePassword] = useState(false);
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [userInviteLinks, setUserInviteLinks] = useState({});
+  const [inviteLinksModal, setInviteLinksModal] = useState(null);
+  const [inviteAccessLinks, setInviteAccessLinks] = useState([]);
+  const [inviteLinksGlobalDisabled, setInviteLinksGlobalDisabled] = useState(false);
+  const [inviteLinkDraft, setInviteLinkDraft] = useState({ kind: 'permanent', next_path: '/' });
+  const [editingInviteLinkId, setEditingInviteLinkId] = useState(null);
+  const [inviteLinkEditDraft, setInviteLinkEditDraft] = useState({ kind: 'permanent', next_path: '/' });
+  const [inviteLinksLoading, setInviteLinksLoading] = useState(false);
+  const [inviteLinksMessage, setInviteLinksMessage] = useState('');
   const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
   const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
   const [deletingUserIds, setDeletingUserIds] = useState(new Set());
@@ -389,6 +430,9 @@ useEffect(() => {
 
   // Orders
   const [orders, setOrders] = useState([]);
+  const [carts, setCarts] = useState([]);
+  const [loadingCarts, setLoadingCarts] = useState(false);
+  const [cartsError, setCartsError] = useState('');
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all' });
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
@@ -419,8 +463,15 @@ useEffect(() => {
   const [priceTiers, setPriceTiers] = useState([]);
   const [userProductLocalities, setUserProductLocalities] = useState([]);
   const [userScaleModal, setUserScaleModal] = useState(null);
+  const [userProductsModal, setUserProductsModal] = useState(null);
+  const [visibilityTab, setVisibilityTab] = useState('products');
+  const [visibilitySearch, setVisibilitySearch] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState('all');
+  const [visibilitySelection, setVisibilitySelection] = useState(new Set());
+  const visibilityLastSelectedRef = useRef(null);
   const [savingUserScaleKey, setSavingUserScaleKey] = useState(null);
   const [newScaleNames, setNewScaleNames] = useState({});
+  const [newDesignLimitTiers, setNewDesignLimitTiers] = useState({});
   const [newTiers, setNewTiers] = useState({});
   const [editingTiers, setEditingTiers] = useState({});
   const [savedTierId, setSavedTierId] = useState(null);
@@ -434,7 +485,7 @@ useEffect(() => {
   const autoSnapshotSavingRef = useRef(false);
 
   useEffect(() => {
-    if (!productManageModal && !allScalesModalOpen) return;
+    if (!productManageModal && !allScalesModalOpen && !userProductsModal) return;
     const originalOverflow = document.body.style.overflow;
     const originalPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -447,7 +498,22 @@ useEffect(() => {
       document.body.style.overflow = originalOverflow;
       document.body.style.paddingRight = originalPaddingRight;
     };
-  }, [productManageModal, allScalesModalOpen]);
+  }, [productManageModal, allScalesModalOpen, userProductsModal]);
+
+  useEffect(() => {
+    if (!userProductsModal) return;
+    function handleVisibilityEsc(e) {
+      if (e.key !== 'Escape') return;
+      if (visibilitySelection.size > 0) {
+        setVisibilitySelection(new Set());
+        visibilityLastSelectedRef.current = null;
+      } else {
+        setUserProductsModal(null);
+      }
+    }
+    window.addEventListener('keydown', handleVisibilityEsc);
+    return () => window.removeEventListener('keydown', handleVisibilityEsc);
+  }, [userProductsModal, visibilitySelection]);
 
   useEffect(() => {
     if (!versionSnapshotViewer.open) return;
@@ -520,7 +586,7 @@ useEffect(() => {
   // ── Auth listener ──
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }, []);
+  }, [selectedProductId]);
 
   useEffect(() => {
     screenRef.current = screen;
@@ -529,6 +595,54 @@ useEffect(() => {
   useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
+
+  useEffect(() => {
+    function isVisibleSearchInput(el) {
+      if (!el || el.disabled || el.getAttribute('aria-hidden') === 'true') return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+    }
+
+    function handleAdminSearchShortcut(e) {
+      const key = e.key?.toLowerCase?.();
+      if (!(e.ctrlKey || e.metaKey) || key !== 'f') return;
+
+      e.preventDefault();
+      const searchInputs = Array.from(document.querySelectorAll('[data-admin-search="true"]')).filter(isVisibleSearchInput);
+      if (searchInputs.length === 0) return;
+
+      const activeIndex = searchInputs.indexOf(document.activeElement);
+      if (adminSearchCycleRef.current.tab !== activeTab) {
+        adminSearchCycleRef.current = { tab: activeTab, index: -1 };
+      }
+
+      const baseIndex = activeIndex >= 0 ? activeIndex : adminSearchCycleRef.current.index;
+      const direction = e.shiftKey ? -1 : 1;
+      const nextIndex = (baseIndex + direction + searchInputs.length) % searchInputs.length;
+      const nextInput = searchInputs[nextIndex];
+
+      adminSearchCycleRef.current = { tab: activeTab, index: nextIndex };
+      nextInput.focus();
+      nextInput.select?.();
+    }
+
+    window.addEventListener('keydown', handleAdminSearchShortcut);
+    return () => window.removeEventListener('keydown', handleAdminSearchShortcut);
+  }, [activeTab]);
+
+  useEffect(() => {
+    function handleDesignUploadShortcut(e) {
+      const key = e.key?.toLowerCase?.();
+      if (!(e.ctrlKey || e.metaKey) || key !== 'i') return;
+      if (activeTab !== 'designs' || !selectedProductId || !designFileInputRef.current) return;
+
+      e.preventDefault();
+      designFileInputRef.current.click();
+    }
+
+    window.addEventListener('keydown', handleDesignUploadShortcut);
+    return () => window.removeEventListener('keydown', handleDesignUploadShortcut);
+  }, [activeTab, selectedProductId]);
 
   function rememberAdminScroll(tab = activeTabRef.current) {
     if (typeof window === 'undefined') return;
@@ -577,6 +691,7 @@ useEffect(() => {
         loadAdmins(),
         loadAdminPresence(),
         loadOrders(),
+        loadCarts(),
         loadSettings(),
         loadSellers(),
         loadUsers(),
@@ -721,6 +836,7 @@ useEffect(() => {
       watch('user_product_localities', loadUserProductLocalities),
       watch('admins', loadAdmins),
       watch('orders', loadOrders),
+      watch('carts', loadCarts),
       watch('settings', loadSettings),
       watch('sellers', () => { loadSellers(); loadUsers(); }),
       watch('profiles', loadUsers),
@@ -814,7 +930,7 @@ useEffect(() => {
     const forms = {};
     products.forEach(p => {
       if (!productForms[p.id]) {
-        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 }, use_parent_tiers: p.use_parent_tiers === true };
+        forms[p.id] = { name: p.name, variant_name: p.variant_name || '', parent_product_id: p.parent_product_id || null, card_width_desktop: p.card_width_desktop, card_width_mobile: p.card_width_mobile, landing_card_width_desktop: p.landing_card_width_desktop ?? 320, landing_card_width_mobile: p.landing_card_width_mobile ?? 280, aspect_ratio: p.aspect_ratio, max_file_size_kb: p.max_file_size_kb, landing_max_file_size_kb: p.landing_max_file_size_kb ?? 4096, price_per_unit: p.price_per_unit ?? 0, show_price: p.show_price !== false, allow_3d: p.allow_3d === true, allow_glb: p.allow_glb === true, design_formats: getProductDesignFormats(p), landing_image: p.landing_image || '', model_config: p.model_config || { mode: 'static', speed: 5 }, use_parent_tiers: p.use_parent_tiers === true };
       }
     });
     if (Object.keys(forms).length > 0) setProductForms(prev => ({ ...prev, ...forms }));
@@ -897,7 +1013,10 @@ useEffect(() => {
 
   async function loadProducts() {
     const { data } = await supabase.from('products').select('*').order('sort_order', { nullsFirst: false }).order('created_at');
-    if (data) setProducts(sortProductRows(data));
+    if (data) {
+      setProductDesignFormatsAvailable(data.some(product => Object.prototype.hasOwnProperty.call(product, 'design_formats')));
+      setProducts(sortProductRows(data));
+    }
   }
 
   function updateProductForm(id, field, value) {
@@ -943,10 +1062,252 @@ useEffect(() => {
     return product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
   }
 
+  function isDefault3dDesignProduct(product) {
+    const name = String(productDisplayName(product) || product?.name || '').toLowerCase();
+    return name.includes('llaveros 3d librer') || name.includes('llaveros 3d motos');
+  }
+
+  function normalizeDesignFormats(formats, product = null) {
+    if (Array.isArray(formats)) {
+      return [...new Set(formats.map(format => String(format).replace(/^\./, '').toLowerCase()).filter(format => DESIGN_FORMAT_OPTIONS.some(option => option.value === format)))];
+    }
+    if (typeof formats === 'string' && formats.trim()) {
+      try {
+        const parsed = JSON.parse(formats);
+        if (Array.isArray(parsed)) return normalizeDesignFormats(parsed, product);
+      } catch {}
+      return normalizeDesignFormats(formats.split(','), product);
+    }
+    return isDefault3dDesignProduct(product) ? ['3mf'] : [...IMAGE_DESIGN_FORMATS];
+  }
+
+  function getProductDesignFormats(product) {
+    return normalizeDesignFormats(product?.design_formats, product);
+  }
+
+  function hasModelDesignFormat(product) {
+    return getProductDesignFormats(product).some(format => MODEL_DESIGN_FORMATS.includes(format));
+  }
+
+  function getDesignAcceptForProduct(product) {
+    const formats = getProductDesignFormats(product);
+    return DESIGN_FORMAT_OPTIONS
+      .filter(option => formats.includes(option.value))
+      .flatMap(option => option.accept.split(','))
+      .join(',');
+  }
+
+  function getReadableTextColor(background) {
+    const hex = String(background || '').replace('#', '').trim();
+    const expanded = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
+    if (expanded.length !== 6) return '#1B2F5E';
+    const r = parseInt(expanded.slice(0, 2), 16);
+    const g = parseInt(expanded.slice(2, 4), 16);
+    const b = parseInt(expanded.slice(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.62 ? '#1B2F5E' : 'white';
+  }
+
+  function renderDesignFormatSelector(formats, onToggle, disabled = false) {
+    const selected = normalizeDesignFormats(formats);
+    return (
+      <div style={{display:'flex', flexWrap:'wrap', gap:4, minWidth:150}}>
+        {DESIGN_FORMAT_OPTIONS.map(option => {
+          const active = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={disabled}
+              onClick={e => { e.stopPropagation(); onToggle(option.value, !active); }}
+              style={{
+                border:'1.5px solid',
+                borderColor: active ? '#2D6BE4' : '#dde1ef',
+                borderRadius:6,
+                padding:'3px 7px',
+                background: active ? '#e8eef9' : 'white',
+                color: active ? '#2D6BE4' : '#5a6380',
+                fontSize:11,
+                fontWeight:800,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.55 : 1,
+                fontFamily:'Barlow, sans-serif',
+                lineHeight:1.2,
+              }}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function catalogProductPath(product) {
+    if (!product?.name) return '/catalogo';
+    const slug = catalogSlug(product.name);
+    return `/catalogo?producto=${encodeURIComponent(slug)}`;
+  }
+
+  function catalogSlug(value) {
+    return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  function catalogVariantSlug(product) {
+    return catalogSlug(product?.variant_name || 'base');
+  }
+
+  function isCatalogPath(path) {
+    try {
+      const url = new URL(String(path || '/'), 'https://inkora.local');
+      return url.pathname === '/catalogo';
+    } catch {
+      return false;
+    }
+  }
+
+  function getInviteDestinationValue(path) {
+    if (isCatalogPath(path)) return '/catalogo';
+    return INVITE_DESTINATIONS.some(item => item.value === path) ? path : 'custom';
+  }
+
+  function getActiveRootProducts() {
+    return products
+      .filter(product => product.active && !product.parent_product_id)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  }
+
+  function matchCatalogSlug(value, slug) {
+    return !!slug && (String(value || '').trim() === slug || catalogSlug(value) === slug);
+  }
+
+  function buildInviteCatalogPath(rootId, variantId = '', category = '') {
+    const root = products.find(product => product.id === rootId);
+    if (!root) return '/catalogo';
+    const variants = getProductVariants(root).filter(product => product.active);
+    const selectedVariant = variants.find(product => product.id === variantId) || variants[0] || root;
+    const params = new URLSearchParams();
+    params.set('producto', catalogSlug(root.name));
+    if (variants.length > 1) params.set('variante', catalogVariantSlug(selectedVariant));
+    if (category) params.set('categoria', catalogSlug(category));
+    return `/catalogo?${params.toString()}`;
+  }
+
+  function getInviteCatalogSelection(path) {
+    if (!isCatalogPath(path)) return { isCatalog: false, root: null, variants: [], variant: null, categories: [], category: '' };
+
+    let params = new URLSearchParams();
+    try {
+      params = new URL(String(path || '/catalogo'), 'https://inkora.local').searchParams;
+    } catch {}
+
+    const productSlug = params.get('producto');
+    const variantSlug = params.get('variante');
+    const categorySlug = params.get('categoria');
+    const roots = getActiveRootProducts();
+    const root = productSlug
+      ? roots.find(product => matchCatalogSlug(product.name, productSlug) || matchCatalogSlug(product.slug, productSlug))
+      : null;
+    const variants = root ? getProductVariants(root).filter(product => product.active) : [];
+    const variant = variantSlug
+      ? variants.find(product => matchCatalogSlug(product.variant_name || 'base', variantSlug) || matchCatalogSlug(product.slug, variantSlug))
+      : (variants[0] || null);
+    const categories = variant ? getProductCategories(variant.id) : [];
+    const category = categorySlug
+      ? (categories.find(cat => matchCatalogSlug(cat, categorySlug)) || '')
+      : '';
+
+    return { isCatalog: true, root, variants, variant, categories, category };
+  }
+
+  function getDesignLimitRules() {
+    return parseDesignLimitRules(settings[DESIGN_LIMITS_SETTING_KEY]);
+  }
+
+  function getProductDesignLimitConfig(product) {
+    return getDesignLimitConfig(product, products, getDesignLimitRules());
+  }
+
+  async function saveDesignLimitRules(nextRules) {
+    const serialized = serializeDesignLimitRules(nextRules);
+    setSettings(prev => ({ ...prev, [DESIGN_LIMITS_SETTING_KEY]: serialized }));
+    await supabase.from('settings').upsert({ key: DESIGN_LIMITS_SETTING_KEY, value: serialized });
+  }
+
+  async function updateDesignLimitConfig(productId, updater) {
+    const rules = getDesignLimitRules();
+    const product = products.find(p => p.id === productId);
+    const effective = getProductDesignLimitConfig(product);
+    const current = rules[productId] || { inheritParent: false, tiers: effective.tiers || [] };
+    const nextRules = {
+      ...rules,
+      [productId]: updater({ inheritParent: current.inheritParent === true, tiers: Array.isArray(current.tiers) ? current.tiers : [] }),
+    };
+    await saveDesignLimitRules(nextRules);
+    trackAdminActivity('product_design_limits_update', { product_id: productId, product_name: product?.name }, 'products');
+  }
+
+  function updateDesignLimitTier(productId, tierIndex, field, value) {
+    const numeric = Math.max(1, parseInt(value, 10) || 1);
+    updateDesignLimitConfig(productId, config => {
+      const tiers = [...config.tiers];
+      tiers[tierIndex] = { ...tiers[tierIndex], [field]: numeric };
+      return { ...config, tiers: tiers.sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity)) };
+    });
+  }
+
+  function addDesignLimitTier(productId) {
+    const draft = newDesignLimitTiers[productId] || { min_quantity: '', max_designs: '' };
+    const minQuantity = parseInt(draft.min_quantity, 10);
+    const maxDesigns = parseInt(draft.max_designs, 10);
+    if (!minQuantity || !maxDesigns) return;
+    updateDesignLimitConfig(productId, config => ({
+      ...config,
+      tiers: [...config.tiers, { min_quantity: minQuantity, max_designs: maxDesigns }]
+        .sort((a, b) => Number(a.min_quantity) - Number(b.min_quantity)),
+    }));
+    setNewDesignLimitTiers(prev => ({ ...prev, [productId]: { min_quantity: '', max_designs: '' } }));
+  }
+
+  function deleteDesignLimitTier(productId, tierIndex) {
+    updateDesignLimitConfig(productId, config => ({
+      ...config,
+      tiers: config.tiers.filter((_, i) => i !== tierIndex),
+    }));
+  }
+
+  function toggleDesignLimitInheritance(productId) {
+    updateDesignLimitConfig(productId, config => ({ ...config, inheritParent: !config.inheritParent }));
+  }
+
+  function updateProductDesignFormat(productId, format, enabled) {
+    const product = products.find(p => p.id === productId);
+    const current = normalizeDesignFormats(productForms[productId]?.design_formats, product);
+    const next = enabled
+      ? [...new Set([...current, format])]
+      : current.filter(item => item !== format);
+    const hasModelFormat = next.some(item => MODEL_DESIGN_FORMATS.includes(item));
+
+    updateProductForm(productId, 'design_formats', next);
+    updateProductForm(productId, 'allow_3d', hasModelFormat);
+    updateProductForm(productId, 'allow_glb', hasModelFormat);
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, design_formats: next, allow_3d: hasModelFormat, allow_glb: hasModelFormat } : p));
+    if (productId === selectedProductId) setPendingFiles([]);
+
+    if (!productDesignFormatsAvailable) {
+      alert('Falta ejecutar sql/product_design_formats.sql en Supabase para guardar formatos por producto.');
+      return;
+    }
+
+    saveProduct(productId, { design_formats: next, allow_3d: hasModelFormat, allow_glb: hasModelFormat });
+  }
+
   async function saveProduct(id, overrides = {}) {
     const data = { ...(productForms[id] || {}), ...overrides };
     const product = products.find(p => p.id === id);
     const payload = { ...data, parent_product_id: data.parent_product_id || null, variant_name: (data.variant_name || '').trim() || null };
+    if (!productDesignFormatsAvailable) delete payload.design_formats;
+    if (payload.design_formats) payload.design_formats = normalizeDesignFormats(payload.design_formats, product);
     await supabase.from('products').update(payload).eq('id', id);
     if (product && !product.parent_product_id && payload.name && payload.name !== product.name) {
       await supabase.from('products').update({ name: payload.name }).eq('parent_product_id', id);
@@ -973,7 +1334,9 @@ useEffect(() => {
   async function addProduct() {
     if (!newProduct.name.trim() || !newProduct.slug.trim()) return;
     setSavingProduct(true);
-    await supabase.from('products').insert({ ...newProduct, variant_name: newProduct.variant_name.trim() || null, parent_product_id: null, active: true });
+    const payload = { ...newProduct, design_formats: normalizeDesignFormats(newProduct.design_formats), variant_name: newProduct.variant_name.trim() || null, parent_product_id: null, active: true };
+    if (!productDesignFormatsAvailable) delete payload.design_formats;
+    await supabase.from('products').insert(payload);
     trackAdminActivity('product_create', { product_name: newProduct.name, slug: newProduct.slug }, 'products');
     setNewProduct(EMPTY_PRODUCT);
     setSavingProduct(false);
@@ -1013,10 +1376,12 @@ useEffect(() => {
       variant_name: `Variante ${variantNumber}`,
       categories: Array.isArray(root.categories) ? [...root.categories] : [],
       category_colors: root.category_colors ? { ...root.category_colors } : {},
+      design_formats: getProductDesignFormats(root),
       model_config: root.model_config ? { ...root.model_config } : { mode: 'static', speed: 5 },
       active: true,
       sort_order: (root.sort_order ?? products.length) + variantNumber,
     };
+    if (!productDesignFormatsAvailable) delete payload.design_formats;
 
     const { error } = await supabase.from('products').insert(payload);
     setAddingVariantId(null);
@@ -1181,6 +1546,7 @@ useEffect(() => {
     const p = products.find(pr => pr.id === productId);
     const current = p?.category_colors || {};
     const updated = { ...current, [cat]: color };
+    setProducts(prev => prev.map(product => product.id === productId ? { ...product, category_colors: updated } : product));
     await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
     trackAdminActivity('product_category_color_update', { product_id: productId, category: cat, color }, 'products');
     loadProducts();
@@ -1324,14 +1690,18 @@ useEffect(() => {
       file, preview: URL.createObjectURL(file),
       name: file.name.replace(/\.[^.]+$/, ''), category: defaultCategory,
       nameExists: false, sizeError: file.size > maxSizeKb * 1024,
+      existingDesignId: null, overwriteExisting: false,
       modelFile: null,
     }));
     setPendingFiles(entries);
     e.target.value = '';
-    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
-    const existing = new Set((data || []).map(d => d.name.toLowerCase()));
+    const { data } = await supabase.from('designs').select('id, name').eq('active', true).eq('product_id', selectedProductId);
+    const existing = new Map((data || []).map(d => [d.name.toLowerCase(), d.id]));
     setPendingFiles(prev => prev.map(entry => ({
-      ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+      ...entry,
+      nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+      existingDesignId: existing.get(entry.name.toLowerCase()) || null,
+      overwriteExisting: false,
     })));
   }
 
@@ -1339,14 +1709,43 @@ useEffect(() => {
     setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], [field]: value }; return next; });
     if (field === 'name') {
       if (value.length > 2) {
-        const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
-        const exists = Array.isArray(data) && data.some(d => d.name.toLowerCase() === value.toLowerCase());
-        setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: exists }; return next; });
+        const { data } = await supabase.from('designs').select('id, name').eq('active', true).eq('product_id', selectedProductId);
+        const match = Array.isArray(data) ? data.find(d => d.name.toLowerCase() === value.toLowerCase()) : null;
+        setPendingFiles(prev => {
+          const next = [...prev];
+          next[index] = { ...next[index], nameExists: !!match, existingDesignId: match?.id || null, overwriteExisting: false };
+          return next;
+        });
       } else {
-        setPendingFiles(prev => { const next = [...prev]; next[index] = { ...next[index], nameExists: false }; return next; });
+        setPendingFiles(prev => {
+          const next = [...prev];
+          next[index] = { ...next[index], nameExists: false, existingDesignId: null, overwriteExisting: false };
+          return next;
+        });
       }
     }
-  }, []);
+  }, [selectedProductId]);
+
+  function setPendingOverwrite(index, overwriteExisting) {
+    setPendingFiles(prev => {
+      const next = [...prev];
+      if (!next[index]) return prev;
+      next[index] = { ...next[index], overwriteExisting };
+      return next;
+    });
+  }
+
+  function overwriteAllPendingConflicts() {
+    const count = pendingFiles.filter(entry => entry.nameExists && entry.existingDesignId && !entry.sizeError).length;
+    if (count === 0) return;
+    askConfirm(`¿Sobrescribir ${count} diseño${count !== 1 ? 's' : ''} existente${count !== 1 ? 's' : ''}? Esta acción reemplaza los archivos de esos diseños.`, () => {
+      setPendingFiles(prev => prev.map(entry => (
+        entry.nameExists && entry.existingDesignId && !entry.sizeError
+          ? { ...entry, overwriteExisting: true }
+          : entry
+      )));
+    });
+  }
 
   function removePending(index) {
     setPendingFiles(prev => {
@@ -1400,13 +1799,33 @@ useEffect(() => {
         }
 
         if (imageUrl || modelUrl) {
-          await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId });
+          if (entry.nameExists && entry.overwriteExisting && entry.existingDesignId) {
+            const payload = {
+              name: entry.name,
+              category: entry.category,
+              active: true,
+              product_id: selectedProductId,
+              image_url: imageUrl || null,
+              model_url: modelUrl || null,
+            };
+            const { error } = await supabase.from('designs').update(payload).eq('id', entry.existingDesignId);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId });
+            if (error) throw error;
+          }
         } else { alert(`"${entry.name}" no tiene imagen ni modelo.`); anyError = true; }
       } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
     }
     setUploading(false);
-    if (!anyError) { pendingFiles.forEach(f => URL.revokeObjectURL(f.preview)); setPendingFiles([]); }
-    trackAdminActivity('design_create_bulk', { count: pendingFiles.length, product_id: selectedProductId, product_name: selectedProduct?.name, had_errors: anyError }, 'designs');
+    if (!anyError) {
+      pendingFiles.forEach(f => {
+        if (f.preview) URL.revokeObjectURL(f.preview);
+        if (f.modelPreview) URL.revokeObjectURL(f.modelPreview);
+      });
+      setPendingFiles([]);
+    }
+    trackAdminActivity('design_create_bulk', { count: pendingFiles.length, overwritten_count: pendingFiles.filter(entry => entry.nameExists && entry.overwriteExisting).length, product_id: selectedProductId, product_name: selectedProduct?.name, had_errors: anyError }, 'designs');
     console.log('Upload completo, recargando diseños...');
     loadDesigns();
   }
@@ -1685,6 +2104,194 @@ useEffect(() => {
     setSavingUserScaleKey(null);
   }
 
+  function openUserProductsModal(user = null) {
+    setUserProductsModal(user ? { type: 'user', user } : { type: 'anonymous' });
+    setVisibilityTab('products');
+    setVisibilitySearch('');
+    setVisibilityFilter('all');
+    setVisibilitySelection(new Set());
+    visibilityLastSelectedRef.current = null;
+  }
+
+  function currentVisibilityKey(target = userProductsModal) {
+    if (!target) return ANONYMOUS_VISIBILITY_KEY;
+    return target.type === 'anonymous' ? ANONYMOUS_VISIBILITY_KEY : userVisibilityKey(target.user.id);
+  }
+
+  function getVisibilityRules(target = userProductsModal) {
+    return parseVisibilityRules(settings[currentVisibilityKey(target)]);
+  }
+
+  function visibilityItemKey(item) {
+    return `${item.type}:${item.id}`;
+  }
+
+  function visibilityItemHidden(item, rules = getVisibilityRules()) {
+    if (item.type === 'product') return rules.hiddenProducts.includes(item.id);
+    if (item.type === 'variant') return rules.hiddenVariants.includes(item.id);
+    if (item.type === 'category') return (rules.hiddenCategories[item.productId] || []).includes(item.category);
+    if (item.type === 'design') return rules.hiddenDesigns.includes(item.id);
+    return false;
+  }
+
+  function getVisibilityItems(tab = visibilityTab) {
+    const activeProducts = products.filter(p => p.active);
+    const roots = activeProducts
+      .filter(p => !p.parent_product_id || !activeProducts.some(parent => parent.id === p.parent_product_id))
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const q = visibilitySearch.trim().toLowerCase();
+    const rules = getVisibilityRules();
+
+    let items = [];
+    if (tab === 'products') {
+      items = roots.map(product => ({
+        type: 'product',
+        id: product.id,
+        productId: product.id,
+        title: product.name,
+        meta: `${getProductVariants(product).filter(p => p.active).length} variante${getProductVariants(product).filter(p => p.active).length !== 1 ? 's' : ''}`,
+      }));
+    } else if (tab === 'variants') {
+      items = roots.flatMap(root => getProductVariants(root)
+        .filter(product => product.active && product.parent_product_id)
+        .map(product => ({
+          type: 'variant',
+          id: product.id,
+          productId: product.id,
+          title: product.variant_name || product.name,
+          meta: product.id === root.id ? `${root.name} · principal` : root.name,
+        })));
+    } else if (tab === 'categories') {
+      items = activeProducts.flatMap(product => {
+        const productCategories = Array.isArray(product.categories) ? product.categories : [];
+        const designCategories = [...new Set(designs
+          .filter(design => design.product_id === product.id)
+          .flatMap(design => Array.isArray(design.categories) && design.categories.length > 0 ? design.categories : (design.category ? [design.category] : []))
+          .filter(category => category && category !== 'Sin categoria' && category !== 'Sin categoría'))];
+        const categories = productCategories.length > 0 ? productCategories : designCategories;
+        return categories.map(category => ({
+          type: 'category',
+          id: `${product.id}::${category}`,
+          productId: product.id,
+          category,
+          title: category,
+          meta: productDisplayName(product),
+        }));
+      });
+    } else {
+      items = designs
+        .filter(design => design.active)
+        .map(design => {
+          const product = products.find(p => p.id === design.product_id);
+          const cats = Array.isArray(design.categories) && design.categories.length > 0
+            ? design.categories
+            : (design.category ? [design.category] : []);
+          return {
+            type: 'design',
+            id: design.id,
+            productId: design.product_id,
+            title: design.name,
+            meta: `${productDisplayName(product) || 'Sin producto'}${cats.length ? ` · ${cats.join(', ')}` : ''}`,
+          };
+        });
+    }
+
+    return items.filter(item => {
+      const hidden = visibilityItemHidden(item, rules);
+      if (visibilityFilter === 'hidden' && !hidden) return false;
+      if (visibilityFilter === 'visible' && hidden) return false;
+      if (!q) return true;
+      return `${item.title} ${item.meta}`.toLowerCase().includes(q);
+    });
+  }
+
+  function selectVisibilityItem(e, item, orderedItems) {
+    const key = visibilityItemKey(item);
+    setVisibilitySelection(prev => {
+      const next = new Set(prev);
+      if (e.shiftKey && visibilityLastSelectedRef.current) {
+        const keys = orderedItems.map(visibilityItemKey);
+        const from = keys.indexOf(visibilityLastSelectedRef.current);
+        const to = keys.indexOf(key);
+        if (from >= 0 && to >= 0) {
+          const [start, end] = from < to ? [from, to] : [to, from];
+          for (let i = start; i <= end; i += 1) next.add(keys[i]);
+        } else {
+          next.add(key);
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        visibilityLastSelectedRef.current = key;
+      } else {
+        next.clear();
+        next.add(key);
+        visibilityLastSelectedRef.current = key;
+      }
+      return next;
+    });
+  }
+
+  async function saveVisibilityRules(nextRules, target = userProductsModal) {
+    const key = currentVisibilityKey(target);
+    const serialized = serializeVisibilityRules(nextRules);
+    setSettings(prev => ({ ...prev, [key]: serialized }));
+    const { error } = await supabase.from('settings').upsert({ key, value: serialized });
+    if (error) {
+      console.error('Error saving visibility rules', error);
+      alert('No se pudo guardar la visibilidad de productos.');
+      return;
+    }
+    const counts = visibilityCounts(nextRules);
+    trackAdminActivity('visibility_rules_update', {
+      target: target?.type === 'anonymous' ? 'anonymous' : 'user',
+      user_id: target?.user?.id || null,
+      user_email: target?.user?.email || null,
+      counts,
+    }, 'users');
+  }
+
+  function setItemHiddenInRules(rules, item, hidden) {
+    const next = parseVisibilityRules(rules);
+    if (item.type === 'product') {
+      next.hiddenProducts = hidden
+        ? [...new Set([...next.hiddenProducts, item.id])]
+        : next.hiddenProducts.filter(id => id !== item.id);
+    } else if (item.type === 'variant') {
+      next.hiddenVariants = hidden
+        ? [...new Set([...next.hiddenVariants, item.id])]
+        : next.hiddenVariants.filter(id => id !== item.id);
+    } else if (item.type === 'category') {
+      const current = next.hiddenCategories[item.productId] || [];
+      const updated = hidden
+        ? [...new Set([...current, item.category])]
+        : current.filter(category => category !== item.category);
+      if (updated.length > 0) next.hiddenCategories[item.productId] = updated;
+      else delete next.hiddenCategories[item.productId];
+    } else if (item.type === 'design') {
+      next.hiddenDesigns = hidden
+        ? [...new Set([...next.hiddenDesigns, item.id])]
+        : next.hiddenDesigns.filter(id => id !== item.id);
+    }
+    return next;
+  }
+
+  function toggleVisibilityItem(item, visibleItems) {
+    const key = visibilityItemKey(item);
+    const selectedKeys = visibilitySelection.has(key) && visibilitySelection.size > 0
+      ? visibilitySelection
+      : new Set([key]);
+    const itemByKey = new Map(visibleItems.map(x => [visibilityItemKey(x), x]));
+    const rules = getVisibilityRules();
+    const makeHidden = !visibilityItemHidden(item, rules);
+    let nextRules = rules;
+    selectedKeys.forEach(selectedKey => {
+      const selectedItem = itemByKey.get(selectedKey);
+      if (selectedItem) nextRules = setItemHiddenInRules(nextRules, selectedItem, makeHidden);
+    });
+    saveVisibilityRules(nextRules);
+  }
+
   // ── Price tiers ──
   async function loadPriceTiers() {
     const { data } = await supabase.from('price_tiers').select('*').order('min_quantity');
@@ -1948,6 +2555,28 @@ useEffect(() => {
     if (data) setOrders(data);
   }
 
+  async function loadCarts() {
+    setLoadingCarts(true);
+    setCartsError('');
+
+    let { data, error } = await supabase.rpc('admin_get_active_carts');
+
+    if (error && error.code === 'PGRST202') {
+      ({ data, error } = await supabase
+        .from('carts')
+        .select('*')
+        .order('updated_at', { ascending: false }));
+    }
+
+    if (error) {
+      setCartsError(`No se pudieron cargar los carritos: ${error.message}`);
+      setCarts([]);
+    } else if (data) {
+      setCarts(data.filter(cart => Array.isArray(cart.items) && cart.items.some(item => Number(item?.qty) > 0)));
+    }
+    setLoadingCarts(false);
+  }
+
   function normalizeOrderIds(idsInput) {
     return idsInput instanceof Set ? [...idsInput] : Array.isArray(idsInput) ? idsInput : [idsInput];
   }
@@ -2047,6 +2676,14 @@ useEffect(() => {
     return Object.entries(byProduct)
       .map(([product, designs]) => `${product} — ${designs.join(', ')}`)
       .join(' | ');
+  }
+
+  function getCartUser(cart) {
+    return users.find(u => u.id === cart.user_id) || null;
+  }
+
+  function getCartTotalItems(cart) {
+    return (Array.isArray(cart.items) ? cart.items : []).reduce((sum, item) => sum + (Number(item?.qty) || 0), 0);
   }
 
   function getOrderPriceWarning(order) {
@@ -2163,13 +2800,150 @@ useEffect(() => {
     setInviteLoading(false);
   }
 
-  async function handleRegenerateLink(userId, email) {
+  async function loadInviteAccessLinks(userId = inviteLinksModal?.id) {
+    if (!userId) return;
+    setInviteLinksLoading(true);
+    setInviteLinksMessage('');
+    try {
+      const res = await fetch(`/api/invite-links?user_id=${encodeURIComponent(userId)}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setInviteAccessLinks(data.links || []);
+      setInviteLinksGlobalDisabled(data.globalDisabled === true);
+    } catch (error) {
+      setInviteLinksMessage(error.message);
+    } finally {
+      setInviteLinksLoading(false);
+    }
+  }
+
+  async function openInviteLinksModal(user) {
+    setInviteLinksModal(user);
+    setInviteLinkDraft({ kind: 'permanent', next_path: '/' });
+    setEditingInviteLinkId(null);
+    setInviteLinkEditDraft({ kind: 'permanent', next_path: '/' });
+    setInviteAccessLinks([]);
+    await loadInviteAccessLinks(user.id);
+  }
+
+  async function createInviteAccessLink() {
+    if (!inviteLinksModal?.email) return;
+    setInviteLinksLoading(true);
+    setInviteLinksMessage('');
+    try {
+      const res = await fetch('/api/invite-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteLinksModal.email,
+          user_id: inviteLinksModal.id,
+          client_name: inviteLinksModal.name || inviteLinksModal.email,
+          kind: inviteLinkDraft.kind,
+          next_path: inviteLinkDraft.next_path,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.link) {
+        setUserInviteLinks(prev => ({ ...prev, [inviteLinksModal.id]: data.link }));
+        await navigator.clipboard?.writeText(data.link).catch(() => {});
+      }
+      await loadInviteAccessLinks(inviteLinksModal.id);
+      setInviteLinkDraft({ kind: inviteLinkDraft.kind, next_path: inviteLinkDraft.next_path });
+      setInviteLinksMessage(data.link ? 'Link creado y copiado.' : 'Link creado.');
+      trackAdminActivity('invite_link_create', { user_id: inviteLinksModal.id, email: inviteLinksModal.email, kind: inviteLinkDraft.kind, next_path: inviteLinkDraft.next_path }, 'users');
+    } catch (error) {
+      setInviteLinksMessage(error.message);
+    } finally {
+      setInviteLinksLoading(false);
+    }
+  }
+
+  async function updateInviteAccessLink(linkId, patch) {
+    setInviteLinksLoading(true);
+    setInviteLinksMessage('');
+    try {
+      const res = await fetch('/api/invite-links', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: linkId, ...patch }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadInviteAccessLinks(inviteLinksModal?.id);
+      setInviteLinksMessage('Link actualizado.');
+      return true;
+    } catch (error) {
+      setInviteLinksMessage(error.message);
+      return false;
+    } finally {
+      setInviteLinksLoading(false);
+    }
+  }
+
+  function startEditInviteAccessLink(link) {
+    setEditingInviteLinkId(link.id);
+    setInviteLinkEditDraft({
+      kind: link.kind === 'permanent' ? 'permanent' : 'single',
+      next_path: link.next_path || '/',
+    });
+    setInviteLinksMessage('');
+  }
+
+  async function saveInviteAccessLinkEdit() {
+    if (!editingInviteLinkId) return;
+    const saved = await updateInviteAccessLink(editingInviteLinkId, {
+      ...inviteLinkEditDraft,
+      client_name: inviteLinksModal?.name || inviteLinksModal?.email || '',
+    });
+    if (saved) {
+      setEditingInviteLinkId(null);
+      setInviteLinkEditDraft({ kind: 'permanent', next_path: '/' });
+    }
+  }
+
+  async function deleteInviteAccessLink(linkId) {
+    setInviteLinksLoading(true);
+    setInviteLinksMessage('');
+    try {
+      const res = await fetch(`/api/invite-links?id=${encodeURIComponent(linkId)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadInviteAccessLinks(inviteLinksModal?.id);
+    } catch (error) {
+      setInviteLinksMessage(error.message);
+    } finally {
+      setInviteLinksLoading(false);
+    }
+  }
+
+  async function toggleInviteLinksGlobalDisabled() {
+    setInviteLinksLoading(true);
+    setInviteLinksMessage('');
+    try {
+      const res = await fetch('/api/invite-links', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', disabled: !inviteLinksGlobalDisabled }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setInviteLinksGlobalDisabled(data.globalDisabled === true);
+      await loadInviteAccessLinks(inviteLinksModal?.id);
+    } catch (error) {
+      setInviteLinksMessage(error.message);
+    } finally {
+      setInviteLinksLoading(false);
+    }
+  }
+
+  async function handleRegenerateLink(userId, email, clientName = '') {
     setRegenLoadingIds(prev => { const n = new Set(prev); n.add(userId); return n; });
     try {
       const res = await fetch('/api/generate-invite-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, user_id: userId, client_name: clientName, kind: 'permanent', next_path: '/' }),
       });
       const data = await res.json();
       if (data.link) setUserInviteLinks(prev => ({ ...prev, [userId]: data.link }));
@@ -2304,14 +3078,111 @@ useEffect(() => {
 
   const hasDupInBatch = (index, name) => name.length > 0 && pendingFiles.some((f, i) => i !== index && f.name.toLowerCase() === name.toLowerCase());
   const canSubmit = selectedProductId && pendingFiles.length > 0 &&
-    pendingFiles.every(f => f.name.trim().length > 0 && !f.nameExists && !f.sizeError && (f.file || f.modelFile)) &&
+    pendingFiles.every(f => f.name.trim().length > 0 && (!f.nameExists || (f.overwriteExisting && f.existingDesignId)) && !f.sizeError && (f.file || f.modelFile)) &&
     !pendingFiles.some((f, i) => hasDupInBatch(i, f.name));
+  const pendingExistingConflicts = pendingFiles.filter(f => f.nameExists && f.existingDesignId);
 
   const s = getAdminStyles(adminDarkMode);
   const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
     : null;
+
+  function renderInvitePathEditor(draft, setDraft, compact = false) {
+    const selection = getInviteCatalogSelection(draft.next_path);
+    const destinationValue = getInviteDestinationValue(draft.next_path);
+    const isCatalogDestination = destinationValue === '/catalogo';
+    const rootProducts = getActiveRootProducts();
+    const hasVariants = isCatalogDestination && selection.root && selection.variants.length > 1;
+    const labelStyle = {display:'flex', flexDirection:'column', gap:4, fontSize:compact ? 10 : 11, fontWeight:compact ? 800 : 700, color:'#7d879f'};
+    const inputStyle = compact ? {...s.input, fontSize:12, padding:'6px 8px'} : s.input;
+
+    const setNextPath = (nextPath) => setDraft(prev => ({ ...prev, next_path: nextPath }));
+
+    return (
+      <>
+        <label style={labelStyle}>
+          Destino rapido
+          <select
+            value={destinationValue}
+            onChange={e => {
+              const value = e.target.value;
+              if (value === 'custom') return;
+              setNextPath(value);
+            }}
+            style={inputStyle}
+          >
+            {INVITE_DESTINATIONS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+            <option value="custom">Personalizado</option>
+          </select>
+        </label>
+
+        {isCatalogDestination && (
+          <>
+            <label style={labelStyle}>
+              Producto
+              <select
+                value={selection.root?.id || ''}
+                onChange={e => setNextPath(e.target.value ? buildInviteCatalogPath(e.target.value) : '/catalogo')}
+                style={inputStyle}
+              >
+                <option value="">Elegir producto</option>
+                {rootProducts.map(product => (
+                  <option key={product.id} value={product.id}>{product.name}</option>
+                ))}
+              </select>
+            </label>
+
+            {hasVariants && (
+              <label style={labelStyle}>
+                Variante
+                <select
+                  value={selection.variant?.id || ''}
+                  onChange={e => {
+                    const nextVariantId = e.target.value;
+                    const nextCategories = getProductCategories(nextVariantId);
+                    const nextCategory = nextCategories.includes(selection.category) ? selection.category : '';
+                    setNextPath(buildInviteCatalogPath(selection.root.id, nextVariantId, nextCategory));
+                  }}
+                  style={inputStyle}
+                >
+                  {selection.variants.map(variant => (
+                    <option key={variant.id} value={variant.id}>{variant.variant_name || 'Base'}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {selection.root && selection.categories.length > 0 && (
+              <label style={labelStyle}>
+                Categoria
+                <select
+                  value={selection.category || ''}
+                  onChange={e => setNextPath(buildInviteCatalogPath(selection.root.id, selection.variant?.id || '', e.target.value))}
+                  style={inputStyle}
+                >
+                  <option value="">Todas</option>
+                  {selection.categories.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
+        )}
+
+        <label style={labelStyle}>
+          URL inicial
+          <input
+            value={draft.next_path}
+            onChange={e => setNextPath(e.target.value)}
+            placeholder="/catalogo?producto=calcos-librerias&variante=base&categoria=infantiles"
+            style={inputStyle}
+          />
+        </label>
+      </>
+    );
+  }
 
   // ── PANTALLAS AUTH ──
   const sessionBar = currentUser ? (
@@ -2502,7 +3373,7 @@ useEffect(() => {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -2516,6 +3387,7 @@ useEffect(() => {
                 {ALL_TABS[id]}
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
                 {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'carts' && carts.length > 0 && <span style={s.orphanBadge}>{carts.length}</span>}
                 {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
                 {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
                 {renderAdminTabPresence(id)}
@@ -2525,7 +3397,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <div style={{...s.content, ...(activeTab === 'products' ? s.contentFull : {})}}>
+      <div style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}}>
 
         {/* == PRODUCTOS == */}
         {activeTab === 'products' && (
@@ -2536,13 +3408,14 @@ useEffect(() => {
                 <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600}}>{products.length} producto{products.length !== 1 ? 's' : ''}</span>
               </div>
               <div style={{...s.productTableWrap, maxHeight: useProductManagementModals ? 'calc(100vh - 112px)' : undefined}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1320 : 1160 }}>
+                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1570 : 1320 }}>
                   <colgroup>
                     <col style={{width:42}} />
                     <col style={{width:200}} />
                     <col style={{width:220}} />
                     {useProductManagementModals && <col style={{width:78}} />}
                     {useProductManagementModals && <col style={{width:72}} />}
+                    {useProductManagementModals && <col style={{width:86}} />}
                     {useProductManagementModals && <col style={{width:64}} />}
                     <col style={{width:70}} />
                     <col style={{width:70}} />
@@ -2554,6 +3427,7 @@ useEffect(() => {
                     <col style={{width:72}} />
                     <col style={{width:72}} />
                     <col style={{width:86}} />
+                    <col style={{width:168}} />
                     <col style={{width:34}} />
                     <col style={{width:34}} />
                   </colgroup>
@@ -2563,7 +3437,8 @@ useEffect(() => {
                       <th style={s.th}>Producto</th>
                       <th style={s.th}>Variante</th>
                       {useProductManagementModals && <th style={s.th}>Categorías</th>}
-                      {useProductManagementModals && <th style={s.th}>Escalas</th>}
+                      {useProductManagementModals && <th style={s.th}>Escalas precios</th>}
+                      {useProductManagementModals && <th style={s.th}>Escalas diseños</th>}
                       {useProductManagementModals && <th style={s.th}>INFO</th>}
                       <th style={s.th}>Cat PC</th>
                       <th style={s.th}>Cat Cel</th>
@@ -2575,6 +3450,7 @@ useEffect(() => {
                       <th style={s.th}>3D</th>
                       <th style={s.th}>Land KB</th>
                       <th style={s.th}>Img</th>
+                      <th style={s.th}>Formato</th>
                       <th style={{...s.th, width: 32}}></th>
                       <th style={{...s.th, width: 32}}></th>
                     </tr>
@@ -2665,6 +3541,24 @@ useEffect(() => {
                                 onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
                               >
                                 Editar
+                              </button>
+                            </td>
+                          )}
+                          {useProductManagementModals && (
+                            <td style={{...s.td, textAlign:'center'}}>
+                              <button
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative'}}
+                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'design_limits', productId: p.id }); }}
+                              >
+                                Editar
+                                {(() => {
+                                  const config = getProductDesignLimitConfig(p);
+                                  const own = getDesignLimitRules()[p.id];
+                                  const count = own?.inheritParent && p.parent_product_id ? '↳' : config.tiers.length;
+                                  return config.tiers.length > 0 ? (
+                                    <span style={{position:'absolute', top:-4, right:-4, minWidth:14, height:14, borderRadius:7, background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, padding:'0 3px'}}>{count}</span>
+                                  ) : null;
+                                })()}
                               </button>
                             </td>
                           )}
@@ -2923,6 +3817,9 @@ useEffect(() => {
                                 />
                               ) : null}
                             </div>
+                          </td>
+                          <td style={s.td}>
+                            {renderDesignFormatSelector(form.design_formats, (format, enabled) => updateProductDesignFormat(p.id, format, enabled))}
                           </td>
                           <td style={{...s.td, textAlign:'center', width: 32}}>
                             {savedProductId === p.id && <span style={{color:'#18a36a', fontWeight:700, fontSize:18}}>✓</span>}
@@ -3251,30 +4148,48 @@ useEffect(() => {
               <h2 style={s.sectionTitle}>Agregar diseños</h2>
               <div style={s.formGroup}>
                 <label style={s.label}>Producto *</label>
+                <input
+                  data-admin-search="true"
+                  style={{...s.input, maxWidth: 320, marginBottom: 8}}
+                  placeholder="Buscar producto..."
+                  value={designUploadProductSearch}
+                  onChange={e => setDesignUploadProductSearch(e.target.value)}
+                />
                 <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
-                  {products.map(p => (
-                    <button key={p.id} onClick={() => { setSelectedProductId(p.id); if (p.id !== selectedProductId) setPendingFiles([]); }} style={{border:'none', borderRadius:7, padding:'6px 14px', fontSize:13, fontWeight:600, cursor:'pointer', background: selectedProductId === p.id ? '#1B2F5E' : '#eef0f6', color: selectedProductId === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
-                      {productDisplayName(p)}
-                    </button>
-                  ))}
+                  {(() => {
+                    const query = designUploadProductSearch.trim().toLowerCase();
+                    const filteredProducts = products.filter(p => {
+                      if (!query) return true;
+                      return `${productDisplayName(p)} ${p.slug || ''}`.toLowerCase().includes(query);
+                    });
+                    if (filteredProducts.length === 0) {
+                      return <div style={{fontSize:12, color:'#9aa3bc', padding:'6px 0'}}>No hay productos para esa busqueda.</div>;
+                    }
+                    return filteredProducts.map(p => (
+                      <button key={p.id} onClick={() => { setSelectedProductId(p.id); if (p.id !== selectedProductId) setPendingFiles([]); }} style={{border:'none', borderRadius:7, padding:'6px 14px', fontSize:13, fontWeight:600, cursor:'pointer', background: selectedProductId === p.id ? '#1B2F5E' : '#eef0f6', color: selectedProductId === p.id ? 'white' : '#5a6380', transition:'background 0.15s, color 0.15s'}}>
+                        {productDisplayName(p)}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </div>
-              {selectedProductId && !selectedProduct?.allow_glb && (
+              {selectedProductId && !hasModelDesignFormat(selectedProduct) && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>Imágenes (máx. {maxSizeKb}kb c/u)</label>
-                  <input type="file" accept="image/*" multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
+                  <label style={s.label}>Archivos ({getDesignAcceptForProduct(selectedProduct) || 'image/*'}) — máx. {maxSizeKb}kb c/u</label>
+                  <input ref={designFileInputRef} type="file" accept={getDesignAcceptForProduct(selectedProduct) || 'image/*'} multiple style={{...s.input, padding: 6}} onChange={handleFileSelect} />
                 </div>
               )}
-              {selectedProductId && selectedProduct?.allow_glb && (
+              {selectedProductId && hasModelDesignFormat(selectedProduct) && (
                 <div style={s.formGroup}>
-                  <label style={s.label}>3MF (máx. {maxSizeKb}kb c/u — máx. 10 archivos por vez)</label>
-                  <input type="file" accept=".glb,.3mf" multiple style={{...s.input, padding: 6}} onChange={async e => {
+                  <label style={s.label}>Archivos 3D ({getDesignAcceptForProduct(selectedProduct)}) — máx. {maxSizeKb}kb c/u — máx. 10 por vez</label>
+                  <input ref={designFileInputRef} type="file" accept={getDesignAcceptForProduct(selectedProduct)} multiple style={{...s.input, padding: 6}} onChange={async e => {
                     const files = Array.from(e.target.files);
                     if (files.length > 10) { alert('Podés subir hasta 10 archivos 3D por vez. Seleccioná menos archivos.'); e.target.value = ''; return; }
                     if (!files.length) return;
                     const newEntries = files.map(file => ({
                       file: null, preview: null, modelPreview: URL.createObjectURL(file), name: file.name.replace(/\.[^.]+$/, ''),
                       category: 'Sin categoría', nameExists: false,
+                      existingDesignId: null, overwriteExisting: false,
                       sizeError: file.size > maxSizeKb * 1024, modelFile: file, fileType: file.name.split('.').pop().toLowerCase(),
                     }));
                     setPendingFiles(prev => {
@@ -3282,10 +4197,13 @@ useEffect(() => {
                       return [...prev, ...newEntries.filter(e => !existingNames.has(e.modelFile.name))];
                     });
                     e.target.value = '';
-                    const { data } = await supabase.from('designs').select('name').eq('active', true).eq('product_id', selectedProductId);
-                    const existing = new Set((data || []).map(d => d.name.toLowerCase()));
+                    const { data } = await supabase.from('designs').select('id, name').eq('active', true).eq('product_id', selectedProductId);
+                    const existing = new Map((data || []).map(d => [d.name.toLowerCase(), d.id]));
                     setPendingFiles(prev => prev.map(entry => ({
-                      ...entry, nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+                      ...entry,
+                      nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+                      existingDesignId: existing.get(entry.name.toLowerCase()) || null,
+                      overwriteExisting: false,
                     })));
                   }} />
                 </div>
@@ -3296,7 +4214,7 @@ useEffect(() => {
                   <div style={s.fileList}>
                     {pendingFiles.map((entry, i) => {
                       const dupInBatch = hasDupInBatch(i, entry.name);
-                      const hasError = entry.nameExists || dupInBatch || entry.sizeError;
+                      const hasError = (entry.nameExists && !entry.overwriteExisting) || dupInBatch || entry.sizeError;
                       return (
                         <div key={i} style={s.fileRow}>
                           {entry.preview
@@ -3310,7 +4228,32 @@ useEffect(() => {
                           }
                           <div style={s.fileFields}>
                             <input style={{...s.input, borderColor: hasError ? '#dc2626' : '#dde1ef'}} value={entry.name} onChange={e => updateEntry(i, 'name', e.target.value)} placeholder="Nombre del diseño" />
-                            {entry.nameExists && <div style={s.errorMsg}>⚠ Ya existe este diseño</div>}
+                            {entry.nameExists && (
+                              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginTop:4}}>
+                                <div style={entry.overwriteExisting ? {fontSize:11, color:'#15803d', fontWeight:700} : s.errorMsg}>
+                                  {entry.overwriteExisting ? '✓ Se sobrescribirá el diseño existente' : '⚠ Ya existe este diseño'}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingOverwrite(i, !entry.overwriteExisting)}
+                                  disabled={!entry.existingDesignId || dupInBatch}
+                                  style={{
+                                    border:'1.5px solid',
+                                    borderColor: entry.overwriteExisting ? '#86efac' : '#fed7aa',
+                                    borderRadius:6,
+                                    padding:'3px 8px',
+                                    background: entry.overwriteExisting ? '#dcfce7' : '#fff7ed',
+                                    color: entry.overwriteExisting ? '#166534' : '#c2410c',
+                                    fontSize:11,
+                                    fontWeight:800,
+                                    cursor: (!entry.existingDesignId || dupInBatch) ? 'not-allowed' : 'pointer',
+                                    opacity: (!entry.existingDesignId || dupInBatch) ? 0.55 : 1,
+                                  }}
+                                >
+                                  {entry.overwriteExisting ? 'No sobrescribir' : 'Sobrescribir'}
+                                </button>
+                              </div>
+                            )}
                             {dupInBatch && <div style={s.errorMsg}>⚠ Nombre duplicado en este lote</div>}
                             {(entry.file || entry.modelFile) && (() => {
                               const f = entry.modelFile || entry.file;
@@ -3330,6 +4273,21 @@ useEffect(() => {
                       );
                     })}
                   </div>
+                  {pendingExistingConflicts.length > 0 && (
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap', marginTop:12, padding:'10px 12px', border:'1.5px solid #fed7aa', borderRadius:8, background:'#fff7ed'}}>
+                      <div style={{fontSize:12, color:'#9a3412', fontWeight:700}}>
+                        {pendingExistingConflicts.length} diseño{pendingExistingConflicts.length !== 1 ? 's' : ''} ya existe{pendingExistingConflicts.length !== 1 ? 'n' : ''} en este producto.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={overwriteAllPendingConflicts}
+                        disabled={uploading}
+                        style={{border:'1.5px solid #fb923c', borderRadius:7, padding:'7px 12px', background:'#ffedd5', color:'#c2410c', fontSize:12, fontWeight:900, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.55 : 1}}
+                      >
+                        Sobrescribir todo
+                      </button>
+                    </div>
+                  )}
                   <button style={{...s.btnPrimary, marginTop: 16, opacity: canSubmit && !uploading ? 1 : 0.5}} disabled={!canSubmit || uploading} onClick={addDesigns}>
                     {uploading ? 'Subiendo...' : `Agregar ${pendingFiles.length} diseño${pendingFiles.length !== 1 ? 's' : ''}`}
                   </button>
@@ -3353,6 +4311,7 @@ useEffect(() => {
               </div>
               <div style={{display:'flex', flexWrap:'wrap', gap:8, marginBottom: 12, alignItems:'center'}}>
                 <input
+                  data-admin-search="true"
                   style={{...s.input, maxWidth: 220}}
                   placeholder="Buscar diseño..."
                   value={designSearch ?? ''}
@@ -3596,6 +4555,7 @@ useEffect(() => {
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
               <input
+                data-admin-search="true"
                 style={{ ...s.input, maxWidth: 220 }}
                 placeholder="Código, nombre o email..."
                 value={orderSearch}
@@ -3765,6 +4725,25 @@ useEffect(() => {
           </div>
         )}
 
+        {/* == CARRITOS == */}
+        {activeTab === 'carts' && (
+          <CartsTab
+            carts={carts}
+            users={users}
+            loading={loadingCarts}
+            error={cartsError}
+            onRefresh={loadCarts}
+            getCartUser={getCartUser}
+            getCartTotalItems={getCartTotalItems}
+            summarizeItems={summarizeItems}
+          />
+        )}
+
+        {/* == BASE DE DATOS == */}
+        {activeTab === 'database' && (
+          <AdminDatabaseSheet supabase={supabase} currentUser={currentUser} />
+        )}
+
         {/* == LOCALIDADES == */}
         {activeTab === 'localities' && (
           <>
@@ -3809,7 +4788,15 @@ useEffect(() => {
         {/* == USUARIOS == */}
         {activeTab === 'users' && (
           <div style={s.card}>
-            <h2 style={s.sectionTitle}>Usuarios registrados ({users.length})</h2>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:14}}>
+              <h2 style={{...s.sectionTitle, marginBottom:0}}>Usuarios registrados ({users.length})</h2>
+              <button
+                onClick={() => openUserProductsModal(null)}
+                style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+              >
+                Usuarios no logueados
+              </button>
+            </div>
 
             {/* Invitar usuario */}
             <div
@@ -3916,6 +4903,7 @@ useEffect(() => {
               }}
             >
               <input
+                data-admin-search="true"
                 style={{...s.input, flex:'1 1 200px', minWidth:160, fontSize:13, padding:'7px 12px'}}
                 placeholder="Buscar por nombre o email..."
                 value={userSearch}
@@ -4084,8 +5072,14 @@ useEffect(() => {
                         >
                           Escalas por producto
                         </button>
+                        <button
+                          onClick={() => openUserProductsModal(u)}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                        >
+                          Productos
+                        </button>
                         <div style={{display:'flex', alignItems:'center', gap:6}}>
-                          <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Mandar email para confirmación de pedido?</span>
+                          <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Email de pedido</span>
                           <div
                             onClick={() => {
                               const newVal = u.send_confirmation_email === false ? true : false;
@@ -4117,13 +5111,13 @@ useEffect(() => {
                         </div>
                         {u.registration_source === 'admin_invite' && (
                           <button
-                            onClick={() => handleRegenerateLink(u.id, u.email)}
-                            title="Generar link de acceso único"
+                            onClick={() => openInviteLinksModal(u)}
+                            title="Configurar links de acceso"
                             style={{border:'1.5px solid #bde0fe', borderRadius:6, padding:'4px 8px', fontSize:12, cursor:'pointer', background:'#f0f8ff', color:'#2D6BE4', display:'flex', alignItems:'center', gap:4, opacity: regenLoadingIds.has(u.id) ? 0.5 : 1}}
                             disabled={regenLoadingIds.has(u.id)}
                           >
                             <LinkIcon/>
-                            <span style={{fontSize:10, fontWeight:600}}>{regenLoadingIds.has(u.id) ? '...' : 'Link'}</span>
+                            <span style={{fontSize:10, fontWeight:600}}>Links</span>
                           </button>
                         )}
 
@@ -4180,6 +5174,150 @@ useEffect(() => {
                 );
               });
             })()}
+          </div>
+        )}
+
+        {inviteLinksModal && (
+          <div
+            style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:420, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}
+            onMouseDown={e => { if (e.target === e.currentTarget) setInviteLinksModal(null); }}
+          >
+            <div style={{width:'100%', maxWidth:920, maxHeight:'86vh', overflow:'hidden', background: adminDarkMode ? '#111b34' : 'white', border:'1.5px solid #dde1ef', borderRadius:14, boxShadow:'0 20px 60px rgba(27,47,94,0.25)', display:'flex', flexDirection:'column'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, padding:'18px 20px', borderBottom: adminDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid #eef2fb'}}>
+                <div>
+                  <div style={{fontSize:18, fontWeight:800, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>Links de acceso</div>
+                  <div style={{fontSize:12, color:'#8b95b3', marginTop:3}}>{inviteLinksModal.name || inviteLinksModal.email} · {inviteLinksModal.email}</div>
+                </div>
+                <button onClick={() => setInviteLinksModal(null)} style={{border:'none', background:adminDarkMode ? 'rgba(255,255,255,0.08)' : '#eef4ff', color:adminDarkMode ? '#e7ecf8' : '#1B2F5E', borderRadius:8, width:34, height:34, cursor:'pointer', fontSize:18, fontWeight:800}}>×</button>
+              </div>
+
+              <div style={{padding:20, overflowY:'auto', display:'flex', flexDirection:'column', gap:16}}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'12px 14px', border:'1.5px solid #ffd5d5', background: inviteLinksGlobalDisabled ? '#fff1f1' : (adminDarkMode ? 'rgba(255,255,255,0.04)' : '#fbfcff'), borderRadius:10}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:800, color: inviteLinksGlobalDisabled ? '#b42318' : (adminDarkMode ? '#e7ecf8' : '#1B2F5E')}}>{inviteLinksGlobalDisabled ? 'Todos los links deshabilitados' : 'Links habilitados'}</div>
+                    <div style={{fontSize:11, color:'#8b95b3', marginTop:2}}>Cuando está deshabilitado, cualquier link responde que el token no es valido.</div>
+                  </div>
+                  <button onClick={toggleInviteLinksGlobalDisabled} disabled={inviteLinksLoading} style={{border:'none', borderRadius:8, padding:'8px 12px', background: inviteLinksGlobalDisabled ? '#16a34a' : '#dc2626', color:'white', fontSize:12, fontWeight:800, cursor:'pointer'}}>
+                    {inviteLinksGlobalDisabled ? 'Habilitar todos' : 'Deshabilitar todos'}
+                  </button>
+                </div>
+
+                <div style={{border:'1.5px solid #dde1ef', borderRadius:10, padding:14, display:'flex', flexDirection:'column', gap:12, background: adminDarkMode ? 'rgba(255,255,255,0.03)' : '#f8faff'}}>
+                  <div style={{fontSize:13, fontWeight:800, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>Crear link</div>
+                  <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10, alignItems:'end'}}>
+                    <label style={{display:'flex', flexDirection:'column', gap:4, fontSize:11, fontWeight:700, color:'#7d879f'}}>
+                      Tipo
+                      <select value={inviteLinkDraft.kind} onChange={e => setInviteLinkDraft(prev => ({...prev, kind:e.target.value}))} style={s.input}>
+                        <option value="permanent">Permanente</option>
+                        <option value="single">Un solo uso</option>
+                      </select>
+                    </label>
+                    {renderInvitePathEditor(inviteLinkDraft, setInviteLinkDraft)}
+                    <button onClick={createInviteAccessLink} disabled={inviteLinksLoading} style={{...s.btnPrimary, height:34, opacity: inviteLinksLoading ? 0.55 : 1}}>
+                      Crear
+                    </button>
+                  </div>
+                </div>
+
+                {inviteLinksMessage && (
+                  <div style={{fontSize:12, fontWeight:700, color: inviteLinksMessage.includes('copiado') || inviteLinksMessage.includes('creado') || inviteLinksMessage.includes('actualizado') ? '#15803d' : '#dc2626'}}>
+                    {inviteLinksMessage}
+                  </div>
+                )}
+
+                <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  {inviteLinksLoading && inviteAccessLinks.length === 0 && (
+                    <div style={{fontSize:12, color:'#8b95b3'}}>Cargando links...</div>
+                  )}
+                  {!inviteLinksLoading && inviteAccessLinks.length === 0 && (
+                    <div style={{fontSize:12, color:'#8b95b3', border:'1px dashed #dde1ef', borderRadius:10, padding:14}}>No hay links creados para este usuario.</div>
+                  )}
+                  {inviteAccessLinks.map(link => {
+                    const isEditingLink = editingInviteLinkId === link.id;
+                    return (
+                      <div key={link.id} style={{border:'1.5px solid #dde1ef', borderRadius:10, padding:12, background: link.disabled ? '#f8fafc' : (adminDarkMode ? 'rgba(255,255,255,0.03)' : 'white'), display:'grid', gridTemplateColumns:'1fr auto', gap:12}}>
+                        <div style={{display:'flex', flexDirection:'column', gap:8, minWidth:0}}>
+                          <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+                            <span style={{fontSize:12, fontWeight:900, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>{link.kind === 'permanent' ? 'Permanente' : 'Un solo uso'}</span>
+                            <span style={{fontSize:11, fontWeight:800, color: link.disabled ? '#b42318' : '#15803d', background: link.disabled ? '#fee2e2' : '#dcfce7', borderRadius:999, padding:'2px 8px'}}>{link.disabled ? 'Inhabilitado' : 'Habilitado'}</span>
+                            {link.used_at && <span style={{fontSize:11, fontWeight:800, color:'#7d879f', background:'#eef2ff', borderRadius:999, padding:'2px 8px'}}>Usado</span>}
+                            {link.usage_count > 0 && <span style={{fontSize:11, color:'#8b95b3'}}>{link.usage_count} usos</span>}
+                          </div>
+
+                          {isEditingLink ? (
+                            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(145px, 1fr))', gap:8, alignItems:'end'}}>
+                              <label style={{display:'flex', flexDirection:'column', gap:4, fontSize:10, fontWeight:800, color:'#7d879f'}}>
+                                Tipo
+                                <select value={inviteLinkEditDraft.kind} onChange={e => setInviteLinkEditDraft(prev => ({...prev, kind:e.target.value}))} style={{...s.input, fontSize:12, padding:'6px 8px'}}>
+                                  <option value="permanent">Permanente</option>
+                                  <option value="single">Un solo uso</option>
+                                </select>
+                              </label>
+                              {renderInvitePathEditor(inviteLinkEditDraft, setInviteLinkEditDraft, true)}
+                            </div>
+                          ) : (
+                            <div style={{display:'flex', flexDirection:'column', gap:5}}>
+                              <div style={{fontSize:12, color: adminDarkMode ? '#d9e2f5' : '#2d3352', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                Inicio: {link.next_path || '/'}
+                              </div>
+                              <div style={{fontSize:10, fontFamily:'monospace', color:'#5f6b89', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                {link.link_url ? link.link_url.replace('https://', '') : 'Link antiguo sin URL recuperable'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{display:'flex', gap:6, alignItems:'flex-start', flexWrap:'wrap', justifyContent:'flex-end'}}>
+                          {isEditingLink ? (
+                            <>
+                              <button
+                                onClick={saveInviteAccessLinkEdit}
+                                disabled={inviteLinksLoading}
+                                style={{border:'1.5px solid #bbf7d0', borderRadius:7, padding:'6px 10px', background:'#dcfce7', color:'#166534', fontSize:12, fontWeight:800, cursor:'pointer'}}
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => { setEditingInviteLinkId(null); setInviteLinkEditDraft({ kind:'permanent', next_path:'/' }); }}
+                                style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', background:'#f8fafc', color:'#5a6380', fontSize:12, fontWeight:800, cursor:'pointer'}}
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => startEditInviteAccessLink(link)}
+                              style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', background:'#f8faff', color:'#1B2F5E', fontSize:12, fontWeight:800, cursor:'pointer'}}
+                            >
+                              Editar
+                            </button>
+                          )}
+                          <button
+                            onClick={() => link.link_url && handleCopyLink(link.id, link.link_url)}
+                            disabled={!link.link_url}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', background:'#eef4ff', color:'#2D6BE4', fontSize:12, fontWeight:800, cursor: link.link_url ? 'pointer' : 'not-allowed', opacity: link.link_url ? 1 : 0.45}}
+                          >
+                            {copiedLinkIds.has(link.id) ? 'Copiado' : 'Copiar'}
+                          </button>
+                          <button
+                            onClick={() => updateInviteAccessLink(link.id, { disabled: !link.disabled })}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', background: link.disabled ? '#dcfce7' : '#fff7ed', color: link.disabled ? '#166534' : '#c2410c', fontSize:12, fontWeight:800, cursor:'pointer'}}
+                          >
+                            {link.disabled ? 'Habilitar' : 'Inhabilitar'}
+                          </button>
+                          <button
+                            onClick={() => deleteInviteAccessLink(link.id)}
+                            style={{border:'1.5px solid #fecaca', borderRadius:7, padding:'6px 10px', background:'#fee2e2', color:'#b42318', fontSize:12, fontWeight:800, cursor:'pointer'}}
+                          >
+                            Borrar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -4404,7 +5542,7 @@ useEffect(() => {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -4512,6 +5650,123 @@ useEffect(() => {
       </div>
 
       <footer style={s.footer}>INKORA® Admin</footer>
+
+      {/* MODAL DE VISIBILIDAD DE PRODUCTOS POR CLIENTE */}
+      {userProductsModal && (() => {
+        const targetName = userProductsModal.type === 'anonymous'
+          ? 'Usuarios no logueados'
+          : (userProductsModal.user.name || userProductsModal.user.email);
+        const targetEmail = userProductsModal.type === 'anonymous' ? 'Reglas globales para visitantes sin sesión' : userProductsModal.user.email;
+        const rules = getVisibilityRules();
+        const counts = visibilityCounts(rules);
+        const visibleItems = getVisibilityItems();
+        const selectedCount = visibilitySelection.size;
+        const tabs = [
+          { id: 'products', label: 'Productos', count: counts.products },
+          { id: 'variants', label: 'Variantes', count: counts.variants },
+          { id: 'categories', label: 'Categorías', count: counts.categories },
+          { id: 'designs', label: 'Diseños', count: counts.designs },
+        ];
+
+        return (
+          <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:310, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setUserProductsModal(null)}>
+            <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'20px 20px 18px', width:'100%', maxWidth:920, height:'min(86vh, 820px)', overflow:'hidden', display:'flex', flexDirection:'column', gap:12}} onClick={e => e.stopPropagation()}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
+                <div>
+                  <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Productos</div>
+                  <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{targetName} · {targetEmail}</div>
+                </div>
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setUserProductsModal(null)}>×</button>
+              </div>
+
+              <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setVisibilityTab(tab.id); setVisibilitySelection(new Set()); visibilityLastSelectedRef.current = null; }}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: visibilityTab === tab.id ? '#1B2F5E' : '#f8faff', color: visibilityTab === tab.id ? 'white' : '#1B2F5E'}}
+                  >
+                    {tab.label}
+                    {tab.count > 0 && <span style={{marginLeft:6, fontSize:10, opacity:0.75}}>{tab.count}</span>}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
+                <input
+                  data-admin-search="true"
+                  style={{...s.input, flex:'1 1 220px', minWidth:160, fontSize:13, padding:'7px 12px'}}
+                  placeholder="Buscar..."
+                  value={visibilitySearch}
+                  onChange={e => setVisibilitySearch(e.target.value)}
+                />
+                {[
+                  ['all', 'Todos'],
+                  ['visible', 'Visibles'],
+                  ['hidden', 'Ocultos'],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setVisibilityFilter(id)}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'7px 11px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: visibilityFilter === id ? '#1B2F5E' : 'white', color: visibilityFilter === id ? 'white' : '#5a6380'}}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {selectedCount > 0 && (
+                  <button
+                    onClick={() => { setVisibilitySelection(new Set()); visibilityLastSelectedRef.current = null; }}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'7px 11px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#fff', color:'#9aa3bc'}}
+                  >
+                    Soltar selección ({selectedCount})
+                  </button>
+                )}
+              </div>
+
+              <div style={{fontSize:11, color:'#9aa3bc', lineHeight:1.35}}>
+                Ctrl suma o quita items, Shift selecciona rangos. El ojo aplica el cambio a toda la selección.
+              </div>
+
+              <div style={{overflowY:'auto', minHeight:0, border:'1.5px solid #dde1ef', borderRadius:8}} onClick={() => { setVisibilitySelection(new Set()); visibilityLastSelectedRef.current = null; }}>
+                <div style={{display:'grid', gridTemplateColumns:'44px minmax(180px, 1fr) minmax(160px, 260px)', background:'#f8faff', borderBottom:'1.5px solid #dde1ef', position:'sticky', top:0, zIndex:1}}>
+                  <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Ver</div>
+                  <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Elemento</div>
+                  <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Contexto</div>
+                </div>
+
+                {visibleItems.length === 0 ? (
+                  <p style={{...s.emptyMsg, padding:16}}>Sin resultados.</p>
+                ) : visibleItems.map(item => {
+                  const key = visibilityItemKey(item);
+                  const selected = visibilitySelection.has(key);
+                  const hidden = visibilityItemHidden(item, rules);
+                  return (
+                    <div
+                      key={key}
+                      onClick={e => { e.stopPropagation(); selectVisibilityItem(e, item, visibleItems); }}
+                      style={{display:'grid', gridTemplateColumns:'44px minmax(180px, 1fr) minmax(160px, 260px)', alignItems:'center', borderBottom:'1px solid #f0f2f8', background:selected ? '#eef4ff' : hidden ? '#fbfcff' : 'white', cursor:'pointer'}}
+                    >
+                      <div style={{padding:'7px 8px'}}>
+                        <button
+                          title={hidden ? 'Oculto' : 'Visible'}
+                          onClick={e => { e.stopPropagation(); toggleVisibilityItem(item, visibleItems); }}
+                          style={{...s.iconBtn, width:30, height:30, background:'transparent'}}
+                        >
+                          {hidden ? <EyeOff /> : <EyeOpen />}
+                        </button>
+                      </div>
+                      <div style={{padding:'9px 10px', minWidth:0}}>
+                        <div style={{fontSize:13, fontWeight:800, color:hidden ? '#9aa3bc' : '#2d3352', textDecoration:hidden ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.title}</div>
+                      </div>
+                      <div style={{padding:'9px 10px', fontSize:12, color:'#5a6380', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.meta}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL DE ESCALAS POR CLIENTE */}
       {userScaleModal && (
@@ -4791,7 +6046,7 @@ useEffect(() => {
           <div
             ref={productManageModalRef}
             tabIndex={-1}
-            style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' ? 760 : 560, height:'min(82vh, 760px)', overflow:'hidden', overscrollBehavior:'contain', display:'flex', flexDirection:'column', gap:14, outline:'none'}}
+            style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth: productManageModal.type === 'tiers' || productManageModal.type === 'design_limits' ? 760 : 560, height:'min(82vh, 760px)', overflow:'hidden', overscrollBehavior:'contain', display:'flex', flexDirection:'column', gap:14, outline:'none'}}
             onClick={e => e.stopPropagation()}
             onKeyDown={e => {
               if (e.key === 'Escape') {
@@ -4806,7 +6061,7 @@ useEffect(() => {
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
               <div>
                 <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>
-                  {productManageModal.type === 'categories' ? 'Categorías' : 'Escalas de precio'}
+                  {productManageModal.type === 'categories' ? 'Categorías' : productManageModal.type === 'design_limits' ? 'Escalas de diseños' : 'Escalas de precio'}
                 </div>
                 <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{modalProduct.name}</div>
               </div>
@@ -4893,6 +6148,104 @@ useEffect(() => {
                       onKeyDown={e => { if (e.key === 'Enter') addProductCategory(modalProduct.id, newCat); }}
                     />
                     <button style={{...s.editBtn, whiteSpace:'nowrap'}} onClick={() => addProductCategory(modalProduct.id, newCat)}>+ Agregar</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {productManageModal.type === 'design_limits' && (() => {
+              const rules = getDesignLimitRules();
+              const hasOwnConfig = Object.prototype.hasOwnProperty.call(rules, modalProduct.id);
+              const ownConfig = rules[modalProduct.id] || { inheritParent: false, tiers: [] };
+              const effective = getProductDesignLimitConfig(modalProduct);
+              const isVariant = !!modalProduct.parent_product_id;
+              const parent = isVariant ? products.find(p => p.id === modalProduct.parent_product_id) : null;
+              const draft = newDesignLimitTiers[modalProduct.id] || { min_quantity: '', max_designs: '' };
+              const visibleTiers = ownConfig.inheritParent && parent
+                ? effective.tiers
+                : (hasOwnConfig ? (ownConfig.tiers || []) : (effective.tiers || []));
+
+              return (
+                <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  {isVariant && (
+                    <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: ownConfig.inheritParent ? '#eef4ff' : '#f8faff', border:`1.5px solid ${ownConfig.inheritParent ? '#2D6BE4' : '#dde1ef'}`, borderRadius:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12, color:'#2d3352', fontWeight:700}}>Heredar escala del producto padre</div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>{parent ? productDisplayName(parent) : 'Producto padre no encontrado'}</div>
+                      </div>
+                      <button
+                        onClick={() => toggleDesignLimitInheritance(modalProduct.id)}
+                        style={{border:`1.5px solid ${ownConfig.inheritParent ? '#2D6BE4' : '#dde1ef'}`, borderRadius:20, padding:'4px 14px', fontSize:12, fontWeight:700, cursor:'pointer', background: ownConfig.inheritParent ? '#2D6BE4' : 'white', color: ownConfig.inheritParent ? 'white' : '#9aa3bc', fontFamily:'Barlow, sans-serif'}}
+                      >
+                        {ownConfig.inheritParent ? 'Activado' : 'Desactivado'}
+                      </button>
+                    </div>
+                  )}
+                  {ownConfig.inheritParent && parent && (
+                    <div style={{fontSize:12, color:'#9aa3bc', padding:'0 2px'}}>Las escalas propias quedan guardadas pero inactivas. Se usan las del producto padre.</div>
+                  )}
+
+                  <div style={{opacity: ownConfig.inheritParent ? 0.45 : 1, pointerEvents: ownConfig.inheritParent ? 'none' : 'auto'}}>
+                    <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
+                      <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', background:'#f8faff', borderBottom:'1.5px solid #dde1ef'}}>
+                        <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Unidades desde</div>
+                        <div style={{padding:'8px 10px', fontSize:10, fontWeight:800, color:'#5a6380', textTransform:'uppercase'}}>Máx. diseños</div>
+                        <div />
+                      </div>
+                      {visibleTiers.length === 0 && (
+                        <p style={{...s.emptyMsg, padding:'12px 14px', fontSize:12}}>Sin límite de diseños para este producto.</p>
+                      )}
+                      {visibleTiers.map((tier, i) => (
+                        <div key={`${tier.min_quantity}-${i}`} style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 36px', alignItems:'center', borderBottom:'1px solid #f0f2f8'}}>
+                          <div style={{padding:'6px 8px'}}>
+                            <input
+                              style={{...s.tblInput, width:'100%'}}
+                              type="number"
+                              min="1"
+                              value={tier.min_quantity}
+                              onChange={e => updateDesignLimitTier(modalProduct.id, i, 'min_quantity', e.target.value)}
+                            />
+                          </div>
+                          <div style={{padding:'6px 8px'}}>
+                            <input
+                              style={{...s.tblInput, width:'100%'}}
+                              type="number"
+                              min="1"
+                              value={tier.max_designs}
+                              onChange={e => updateDesignLimitTier(modalProduct.id, i, 'max_designs', e.target.value)}
+                            />
+                          </div>
+                          <div style={{padding:'6px 8px', textAlign:'center'}}><TrashBtn onClick={() => deleteDesignLimitTier(modalProduct.id, i)} /></div>
+                        </div>
+                      ))}
+                      <div style={{display:'grid', gridTemplateColumns:'minmax(120px, 1fr) minmax(120px, 1fr) 86px', alignItems:'center', background:'#fbfcff'}}>
+                        <div style={{padding:'6px 8px'}}>
+                          <input
+                            style={{...s.tblInput, width:'100%'}}
+                            type="number"
+                            min="1"
+                            placeholder="Ej. 50"
+                            value={draft.min_quantity}
+                            onChange={e => setNewDesignLimitTiers(prev => ({...prev, [modalProduct.id]: {...draft, min_quantity: e.target.value}}))}
+                            onKeyDown={e => { if (e.key === 'Enter') addDesignLimitTier(modalProduct.id); }}
+                          />
+                        </div>
+                        <div style={{padding:'6px 8px'}}>
+                          <input
+                            style={{...s.tblInput, width:'100%'}}
+                            type="number"
+                            min="1"
+                            placeholder="Ej. 30"
+                            value={draft.max_designs}
+                            onChange={e => setNewDesignLimitTiers(prev => ({...prev, [modalProduct.id]: {...draft, max_designs: e.target.value}}))}
+                            onKeyDown={e => { if (e.key === 'Enter') addDesignLimitTier(modalProduct.id); }}
+                          />
+                        </div>
+                        <div style={{padding:'6px 8px'}}>
+                          <button style={{...s.editBtn, width:'100%'}} onClick={() => addDesignLimitTier(modalProduct.id)}>Agregar</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -5197,6 +6550,164 @@ useEffect(() => {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCartTotalItems, summarizeItems }) {
+  const activeCarts = [...(carts || [])].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  const totalUnits = activeCarts.reduce((sum, cart) => sum + getCartTotalItems(cart), 0);
+  const totalDesigns = activeCarts.reduce((sum, cart) => sum + (Array.isArray(cart.items) ? cart.items.length : 0), 0);
+  const loggedCarts = activeCarts.filter(cart => cart.user_id).length;
+  const anonymousCarts = activeCarts.length - loggedCarts;
+  const shortVisitorId = (value) => String(value || '').replace(/-/g, '').slice(-6).toUpperCase() || 'NUEVO';
+  const getCartTotalAmount = (items) => (Array.isArray(items) ? items : []).reduce((sum, item) => {
+    const unit = Number(item?.pricePerUnit ?? item?.price_per_unit ?? item?.price ?? 0);
+    return sum + unit * (Number(item?.qty) || 0);
+  }, 0);
+  const groupedUnits = (items) => Object.entries((Array.isArray(items) ? items : []).reduce((acc, item) => {
+    const product = item?.productName || item?.product_name || 'Sin producto';
+    acc[product] = (acc[product] || 0) + (Number(item?.qty) || 0);
+    return acc;
+  }, {}));
+  const formatDate = (value) => value
+    ? new Date(value).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+    : '-';
+  const minutesAgo = (value) => {
+    if (!value) return '';
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+    if (minutes < 1) return 'recién';
+    if (minutes === 1) return 'hace 1 min';
+    if (minutes < 60) return `hace ${minutes} min`;
+    const hours = Math.round(minutes / 60);
+    return hours === 1 ? 'hace 1 h' : `hace ${hours} h`;
+  };
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:14}}>
+      <div style={styles.card}>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, flexWrap:'wrap'}}>
+          <div>
+            <h2 style={{...styles.sectionTitle, marginBottom:6}}>Carritos activos ({activeCarts.length})</h2>
+            <p style={{margin:0, color:'#5a6380', fontSize:13, lineHeight:1.45}}>
+              Clientes logueados y visitantes con carritos no confirmados. Se actualiza en tiempo real mientras navegan.
+            </p>
+          </div>
+          <button style={{...styles.editBtn, padding:'8px 14px'}} onClick={onRefresh} disabled={loading}>
+            {loading ? 'Actualizando...' : 'Actualizar'}
+          </button>
+        </div>
+
+        <div style={{marginTop:14, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10}}>
+          {[
+            ['Carritos', activeCarts.length],
+            ['Diseños', totalDesigns],
+            ['Unidades', totalUnits],
+            ['Logueados', loggedCarts],
+            ['Visitantes', anonymousCarts],
+          ].map(([label, value]) => (
+            <div key={label} style={{background:'#f7f8fc', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px'}}>
+              <div style={{fontSize:10, color:'#9aa3bc', fontWeight:800, textTransform:'uppercase', letterSpacing:0.6}}>{label}</div>
+              <div style={{fontSize:22, color:'#1B2F5E', fontWeight:900, marginTop:2}}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={styles.card}>
+        {error ? (
+          <p style={{...styles.emptyMsg, color:'#b91c1c'}}>{error}</p>
+        ) : loading && activeCarts.length === 0 ? (
+          <p style={styles.emptyMsg}>Cargando carritos...</p>
+        ) : activeCarts.length === 0 ? (
+          <p style={styles.emptyMsg}>No hay clientes con carrito en este momento.</p>
+        ) : (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:14, alignItems:'start'}}>
+            {activeCarts.map(cart => {
+              const user = getCartUser(cart);
+              const isAnonymous = !cart.user_id;
+              const items = Array.isArray(cart.items) ? cart.items.filter(item => Number(item?.qty) > 0) : [];
+              const units = getCartTotalItems(cart);
+              const amount = getCartTotalAmount(items);
+              const visitorId = shortVisitorId(cart.session_id || cart.id);
+              const title = isAnonymous ? `Visitante #${visitorId}` : (user?.name || user?.email || cart.user_id || 'Cliente');
+              const subtitle = isAnonymous
+                ? 'Usuario no logueado'
+                : (user?.email && user?.name ? user.email : cart.user_id);
+
+              return (
+                <div key={cart.id || cart.user_id || cart.session_id} style={{height:'calc(100vh - 318px)', minHeight:520, maxHeight:720, border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', background:'white', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.08)'}}>
+                  <div style={{background:'#1B2F5E', color:'white', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexShrink:0}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{display:'flex', alignItems:'center', gap:7, minWidth:0}}>
+                        <span style={{fontWeight:800, fontSize:15, letterSpacing:0.3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{title}</span>
+                        <span style={{background:isAnonymous ? 'rgba(45,107,228,0.35)' : 'rgba(24,163,106,0.22)', color:'white', border:'1px solid rgba(255,255,255,0.22)', borderRadius:999, padding:'2px 7px', fontSize:10, fontWeight:900, flexShrink:0}}>
+                          {isAnonymous ? 'Visitante' : 'Cliente'}
+                        </span>
+                      </div>
+                      <div style={{fontSize:11, color:'rgba(255,255,255,0.62)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{subtitle || 'Sin email'}</div>
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
+                      <span style={{background:'#2D6BE4', color:'white', fontSize:11, fontWeight:800, padding:'2px 7px', borderRadius:10}}>{items.length} diseños</span>
+                    </div>
+                  </div>
+
+                  <div style={{padding:'8px 12px', background:'#f8faff', borderBottom:'1px solid #eef0f6', flexShrink:0}}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+                      <span style={{fontSize:11, color:'#5a6380', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={summarizeItems(items)}>
+                        {summarizeItems(items)}
+                      </span>
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginTop:5}}>
+                      <span style={{fontSize:11, color:'#9aa3bc'}}>{minutesAgo(cart.updated_at)}</span>
+                      <span style={{fontSize:10, color:'#9aa3bc'}}>{formatDate(cart.updated_at)}</span>
+                    </div>
+                  </div>
+
+                  <div style={{padding:'10px 12px', flex:1, overflowY:'auto', minHeight:0, background:'white'}}>
+                    {items.map(item => (
+                      <div key={item.id || item.design_id || item.name} style={{display:'flex', alignItems:'center', gap:7, padding:7, background:'#f7f8fc', borderRadius:8, marginBottom:6, minWidth:0}}>
+                        {item.image_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.image_url} alt="" style={{width:36, height:36, objectFit:'cover', borderRadius:6, border:'1px solid #dde1ef', flexShrink:0}} />
+                        )}
+                        <div style={{minWidth:0, flex:1}}>
+                          <div style={{fontSize:12, color:'#2d3352', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.name || item.designName || 'Diseño'}</div>
+                          <div style={{fontSize:9, color:'#9aa3bc', fontWeight:800, textTransform:'uppercase', letterSpacing:0.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.productName || item.product_name || 'Sin producto'}</div>
+                          {Number(item?.pricePerUnit ?? item?.price_per_unit ?? item?.price ?? 0) > 0 && (
+                            <div style={{fontSize:10, color:'#2D6BE4', fontWeight:700}}>c/u ${Number(item.pricePerUnit ?? item.price_per_unit ?? item.price).toLocaleString('es-AR')}</div>
+                          )}
+                        </div>
+                        <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0}}>
+                          <span style={{fontSize:11, fontWeight:800, color:'#1B2F5E', background:'#e8eef9', borderRadius:6, padding:'2px 7px'}}>x{item.qty}</span>
+                          {Number(item?.pricePerUnit ?? item?.price_per_unit ?? item?.price ?? 0) > 0 && (
+                            <span style={{fontSize:11, color:'#5a6380'}}>${(Number(item.pricePerUnit ?? item.price_per_unit ?? item.price) * (Number(item.qty) || 0)).toLocaleString('es-AR')}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{padding:'10px 12px', borderTop:'1.5px solid #eef0f6', flexShrink:0}}>
+                    <div style={{display:'flex', flexDirection:'column', gap:4, marginBottom:8}}>
+                      {groupedUnits(items).map(([product, qty]) => (
+                        <div key={product} style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:11, padding:'4px 8px', borderRadius:6, background:'#f0fdf4', border:'1px solid #bbf7d0'}}>
+                          <span style={{color:'#15803d', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{product}</span>
+                          <span style={{color:'#15803d', fontWeight:900, marginLeft:8}}>{qty}u.</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', fontWeight:800, color:'#1B2F5E', fontSize:15}}>
+                      <span>Total</span>
+                      <span>{amount > 0 ? `$${amount.toLocaleString('es-AR')}` : `${units}u.`}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -6002,7 +7513,7 @@ function ActivityHistoryLegacy({ supabase }) {
         {[['all', 'Todos'], ['known', 'Solo logueados'], ['anonymous', 'Solo anónimos']].map(([id, label]) => (
           <button key={id} onClick={() => setIdentityFilter(id)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 12px', background: identityFilter === id ? '#1B2F5E' : 'white', color: identityFilter === id ? 'white' : '#5a6380', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
         ))}
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesión..." style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, minWidth: 220 }} />
+        <input data-admin-search="true" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesión..." style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, minWidth: 220 }} />
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12 }}>
           <option value="all">Todos los eventos</option>
           {eventTypes.map(t => <option key={t} value={t}>{ACTIVITY_EVENT_CONFIG[t]?.label || t}</option>)}
@@ -6366,7 +7877,7 @@ function ActivityHistory({ supabase }) {
           {[['all', 'Todos'], ['known', 'Logueados'], ['anonymous', 'Anonimos']].map(([id, label]) => (
             <button key={id} onClick={() => setIdentityFilter(id)} style={{ ...compactInput, background: identityFilter === id ? '#1B2F5E' : 'white', color: identityFilter === id ? 'white' : '#5a6380', fontWeight: 700, cursor: 'pointer' }}>{label}</button>
           ))}
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesion..." style={{ ...compactInput, minWidth: 220 }} />
+          <input data-admin-search="true" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar email, nombre o sesion..." style={{ ...compactInput, minWidth: 220 }} />
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={compactInput}>
             <option value="all">Todos los eventos</option>
             {eventTypes.map(t => <option key={t} value={t}>{ACTIVITY_EVENT_CONFIG[t]?.label || t}</option>)}

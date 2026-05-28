@@ -1,7 +1,9 @@
 import { Barlow } from 'next/font/google';
 import './globals.css';
+import '@univerjs/preset-sheets-core/lib/index.css';
 import { CartProvider } from '@/contexts/CartContext';
 import TrackBootstrap from '@/components/TrackBootstrap';
+import AuthHashHandler from '@/components/AuthHashHandler';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -31,6 +33,7 @@ export default function RootLayout({ children }) {
     <html lang="es" className={barlow.className}>
       <body>
         <CartProvider>
+          <AuthHashHandler />
           <TrackBootstrap />
           {children}
         </CartProvider>

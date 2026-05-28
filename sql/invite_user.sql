@@ -56,7 +56,7 @@ AS $$
     p.locality_id,
     l.name AS locality_name,
     p.seller_id,
-    COALESCE(p.send_confirmation_email, true) AS send_confirmation_email,
+    COALESCE(p.send_confirmation_email, false) AS send_confirmation_email,
     p.phone,
     p.created_at,
     p.admin_set_password,

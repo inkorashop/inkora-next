@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
@@ -8,6 +8,18 @@ import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
 import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
+import {
+  filterCategoriesForVisibility,
+  filterDesignsForVisibility,
+  filterProductsForVisibility,
+  parseVisibilityRules,
+  userVisibilityKey,
+} from '@/lib/visibility-rules';
+import {
+  DESIGN_LIMITS_SETTING_KEY,
+  getDesignLimitState,
+  parseDesignLimitRules,
+} from '@/lib/design-limits';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -16,6 +28,7 @@ const SearchIconWhite = () => (
   </svg>
 );
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
+const MIN_DESIGN_QTY = 1;
 
 function generateCode() {
   const ts = Date.now().toString(36).toUpperCase().slice(-4);
@@ -34,7 +47,20 @@ function useWindowWidth() {
 }
 
 function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  return String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function productUrlSlug(product) {
+  return toSlug(product?.name);
+}
+
+function variantUrlSlug(product) {
+  return toSlug(product?.variant_name || 'base');
+}
+
+function matchesUrlSlug(value, slug) {
+  if (!slug) return false;
+  return String(value || '').trim() === slug || toSlug(value) === slug;
 }
 
 function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
@@ -55,7 +81,6 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
   const [cachedUrl, setCachedUrl] = useState(null);
-  const displayMode = modelConfig?.display_mode || 'hover';
 
   useEffect(() => {
     const el = ref.current;
@@ -85,7 +110,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
       .catch(() => {});
   }, [visible, url]);
 
-  const showModel = forceActive || (displayMode === 'hover' ? isHovered : visible);
+  const showModel = forceActive || isHovered;
   const modelUrl = cachedUrl || url;
 
   return (
@@ -123,28 +148,93 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [stickySearchVisible, setStickySearchVisible] = useState(false);
   const [cartPanelOpen, setCartPanelOpen] = useState(false);
+  const pendingCategorySlugRef = useRef(null);
   const checkoutOpenedAtRef = useRef(null);
   const inlineSearchRef = useRef(null);
   const [qtyAnim, setQtyAnim] = useState({});
   const [cardPulse, setCardPulse] = useState({});
-  const [cardHover, setCardHover] = useState({});
+  const [hoveredDesignId, setHoveredDesignId] = useState(null);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [priceTiers, setPriceTiers] = useState([]);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState({});
+  const [visibilityRules, setVisibilityRules] = useState(parseVisibilityRules(null));
+  const [designLimitRules, setDesignLimitRules] = useState({});
+  const [designLimitNotice, setDesignLimitNotice] = useState(null);
+  const [designLimitNoticeClosing, setDesignLimitNoticeClosing] = useState(false);
+  const [designLimitNoticeEntering, setDesignLimitNoticeEntering] = useState(false);
+  const [designLimitNoticeBumping, setDesignLimitNoticeBumping] = useState(false);
+  const [blockedDesignId, setBlockedDesignId] = useState(null);
+  const [qtyDrafts, setQtyDrafts] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [savingCategory, setSavingCategory] = useState(false);
   const [infoTagsPopup, setInfoTagsPopup] = useState(null); // { designId, x, y, tags }
   const footerRef = useRef(null);
+  const scaleBoxRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const designLimitCloseTimerRef = useRef(null);
+  const designLimitEnterTimerRef = useRef(null);
+  const designLimitBumpTimerRef = useRef(null);
   const [cartBottom, setCartBottom] = useState(8);
+  const [desktopReservedRight, setDesktopReservedRight] = useState(420);
 
   const { cart, cartItems, totalItems, addToCart: addToCartCtx, changeQty: changeQtyCtx, removeFromCart, clearCart, setCartItem } = useCart();
 
   const width = useWindowWidth();
   const isMobile = width < 768;
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(designLimitCloseTimerRef.current);
+      clearTimeout(designLimitEnterTimerRef.current);
+      clearTimeout(designLimitBumpTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isMobile) return;
+
+    let frame = 0;
+    const measureReservedRight = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const rects = [scaleBoxRef.current, sidebarRef.current]
+          .map(el => el?.getBoundingClientRect())
+          .filter(rect => rect && rect.width > 0 && rect.left < window.innerWidth);
+
+        if (rects.length === 0) {
+          setDesktopReservedRight(sidebarCollapsed ? 112 : 420);
+          return;
+        }
+
+        const leftEdge = Math.min(...rects.map(rect => rect.left));
+        const measuredReserve = Math.ceil(window.innerWidth - leftEdge + 40);
+        const minReserve = sidebarCollapsed ? 112 : 420;
+        const nextReserve = Math.max(minReserve, measuredReserve);
+
+        setDesktopReservedRight(prev => (Math.abs(prev - nextReserve) > 1 ? nextReserve : prev));
+      });
+    };
+
+    measureReservedRight();
+    window.addEventListener('resize', measureReservedRight);
+
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(measureReservedRight)
+      : null;
+    [scaleBoxRef.current, sidebarRef.current].forEach(el => {
+      if (el && observer) observer.observe(el);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', measureReservedRight);
+      if (observer) observer.disconnect();
+    };
+  }, [isMobile, sidebarCollapsed, headerVisible, cartBottom, activeProductId, priceTiers.length, cartItems.length]);
 
   const getRootProductId = (product) => product?.parent_product_id || product?.id;
   const productGroups = useMemo(() => {
@@ -159,13 +249,24 @@ export default function Home() {
   const activeVariants = activeGroup?.variants || [];
   const designs = useMemo(() => designsByProduct[activeProductId] ?? [], [designsByProduct, activeProductId]);
 
+  function buildCatalogUrl(product, category = filter) {
+    if (!product) return '/catalogo';
+    const group = productGroups.find(item => item.variants.some(variant => variant.id === product.id));
+    const root = group?.root || product;
+    const variants = group?.variants || [product];
+    const params = new URLSearchParams();
+    params.set('producto', productUrlSlug(root));
+    if (variants.length > 1) params.set('variante', variantUrlSlug(product));
+    if (category && category !== 'Todos') params.set('categoria', toSlug(category));
+    return `/catalogo?${params.toString()}`;
+  }
+
   useEffect(() => {
     track('page_view', { page_title: 'Catálogo' });
   }, [track]);
 
   useEffect(() => {
     document.body.style.paddingBottom = '1px';
-    loadProducts();
 
     const isIframe = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
@@ -177,7 +278,10 @@ export default function Home() {
           loadProfile(u.id);
           loadAdminStatus(u.email);
         }
+        loadVisibilityRulesForUser(u?.id || null);
       });
+    } else {
+      loadVisibilityRulesForUser(null);
     }
 
     const { data: { subscription } } = isIframe
@@ -193,6 +297,7 @@ export default function Home() {
             setPriceTiers([]);
             setIsAdmin(false);
           }
+          loadVisibilityRulesForUser(u?.id || null);
         });
 
     supabase.from('settings').select('*')
@@ -201,6 +306,7 @@ export default function Home() {
           const map = {};
           data.forEach(s => { map[s.key] = s.value; });
           setUiSettings(map);
+          setDesignLimitRules(parseDesignLimitRules(map[DESIGN_LIMITS_SETTING_KEY]));
           // Sincronizar google_login_hint a localStorage para que lib/auth.js lo lea
           const hintEnabled = map['google_login_hint'] === 'true';
           localStorage.setItem('inkora_google_hint_enabled', hintEnabled ? 'true' : 'false');
@@ -660,8 +766,7 @@ export default function Home() {
       const product = nextProduct;
       if (product) {
         track('product_view', { product_id: product.id, product_name: product.name, variant_name: product.variant_name || null });
-        const slug = toSlug(product.name);
-        window.history.replaceState(null, '', '/catalogo?producto=' + slug);
+        window.history.replaceState(null, '', buildCatalogUrl(product, 'Todos'));
       }
       requestAnimationFrame(() => requestAnimationFrame(() => {
         setGridTransition('opacity 0.2s ease');
@@ -818,21 +923,49 @@ export default function Home() {
     return () => observer.disconnect();
   }, [isMobile]);
 
-  async function loadProducts() {
+  async function loadVisibilityRulesForUser(userId) {
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', userVisibilityKey(userId))
+      .single();
+    const rules = parseVisibilityRules(data?.value);
+    setVisibilityRules(rules);
+    loadProducts(rules);
+  }
+
+  async function loadProducts(rulesOverride = visibilityRules) {
     const { data } = await supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at');
     if (data && data.length > 0) {
-      setProducts(data);
+      const visibleProducts = filterProductsForVisibility(data, rulesOverride);
+      setProducts(visibleProducts);
       const params = new URLSearchParams(window.location.search);
-      const slug = params.get('producto');
-      const match = slug ? data.find(p => toSlug(p.name) === slug) : null;
-      const rootId = match ? getRootProductId(match) : getRootProductId(data[0]);
-      const firstVariant = data.find(p => getRootProductId(p) === rootId) || match || data[0];
-      setActiveProductId(firstVariant.id);
-      loadAllDesigns(data);
+      const productSlug = params.get('producto');
+      const variantSlug = params.get('variante');
+      const categorySlug = params.get('categoria');
+      const match = productSlug
+        ? visibleProducts.find(p => matchesUrlSlug(p.name, productSlug) || matchesUrlSlug(p.slug, productSlug))
+        : null;
+      const rootId = match ? getRootProductId(match) : getRootProductId(visibleProducts[0]);
+      const variants = visibleProducts
+        .filter(p => getRootProductId(p) === rootId)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      const variantMatch = variantSlug
+        ? variants.find(p => matchesUrlSlug(p.variant_name || 'base', variantSlug) || matchesUrlSlug(p.slug, variantSlug))
+        : null;
+      const firstVariant = variantMatch || (match?.parent_product_id ? match : null) || variants[0] || visibleProducts[0];
+      pendingCategorySlugRef.current = categorySlug || null;
+      setFilter('Todos');
+      setActiveProductId(firstVariant?.id || null);
+      loadAllDesigns(visibleProducts, rulesOverride);
+    } else {
+      setProducts([]);
+      setDesignsByProduct({});
+      setActiveProductId(null);
     }
   }
 
-  async function loadAllDesigns(productList) {
+  async function loadAllDesigns(productList, rulesOverride = visibilityRules) {
     const results = await Promise.all(
       productList.map(p =>
         supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order', { nullsFirst: false }).order('created_at').limit(10000)
@@ -840,7 +973,7 @@ export default function Home() {
     );
     const map = {};
     productList.forEach((p, i) => {
-      if (results[i].data) map[p.id] = results[i].data;
+      if (results[i].data) map[p.id] = filterDesignsForVisibility(results[i].data, rulesOverride);
     });
     setDesignsByProduct(map);
   }
@@ -967,10 +1100,38 @@ export default function Home() {
   }, [searchQuery, fuse, designs]);
 
   
-  const productCats = Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
-    ? activeProduct.categories
-    : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))];
-  const categories = productCats.length >= 1 ? ['Todos', ...productCats] : [];
+  const categories = useMemo(() => {
+    const rawProductCats = Array.isArray(activeProduct?.categories) && activeProduct.categories.length > 0
+      ? activeProduct.categories
+      : [...new Set(designs.map(d => d.category).filter(c => c && c !== 'Sin categoria'))];
+    const productCats = filterCategoriesForVisibility(activeProduct, rawProductCats, visibilityRules);
+    return productCats.length >= 1 ? ['Todos', ...productCats] : [];
+  }, [activeProduct, designs, visibilityRules]);
+  useEffect(() => {
+    const pendingCategory = pendingCategorySlugRef.current;
+    if (pendingCategory && categories.length > 0) {
+      const matchedCategory = categories.find(cat => cat !== 'Todos' && matchesUrlSlug(cat, pendingCategory));
+      pendingCategorySlugRef.current = null;
+      if (matchedCategory) {
+        setFilter(matchedCategory);
+        return;
+      }
+    }
+    if (filter !== 'Todos' && !categories.includes(filter)) setFilter('Todos');
+  }, [categories, filter]);
+  useEffect(() => {
+    if (!activeProduct || typeof window === 'undefined') return;
+    const group = productGroups.find(item => item.variants.some(variant => variant.id === activeProduct.id));
+    const root = group?.root || activeProduct;
+    const variants = group?.variants || [activeProduct];
+    const params = new URLSearchParams();
+    params.set('producto', productUrlSlug(root));
+    if (variants.length > 1) params.set('variante', variantUrlSlug(activeProduct));
+    if (filter && filter !== 'Todos') params.set('categoria', toSlug(filter));
+    const nextUrl = `/catalogo?${params.toString()}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== nextUrl) window.history.replaceState(null, '', nextUrl);
+  }, [activeProduct, filter, productGroups]);
   const filtered = searchQuery.trim()
     ? (filter === 'Todos' ? searchResults : searchResults.filter(d => d.category === filter && d.category !== 'Sin categoria'))
     : (filter === 'Todos' ? designs : designs.filter(d => {
@@ -1003,6 +1164,96 @@ export default function Home() {
     acc[item.product_id] = (acc[item.product_id] || 0) + item.qty;
     return acc;
   }, {});
+
+  const getProductDesignLimitState = useCallback((productId, nextItems = cartItems) => {
+    return getDesignLimitState({
+      productId,
+      products,
+      rules: designLimitRules,
+      cartItems,
+      nextCartItems: nextItems,
+    });
+  }, [cartItems, designLimitRules, products]);
+
+  function showDesignLimitFeedback(design, blockedState) {
+    const currentState = getProductDesignLimitState(design.product_id, cartItems) || blockedState;
+    const shouldBumpNotice = !!designLimitNotice && !designLimitNoticeClosing;
+    setDesignLimitNoticeClosing(false);
+    setBlockedDesignId(design.id);
+    setDesignLimitNotice({
+      productId: currentState.product?.id || design.product_id,
+      productName: currentState.product ? productDisplayNameForCatalog(currentState.product) : 'este producto',
+      totalQty: currentState.totalQty,
+      distinctDesigns: currentState.distinctDesigns,
+      maxDesigns: currentState.maxDesigns,
+      nextTier: currentState.nextTier,
+      createdAt: Date.now(),
+    });
+    if (shouldBumpNotice) {
+      setDesignLimitNoticeEntering(false);
+      clearTimeout(designLimitEnterTimerRef.current);
+      setDesignLimitNoticeBumping(false);
+      requestAnimationFrame(() => {
+        setDesignLimitNoticeBumping(true);
+        clearTimeout(designLimitBumpTimerRef.current);
+        designLimitBumpTimerRef.current = setTimeout(() => setDesignLimitNoticeBumping(false), 460);
+      });
+    } else {
+      setDesignLimitNoticeEntering(true);
+      clearTimeout(designLimitEnterTimerRef.current);
+      designLimitEnterTimerRef.current = setTimeout(() => setDesignLimitNoticeEntering(false), 280);
+    }
+    setTimeout(() => {
+      setBlockedDesignId(current => current === design.id ? null : current);
+    }, 620);
+  }
+
+  function canAddNewDesign(design, qty = 1) {
+    if (cart[design.id]) return true;
+    const safeQty = Math.max(MIN_DESIGN_QTY, Number(qty) || MIN_DESIGN_QTY);
+    const nextItems = [
+      ...cartItems,
+      { ...design, qty: safeQty },
+    ];
+    const state = getProductDesignLimitState(design.product_id, nextItems);
+    if (state && state.distinctDesigns > state.maxDesigns) {
+      showDesignLimitFeedback(design, state);
+      return false;
+    }
+    return true;
+  }
+
+  function productDisplayNameForCatalog(product) {
+    if (!product) return '';
+    return product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
+  }
+
+  const dismissDesignLimitNotice = useCallback(() => {
+    if (!designLimitNotice || designLimitNoticeClosing) return;
+    setDesignLimitNoticeBumping(false);
+    setDesignLimitNoticeEntering(false);
+    clearTimeout(designLimitEnterTimerRef.current);
+    setDesignLimitNoticeClosing(true);
+    clearTimeout(designLimitCloseTimerRef.current);
+    designLimitCloseTimerRef.current = setTimeout(() => {
+      setDesignLimitNotice(null);
+      setDesignLimitNoticeClosing(false);
+      setDesignLimitNoticeEntering(false);
+      setDesignLimitNoticeBumping(false);
+    }, 190);
+  }, [designLimitNotice, designLimitNoticeClosing]);
+
+  function formatUnitQty(qty) {
+    return `${Number(qty).toLocaleString('es-AR')}u.`;
+  }
+
+  useEffect(() => {
+    if (!designLimitNotice) return;
+    const product = products.find(p => p.id === designLimitNotice.productId);
+    if (!product) return;
+    const state = getProductDesignLimitState(product.id);
+    if (!state || state.distinctDesigns < state.maxDesigns) dismissDesignLimitNotice();
+  }, [cartItems, designLimitNotice, products, designLimitRules, getProductDesignLimitState, dismissDesignLimitNotice]);
 
   function getProductMinQty(productId) {
     const effectiveTiersProductId = (() => { const p = products.find(pr => pr.id === productId); return p?.use_parent_tiers && p?.parent_product_id ? p.parent_product_id : productId; })();
@@ -1045,22 +1296,34 @@ export default function Home() {
   const cardWidth = isMobile
     ? (activeProduct?.card_width_mobile ?? 160)
     : (activeProduct?.card_width_desktop ?? 180);
-  const sidebarWidth = isMobile ? 0 : (sidebarCollapsed ? 48 : 388);
-  const availableWidth = width - sidebarWidth - (isMobile ? 32 : 48);
+  const reservedRight = isMobile ? 0 : desktopReservedRight;
+  const availableWidth = Math.max(cardWidth, width - reservedRight - (isMobile ? 32 : 48));
   const colCount = Math.max(1, Math.floor(availableWidth / cardWidth));
   const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
-  function addToCart(design, qty = 1) {
+  function addToCart(design, qty = MIN_DESIGN_QTY) {
+    const safeQty = Math.max(MIN_DESIGN_QTY, Number(qty) || MIN_DESIGN_QTY);
+    if (!canAddNewDesign(design, safeQty)) return;
     const product = products.find(p => p.id === design.product_id);
     track('design_view', { design_id: design.id, design_name: design.name, product_name: product?.name });
-    addToCartCtx(design, product, qty);
+    addToCartCtx(design, product, safeQty);
+    setQtyDrafts(prev => { const next = { ...prev }; delete next[design.id]; return next; });
     triggerQtyAnim(design.id, 'pop');
     triggerCardPulse(design.id);
   }
 
   function changeQty(id, delta) {
+    const item = cart[id];
+    if (delta < 0 && item && item.qty + delta < MIN_DESIGN_QTY) {
+      removeFromCart(id);
+      setQtyDrafts(prev => { const next = { ...prev }; delete next[id]; return next; });
+      triggerQtyAnim(id, 'shrink');
+      triggerCardPulse(id);
+      return;
+    }
     changeQtyCtx(id, delta);
+    setQtyDrafts(prev => { const next = { ...prev }; delete next[id]; return next; });
     triggerQtyAnim(id, delta > 0 ? 'pop' : 'shrink');
     triggerCardPulse(id);
   }
@@ -1201,9 +1464,19 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         @keyframes qty-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
         @keyframes qty-shrink { 0% { transform: scale(1); } 45% { transform: scale(0.8); } 100% { transform: scale(1); } }
         @keyframes card-pulse { 0% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } 35% { border-color: #2D6BE4; box-shadow: 0 0 0 3px rgba(45,107,228,0.25), 0 2px 8px rgba(27,47,94,0.08); } 100% { border-color: rgba(27,47,94,0.12); box-shadow: 0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8); } }
+        @keyframes card-blocked { 0% { transform: translateX(0); border-color: rgba(27,47,94,0.12); } 18% { transform: translateX(-5px); border-color: #ef4444; background: #fff5f5; } 36% { transform: translateX(5px); } 54% { transform: translateX(-3px); } 72% { transform: translateX(3px); } 100% { transform: translateX(0); border-color: rgba(27,47,94,0.12); } }
+        @keyframes limit-toast-in { from { transform: translate3d(-18px, 14px, 0) scale(0.98); opacity: 0; } to { transform: translate3d(0, 0, 0) scale(1); opacity: 1; } }
+        @keyframes limit-toast-out { from { transform: translate3d(0, 0, 0) scale(1); opacity: 1; } to { transform: translate3d(-10px, 8px, 0) scale(0.985); opacity: 0; } }
+        @keyframes limit-toast-bump { 0% { transform: translate3d(0, 0, 0) scale(1); } 35% { transform: translate3d(7px, 0, 0) scale(1.018); } 70% { transform: translate3d(-2px, 0, 0) scale(1.006); } 100% { transform: translate3d(0, 0, 0) scale(1); } }
+        @keyframes limit-toast-breathe { 0%, 100% { box-shadow: 0 18px 46px rgba(27,47,94,0.20), 0 0 0 0 rgba(45,107,228,0.16); } 50% { box-shadow: 0 22px 54px rgba(27,47,94,0.24), 0 0 0 5px rgba(45,107,228,0.08); } }
         .qty-pop { animation: qty-pop 200ms ease-out; }
         .qty-shrink { animation: qty-shrink 200ms ease-out; }
         .card-pulse { animation: card-pulse 350ms ease-out; }
+        .card-blocked { animation: card-blocked 520ms cubic-bezier(.2,.8,.2,1); }
+        .limit-toast { animation: limit-toast-breathe 3.4s ease-in-out infinite; }
+        .limit-toast-enter { animation: limit-toast-in 240ms ease-out, limit-toast-breathe 3.4s ease-in-out 280ms infinite; }
+        .limit-toast-closing { animation: limit-toast-out 180ms ease-in forwards; }
+        .limit-toast-bump { animation: limit-toast-bump 420ms cubic-bezier(.2,.8,.2,1), limit-toast-breathe 3.4s ease-in-out 420ms infinite; }
         input::placeholder { color: rgba(255,255,255,0.6); }
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
         .qty-input::placeholder { color: #9aa3bc; }
@@ -1243,7 +1516,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         minHeight: 'calc(100vh - 64px)',
         gridTemplateColumns: '1fr',
         padding: isMobile ? 16 : 24,
-        paddingRight: isMobile ? 16 : (sidebarCollapsed ? 48 : 388),
+        paddingRight: isMobile ? 16 : desktopReservedRight,
         paddingTop: isMobile ? 72 : 24,
         paddingBottom: isMobile ? 88 : 24,
         transition: isMobile ? 'padding-top 0.3s ease' : undefined,
@@ -1426,25 +1699,28 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             <div style={{...s.grid, gridTemplateColumns: gridCols}}>
               {filtered.map((d, idx) => {
                 const inCart = cart[d.id];
-                const isHovered = cardHover[d.id];
+                const isHovered = hoveredDesignId === d.id;
                 const isPulsing = cardPulse[d.id];
+                const isBlocked = blockedDesignId === d.id;
+                const qtyDraft = Object.prototype.hasOwnProperty.call(qtyDrafts, d.id) ? qtyDrafts[d.id] : null;
                 const isFirstRow3d = idx < colCount && !!d.model_url && activeProduct?.allow_3d === true;
                 return (
                   <div
                     key={d.id}
-                    className={isPulsing ? 'card-pulse' : ''}
+                    className={`${isPulsing ? 'card-pulse' : ''} ${isBlocked ? 'card-blocked' : ''}`}
                     style={{
                       ...s.card,
                       transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
+                      borderColor: isBlocked ? '#ef4444' : 'rgba(27,47,94,0.12)',
                       boxShadow: isHovered
                         ? '0 6px 20px rgba(27,47,94,0.16), inset 0 1px 0 rgba(255,255,255,0.8)'
                         : '0 2px 8px rgba(27,47,94,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
                     }}
                     onMouseEnter={() => {
-                      setCardHover(prev => ({ ...prev, [d.id]: true }));
+                      setHoveredDesignId(d.id);
                       if (d.model_url) track('model_view', { design_id: d.id, design_name: d.name, product_name: activeProduct?.name });
                     }}
-                    onMouseLeave={() => setCardHover(prev => ({ ...prev, [d.id]: false }))}
+                    onMouseLeave={() => setHoveredDesignId(current => current === d.id ? null : current)}
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url
@@ -1531,18 +1807,23 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                           pattern="[0-9]*"
                           className={'qty-input' + (qtyAnim[d.id] === 'pop' ? ' qty-pop' : qtyAnim[d.id] === 'shrink' ? ' qty-shrink' : '')}
                           style={{...s.qtyNum, color: inCart ? 'white' : '#9aa3bc', background: 'transparent', border: 'none', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield', appearance: 'none', width: 40, textAlign: 'center', fontWeight: 700, padding: 0, cursor: 'text'}}
-                          value={inCart ? String(inCart.qty) : ''}
+                          value={qtyDraft !== null ? qtyDraft : (inCart ? String(inCart.qty) : '')}
                           placeholder="0"
-                          onFocus={e => e.target.select()}
+                          onFocus={e => {
+                            setQtyDrafts(prev => ({ ...prev, [d.id]: inCart ? String(inCart.qty) : '' }));
+                            e.target.select();
+                          }}
                           onChange={e => {
                             const raw = e.target.value.replace(/\D/g, '');
+                            setQtyDrafts(prev => ({ ...prev, [d.id]: raw }));
 
                             if (!raw) {
                               removeFromCart(d.id);
                               return;
                             }
 
-                            const val = Math.max(1, parseInt(raw, 10));
+                            const val = parseInt(raw, 10);
+                            if (isNaN(val) || val < MIN_DESIGN_QTY) return;
 
                             if (!inCart) {
                               addToCart(d, val);
@@ -1556,7 +1837,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
                             if (!raw || isNaN(val) || val <= 0) {
                               removeFromCart(d.id);
+                            } else if (val < MIN_DESIGN_QTY) {
+                              if (!inCart) addToCart(d, MIN_DESIGN_QTY);
+                              else setCartItem(d.id, MIN_DESIGN_QTY);
                             }
+                            setQtyDrafts(prev => { const next = { ...prev }; delete next[d.id]; return next; });
                           }}
                           onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
                         />
@@ -1586,7 +1871,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           return (
           <>
           {hasScaleBox && (
-            <div style={{position:'fixed', top: headerOffset, right: 24, width: 340, maxHeight: '22vh', zIndex: 98, background:'white', border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.10)', transition:'top 0.3s ease'}}>
+            <div ref={scaleBoxRef} style={{position:'fixed', top: headerOffset, right: 24, width: 340, maxHeight: '22vh', zIndex: 98, background:'white', border:'1.5px solid #dde1ef', borderRadius:14, overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 2px 12px rgba(27,47,94,0.10)', transition:'top 0.3s ease'}}>
               <div style={{background:'#1B2F5E', padding:'7px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0}}>
                 <span style={{fontSize:12, fontWeight:800, color:'white', letterSpacing:0.5}}>Escala de precios</span>
                 <span style={{fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.65)'}}>{activeProduct?.name}</span>
@@ -1611,7 +1896,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
               </div>
             </div>
           )}
-          <div style={{...s.sidebar, position: 'fixed', top: sidebarTop, right: 24, width: 340, transition: 'top 0.3s ease, bottom 0.2s ease', bottom: cartBottom, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
+          <div ref={sidebarRef} style={{...s.sidebar, position: 'fixed', top: sidebarTop, right: 24, width: 340, transition: 'top 0.3s ease, bottom 0.2s ease', bottom: cartBottom, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 14, zIndex: 98}}>
             {sidebarCollapsed ? (
               <div
                 onClick={() => setSidebarCollapsed(false)}
@@ -1785,7 +2070,6 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             })}>
               <span style={s.mobileBadge}>{totalItems}</span>
               <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
-              <span style={s.mobileBarChevron}>{cartPanelOpen ? 'v' : '^'}</span>
             </button>
             <button
               style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
@@ -1920,7 +2204,14 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent('Hola! Vengo desde la pagina. ')}
           target="_blank"
           rel="noreferrer"
-          style={{...s.waFab, bottom: isMobile ? 80 : 24, right: isMobile ? 16 : undefined, left: isMobile ? undefined : 24}}
+          style={{
+            ...s.waFab,
+            bottom: isMobile ? 80 : 24,
+            right: isMobile ? 16 : undefined,
+            left: isMobile ? undefined : 24,
+            opacity: isMobile && cartPanelOpen ? 0 : 1,
+            pointerEvents: isMobile && cartPanelOpen ? 'none' : 'auto',
+          }}
           onClick={() => track('whatsapp_click', { page: 'catalogo' })}
           onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -1950,6 +2241,45 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         </div>
       )}
 
+      {designLimitNotice && (
+        <div
+          className={`limit-toast${designLimitNoticeEntering && !designLimitNoticeBumping && !designLimitNoticeClosing ? ' limit-toast-enter' : ''}${designLimitNoticeClosing ? ' limit-toast-closing' : ''}${designLimitNoticeBumping ? ' limit-toast-bump' : ''}`}
+          style={{
+            position:'fixed',
+            left: isMobile ? 16 : 96,
+            bottom: isMobile ? 92 : 24,
+            zIndex: isMobile && cartPanelOpen ? 130 : 520,
+            width: isMobile ? 'calc(100vw - 32px)' : 432,
+            maxWidth: isMobile ? 'calc(100vw - 32px)' : 'calc(100vw - 460px)',
+            background:'white',
+            border:'1.5px solid #bfdbfe',
+            borderLeft:'6px solid #2D6BE4',
+            borderRadius:16,
+            boxShadow:'0 18px 46px rgba(27,47,94,0.20), 0 0 0 0 rgba(45,107,228,0.16)',
+            padding:'17px 19px',
+            color:'#2d3352',
+          }}
+        >
+          <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14}}>
+            <div>
+              <div style={{fontSize:16, fontWeight:800, color:'#1B2F5E'}}>Límite de diseños alcanzado</div>
+              <div style={{fontSize:14, color:'#405070', lineHeight:1.5, marginTop:6}}>
+                Con {formatUnitQty(designLimitNotice.totalQty)} de {designLimitNotice.productName} podés usar hasta {designLimitNotice.maxDesigns} diseños diferentes.
+                {designLimitNotice.nextTier
+                  ? ` Para sumar más diseños, subí a ${formatUnitQty(designLimitNotice.nextTier.min_quantity)} y el límite pasa a ${designLimitNotice.nextTier.max_designs} diseños.`
+                  : ' Quitá un diseño diferente para agregar otro.'}
+              </div>
+            </div>
+            <button
+              onClick={dismissDesignLimitNotice}
+              style={{background:'#e8f0fe', border:'none', color:'#1B2F5E', cursor:'pointer', fontSize:22, lineHeight:1, padding:0, width:30, height:30, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {authModalOpen && (
         <AuthModal
           onClose={() => setAuthModalOpen(false)}
@@ -1969,7 +2299,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 {tag.color && <span style={{width:8, height:8, borderRadius:'50%', background:tag.color, flexShrink:0}} />}
                 <span style={{fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{tag.title}</span>
               </div>
-              {tag.description && <span style={{fontSize:11, color:'#5a6380', lineHeight:1.5}}>{tag.description}</span>}
+              {tag.description && <span style={{fontSize:11, color:'#5a6380', lineHeight:1.5, whiteSpace:'pre-line'}}>{tag.description}</span>}
             </div>
           ))}
         </div>
@@ -2059,7 +2389,6 @@ const styles = {
   mobileBarLeft: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
   mobileBadge: { background: '#2D6BE4', color: 'white', fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12 },
   mobileTotal: { color: 'white', fontWeight: 700, fontSize: 18 },
-  mobileBarChevron: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
   mobileConfirmBtn: { background: 'white', color: '#1B2F5E', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 },
   mobileConfirmBtnDisabled: { background: '#4a5a7a', color: 'rgba(255,255,255,0.4)', cursor: 'not-allowed' },
   cartPanelBackdrop: { position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.45)', zIndex: 140 },

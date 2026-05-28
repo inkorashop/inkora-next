@@ -75,7 +75,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           const { data, error: e } = await supabase.auth.signUp({
             email: form.email,
             password: form.password,
-            options: { data: { full_name: form.name, phone: form.phone } },
+            options: { data: { full_name: form.name, phone: form.phone, send_confirmation_email: false } },
           });
           if (e) throw e;
           if (data.user && data.user.identities && data.user.identities.length === 0) {

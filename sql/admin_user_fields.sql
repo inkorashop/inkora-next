@@ -1,7 +1,7 @@
 -- Agrega seller_id y send_confirmation_email a profiles
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS seller_id uuid REFERENCES public.sellers(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS send_confirmation_email boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS send_confirmation_email boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS phone text;
 
 -- Actualiza admin_get_profiles para devolver los nuevos campos
@@ -29,7 +29,7 @@ AS $$
     p.locality_id,
     l.name AS locality_name,
     p.seller_id,
-    COALESCE(p.send_confirmation_email, true) AS send_confirmation_email,
+    COALESCE(p.send_confirmation_email, false) AS send_confirmation_email,
     p.phone,
     p.created_at
   FROM profiles p

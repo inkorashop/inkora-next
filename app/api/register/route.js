@@ -54,6 +54,7 @@ export async function POST(req) {
       name: name.trim(),
       phone: phone?.trim() || null,
       registration_source: 'self_email',
+      send_confirmation_email: false,
     });
 
     return NextResponse.json({ confirmationRequired: false });

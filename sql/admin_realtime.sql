@@ -110,6 +110,7 @@ FROM (
     ('user_product_localities'),
     ('admins'),
     ('orders'),
+    ('carts'),
     ('settings'),
     ('sellers'),
     ('profiles'),

@@ -3,6 +3,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
+import {
+  filterProductsForVisibility,
+  parseVisibilityRules,
+  userVisibilityKey,
+} from '@/lib/visibility-rules';
 
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
@@ -33,8 +38,27 @@ export default function Landing() {
   useEffect(() => {
     
 
-    supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at')
-      .then(({ data }) => { if (data) setProducts(data.filter(p => !p.parent_product_id)); });
+    async function loadVisibleProducts() {
+      const [{ data: sessionData }, { data: productData }] = await Promise.all([
+        supabase.auth.getSession(),
+        supabase.from('products').select('*').eq('active', true).order('sort_order', { nullsFirst: false }).order('created_at'),
+      ]);
+      const userId = sessionData?.session?.user?.id || null;
+      const { data: ruleRow } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', userVisibilityKey(userId))
+        .single();
+      const rules = parseVisibilityRules(ruleRow?.value);
+      if (productData) {
+        setProducts(filterProductsForVisibility(productData, rules).filter(p => !p.parent_product_id));
+      }
+    }
+
+    loadVisibleProducts();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      loadVisibleProducts();
+    });
 
     supabase.from('settings').select('*')
       .then(({ data }) => {
@@ -142,6 +166,7 @@ export default function Landing() {
       window.removeEventListener('storage', handler);
       window.removeEventListener('inkora_theme_change', handler);
       clearInterval(tabInterval);
+      subscription.unsubscribe();
       if (presenceCh) clearInterval(presenceCh.heartbeat);
     };
   }, []);

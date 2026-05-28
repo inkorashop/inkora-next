@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createStoredInviteLink } from '@/lib/invite-access-links';
+import { requireAdmin } from '@/lib/admin-api-auth';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,32 +19,19 @@ function getAdminClient() {
   });
 }
 
-async function generateInviteLink(supabaseAdmin, email) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://inkora.com.ar';
-
-  const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-    type: 'magiclink',
-    email,
-    options: { redirectTo: siteUrl },
-  });
-
-  let link = null;
-
-  if (!linkError) {
-    const rawLink = linkData?.properties?.action_link;
-
-    try {
-      const token = new URL(rawLink).searchParams.get('token');
-      link = token ? `${siteUrl}/invite?token=${encodeURIComponent(token)}` : rawLink;
-    } catch {
-      link = rawLink;
-    }
+async function generateInviteLink(supabaseAdmin, email, userId, clientName = '') {
+  try {
+    const { link, record } = await createStoredInviteLink(supabaseAdmin, {
+      email,
+      userId,
+      clientName,
+      kind: 'permanent',
+      nextPath: '/',
+    });
+    return { link, record, link_error: null };
+  } catch (error) {
+    return { link: null, record: null, link_error: error.message };
   }
-
-  return {
-    link,
-    link_error: linkError?.message || null,
-  };
 }
 
 export async function POST(req) {
@@ -61,6 +50,7 @@ export async function POST(req) {
     }
 
     const supabaseAdmin = getAdminClient();
+    await requireAdmin(supabaseAdmin);
 
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
@@ -96,6 +86,7 @@ export async function POST(req) {
           admin_set_password: password,
           registration_source: 'admin_invite',
           password_changed_by_user: false,
+          send_confirmation_email: false,
           deleted_at: null,
           deleted_by: null,
           deleted_reason: null,
@@ -106,13 +97,14 @@ export async function POST(req) {
         return NextResponse.json({ error: reactivateProfileError.message }, { status: 400 });
       }
 
-      const { link, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail);
+      const { link, record, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail, existingProfile.id, trimmedName);
 
       return NextResponse.json({
         success: true,
         reactivated: true,
         user_id: existingProfile.id,
         link,
+        link_record: record,
         link_error,
       });
     }
@@ -136,6 +128,7 @@ export async function POST(req) {
       admin_set_password: password,
       registration_source: 'admin_invite',
       password_changed_by_user: false,
+      send_confirmation_email: false,
       deleted_at: null,
       deleted_by: null,
       deleted_reason: null,
@@ -145,17 +138,18 @@ export async function POST(req) {
       console.error('Error updating profile:', profileError);
     }
 
-    const { link, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail);
+    const { link, record, link_error } = await generateInviteLink(supabaseAdmin, normalizedEmail, user.id, trimmedName);
 
     return NextResponse.json({
       success: true,
       reactivated: false,
       user_id: user.id,
       link,
+      link_record: record,
       link_error,
     });
 
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: err.status || 500 });
   }
 }

@@ -53,6 +53,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
         const fill = new THREE.DirectionalLight(0xffffff, 0.5);
         fill.position.set(-5, -5, -5);
         scene.add(fill);
+        let loadedModel = null;
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
@@ -118,6 +119,7 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           (result) => {
             if (cancelled) return;
             const model = is3MF ? result : result.scene;
+            loadedModel = model;
             scene.add(model);
 
             const box = new THREE.Box3().setFromObject(model);
@@ -242,7 +244,21 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
           clearTimeout(returnTimeout);
           ro.disconnect();
           controls.dispose();
+          if (loadedModel) {
+            loadedModel.traverse?.((object) => {
+              if (object.geometry) object.geometry.dispose?.();
+              const materials = Array.isArray(object.material) ? object.material : [object.material];
+              materials.filter(Boolean).forEach((material) => {
+                Object.values(material).forEach((value) => {
+                  if (value?.isTexture) value.dispose?.();
+                });
+                material.dispose?.();
+              });
+            });
+            scene.remove(loadedModel);
+          }
           renderer.dispose();
+          renderer.forceContextLoss?.();
           if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
         };
 
