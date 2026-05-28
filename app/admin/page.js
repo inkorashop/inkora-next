@@ -368,6 +368,7 @@ useEffect(() => {
   const designFileInputRef = useRef(null);
   const [designFilterProduct, setDesignFilterProduct] = useState('all');
   const [dragOverId, setDragOverId] = useState(null);
+  const [dragOverUpload, setDragOverUpload] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
   const dragSrcIdRef = useRef(null);
   const [dragOverProductId, setDragOverProductId] = useState(null);
@@ -385,6 +386,7 @@ useEffect(() => {
   const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
+  const [designSortBy, setDesignSortBy] = useState('default');
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -3531,30 +3533,33 @@ useEffect(() => {
                           {useProductManagementModals && (
                             <td style={{...s.td, textAlign:'center'}}>
                               <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
                                 onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
                               >
-                                Editar
+                                Categorías
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                               </button>
                             </td>
                           )}
                           {useProductManagementModals && (
                             <td style={{...s.td, textAlign:'center'}}>
                               <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap'}}
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
                                 onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
                               >
-                                Editar
+                                Escalas Precios
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                               </button>
                             </td>
                           )}
                           {useProductManagementModals && (
                             <td style={{...s.td, textAlign:'center'}}>
                               <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative'}}
+                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative', display:'flex', alignItems:'center', gap:4}}
                                 onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'design_limits', productId: p.id }); }}
                               >
-                                Editar
+                                Escalas Diseños
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 {(() => {
                                   const config = getProductDesignLimitConfig(p);
                                   const own = getDesignLimitRules()[p.id];
@@ -4148,7 +4153,60 @@ useEffect(() => {
         {/* == DISEÑOS == */}
         {activeTab === 'designs' && (
           <>
-            <div style={s.card}>
+            <div
+              style={{...s.card, position:'relative', outline: dragOverUpload ? '2.5px dashed #2D6BE4' : '2.5px solid transparent', transition:'outline 0.15s', background: dragOverUpload ? '#f0f5ff' : undefined}}
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverUpload(true); }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverUpload(false); }}
+              onDrop={e => {
+                e.preventDefault(); e.stopPropagation(); setDragOverUpload(false);
+                const files = Array.from(e.dataTransfer.files);
+                if (!files.length) return;
+                const accept = selectedProduct ? getDesignAcceptForProduct(selectedProduct) : '';
+                const allowed = hasModelDesignFormat(selectedProduct) ? ['3mf','obj'] : ['jpg','jpeg','png','gif','webp','svg','dxf'];
+                const valid = files.filter(f => {
+                  const ext = f.name.split('.').pop().toLowerCase();
+                  return !allowed.length || allowed.includes(ext);
+                });
+                if (!valid.length) { alert(`Formato no compatible. Formatos permitidos: ${accept}`); return; }
+                if (hasModelDesignFormat(selectedProduct)) {
+                  // 3D handler
+                  if (valid.length > 10) { alert('Podés subir hasta 10 archivos 3D por vez.'); return; }
+                  const fakeEvent = { target: { files: valid, value: '' }, stopPropagation: () => {} };
+                  // build entries manually same as the 3D input handler
+                  const newEntries = valid.map(file => ({
+                    file: null, preview: null, modelPreview: URL.createObjectURL(file),
+                    name: file.name.replace(/\.[^.]+$/, ''), category: 'Sin categoría', nameExists: false,
+                    existingDesignId: null, overwriteExisting: false,
+                    sizeError: file.size > maxSizeKb * 1024, modelFile: file, fileType: file.name.split('.').pop().toLowerCase(),
+                  }));
+                  setPendingFiles(prev => {
+                    const existingNames = new Set(prev.map(p => p.modelFile?.name));
+                    return [...prev, ...newEntries.filter(e => !existingNames.has(e.modelFile.name))];
+                  });
+                  supabase.from('designs').select('id, name').eq('active', true).eq('product_id', selectedProductId).then(({ data }) => {
+                    const existing = new Map((data || []).map(d => [d.name.toLowerCase(), d.id]));
+                    setPendingFiles(prev => prev.map(entry => ({
+                      ...entry,
+                      nameExists: entry.name.length > 2 && existing.has(entry.name.toLowerCase()),
+                      existingDesignId: existing.get(entry.name.toLowerCase()) || null,
+                      overwriteExisting: false,
+                    })));
+                  });
+                } else {
+                  // Image handler — reuse the synthetic event approach
+                  const dt = new DataTransfer();
+                  valid.forEach(f => dt.items.add(f));
+                  const syntheticEvent = { target: { files: dt.files, value: '' } };
+                  handleFileSelect(syntheticEvent);
+                }
+              }}
+            >
+              {dragOverUpload && (
+                <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:10, fontSize:14, fontWeight:700, color:'#2D6BE4', gap:8}}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2D6BE4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Soltá los archivos para subirlos
+                </div>
+              )}
               <h2 style={s.sectionTitle}>Agregar diseños</h2>
               <div style={s.formGroup}>
                 <label style={s.label}>Producto *</label>
@@ -4307,12 +4365,27 @@ useEffect(() => {
               )}
             </div>
             <div style={s.card}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12, flexWrap:'wrap', gap:8}}>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
                   <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
                   {selectedIds.size > 1 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:700}}>{selectedIds.size} seleccionados</span>}
                 </div>
-                {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <select
+                    value={designSortBy}
+                    onChange={e => setDesignSortBy(e.target.value)}
+                    style={{...s.input, fontSize:12, padding:'4px 8px', width:'auto', minWidth:160}}
+                  >
+                    <option value="default">Orden personalizado</option>
+                    <option value="name_asc">Nombre A→Z</option>
+                    <option value="name_desc">Nombre Z→A</option>
+                    <option value="newest">Más reciente</option>
+                    <option value="oldest">Más antiguo</option>
+                    <option value="file_type">Tipo de archivo</option>
+                    <option value="active_first">Activos primero</option>
+                  </select>
+                  {orphanCount > 0 && <button style={{...s.btnWarning, opacity: migrating ? 0.5 : 1}} disabled={migrating} onClick={migrateOrphans}>{migrating ? 'Migrando...' : `Migrar ${orphanCount} sin producto →`}</button>}
+                </div>
               </div>
               <div style={{display:'flex', flexWrap:'wrap', gap:6, marginBottom:16}}>
                 {[{id:'all', name:'Todos'}, ...products].map(p => (
@@ -4341,12 +4414,29 @@ useEffect(() => {
                 </div>
               </div>
               <div onClick={() => setSelectedIds(new Set())}>
-              {designs.filter(d => {
-                const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
-                return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
-                  && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
-                  && (!designCatFilter || cats.includes(designCatFilter));
-              }).map(d => (
+              {(() => {
+                const getFileExt = d => {
+                  const url = d.model_url || d.image_url || '';
+                  const m = url.split('?')[0].match(/\.([a-z0-9]+)(-\d+)?$/i);
+                  return m ? m[1].toLowerCase() : 'zzz';
+                };
+                const sortFns = {
+                  name_asc:    (a, b) => a.name.localeCompare(b.name),
+                  name_desc:   (a, b) => b.name.localeCompare(a.name),
+                  newest:      (a, b) => new Date(b.created_at) - new Date(a.created_at),
+                  oldest:      (a, b) => new Date(a.created_at) - new Date(b.created_at),
+                  file_type:   (a, b) => getFileExt(a).localeCompare(getFileExt(b)) || a.name.localeCompare(b.name),
+                  active_first:(a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0) || a.name.localeCompare(b.name),
+                  default:     null,
+                };
+                const filtered = designs.filter(d => {
+                  const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                  return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
+                    && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
+                    && (!designCatFilter || cats.includes(designCatFilter));
+                });
+                const sortFn = sortFns[designSortBy];
+                return (sortFn ? [...filtered].sort(sortFn) : filtered).map(d => (
                 <div
                   key={d.id}
                   draggable
@@ -4406,7 +4496,7 @@ useEffect(() => {
                         {(d.tags || []).map((tag, ti) => (
                           <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
                             {tag}
-                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const newTags = (d.tags || []).filter((_, i) => i !== ti); await supabase.from('designs').update({ tags: newTags }).eq('id', d.id); trackAdminActivity('design_tag_delete', { design_id: d.id, design_name: d.name, tag }, 'designs'); setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x)); }}>×</button>
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:11, lineHeight:1, padding:0}} onClick={async e => { e.stopPropagation(); const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id]; const newTags = (d.tags || []).filter((_, i) => i !== ti); await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ tags: newTags }).eq('id', did))); trackAdminActivity('design_tag_delete', { design_ids: idsToUpdate, tag }, 'designs'); setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, tags: newTags} : x)); }}>×</button>
                           </span>
                         ))}
                         <input
@@ -4417,10 +4507,17 @@ useEffect(() => {
                           onKeyDown={async e => {
                             if (e.key === 'Enter' && e.target.value.trim()) {
                               const newTag = e.target.value.trim().toLowerCase();
-                              const newTags = [...(d.tags || []), newTag];
-                              await supabase.from('designs').update({ tags: newTags }).eq('id', d.id);
-                              trackAdminActivity('design_tag_create', { design_id: d.id, design_name: d.name, tag: newTag }, 'designs');
-                              setDesigns(prev => prev.map(x => x.id === d.id ? {...x, tags: newTags} : x));
+                              const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
+                              await Promise.all(idsToUpdate.map(async did => {
+                                const existing = designs.find(x => x.id === did);
+                                const newTags = [...new Set([...(existing?.tags || []), newTag])];
+                                await supabase.from('designs').update({ tags: newTags }).eq('id', did);
+                              }));
+                              trackAdminActivity('design_tag_create', { design_ids: idsToUpdate, tag: newTag }, 'designs');
+                              setDesigns(prev => prev.map(x => {
+                                if (!idsToUpdate.includes(x.id)) return x;
+                                return { ...x, tags: [...new Set([...(x.tags || []), newTag])] };
+                              }));
                               e.target.value = '';
                             }
                           }}
@@ -4463,7 +4560,8 @@ useEffect(() => {
                     <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>
                 </div>
-              ))}
+              ));
+              })()}
               </div>
             </div>
           </>
