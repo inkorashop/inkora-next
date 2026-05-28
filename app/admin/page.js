@@ -4281,17 +4281,22 @@ useEffect(() => {
                         <div key={i} style={s.fileRow}>
                           {(() => {
                             const fname = entry.file?.name || entry.modelFile?.name || '';
-                            const isImageFile = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fname);
-                            if (entry.preview && isImageFile) {
+                            // entry.preview is only set by the image upload handler → always render as <img>
+                            if (entry.preview) {
                               // eslint-disable-next-line @next/next/no-img-element
                               return <img src={entry.preview} alt="" style={s.fileThumb} />;
                             }
+                            // entry.modelPreview is set by the 3D upload handler
                             if (entry.modelPreview) {
-                              return (
-                                <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
-                                  <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} onCapture={blob => { if (!entry.capturedThumb) updateEntry(i, 'capturedThumb', blob); }} />
-                                </div>
-                              );
+                              const is3dExt = /\.(3mf|glb|gltf|obj)/i.test(fname);
+                              if (is3dExt) {
+                                return (
+                                  <div style={{...s.fileThumb, overflow:'hidden', border: entry.sizeError ? '1px solid #fca5a5' : '1px solid #dde1ef'}}>
+                                    <ModelViewer url={entry.modelPreview} autoRotate={false} hideHint={true} modelConfig={{_fileType: entry.fileType}} onCapture={blob => { if (!entry.capturedThumb) updateEntry(i, 'capturedThumb', blob); }} />
+                                  </div>
+                                );
+                              }
+                              // Non-3D file ended up in 3D handler (e.g. DXF): show extension label
                             }
                             const ext = fname.split('.').pop().toUpperCase() || '?';
                             return <div style={{...s.fileThumb, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color:'#2D6BE4', fontWeight:700}}>{ext}</div>;
