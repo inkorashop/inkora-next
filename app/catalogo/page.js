@@ -52,7 +52,7 @@ function toSlug(name) {
 
 function is3dModelUrl(url) {
   if (!url) return false;
-  return /\.(3mf|glb|gltf|obj)(\?|$)/i.test(url.split('?')[0]);
+  return /\.(3mf|glb|gltf|obj)/i.test(url.split('?')[0]);
 }
 
 function productUrlSlug(product) {

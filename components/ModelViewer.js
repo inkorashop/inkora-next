@@ -170,7 +170,10 @@ export default function ModelViewer({ url, autoRotate = false, hideHint = false,
             const psBytes = await readFromZip(buf, 'Metadata/project_settings.config');
             if (!psBytes) return;
             const ps = JSON.parse(dec.decode(psBytes));
-            const colours = String(ps.filament_colour || '').split(/\s+/).filter(c => /^#[0-9a-fA-F]{6}$/.test(c));
+            const fc = ps.filament_colour;
+            const colours = (Array.isArray(fc) ? fc : String(fc || '').split(/[\s,]+/))
+              .map(c => String(c).trim())
+              .filter(c => /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(c));
             if (!colours.length) return;
 
             const msBytes = await readFromZip(buf, 'Metadata/model_settings.config');
