@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 import AuthModal from '@/components/AuthModal';
 import GoogleOneTap from '@/components/GoogleOneTap';
+import SafeImage from '@/components/SafeImage';
 import { signInWithGoogle } from '@/lib/auth';
 import { useTrack } from '@/hooks/useTrack';
 
@@ -210,7 +211,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     ) : (
                       cartItems.map(item => (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
-                          {item.image_url && <img src={item.image_url} alt={item.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
+                          {item.image_url && <SafeImage src={item.image_url} alt={item.name} compactFallback style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ color: darkMode ? '#1B2F5E' : 'white', fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                             <div style={{ color: darkMode ? 'rgba(27,47,94,0.5)' : 'rgba(255,255,255,0.5)', fontSize: 11 }}>x{item.qty}</div>

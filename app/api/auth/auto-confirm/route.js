@@ -16,14 +16,14 @@ export async function POST(req) {
 
     const supabaseAdmin = getAdminClient();
 
-    // Only proceed if email confirmation is disabled
+    // Only proceed when email confirmation is not explicitly enabled.
     const { data: settingData } = await supabaseAdmin
       .from('settings')
       .select('value')
       .eq('key', 'require_email_confirmation')
       .maybeSingle();
 
-    if (settingData?.value !== 'false') {
+    if (settingData?.value === 'true') {
       return NextResponse.json({ confirmed: false });
     }
 

@@ -20,6 +20,10 @@ const SYSTEM_READONLY_KEYS = new Set([
   'locality_name',
   'registration_source',
   'password_changed_by_user',
+  'password_changed_at',
+  'password_prompt_dismissed_on',
+  'password_prompt_manual_requested_at',
+  'password_prompt_manual_seen_at',
   'admin_set_password',
 ]);
 
@@ -162,6 +166,12 @@ const TABLE_CONFIGS = {
       { key: 'seller_id', label: 'seller_id', type: 'text', nullable: true, width: 250 },
       { key: 'send_confirmation_email', label: 'send_confirmation_email', type: 'boolean', width: 190 },
       { key: 'registration_source', label: 'registration_source', type: 'text', readOnly: true, width: 170 },
+      { key: 'password_changed_by_user', label: 'password_changed_by_user', type: 'boolean', readOnly: true, width: 190 },
+      { key: 'password_changed_at', label: 'password_changed_at', type: 'text', readOnly: true, nullable: true, width: 190 },
+      { key: 'password_prompt_dismissed_on', label: 'password_prompt_dismissed_on', type: 'text', readOnly: true, nullable: true, width: 210 },
+      { key: 'password_prompt_manual_requested_at', label: 'password_prompt_manual_requested_at', type: 'text', readOnly: true, nullable: true, width: 250 },
+      { key: 'password_prompt_manual_seen_at', label: 'password_prompt_manual_seen_at', type: 'text', readOnly: true, nullable: true, width: 230 },
+      { key: 'deleted_at', label: 'deleted_at', type: 'text', readOnly: true, nullable: true, width: 190 },
       { key: 'created_at', label: 'created_at', type: 'text', readOnly: true, width: 190 },
     ],
     updateRow: async ({ supabase, row, payload }) => {
@@ -196,6 +206,23 @@ const TABLE_CONFIGS = {
     columns: [
       { key: 'key', label: 'key', type: 'text', readOnly: true, width: 260 },
       { key: 'value', label: 'value', type: 'text', nullable: false, width: 520 },
+    ],
+  },
+  admin_notifications: {
+    table: 'admin_notifications',
+    label: 'Notificaciones',
+    primaryKey: ['id'],
+    orderBy: [{ column: 'created_at', options: { ascending: false } }],
+    columns: [
+      { key: 'id', label: 'id', type: 'text', readOnly: true, width: 250 },
+      { key: 'type', label: 'type', type: 'text', readOnly: true, width: 150 },
+      { key: 'title', label: 'title', type: 'text', readOnly: true, width: 220 },
+      { key: 'body', label: 'body', type: 'text', readOnly: true, nullable: true, width: 340 },
+      { key: 'user_id', label: 'user_id', type: 'text', readOnly: true, nullable: true, width: 250 },
+      { key: 'order_id', label: 'order_id', type: 'text', readOnly: true, nullable: true, width: 180 },
+      { key: 'metadata', label: 'metadata', type: 'json', readOnly: true, nullable: true, width: 360 },
+      { key: 'read_at', label: 'read_at', type: 'text', nullable: true, width: 190 },
+      { key: 'created_at', label: 'created_at', type: 'text', readOnly: true, width: 190 },
     ],
   },
 };

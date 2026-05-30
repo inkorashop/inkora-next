@@ -4,6 +4,7 @@ import '@univerjs/preset-sheets-core/lib/index.css';
 import { CartProvider } from '@/contexts/CartContext';
 import TrackBootstrap from '@/components/TrackBootstrap';
 import AuthHashHandler from '@/components/AuthHashHandler';
+import PasswordChangeReminder from '@/components/PasswordChangeReminder';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
         <CartProvider>
           <AuthHashHandler />
           <TrackBootstrap />
+          <PasswordChangeReminder />
           {children}
         </CartProvider>
       </body>

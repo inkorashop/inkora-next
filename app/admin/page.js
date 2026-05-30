@@ -42,8 +42,11 @@ function is3dModelUrl(url) {
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], design_formats: IMAGE_DESIGN_FORMATS, use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TABS = ['products','designs','orders','carts','database','users','sellers','admins','config','tracking','production','version_history','emails'];
-const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const ADMIN_TABS = ['products','designs','orders','notifications','carts','database','users','sellers','admins','config','tracking','production','version_history','emails'];
+const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const PASSWORD_PROMPT_ENABLED_KEY = 'password_change_prompt_enabled';
+const PASSWORD_PROMPT_DELAY_DAYS_KEY = 'password_change_prompt_delay_days';
+const DEFAULT_PASSWORD_PROMPT_DELAY_DAYS = 14;
 const INVITE_DESTINATIONS = [
   { label: 'Inicio', value: '/' },
   { label: 'Catalogo', value: '/catalogo' },
@@ -294,7 +297,7 @@ useEffect(() => {
   if (typeof window === 'undefined') return;
   localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
 }, [adminDarkMode]);
-  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', carts: 'carritos', database: 'base-de-datos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
+  const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', notifications: 'notificaciones', carts: 'carritos', database: 'base-de-datos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
@@ -406,7 +409,8 @@ useEffect(() => {
   const [userFilterSeller, setUserFilterSeller] = useState('all');
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const lastSelectedUserIdRef = useRef(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [bulkUpdatingUsers, setBulkUpdatingUsers] = useState(false);
+  const inviteOpen = true;
   const [inviteForm, setInviteForm] = useState({ name: '', phone: '', email: '', password: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
@@ -424,6 +428,9 @@ useEffect(() => {
   const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
   const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
   const [deletingUserIds, setDeletingUserIds] = useState(new Set());
+  const [deployingPasswordPromptIds, setDeployingPasswordPromptIds] = useState(new Set());
+  const [adminPasswordDrafts, setAdminPasswordDrafts] = useState({});
+  const [savingAdminPasswordIds, setSavingAdminPasswordIds] = useState(new Set());
   const { getStatus } = usePresence(supabase);
 
   // Admins
@@ -439,7 +446,10 @@ useEffect(() => {
   const [carts, setCarts] = useState([]);
   const [loadingCarts, setLoadingCarts] = useState(false);
   const [cartsError, setCartsError] = useState('');
-  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all' });
+  const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all', [PASSWORD_PROMPT_ENABLED_KEY]: 'true', [PASSWORD_PROMPT_DELAY_DAYS_KEY]: String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS) });
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
@@ -697,6 +707,7 @@ useEffect(() => {
         loadAdmins(),
         loadAdminPresence(),
         loadOrders(),
+        loadAdminNotifications(),
         loadCarts(),
         loadSettings(),
         loadSellers(),
@@ -705,6 +716,7 @@ useEffect(() => {
         loadVersionSnapshots(),
       ]).finally(() => setAdminDataReadyForSnapshots(true));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   useEffect(() => {
@@ -842,6 +854,7 @@ useEffect(() => {
       watch('user_product_localities', loadUserProductLocalities),
       watch('admins', loadAdmins),
       watch('orders', loadOrders),
+      watch('admin_notifications', loadAdminNotifications),
       watch('carts', loadCarts),
       watch('settings', loadSettings),
       watch('sellers', () => { loadSellers(); loadUsers(); }),
@@ -855,6 +868,7 @@ useEffect(() => {
       Object.values(realtimeTimersRef.current).forEach(clearTimeout);
       realtimeTimersRef.current = {};
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   useEffect(() => {
@@ -2021,11 +2035,87 @@ useEffect(() => {
     if (data) {
       const overrides = userOverridesRef.current;
       setUsers(data.map(u => {
+        const normalized = {
+          ...u,
+          seller_id: u.seller_id || null,
+          send_confirmation_email: u.send_confirmation_email === true,
+        };
         const override = overrides[u.id];
-        return override ? { ...u, ...override } : u;
+        return override ? { ...normalized, ...override } : normalized;
       }));
     }
     setLoadingUsers(false);
+  }
+
+  function setUserOverride(userId, patch, options = {}) {
+    userOverridesRef.current[userId] = { ...userOverridesRef.current[userId], ...patch };
+
+    if (options.persist) return;
+
+    setTimeout(() => {
+      const current = userOverridesRef.current[userId];
+      if (!current) return;
+
+      Object.entries(patch).forEach(([key, value]) => {
+        if (Object.is(current[key], value)) delete current[key];
+      });
+
+      if (Object.keys(current).length === 0) delete userOverridesRef.current[userId];
+    }, options.ttlMs || 5000);
+  }
+
+  function clearUserOverrideFields(userIds, fields) {
+    userIds.forEach(userId => {
+      const current = userOverridesRef.current[userId];
+      if (!current) return;
+      fields.forEach(field => delete current[field]);
+      if (Object.keys(current).length === 0) delete userOverridesRef.current[userId];
+    });
+  }
+
+  function getFilteredUsers() {
+    const q = userSearch.trim().toLowerCase();
+    return users.filter(u => {
+      if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
+      if (userFilterSeller !== 'all') {
+        if (userFilterSeller === 'none' && u.seller_id) return false;
+        if (userFilterSeller !== 'none' && u.seller_id !== userFilterSeller) return false;
+      }
+      if (userFilterStatus !== 'all') {
+        const st = getStatus(u.id);
+        if (userFilterStatus === 'online' && !st?.isActive) return false;
+        if (userFilterStatus === 'inactive' && (!st || st.isActive)) return false;
+        if (userFilterStatus === 'never' && st) return false;
+      }
+      return true;
+    });
+  }
+
+  function handleUserClick(e, id) {
+    if (e.shiftKey && lastSelectedUserIdRef.current) {
+      const visible = getFilteredUsers();
+      const lastIdx = visible.findIndex(u => u.id === lastSelectedUserIdRef.current);
+      const currIdx = visible.findIndex(u => u.id === id);
+      if (lastIdx !== -1 && currIdx !== -1) {
+        const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
+        setSelectedUserIds(new Set(visible.slice(start, end + 1).map(u => u.id)));
+      }
+      return;
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedUserIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      lastSelectedUserIdRef.current = id;
+      return;
+    }
+
+    setSelectedUserIds(new Set([id]));
+    lastSelectedUserIdRef.current = id;
   }
 
   async function updateUserLocality(userId, localityId) {
@@ -2469,6 +2559,96 @@ useEffect(() => {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
+  function formatAdminDateTime(iso) {
+    if (!iso) return 'Sin hora';
+    try {
+      return new Date(iso).toLocaleString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return 'Sin hora';
+    }
+  }
+
+  function formatAdminTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  function getNotificationTone(type) {
+    if (type === 'password_changed') return { label: 'Contraseña', color: '#7c3aed', bg: '#f3e8ff' };
+    if (type === 'order_created') return { label: 'Pedido', color: '#15803d', bg: '#dcfce7' };
+    return { label: 'Admin', color: '#2D6BE4', bg: '#e8eef9' };
+  }
+
+  function summarizeNotificationItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return '';
+    const preview = items.slice(0, 3).map(item => {
+      const name = item?.name || item?.designName || item?.design_name || item?.productName || 'Item';
+      const qty = item?.qty || item?.quantity || 1;
+      return `${name} x${qty}`;
+    }).join(', ');
+    return items.length > 3 ? `${preview} +${items.length - 3}` : preview;
+  }
+
+  function normalizeAdminNotification(row) {
+    const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    const type = row?.type || 'general';
+    const tone = getNotificationTone(type);
+    const fallbackTitle = type === 'password_changed'
+      ? 'Un usuario cambió su contraseña'
+      : type === 'order_created'
+        ? `Nuevo pedido ${metadata.order_code || ''}`.trim()
+        : 'Notificación';
+    const fallbackBody = type === 'password_changed'
+      ? `${metadata.user_name || 'Usuario'} · ${metadata.user_email || 'Sin email'}`
+      : type === 'order_created'
+        ? `${metadata.customer_name || 'Cliente'} · ${metadata.items_count || 0} ítems${metadata.total ? ` · $${Number(metadata.total).toLocaleString('es-AR')}` : ''}`
+        : '';
+
+    return {
+      ...row,
+      metadata,
+      tone,
+      title: row?.title || fallbackTitle,
+      body: row?.body || fallbackBody,
+    };
+  }
+
+  async function loadAdminNotifications() {
+    setLoadingNotifications(true);
+    const { data, error } = await supabase
+      .from('admin_notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) {
+      const missingTable = error.code === '42P01' || error.code === 'PGRST205' || /admin_notifications/i.test(error.message || '');
+      setNotificationsError(missingTable
+        ? 'Falta ejecutar sql/admin_notifications.sql en Supabase para activar las notificaciones internas.'
+        : `No se pudieron cargar las notificaciones: ${error.message}`
+      );
+      setAdminNotifications([]);
+    } else {
+      setNotificationsError('');
+      setAdminNotifications((data || []).map(normalizeAdminNotification));
+    }
+
+    setLoadingNotifications(false);
+  }
+
   async function loadVersionSnapshots() {
     setLoadingVersionSnapshots(true);
     const { data, error } = await supabase
@@ -2762,19 +2942,109 @@ useEffect(() => {
     loadSellers();
   }
 
-  async function updateUserSeller(userId, sellerId) {
+  async function updateUsersSeller(userIds, sellerId) {
+    const ids = [...new Set(userIds)].filter(Boolean);
+    if (ids.length === 0) return;
+
     const normalizedSellerId = sellerId || null;
-    userOverridesRef.current[userId] = { ...userOverridesRef.current[userId], seller_id: normalizedSellerId };
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, seller_id: normalizedSellerId } : u));
-    const { error } = await supabase.rpc('admin_update_user_seller', { p_user_id: userId, p_seller_id: normalizedSellerId });
+    const previous = new Map(users.filter(u => ids.includes(u.id)).map(u => [u.id, u.seller_id || null]));
+    ids.forEach(id => setUserOverride(id, { seller_id: normalizedSellerId }));
+    setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, seller_id: normalizedSellerId } : u));
+
+    const results = await Promise.all(ids.map(id => supabase.rpc('admin_update_user_seller', {
+      p_user_id: id,
+      p_seller_id: normalizedSellerId,
+    })));
+    const error = results.find(result => result.error)?.error;
+
     if (error) {
       console.error('Error al guardar vendedor:', error);
-      delete userOverridesRef.current[userId];
+      clearUserOverrideFields(ids, ['seller_id']);
+      setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, seller_id: previous.get(u.id) || null } : u));
       loadUsers();
-    } else {
-      const user = users.find(u => u.id === userId);
+      throw error;
+    }
+
+    if (ids.length === 1) {
+      const user = users.find(u => u.id === ids[0]);
       const seller = sellers.find(s => s.id === sellerId);
-      trackAdminActivity('user_seller_update', { user_id: userId, user_email: user?.email, seller_id: normalizedSellerId, seller_name: seller?.name || null }, 'users');
+      trackAdminActivity('user_seller_update', { user_id: ids[0], user_email: user?.email, seller_id: normalizedSellerId, seller_name: seller?.name || null }, 'users');
+    } else {
+      const seller = sellers.find(s => s.id === sellerId);
+      trackAdminActivity('user_seller_update_bulk', { user_ids: ids, count: ids.length, seller_id: normalizedSellerId, seller_name: seller?.name || null }, 'users');
+    }
+  }
+
+  async function updateUserSeller(userId, sellerId) {
+    try {
+      await updateUsersSeller([userId], sellerId);
+    } catch (error) {
+      alert(`No se pudo guardar el vendedor: ${error.message}`);
+    }
+  }
+
+  async function updateUsersConfirmation(userIds, sendConfirmation) {
+    const ids = [...new Set(userIds)].filter(Boolean);
+    if (ids.length === 0) return;
+
+    const value = sendConfirmation === true;
+    const previous = new Map(users.filter(u => ids.includes(u.id)).map(u => [u.id, u.send_confirmation_email === true]));
+    ids.forEach(id => setUserOverride(id, { send_confirmation_email: value }));
+    setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, send_confirmation_email: value } : u));
+
+    const results = await Promise.all(ids.map(id => supabase.rpc('admin_update_user_confirmation', {
+      p_user_id: id,
+      p_send_confirmation: value,
+    })));
+    const error = results.find(result => result.error)?.error;
+
+    if (error) {
+      console.error('Error al guardar email de pedido:', error);
+      clearUserOverrideFields(ids, ['send_confirmation_email']);
+      setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, send_confirmation_email: previous.get(u.id) === true } : u));
+      loadUsers();
+      throw error;
+    }
+
+    if (ids.length === 1) {
+      const user = users.find(u => u.id === ids[0]);
+      trackAdminActivity('user_confirmation_update', { user_id: ids[0], user_email: user?.email, send_confirmation_email: value }, 'users');
+    } else {
+      trackAdminActivity('user_confirmation_update_bulk', { user_ids: ids, count: ids.length, send_confirmation_email: value }, 'users');
+    }
+  }
+
+  async function updateUserConfirmation(userId, sendConfirmation) {
+    try {
+      await updateUsersConfirmation([userId], sendConfirmation);
+    } catch (error) {
+      alert(`No se pudo guardar email de pedido: ${error.message}`);
+    }
+  }
+
+  async function updateSelectedUsersSeller(sellerId) {
+    const ids = [...selectedUserIds];
+    if (ids.length < 2) return;
+    setBulkUpdatingUsers(true);
+    try {
+      await updateUsersSeller(ids, sellerId);
+    } catch (error) {
+      alert(`No se pudo guardar vendedor en selección: ${error.message}`);
+    } finally {
+      setBulkUpdatingUsers(false);
+    }
+  }
+
+  async function updateSelectedUsersConfirmation(value) {
+    const ids = [...selectedUserIds];
+    if (ids.length < 2) return;
+    setBulkUpdatingUsers(true);
+    try {
+      await updateUsersConfirmation(ids, value);
+    } catch (error) {
+      alert(`No se pudo guardar email de pedido en selección: ${error.message}`);
+    } finally {
+      setBulkUpdatingUsers(false);
     }
   }
 
@@ -2794,6 +3064,15 @@ useEffect(() => {
       } else {
         if (data.link && data.user_id) {
           setUserInviteLinks(prev => ({ ...prev, [data.user_id]: data.link }));
+        }
+        if (data.reactivated && data.user_id) {
+          clearUserOverrideFields([data.user_id], [
+            'deleted_at',
+            'deleted_by',
+            'deleted_reason',
+            'admin_set_password',
+            'password_prompt_manual_seen_at',
+          ]);
         }
         setInviteResult({ success: true, linkError: data.link_error });
         setInviteForm({ name: '', phone: '', email: '', password: '' });
@@ -2963,12 +3242,100 @@ useEffect(() => {
     setTimeout(() => setCopiedLinkIds(prev => { const n = new Set(prev); n.delete(userId); return n; }), 1500);
   }
 
-  function isInvitedUserDeletable(user) {
-    return user?.registration_source === 'admin_invite' && !user?.deleted_at;
+  async function deployPasswordPrompt(user) {
+    if (!user?.id || user.password_changed_by_user) return;
+
+    setDeployingPasswordPromptIds(prev => {
+      const next = new Set(prev);
+      next.add(user.id);
+      return next;
+    });
+
+    try {
+      const res = await fetch('/api/admin-password-prompt', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'No se pudo desplegar la notificación.');
+
+      const requestedAt = data.password_prompt_manual_requested_at || new Date().toISOString();
+      setUsers(prev => prev.map(u => u.id === user.id ? {
+        ...u,
+        password_prompt_manual_requested_at: requestedAt,
+        password_prompt_manual_seen_at: null,
+      } : u));
+      trackAdminActivity('user_password_prompt_deploy', { user_id: user.id, user_email: user.email }, 'users');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setDeployingPasswordPromptIds(prev => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
+    }
   }
 
-  async function softDeleteInvitedUser(user) {
-    if (!isInvitedUserDeletable(user)) return;
+  function canSetAdminPassword(user) {
+    return user?.registration_source === 'admin_invite' && user?.password_changed_by_user !== true && !user?.deleted_at;
+  }
+
+  function updateAdminPasswordDraft(userId, value) {
+    setAdminPasswordDrafts(prev => ({ ...prev, [userId]: value }));
+  }
+
+  async function saveAdminCreatedPassword(user) {
+    if (!canSetAdminPassword(user)) return;
+    const password = String(adminPasswordDrafts[user.id] || '').trim();
+    if (password.length < 6) {
+      alert('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    setSavingAdminPasswordIds(prev => {
+      const next = new Set(prev);
+      next.add(user.id);
+      return next;
+    });
+
+    try {
+      const res = await fetch('/api/admin-user-access', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_password', user_id: user.id, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'No se pudo cambiar la contraseña.');
+
+      setUsers(prev => prev.map(u => u.id === user.id ? {
+        ...u,
+        admin_set_password: data.user?.admin_set_password ?? password,
+        password_changed_by_user: false,
+        password_changed_at: null,
+        password_prompt_manual_seen_at: data.user?.password_prompt_manual_seen_at ?? null,
+      } : u));
+      setAdminPasswordDrafts(prev => ({ ...prev, [user.id]: '' }));
+      setRevealedPasswords(prev => ({ ...prev, [user.id]: true }));
+      trackAdminActivity('user_admin_password_update', { user_id: user.id, user_email: user.email }, 'users');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setSavingAdminPasswordIds(prev => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
+    }
+  }
+
+  function isUserAccessDisableable(user) {
+    return user?.id && !user?.deleted_at;
+  }
+
+  async function disableUserAccess(user) {
+    if (!isUserAccessDisableable(user)) return;
 
     setDeletingUserIds(prev => {
       const next = new Set(prev);
@@ -2976,39 +3343,43 @@ useEffect(() => {
       return next;
     });
 
-    const deletedAt = new Date().toISOString();
+    try {
+      const res = await fetch('/api/admin-user-access', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disable_access', user_id: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'No se pudo eliminar el registro.');
 
-    const { error } = await supabase.rpc('admin_soft_delete_invited_profile', {
-      p_user_id: user.id,
-    });
+      const deletedAt = data.user?.deleted_at || new Date().toISOString();
+      const deletedPatch = {
+        deleted_at: deletedAt,
+        deleted_by: data.user?.deleted_by || currentUser,
+        deleted_reason: data.user?.deleted_reason || 'access_disabled_by_admin',
+        admin_set_password: null,
+        password_prompt_manual_seen_at: data.user?.password_prompt_manual_seen_at || deletedAt,
+      };
+      setUserOverride(user.id, deletedPatch, { persist: true });
+      setUsers(prev => prev.map(u => u.id === user.id ? {
+        ...u,
+        ...deletedPatch,
+      } : u));
 
-    if (error) {
+      trackAdminActivity('user_access_disable', {
+        user_id: user.id,
+        user_email: user.email,
+        registration_source: user.registration_source,
+      }, 'users');
+    } catch (error) {
       alert(`No se pudo eliminar el registro: ${error.message}`);
+    } finally {
       setDeletingUserIds(prev => {
         const next = new Set(prev);
         next.delete(user.id);
         return next;
       });
-      return;
     }
-
-    setUsers(prev => prev.map(u => u.id === user.id ? {
-      ...u,
-      deleted_at: deletedAt,
-      deleted_by: currentUser,
-      deleted_reason: 'deleted_by_admin_for_reinvite',
-    } : u));
-
-    trackAdminActivity('user_soft_delete_invited', {
-      user_id: user.id,
-      user_email: user.email,
-    }, 'users');
-
-    setDeletingUserIds(prev => {
-      const next = new Set(prev);
-      next.delete(user.id);
-      return next;
-    });
   }
 
   // ── Admins ──
@@ -3099,16 +3470,20 @@ useEffect(() => {
     const destinationValue = getInviteDestinationValue(draft.next_path);
     const isCatalogDestination = destinationValue === '/catalogo';
     const rootProducts = getActiveRootProducts();
-    const hasVariants = isCatalogDestination && selection.root && selection.variants.length > 1;
     const labelStyle = {display:'flex', flexDirection:'column', gap:4, fontSize:compact ? 10 : 11, fontWeight:compact ? 800 : 700, color:'#7d879f'};
     const inputStyle = compact ? {...s.input, fontSize:12, padding:'6px 8px'} : s.input;
+    const mutedInputStyle = {...inputStyle, background:'#f3f5fa', color:'#a4adbf', cursor:'not-allowed'};
+    const productDisabled = !isCatalogDestination;
+    const hasSelectedProduct = Boolean(selection.root);
+    const hasVariantOptions = isCatalogDestination && hasSelectedProduct && selection.variants.length > 1;
+    const hasCategoryOptions = isCatalogDestination && hasSelectedProduct && selection.categories.length > 0;
 
     const setNextPath = (nextPath) => setDraft(prev => ({ ...prev, next_path: nextPath }));
 
     return (
       <>
         <label style={labelStyle}>
-          Destino rapido
+          Destino
           <select
             value={destinationValue}
             onChange={e => {
@@ -3119,72 +3494,63 @@ useEffect(() => {
             style={inputStyle}
           >
             {INVITE_DESTINATIONS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-            <option value="custom">Personalizado</option>
+            {destinationValue === 'custom' && <option value="custom">Personalizado</option>}
           </select>
         </label>
 
-        {isCatalogDestination && (
-          <>
-            <label style={labelStyle}>
-              Producto
-              <select
-                value={selection.root?.id || ''}
-                onChange={e => setNextPath(e.target.value ? buildInviteCatalogPath(e.target.value) : '/catalogo')}
-                style={inputStyle}
-              >
-                <option value="">Elegir producto</option>
-                {rootProducts.map(product => (
-                  <option key={product.id} value={product.id}>{product.name}</option>
-                ))}
-              </select>
-            </label>
-
-            {hasVariants && (
-              <label style={labelStyle}>
-                Variante
-                <select
-                  value={selection.variant?.id || ''}
-                  onChange={e => {
-                    const nextVariantId = e.target.value;
-                    const nextCategories = getProductCategories(nextVariantId);
-                    const nextCategory = nextCategories.includes(selection.category) ? selection.category : '';
-                    setNextPath(buildInviteCatalogPath(selection.root.id, nextVariantId, nextCategory));
-                  }}
-                  style={inputStyle}
-                >
-                  {selection.variants.map(variant => (
-                    <option key={variant.id} value={variant.id}>{variant.variant_name || 'Base'}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {selection.root && selection.categories.length > 0 && (
-              <label style={labelStyle}>
-                Categoria
-                <select
-                  value={selection.category || ''}
-                  onChange={e => setNextPath(buildInviteCatalogPath(selection.root.id, selection.variant?.id || '', e.target.value))}
-                  style={inputStyle}
-                >
-                  <option value="">Todas</option>
-                  {selection.categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </>
-        )}
+        <label style={labelStyle}>
+          Producto
+          <select
+            value={isCatalogDestination ? (selection.root?.id || '') : ''}
+            disabled={productDisabled}
+            onChange={e => setNextPath(e.target.value ? buildInviteCatalogPath(e.target.value) : '/catalogo')}
+            style={productDisabled ? mutedInputStyle : inputStyle}
+          >
+            <option value="">{isCatalogDestination ? 'Elegir producto' : 'Elegí catálogo'}</option>
+            {isCatalogDestination && rootProducts.map(product => (
+              <option key={product.id} value={product.id}>{product.name}</option>
+            ))}
+          </select>
+        </label>
 
         <label style={labelStyle}>
-          URL inicial
-          <input
-            value={draft.next_path}
-            onChange={e => setNextPath(e.target.value)}
-            placeholder="/catalogo?producto=calcos-librerias&variante=base&categoria=infantiles"
-            style={inputStyle}
-          />
+          Variante
+          <select
+            value={hasVariantOptions ? (selection.variant?.id || '') : ''}
+            disabled={!hasVariantOptions}
+            onChange={e => {
+              const nextVariantId = e.target.value;
+              const nextCategories = getProductCategories(nextVariantId);
+              const nextCategory = nextCategories.includes(selection.category) ? selection.category : '';
+              setNextPath(buildInviteCatalogPath(selection.root.id, nextVariantId, nextCategory));
+            }}
+            style={hasVariantOptions ? inputStyle : mutedInputStyle}
+          >
+            {!isCatalogDestination && <option value="">Elegí catálogo</option>}
+            {isCatalogDestination && !hasSelectedProduct && <option value="">Elegí un producto</option>}
+            {isCatalogDestination && hasSelectedProduct && !hasVariantOptions && <option value="">Sin variantes disponibles</option>}
+            {hasVariantOptions && selection.variants.map(variant => (
+              <option key={variant.id} value={variant.id}>{variant.variant_name || 'Base'}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={labelStyle}>
+          Categoria
+          <select
+            value={hasCategoryOptions ? (selection.category || '') : ''}
+            disabled={!hasCategoryOptions}
+            onChange={e => setNextPath(buildInviteCatalogPath(selection.root.id, selection.variant?.id || '', e.target.value))}
+            style={hasCategoryOptions ? inputStyle : mutedInputStyle}
+          >
+            {!isCatalogDestination && <option value="">Elegí catálogo</option>}
+            {isCatalogDestination && !hasSelectedProduct && <option value="">Elegí un producto</option>}
+            {isCatalogDestination && hasSelectedProduct && !hasCategoryOptions && <option value="">Sin categorías disponibles</option>}
+            {hasCategoryOptions && <option value="">Todas</option>}
+            {hasCategoryOptions && selection.categories.map(category => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
         </label>
       </>
     );
@@ -3379,7 +3745,7 @@ useEffect(() => {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -3393,6 +3759,7 @@ useEffect(() => {
                 {ALL_TABS[id]}
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
                 {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
+                {id === 'notifications' && adminNotifications.length > 0 && <span style={s.orphanBadge}>{adminNotifications.length}</span>}
                 {id === 'carts' && carts.length > 0 && <span style={s.orphanBadge}>{carts.length}</span>}
                 {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
                 {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
@@ -4839,6 +5206,90 @@ useEffect(() => {
           </div>
         )}
 
+        {/* == NOTIFICACIONES == */}
+        {activeTab === 'notifications' && (
+          <div style={s.card}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, marginBottom:14}}>
+              <div>
+                <h2 style={{...s.sectionTitle, marginBottom:4}}>Notificaciones internas ({adminNotifications.length})</h2>
+                <div style={{fontSize:12, color:'#8b95b3'}}>Pedidos nuevos y cambios manuales de contraseña.</div>
+              </div>
+              <button
+                onClick={loadAdminNotifications}
+                disabled={loadingNotifications}
+                style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', background:'#f8faff', color:'#1B2F5E', fontSize:12, fontWeight:800, cursor:loadingNotifications ? 'not-allowed' : 'pointer', opacity:loadingNotifications ? 0.55 : 1}}
+              >
+                Actualizar
+              </button>
+            </div>
+
+            {notificationsError && (
+              <div style={{border:'1.5px solid #fed7aa', background:'#fff7ed', color:'#c2410c', borderRadius:10, padding:'10px 12px', fontSize:12, fontWeight:700, marginBottom:12}}>
+                {notificationsError}
+              </div>
+            )}
+
+            {loadingNotifications && adminNotifications.length === 0 && <p style={s.emptyMsg}>Cargando notificaciones...</p>}
+            {!loadingNotifications && !notificationsError && adminNotifications.length === 0 && (
+              <p style={s.emptyMsg}>Todavía no hay notificaciones internas.</p>
+            )}
+
+            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+              {adminNotifications.map(notification => {
+                const meta = notification.metadata || {};
+                const tone = notification.tone || getNotificationTone(notification.type);
+                const itemsPreview = meta.items_preview || summarizeNotificationItems(meta.items);
+                return (
+                  <div
+                    key={notification.id}
+                    style={{
+                      border:'1.5px solid #eef2fb',
+                      borderRadius:10,
+                      padding:'11px 12px',
+                      background: adminDarkMode ? 'rgba(255,255,255,0.03)' : '#fbfcff',
+                      display:'grid',
+                      gridTemplateColumns:'auto 1fr auto',
+                      gap:10,
+                      alignItems:'start',
+                    }}
+                  >
+                    <span style={{fontSize:11, fontWeight:900, color:tone.color, background:tone.bg, borderRadius:999, padding:'3px 8px', whiteSpace:'nowrap'}}>
+                      {tone.label}
+                    </span>
+                    <div style={{minWidth:0}}>
+                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
+                        <span style={{fontSize:13, fontWeight:900, color:adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>{notification.title}</span>
+                        {meta.order_code && <span style={{fontSize:11, fontFamily:'monospace', color:'#2D6BE4', fontWeight:800}}>{meta.order_code}</span>}
+                      </div>
+                      <div style={{fontSize:12, color:adminDarkMode ? '#b9c4da' : '#5a6380', marginTop:3, lineHeight:1.35}}>
+                        {notification.body}
+                      </div>
+                      {notification.type === 'order_created' && (
+                        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:6, fontSize:11, color:'#8b95b3'}}>
+                          {meta.customer_email && <span>{meta.customer_email}</span>}
+                          {meta.customer_phone && <span>{meta.customer_phone}</span>}
+                          {itemsPreview && <span style={{maxWidth:420, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{itemsPreview}</span>}
+                          {meta.notes && <span style={{maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>Nota: {meta.notes}</span>}
+                        </div>
+                      )}
+                      {notification.type === 'password_changed' && (
+                        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:6, fontSize:11, color:'#8b95b3'}}>
+                          {meta.user_email && <span>{meta.user_email}</span>}
+                          {meta.user_name && <span>{meta.user_name}</span>}
+                          <span>No se registra ni se muestra la contraseña.</span>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{fontSize:11, color:'#9aa3bc', fontWeight:800, whiteSpace:'nowrap', textAlign:'right'}} title={formatAdminDateTime(notification.created_at)}>
+                      {formatAdminTime(notification.created_at)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* == CARRITOS == */}
         {activeTab === 'carts' && (
           <CartsTab
@@ -4912,6 +5363,17 @@ useEffect(() => {
               </button>
             </div>
 
+            <div
+              style={{
+                position:'sticky',
+                top:38,
+                zIndex:10,
+                background: adminDarkMode ? '#111b34' : 'white',
+                paddingTop:10,
+                marginTop:-10,
+                marginBottom:14,
+              }}
+            >
             {/* Invitar usuario */}
             <div
               style={{
@@ -4922,28 +5384,21 @@ useEffect(() => {
                 background: adminDarkMode ? '#101a32' : 'white',
               }}
             >
-              <button
+              <div
                 style={{
                   width:'100%',
                   padding:'11px 16px',
-                  background: inviteOpen
-                    ? (adminDarkMode ? '#172444' : '#f0f4ff')
-                    : (adminDarkMode ? '#101a32' : '#f8faff'),
+                  background: adminDarkMode ? '#172444' : '#f0f4ff',
                   border:'none',
-                  borderBottom: inviteOpen
-                    ? (adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef')
-                    : 'none',
-                  cursor:'pointer',
+                  borderBottom: adminDarkMode ? '1.5px solid rgba(255,255,255,0.10)' : '1.5px solid #dde1ef',
                   display:'flex',
                   justifyContent:'space-between',
                   alignItems:'center',
                   fontFamily:'Barlow, sans-serif'
                 }}
-                onClick={() => { setInviteOpen(v => !v); setInviteResult(null); }}
               >
                 <span style={{fontSize:13, fontWeight:700, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>+ Invitar usuario</span>
-                <span style={{fontSize:11, color:'#9aa3bc'}}>{inviteOpen ? '▲' : '▼'}</span>
-              </button>
+              </div>
               {inviteOpen && (
                 <div style={{padding:'16px', display:'flex', flexDirection:'column', gap:12}}>
                   <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
@@ -4985,7 +5440,7 @@ useEffect(() => {
                       disabled={!inviteForm.name || !inviteForm.email || !inviteForm.password || inviteLoading}
                       onClick={handleInviteUser}
                     >
-                      {inviteLoading ? 'Generando...' : 'Generar invitación'}
+                      {inviteLoading ? 'Registrando...' : 'Registrar'}
                     </button>
                     {inviteResult?.error && (
                       <span style={{fontSize:12, color:'#e53e3e', fontWeight:600}}>{inviteResult.error}</span>
@@ -5008,12 +5463,6 @@ useEffect(() => {
                 marginBottom:14,
                 paddingBottom:14,
                 borderBottom: adminDarkMode ? '1.5px solid rgba(255,255,255,0.08)' : '1.5px solid #f0f2f8',
-                position:'sticky',
-                top:38,
-                zIndex:10,
-                background: adminDarkMode ? '#111b34' : 'white',
-                paddingTop:10,
-                marginTop:-10,
               }}
             >
               <input
@@ -5053,44 +5502,99 @@ useEffect(() => {
                 </button>
               )}
             </div>
+            </div>
+
+            {selectedUserIds.size > 1 && (
+              <div style={{
+                display:'flex',
+                alignItems:'center',
+                gap:8,
+                flexWrap:'wrap',
+                marginBottom:12,
+                padding:'10px 12px',
+                border:'1.5px solid #bde0fe',
+                borderRadius:8,
+                background:'#f0f8ff',
+              }}>
+                <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:800}}>
+                  {selectedUserIds.size} seleccionados
+                </span>
+                <button
+                  type="button"
+                  disabled={bulkUpdatingUsers}
+                  onClick={() => updateSelectedUsersConfirmation(true)}
+                  style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', fontSize:12, fontWeight:800, cursor:bulkUpdatingUsers ? 'not-allowed' : 'pointer', background:'white', color:'#1B2F5E', opacity:bulkUpdatingUsers ? 0.55 : 1}}
+                >
+                  Email pedido: activar
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkUpdatingUsers}
+                  onClick={() => updateSelectedUsersConfirmation(false)}
+                  style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', fontSize:12, fontWeight:800, cursor:bulkUpdatingUsers ? 'not-allowed' : 'pointer', background:'white', color:'#1B2F5E', opacity:bulkUpdatingUsers ? 0.55 : 1}}
+                >
+                  Email pedido: desactivar
+                </button>
+                <select
+                  value=""
+                  disabled={bulkUpdatingUsers}
+                  onChange={e => {
+                    if (!e.target.value) return;
+                    updateSelectedUsersSeller(e.target.value === 'none' ? null : e.target.value);
+                  }}
+                  style={{...s.input, width:'auto', minWidth:160, fontSize:12, padding:'6px 10px', opacity:bulkUpdatingUsers ? 0.55 : 1}}
+                >
+                  <option value="">Asignar vendedor</option>
+                  <option value="none">Sin vendedor</option>
+                  {sellers.filter(sel => sel.active).map(sel => (
+                    <option key={sel.id} value={sel.id}>{sel.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={bulkUpdatingUsers}
+                  onClick={() => setSelectedUserIds(new Set())}
+                  style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 10px', fontSize:12, fontWeight:700, cursor:bulkUpdatingUsers ? 'not-allowed' : 'pointer', background:'white', color:'#5a6380', opacity:bulkUpdatingUsers ? 0.55 : 1}}
+                >
+                  Limpiar selección
+                </button>
+              </div>
+            )}
 
             {loadingUsers && users.length === 0 && <p style={s.emptyMsg}>Cargando...</p>}
             {!loadingUsers && users.length === 0 && <p style={s.emptyMsg}>No hay usuarios registrados.</p>}
             {(() => {
-              const q = userSearch.trim().toLowerCase();
-              const filtered = users.filter(u => {
-                if (q && !u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
-                if (userFilterSeller !== 'all') {
-                  if (userFilterSeller === 'none' && u.seller_id) return false;
-                  if (userFilterSeller !== 'none' && u.seller_id !== userFilterSeller) return false;
-                }
-                if (userFilterStatus !== 'all') {
-                  const st = getStatus(u.id);
-                  if (userFilterStatus === 'online' && !st?.isActive) return false;
-                  if (userFilterStatus === 'inactive' && (!st || st.isActive)) return false;
-                  if (userFilterStatus === 'never' && st) return false;
-                }
-                return true;
-              });
+              const filtered = getFilteredUsers();
               if (!loadingUsers && filtered.length === 0 && users.length > 0) {
                 return <p style={s.emptyMsg}>Sin usuarios para los filtros aplicados.</p>;
               }
               return filtered.map(u => {
                 const status = getStatus(u.id);
                 const isDeleted = Boolean(u.deleted_at);
+                const isUserSelected = selectedUserIds.has(u.id);
+                const hasBulkUserSelection = selectedUserIds.size > 1;
 
                 return (
                   <div
                     key={u.id}
+                    onClick={e => handleUserClick(e, u.id)}
                     style={{
                       ...s.userRow,
                       opacity: isDeleted ? 0.58 : 1,
                       background: isDeleted
                         ? (adminDarkMode ? 'rgba(229,62,62,0.08)' : '#fff5f5')
-                        : 'transparent',
+                        : isUserSelected
+                          ? (adminDarkMode ? 'rgba(45,107,228,0.14)' : '#f0f5ff')
+                          : 'transparent',
                       borderRadius: isDeleted ? 8 : undefined,
+                      border: isDeleted
+                        ? (adminDarkMode ? '1.5px solid rgba(248,113,113,0.28)' : '1.5px solid #fecaca')
+                        : isUserSelected
+                          ? '1.5px solid #bde0fe'
+                          : s.userRow.border,
                       paddingLeft: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
                       paddingRight: isDeleted ? 8 : s.userRow.padding?.split?.(' ')?.[1] || undefined,
+                      cursor:'pointer',
                     }}
                   >
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0, minWidth: 60 }}>
@@ -5129,6 +5633,12 @@ useEffect(() => {
                       </div>
                       {(() => {
                         const src = u.registration_source;
+                        if (u.password_changed_by_user && src !== 'admin_invite') return (
+                          <div style={{display:'inline-flex', alignItems:'center', gap:6, background:'#ecfdf3', borderRadius:5, padding:'2px 8px', marginTop:3}}>
+                            <span style={{fontSize:10, fontWeight:800, color:'#15803d'}}>Contraseña cambiada</span>
+                            {u.password_changed_at && <span style={{fontSize:9, fontWeight:700, color:'#6b7280'}}>{formatAdminDateTime(u.password_changed_at)}</span>}
+                          </div>
+                        );
                         if (src === 'self_google') return (
                           <div style={{display:'inline-flex', alignItems:'center', gap:4, background:'#e8f0fe', borderRadius:5, padding:'2px 8px', marginTop:3}}>
                             <span style={{fontSize:10, fontWeight:700, color:'#4285F4'}}>Google</span>
@@ -5141,8 +5651,9 @@ useEffect(() => {
                         );
                         if (src === 'admin_invite') {
                           if (u.password_changed_by_user) return (
-                            <div style={{display:'inline-flex', alignItems:'center', background:'#fff7e6', borderRadius:5, padding:'2px 8px', marginTop:3}}>
-                              <span style={{fontSize:10, fontWeight:600, color:'#f6a800'}}>Cambió su contraseña</span>
+                            <div style={{display:'inline-flex', alignItems:'center', gap:6, background:'#ecfdf3', borderRadius:5, padding:'2px 8px', marginTop:3}}>
+                              <span style={{fontSize:10, fontWeight:800, color:'#15803d'}}>Contraseña cambiada</span>
+                              {u.password_changed_at && <span style={{fontSize:9, fontWeight:700, color:'#6b7280'}}>{formatAdminDateTime(u.password_changed_at)}</span>}
                             </div>
                           );
                           if (u.admin_set_password) {
@@ -5150,9 +5661,9 @@ useEffect(() => {
                             return (
                               <div
                                 style={{display:'inline-flex', alignItems:'center', gap:6, background:'#e8eef9', borderRadius:5, padding:'2px 8px', marginTop:3, cursor:'pointer', userSelect:'none'}}
-                                onClick={() => setRevealedPasswords(prev => ({...prev, [u.id]: !prev[u.id]}))}
+                                onClick={e => { e.stopPropagation(); setRevealedPasswords(prev => ({...prev, [u.id]: !prev[u.id]})); }}
                               >
-                                <span style={{fontSize:10, fontWeight:600, color:'#1B2F5E'}}>Clave:</span>
+                                <span style={{fontSize:10, fontWeight:600, color:'#1B2F5E'}}>Contraseña:</span>
                                 <span style={{fontSize:10, fontWeight:700, color:'#2D6BE4', fontFamily:'monospace'}}>{isRevealed ? u.admin_set_password : '••••••'}</span>
                                 <span style={{fontSize:9, color:'#5a6380'}}>{isRevealed ? '[ocultar]' : '[ver]'}</span>
                               </div>
@@ -5161,6 +5672,13 @@ useEffect(() => {
                         }
                         return null;
                       })()}
+
+                      {u.registration_source === 'admin_invite' && !u.password_changed_by_user && u.password_prompt_manual_requested_at && (
+                        <div style={{display:'inline-flex', alignItems:'center', gap:6, background:'#f5f3ff', borderRadius:5, padding:'2px 8px', marginTop:3, marginLeft:4}}>
+                          <span style={{fontSize:10, fontWeight:800, color:'#6d28d9'}}>Aviso desplegado</span>
+                          <span style={{fontSize:9, fontWeight:700, color:'#7d879f'}}>{formatAdminDateTime(u.password_prompt_manual_requested_at)}</span>
+                        </div>
+                      )}
 
                       {isDeleted && (
                         <div style={{
@@ -5178,17 +5696,19 @@ useEffect(() => {
                         </div>
                       )}
                     </div>
-                    <div style={{display:'flex', flexDirection:'column', gap:6, alignItems:'flex-end'}}>
-                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end'}}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:14, flex:'0 0 1260px', width:1260, minWidth:0}} onClick={e => e.stopPropagation()}>
+                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'nowrap', justifyContent:'center', flex:'0 0 auto', minWidth:620}}>
                         <button
+                          disabled={hasBulkUserSelection}
                           onClick={() => setUserScaleModal(u)}
-                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap', opacity:hasBulkUserSelection ? 0.45 : 1}}
                         >
-                          Escalas por producto
+                          Precios
                         </button>
                         <button
+                          disabled={hasBulkUserSelection}
                           onClick={() => openUserProductsModal(u)}
-                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap', opacity:hasBulkUserSelection ? 0.45 : 1}}
                         >
                           Productos
                         </button>
@@ -5196,61 +5716,130 @@ useEffect(() => {
                           <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Email de pedido</span>
                           <div
                             onClick={() => {
-                              const newVal = u.send_confirmation_email === false ? true : false;
-                              userOverridesRef.current[u.id] = { ...userOverridesRef.current[u.id], send_confirmation_email: newVal };
-                              setUsers(prev => prev.map(x => x.id === u.id ? { ...x, send_confirmation_email: newVal } : x));
-                              supabase.rpc('admin_update_user_confirmation', { p_user_id: u.id, p_send_confirmation: newVal }).then(r => console.log('confirmation rpc:', r));
+                              if (hasBulkUserSelection) return;
+                              updateUserConfirmation(u.id, u.send_confirmation_email !== true);
                             }}
-                            style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === false ? '#dde1ef' : '#1B2F5E', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                            style={{ width: 36, height: 20, borderRadius: 10, background: u.send_confirmation_email === true ? '#1B2F5E' : '#dde1ef', cursor: hasBulkUserSelection ? 'not-allowed' : 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0, opacity:hasBulkUserSelection ? 0.45 : 1 }}
                           >
-                            <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === false ? 2 : 18, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === true ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
                         </div>
-                        <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+                        <div style={{display:'flex', gap:4, flexWrap:'nowrap', justifyContent:'center'}}>
                           <button
+                            disabled={hasBulkUserSelection}
                             onClick={() => updateUserSeller(u.id, null)}
-                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc'}}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc', opacity:hasBulkUserSelection ? 0.45 : 1}}
                           >
                             Sin vendedor
                           </button>
                           {sellers.filter(sel => sel.active).map(sel => (
                             <button
                               key={sel.id}
+                              disabled={hasBulkUserSelection}
                               onClick={() => updateUserSeller(u.id, sel.id)}
-                              style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380'}}
+                              style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380', opacity:hasBulkUserSelection ? 0.45 : 1}}
                             >
                               {sel.name}
                             </button>
                           ))}
                         </div>
+                      </div>
+                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'nowrap', justifyContent:'flex-end', flex:'0 0 auto'}}>
                         {u.registration_source === 'admin_invite' && (
                           <button
                             onClick={() => openInviteLinksModal(u)}
                             title="Configurar links de acceso"
-                            style={{border:'1.5px solid #bde0fe', borderRadius:6, padding:'4px 8px', fontSize:12, cursor:'pointer', background:'#f0f8ff', color:'#2D6BE4', display:'flex', alignItems:'center', gap:4, opacity: regenLoadingIds.has(u.id) ? 0.5 : 1}}
-                            disabled={regenLoadingIds.has(u.id)}
+                            style={{border:'1.5px solid #bde0fe', borderRadius:6, padding:'4px 8px', fontSize:12, cursor:(regenLoadingIds.has(u.id) || hasBulkUserSelection) ? 'not-allowed' : 'pointer', background:'#f0f8ff', color:'#2D6BE4', display:'flex', alignItems:'center', gap:4, opacity: (regenLoadingIds.has(u.id) || hasBulkUserSelection) ? 0.45 : 1}}
+                            disabled={regenLoadingIds.has(u.id) || hasBulkUserSelection}
                           >
                             <LinkIcon/>
                             <span style={{fontSize:10, fontWeight:600}}>Links</span>
                           </button>
                         )}
 
-                        {isInvitedUserDeletable(u) ? (
+                        {canSetAdminPassword(u) && (
+                          <div style={{display:'flex', gap:5, alignItems:'center', flexWrap:'nowrap', justifyContent:'flex-end'}}>
+                            <input
+                              type="password"
+                              value={adminPasswordDrafts[u.id] || ''}
+                              onChange={e => updateAdminPasswordDraft(u.id, e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveAdminCreatedPassword(u); }}
+                              placeholder="Nueva contraseña"
+                              disabled={savingAdminPasswordIds.has(u.id) || hasBulkUserSelection}
+                              style={{
+                                ...s.input,
+                                width:142,
+                                minWidth:0,
+                                fontSize:12,
+                                padding:'5px 8px',
+                                height:30,
+                              }}
+                            />
+                            <button
+                              onClick={() => saveAdminCreatedPassword(u)}
+                              disabled={savingAdminPasswordIds.has(u.id) || !adminPasswordDrafts[u.id]?.trim() || hasBulkUserSelection}
+                              title="Cambiar la contraseña mientras el usuario todavía no la cambió."
+                              style={{
+                                border:'1.5px solid #bbf7d0',
+                                borderRadius:6,
+                                padding:'5px 9px',
+                                height:30,
+                                fontSize:11,
+                                fontWeight:800,
+                                cursor:(savingAdminPasswordIds.has(u.id) || !adminPasswordDrafts[u.id]?.trim() || hasBulkUserSelection) ? 'not-allowed' : 'pointer',
+                                fontFamily:'Barlow, sans-serif',
+                                background:'#dcfce7',
+                                color:'#166534',
+                                opacity:(savingAdminPasswordIds.has(u.id) || !adminPasswordDrafts[u.id]?.trim() || hasBulkUserSelection) ? 0.45 : 1,
+                                whiteSpace:'nowrap',
+                              }}
+                            >
+                              {savingAdminPasswordIds.has(u.id) ? 'Guardando...' : 'Guardar contraseña'}
+                            </button>
+                          </div>
+                        )}
+
+                        {u.registration_source === 'admin_invite' && (
+                          <button
+                            onClick={() => deployPasswordPrompt(u)}
+                            disabled={deployingPasswordPromptIds.has(u.id) || u.password_changed_by_user || isDeleted || hasBulkUserSelection}
+                            title={u.password_changed_by_user ? 'Este usuario ya cambió su contraseña.' : 'Mostrarle el aviso de cambio de contraseña la próxima vez que entre.'}
+                            style={{
+                              border:'1.5px solid #ddd6fe',
+                              borderRadius:6,
+                              padding:'4px 8px',
+                              fontSize:12,
+                              cursor:(deployingPasswordPromptIds.has(u.id) || u.password_changed_by_user || isDeleted || hasBulkUserSelection) ? 'not-allowed' : 'pointer',
+                              background:u.password_changed_by_user ? '#f0f2f8' : '#f5f3ff',
+                              color:u.password_changed_by_user ? '#9aa3bc' : '#6d28d9',
+                              display:'flex',
+                              alignItems:'center',
+                              gap:4,
+                              opacity:(deployingPasswordPromptIds.has(u.id) || isDeleted || hasBulkUserSelection) ? 0.45 : 1,
+                            }}
+                          >
+                            <span style={{fontSize:10, fontWeight:800}}>
+                              {deployingPasswordPromptIds.has(u.id) ? 'Enviando...' : 'Aviso contraseña'}
+                            </span>
+                          </button>
+                        )}
+
+                        {isUserAccessDisableable(u) && !deletingUserIds.has(u.id) && !hasBulkUserSelection ? (
                           <HoldButton
-                            label={deletingUserIds.has(u.id) ? 'Eliminando...' : 'Eliminar registro'}
+                            label="Eliminar"
                             holdingLabel="Eliminando..."
                             doneLabel="✓ Eliminado"
                             variant="danger"
-                            minWidth={132}
-                            onConfirm={() => softDeleteInvitedUser(u)}
+                            minWidth={108}
+                            onConfirm={() => disableUserAccess(u)}
                           />
                         ) : (
                           <button
                             type="button"
                             disabled
                             title={u.deleted_at
-                              ? 'Este registro ya fue eliminado. Se conserva tachado para mantener historial, estadísticas y configuración.'
-                              : 'Deshabilitado temporalmente hasta nuevo aviso. Por ahora solo se permite eliminar registros creados por invitación.'
+                              ? 'Este registro ya fue eliminado. Se conservan datos, historial y configuración.'
+                              : hasBulkUserSelection ? 'No disponible con selección múltiple.' : 'Eliminando acceso...'
                             }
                             style={{
                               border:'1.5px solid #dde1ef',
@@ -5265,24 +5854,10 @@ useEffect(() => {
                               opacity:0.75,
                             }}
                           >
-                            Eliminar registro
+                            {u.deleted_at ? 'Registro eliminado' : hasBulkUserSelection ? 'No disponible' : 'Eliminando...'}
                           </button>
                         )}
                       </div>
-                      {userInviteLinks[u.id] && (
-                        <div style={{display:'flex', gap:5, alignItems:'center', background:'#f0f8ff', border:'1px solid #bde0fe', borderRadius:6, padding:'4px 8px', maxWidth:340}}>
-                          <span style={{fontSize:10, fontFamily:'monospace', color:'#1B2F5E', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1}}>
-                            {userInviteLinks[u.id].replace('https://', '')}
-                          </span>
-                          <button
-                            onClick={() => handleCopyLink(u.id, userInviteLinks[u.id])}
-                            title="Copiar link"
-                            style={{background:'none', border:'none', cursor:'pointer', color: copiedLinkIds.has(u.id) ? '#22c55e' : '#2D6BE4', padding:'2px', display:'flex', alignItems:'center', flexShrink:0, transition:'color 0.2s'}}
-                          >
-                            {copiedLinkIds.has(u.id) ? <CheckIcon/> : <CopyIcon/>}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -5372,7 +5947,7 @@ useEffect(() => {
                           ) : (
                             <div style={{display:'flex', flexDirection:'column', gap:5}}>
                               <div style={{fontSize:12, color: adminDarkMode ? '#d9e2f5' : '#2d3352', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                                Inicio: {link.next_path || '/'}
+                                Destino: {link.next_path || '/'}
                               </div>
                               <div style={{fontSize:10, fontFamily:'monospace', color:'#5f6b89', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
                                 {link.link_url ? link.link_url.replace('https://', '') : 'Link antiguo sin URL recuperable'}
@@ -5590,14 +6165,53 @@ useEffect(() => {
                 <div>
                   <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Confirmación de email al registrarse</div>
                   <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>
-                    {settings['require_email_confirmation'] !== 'false'
+                    {settings['require_email_confirmation'] === 'true'
                       ? 'Se envía email de confirmación y el usuario debe confirmarlo antes de ingresar'
                       : 'Sin confirmación: el usuario entra directamente al registrarse'}
                   </div>
                 </div>
-                <div onClick={() => saveSetting('require_email_confirmation', settings['require_email_confirmation'] !== 'false' ? 'false' : 'true')}
-                  style={{ width: 36, height: 20, borderRadius: 10, background: settings['require_email_confirmation'] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ position: 'absolute', top: 2, left: settings['require_email_confirmation'] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                <div onClick={() => saveSetting('require_email_confirmation', settings['require_email_confirmation'] === 'true' ? 'false' : 'true')}
+                  style={{ width: 36, height: 20, borderRadius: 10, background: settings['require_email_confirmation'] === 'true' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <div style={{ position: 'absolute', top: 2, left: settings['require_email_confirmation'] === 'true' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Aviso de contraseña segura</h2>
+              <div style={{display:'flex', flexDirection:'column', gap:0}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Mostrar aviso a usuarios creados por admin</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Se muestra una sola vez por día hasta que cambien su contraseña.</div>
+                  </div>
+                  <div
+                    onClick={() => saveSetting(PASSWORD_PROMPT_ENABLED_KEY, settings[PASSWORD_PROMPT_ENABLED_KEY] === 'false' ? 'true' : 'false')}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: settings[PASSWORD_PROMPT_ENABLED_KEY] !== 'false' ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'absolute', top: 2, left: settings[PASSWORD_PROMPT_ENABLED_KEY] !== 'false' ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Primer aviso después de</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Cantidad de días desde que creamos la cuenta. Por defecto: 14.</div>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <input
+                      type="number"
+                      min="0"
+                      style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', width:78}}
+                      value={settings[PASSWORD_PROMPT_DELAY_DAYS_KEY] ?? String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS)}
+                      onChange={e => setSettings(prev => ({...prev, [PASSWORD_PROMPT_DELAY_DAYS_KEY]: e.target.value}))}
+                      onBlur={e => {
+                        const parsed = parseInt(e.target.value, 10);
+                        const days = Number.isFinite(parsed) ? Math.max(0, parsed) : DEFAULT_PASSWORD_PROMPT_DELAY_DAYS;
+                        saveSetting(PASSWORD_PROMPT_DELAY_DAYS_KEY, String(days));
+                      }}
+                    />
+                    <span style={{fontSize:12, color:'#7d879f', fontWeight:700}}>días</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5656,7 +6270,7 @@ useEffect(() => {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -5888,7 +6502,7 @@ useEffect(() => {
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 22px 20px', width:'100%', maxWidth:780, maxHeight:'82vh', overflow:'hidden', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12}}>
               <div>
-                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Escalas por producto</div>
+                <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Precios</div>
                 <div style={{fontSize:12, color:'#9aa3bc', marginTop:2}}>{userScaleModal.name || userScaleModal.email} · {userScaleModal.email}</div>
               </div>
               <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setUserScaleModal(null)}>×</button>

@@ -34,6 +34,24 @@ async function generateInviteLink(supabaseAdmin, email, userId, clientName = '')
   }
 }
 
+async function beginAdminPasswordMutation(supabaseAdmin, userId) {
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ admin_password_reset_started_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error && error.code !== '42703') throw error;
+}
+
+async function removeAdminGeneratedPasswordNotification(supabaseAdmin, userId, sinceIso) {
+  await supabaseAdmin
+    .from('admin_notifications')
+    .delete()
+    .eq('type', 'password_changed')
+    .eq('user_id', userId)
+    .gte('created_at', sinceIso);
+}
+
 export async function POST(req) {
   try {
     const { name, phone, email, password } = await req.json();
@@ -58,11 +76,10 @@ export async function POST(req) {
       .eq('email', normalizedEmail)
       .maybeSingle();
 
-    if (
-      existingProfile?.id &&
-      existingProfile.registration_source === 'admin_invite' &&
-      existingProfile.deleted_at
-    ) {
+    if (existingProfile?.id && existingProfile.deleted_at) {
+      await beginAdminPasswordMutation(supabaseAdmin, existingProfile.id);
+      const authUpdateStartedAt = new Date().toISOString();
+
       const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(
         existingProfile.id,
         {
@@ -77,6 +94,8 @@ export async function POST(req) {
         return NextResponse.json({ error: updateUserError.message }, { status: 400 });
       }
 
+      await removeAdminGeneratedPasswordNotification(supabaseAdmin, existingProfile.id, authUpdateStartedAt);
+
       const { error: reactivateProfileError } = await supabaseAdmin
         .from('profiles')
         .update({
@@ -86,6 +105,10 @@ export async function POST(req) {
           admin_set_password: password,
           registration_source: 'admin_invite',
           password_changed_by_user: false,
+          password_changed_at: null,
+          password_prompt_dismissed_on: null,
+          password_prompt_manual_seen_at: null,
+          admin_password_reset_started_at: null,
           send_confirmation_email: false,
           deleted_at: null,
           deleted_by: null,
@@ -117,6 +140,10 @@ export async function POST(req) {
     });
 
     if (createError) {
+      const msg = createError.message?.toLowerCase?.() || '';
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        return NextResponse.json({ error: 'Ya existe una cuenta activa con ese email.' }, { status: 400 });
+      }
       return NextResponse.json({ error: createError.message }, { status: 400 });
     }
 

@@ -110,6 +110,11 @@ const [savingProfile, setSavingProfile] = useState(false);
       setPasswordMsg('Error: ' + error.message);
     } else {
       setPasswordMsg('¡Contraseña actualizada!');
+      await supabase.from('profiles').update({
+        admin_set_password: null,
+        password_changed_by_user: true,
+        password_changed_at: new Date().toISOString(),
+      }).eq('id', user.id).then(() => {});
       setNewPassword(''); setConfirmPassword('');
       setTimeout(() => setPasswordMsg(''), 3000);
     }

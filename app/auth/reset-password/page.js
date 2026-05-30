@@ -28,6 +28,14 @@ export default function ResetPassword() {
     const { error: e } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (e) { setError(e.message); return; }
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) {
+      await supabase.from('profiles').update({
+        admin_set_password: null,
+        password_changed_by_user: true,
+        password_changed_at: new Date().toISOString(),
+      }).eq('id', userData.user.id).then(() => {});
+    }
     setSuccess(true);
     setTimeout(() => { window.location.href = '/'; }, 2500);
   }

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
+import SafeImage from '@/components/SafeImage';
 import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
@@ -73,7 +74,7 @@ function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       {!ready && imageUrl && (
-        <img src={imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 1 }} />
+        <SafeImage src={imageUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', zIndex: 1 }} />
       )}
       <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
         <ModelViewer url={url} autoRotate={autoRotate} modelConfig={modelConfig} hideHint={true} onReady={() => setReady(true)} />
@@ -122,7 +123,7 @@ function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, fo
   return (
     <div ref={ref} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#eef0f6' }}>
       {imageUrl && !showModel && (
-        <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <SafeImage src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       )}
       {showModel && (
         <ModelViewerWithFallback url={modelUrl} autoRotate={autoRotate} modelConfig={modelConfig} imageUrl={imageUrl} />
@@ -413,6 +414,9 @@ export default function Home() {
     let destroyed = false;
     let realtimeChannel = null;
     let presenceChannel = null;
+    let presenceInterval = null;
+    let panel = null;
+    let badge = null;
 
     async function initHeatmap() {
       const { data: adminData } = await supabase.auth.getSession();
@@ -568,7 +572,7 @@ export default function Home() {
       (profilesData || []).forEach(p => { profilesMap[p.id] = p.name || p.email || p.id.slice(0, 8); });
 
       // Panel de control
-      const panel = document.createElement('div');
+      panel = document.createElement('div');
       panel.setAttribute('data-heatmap-ui', '1');
       panel.style.cssText = 'position:fixed;top:80px;right:16px;background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:12px;padding:12px 16px;z-index:10001;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;max-height:70vh;overflow-y:auto;';
 
@@ -694,7 +698,7 @@ export default function Home() {
         .subscribe();
 
       // Limpiar posiciones viejas cada 10 segundos
-      const presenceInterval = setInterval(() => {
+      presenceInterval = setInterval(() => {
         const users = { ...heatmapPresenceRef.current };
         Object.keys(users).forEach(id => {
           if (new Date(users[id].updated_at).getTime() < Date.now() - 6000) {
@@ -706,7 +710,7 @@ export default function Home() {
       }, 2000);
 
       // Badge
-      const badge = document.createElement('div');
+      badge = document.createElement('div');
       badge.appendChild(badgeSpan);
       badge.setAttribute('data-heatmap-ui', '1');
       badge.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(27,47,94,0.92);backdrop-filter:blur(8px);border-radius:20px;padding:8px 20px;z-index:10002;pointer-events:auto;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
@@ -718,6 +722,7 @@ export default function Home() {
         window.removeEventListener('resize', drawHeatmap);
         realtimeChannel?.unsubscribe();
         presenceChannel?.unsubscribe();
+        if (presenceInterval) clearInterval(presenceInterval);
         canvas?.remove();
         presenceCanvas?.remove();
         badge?.remove();
@@ -734,9 +739,11 @@ export default function Home() {
       heatmapDrawRef.current = null;
       realtimeChannel?.unsubscribe();
       presenceChannel?.unsubscribe();
-      clearInterval(presenceInterval);
+      if (presenceInterval) clearInterval(presenceInterval);
       canvas?.remove();
       presenceCanvas?.remove();
+      badge?.remove();
+      panel?.remove();
     };
   }, []);
 
@@ -1314,13 +1321,19 @@ export default function Home() {
     return i.showPrice !== false && price !== null && price > 0;
   });
 
-  const cardWidth = isMobile
+  const configuredCardWidth = isMobile
     ? (activeProduct?.card_width_mobile ?? 160)
     : (activeProduct?.card_width_desktop ?? 180);
+  const gridGap = 14;
   const reservedRight = isMobile ? 0 : desktopReservedRight;
-  const availableWidth = Math.max(cardWidth, width - reservedRight - (isMobile ? 32 : 48));
-  const colCount = Math.max(1, Math.floor(availableWidth / cardWidth));
-  const gridCols = `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
+  const availableWidth = Math.max(1, width - reservedRight - (isMobile ? 32 : 48));
+  const cardWidth = isMobile
+    ? Math.min(configuredCardWidth, Math.max(142, Math.floor((availableWidth - gridGap) / 2)))
+    : configuredCardWidth;
+  const colCount = Math.max(1, Math.floor((availableWidth + gridGap) / (cardWidth + gridGap)));
+  const gridCols = isMobile
+    ? `repeat(${colCount}, minmax(0, 1fr))`
+    : `repeat(${colCount}, minmax(${cardWidth}px, 1fr))`;
   const cardAspectRatio = activeProduct?.aspect_ratio ?? '2/3';
 
   function addToCart(design, qty = MIN_DESIGN_QTY) {
@@ -1570,7 +1583,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     }}
                   >
                     {p.landing_image
-                      ? <img src={p.landing_image} alt={p.name} style={{position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
+                      ? <SafeImage src={p.landing_image} alt={p.name} style={{position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block'}} />
                       : <div style={{position:'absolute', inset:0, background:'linear-gradient(135deg, #1B2F5E 0%, #2D6BE4 100%)'}} />
                     }
                     <div style={{position:'absolute', inset:0, background:'linear-gradient(to top, rgba(10,20,50,0.82) 0%, rgba(10,20,50,0.2) 100%)'}} />
@@ -1583,47 +1596,59 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             </div>
           )}
 
-          {activeVariants.length > 1 && (
-            <div style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              margin: '2px 0 14px',
-            }}>
-              {activeVariants.map(variant => {
-                const isActive = activeProductId === variant.id;
-                return (
-                  <button
-                    key={variant.id}
-                    onClick={() => switchProduct(variant.id)}
-                    style={{
-                      border: '1.5px solid',
-                      borderColor: isActive ? '#2D6BE4' : '#dde1ef',
-                      borderRadius: 999,
-                      padding: isMobile ? '9px 15px' : '10px 18px',
-                      background: isActive
-                        ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)'
-                        : 'rgba(255,255,255,0.92)',
-                      color: isActive ? 'white' : '#1B2F5E',
-                      fontSize: isMobile ? 13 : 14,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      boxShadow: isActive
-                        ? '0 8px 18px rgba(45,107,228,0.20)'
-                        : '0 3px 10px rgba(27,47,94,0.06)',
-                      transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {variant.variant_name || 'Base'}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            margin: '2px 0 14px',
+            minHeight: isMobile ? 36 : 40,
+            alignItems: 'center',
+          }}>
+            {!activeProduct ? (
+              <button type="button" disabled style={{...s.filterBtn, background:'#eef0f6', color:'#a4adbf', cursor:'not-allowed', boxShadow:'none'}}>
+                Elegí un producto
+              </button>
+            ) : activeVariants.length <= 1 ? (
+              <button type="button" disabled style={{...s.filterBtn, background:'#eef0f6', color:'#a4adbf', cursor:'not-allowed', boxShadow:'none'}}>
+                Sin variantes
+              </button>
+            ) : activeVariants.map(variant => {
+              const isActive = activeProductId === variant.id;
+              return (
+                <button
+                  key={variant.id}
+                  onClick={() => switchProduct(variant.id)}
+                  style={{
+                    border: '1.5px solid',
+                    borderColor: isActive ? '#2D6BE4' : '#dde1ef',
+                    borderRadius: 999,
+                    padding: isMobile ? '9px 15px' : '10px 18px',
+                    background: isActive
+                      ? 'linear-gradient(135deg, #1B2F5E, #2D6BE4)'
+                      : 'rgba(255,255,255,0.92)',
+                    color: isActive ? 'white' : '#1B2F5E',
+                    fontSize: isMobile ? 13 : 14,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: isActive
+                      ? '0 8px 18px rgba(45,107,228,0.20)'
+                      : '0 3px 10px rgba(27,47,94,0.06)',
+                    transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {variant.variant_name || 'Base'}
+                </button>
+              );
+            })}
+          </div>
 
-          <div style={s.filters}>
-            {categories.length > 0 && categories.map(cat => {
+          <div style={{...s.filters, minHeight: isMobile ? 36 : 40, alignItems:'center'}}>
+            {categories.length === 0 ? (
+              <button type="button" disabled style={{...s.filterBtn, background:'#eef0f6', color:'#a4adbf', cursor:'not-allowed', boxShadow:'none'}}>
+                {activeProduct ? 'Sin categorías' : 'Elegí un producto'}
+              </button>
+            ) : categories.map(cat => {
               const activeProd = products.find(p => p.id === activeProductId);
               const savedColor = activeProd?.category_colors?.[cat];
               const bg = savedColor || '#e8eef9';
@@ -1748,7 +1773,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       {d.model_url && is3dModelUrl(d.model_url)
                         ? <LazyModelViewer url={d.model_url} autoRotate={true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
                         : (d.image_url || d.model_url)
-                        ? <img src={d.image_url || d.model_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
+                        ? <SafeImage src={d.image_url || d.model_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
                       {(() => {
                         const tags = Array.isArray(activeProduct?.info_tags) ? activeProduct.info_tags : [];
@@ -1947,11 +1972,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <div key={item.id} style={s.cartItem}>
                         {item.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                          <SafeImage src={item.image_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                         ) : item.model_url && !is3dModelUrl(item.model_url) ? (
                           // Non-3D file in model_url (e.g. PNG stored there)
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.model_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                          <SafeImage src={item.model_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                         ) : item.model_url ? (
                           // 3MF without captured thumbnail — show 3D icon placeholder
                           <div style={{width:36, height:36, borderRadius:6, border:'1px solid #dde1ef', flexShrink:0, background:'#eef0f6', display:'flex', alignItems:'center', justifyContent:'center'}}>
@@ -2038,7 +2063,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   return (
                   <div key={item.id} style={s.cartItem}>
                     {item.image_url && (
-                      <img src={item.image_url} alt={item.name} style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                      <SafeImage src={item.image_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                     )}
                     <div style={s.cartItemInfo}>
                       {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}

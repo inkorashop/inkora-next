@@ -17,9 +17,11 @@ export default function PopupCallback() {
         supabase.from('settings').select('value').eq('key', 'google_login_hint').single()
           .then(({ data }) => {
             localStorage.setItem('inkora_google_hint_enabled', data?.value === 'true' ? 'true' : 'false');
-          });
+        });
         if (window.opener) {
-          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, 'https://www.inkora.com.ar');
+          ['https://www.inkora.com.ar', 'https://inkora.com.ar'].forEach(origin => {
+            window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS' }, origin);
+          });
           window.close();
         }
       }
