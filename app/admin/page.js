@@ -25,6 +25,15 @@ import {
   parseDesignLimitRules,
   serializeDesignLimitRules,
 } from '@/lib/design-limits';
+import {
+  DEFAULT_BRIDGE_URL,
+  getStoredBridgeConfig,
+  saveStoredBridgeConfig,
+  addBridgePdfRoot,
+  getBridgePdfRoots,
+  scanBridgePdfs,
+  matchBridgeDesignPdfs,
+} from '@/lib/print-bridge-client';
 
 const DESIGN_FORMAT_OPTIONS = [
   { value: 'jpg', label: '.jpg', accept: 'image/jpeg,.jpg,.jpeg' },
@@ -42,11 +51,12 @@ function is3dModelUrl(url) {
 const EMPTY_PRODUCT = { name: '', slug: '', variant_name: '', parent_product_id: null, card_width_desktop: 180, card_width_mobile: 160, landing_card_width_desktop: 320, landing_card_width_mobile: 280, aspect_ratio: '2/3', max_file_size_kb: 250, landing_max_file_size_kb: 4096, price_per_unit: 0, show_price: true, allow_3d: false, allow_glb: false, categories: [], design_formats: IMAGE_DESIGN_FORMATS, use_parent_tiers: false };
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const ADMIN_ACTIVE_THRESHOLD = 15000;
-const ADMIN_TABS = ['products','designs','orders','notifications','carts','database','users','sellers','admins','config','tracking','production','version_history','emails'];
+const ADMIN_TABS = ['products','designs','orders','notifications','carts','database','users','sellers','config','tracking','production','version_history','emails'];
 const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
 const PASSWORD_PROMPT_ENABLED_KEY = 'password_change_prompt_enabled';
 const PASSWORD_PROMPT_DELAY_DAYS_KEY = 'password_change_prompt_delay_days';
 const DEFAULT_PASSWORD_PROMPT_DELAY_DAYS = 14;
+const DESIGN_PDF_LINK_ENABLED_KEY = 'design_pdf_link_enabled_ids';
 const INVITE_DESTINATIONS = [
   { label: 'Inicio', value: '/' },
   { label: 'Catalogo', value: '/catalogo' },
@@ -76,6 +86,19 @@ function fileToBase64(file) {
     reader.onload = () => resolve(reader.result.split(',')[1]);
     reader.readAsDataURL(file);
   });
+}
+
+function parseDesignPdfEnabledIds(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeDesignPdfEnabledIds(ids) {
+  return JSON.stringify([...new Set((ids || []).map(String).filter(Boolean))]);
 }
 
 function blobToBase64(blob) {
@@ -297,23 +320,67 @@ useEffect(() => {
   if (typeof window === 'undefined') return;
   localStorage.setItem('inkora_admin_theme', adminDarkMode ? 'dark' : 'light');
 }, [adminDarkMode]);
+
+useEffect(() => {
+  const stored = getStoredBridgeConfig();
+  setDesignPdfBridgeUrl(stored.url || DEFAULT_BRIDGE_URL);
+  setDesignPdfBridgeToken(stored.token || '');
+}, []);
   const TAB_SLUGS = { products: 'productos', designs: 'diseños', orders: 'pedidos', notifications: 'notificaciones', carts: 'carritos', database: 'base-de-datos', users: 'usuarios', sellers: 'vendedores', admins: 'admins', config: 'configuracion', tracking: 'seguimiento', production: 'produccion', version_history: 'historial-de-versiones', emails: 'emails' };
   const SLUG_TABS = Object.fromEntries(Object.entries(TAB_SLUGS).map(([k, v]) => [v, k]));
+  const TRACKING_SUBTAB_SLUGS = { activity: 'actividad', stats: 'estadisticas' };
+  const SLUG_TRACKING_SUBTABS = { actividad: 'activity', estadisticas: 'stats' };
+  const ORDER_VIEW_SLUGS = { active: 'activos', archived: 'archivados' };
+  const SLUG_ORDER_VIEWS = { activos: 'active', archivados: 'archived' };
+  const USERS_SUBTAB_SLUGS = { clients: 'clientes', operators: 'operarios', admins: 'admins' };
+  const SLUG_USERS_SUBTABS = { clientes: 'clients', usuarios: 'clients', operarios: 'operators', admins: 'admins' };
+  const PRODUCTION_SUBTAB_SLUGS = { produce: 'producir', orders: 'pedidos', stock: 'stock', log: 'historial', operators: 'operarios' };
+  const SLUG_PRODUCTION_SUBTABS = { producir: 'produce', pedidos: 'orders', stock: 'stock', historial: 'log', operarios: 'operators' };
+  const VISIBILITY_TAB_SLUGS = { products: 'productos', variants: 'variantes', categories: 'categorias', designs: 'diseños' };
+  const SLUG_VISIBILITY_TABS = { productos: 'products', variantes: 'variants', categorias: 'categories', categorías: 'categories', diseños: 'designs', disenos: 'designs' };
+  const PRODUCT_MODAL_SLUGS = { categories: 'categorias', tiers: 'escalas-precios', design_limits: 'escalas-diseños' };
+  const SLUG_PRODUCT_MODALS = { categorias: 'categories', 'escalas-precios': 'tiers', 'escalas-diseños': 'design_limits', 'escalas-disenos': 'design_limits' };
   const initialTab = () => {
     if (typeof window === 'undefined') return 'products';
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
     if (slug === 'actividad' || slug === 'estadisticas') return 'tracking';
-    return SLUG_TABS[slug] || 'products';
+    const tab = SLUG_TABS[slug] || 'products';
+    return tab === 'admins' ? 'users' : tab;
+  };
+  const initialUsersSubtab = () => {
+    if (typeof window === 'undefined') return 'clients';
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
+    const view = params.get('vista') || params.get('subtab') || '';
+    if (SLUG_TABS[slug] === 'admins') return 'admins';
+    return SLUG_USERS_SUBTABS[view] || 'clients';
+  };
+  const initialProductionSubtab = () => {
+    if (typeof window === 'undefined') return 'produce';
+    const params = new URLSearchParams(window.location.search);
+    return SLUG_PRODUCTION_SUBTABS[params.get('vista') || params.get('subtab') || ''] || 'produce';
   };
   const initialTrackingSubtab = () => {
     if (typeof window === 'undefined') return 'activity';
     const params = new URLSearchParams(window.location.search);
     const slug = params.get('tab') || window.location.pathname.split('/admin/')[1] || '';
-    return slug === 'estadisticas' ? 'stats' : 'activity';
+    const view = params.get('vista') || params.get('subtab') || '';
+    return SLUG_TRACKING_SUBTABS[view] || (slug === 'estadisticas' ? 'stats' : 'activity');
+  };
+  const initialOrdersView = () => {
+    if (typeof window === 'undefined') return 'active';
+    const params = new URLSearchParams(window.location.search);
+    return SLUG_ORDER_VIEWS[params.get('vista') || ''] || 'active';
   };
   const [activeTab, setActiveTab] = useState(initialTab);
   const [trackingSubtab, setTrackingSubtab] = useState(initialTrackingSubtab);
+  const [usersSubtab, setUsersSubtab] = useState(initialUsersSubtab);
+  const [productionSubtab, setProductionSubtab] = useState(initialProductionSubtab);
+  const [productionSelectedOrderId, setProductionSelectedOrderId] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('pedido');
+  });
   const screenRef = useRef(screen);
   const activeTabRef = useRef(activeTab);
   const adminScrollPositionsRef = useRef({});
@@ -390,6 +457,11 @@ useEffect(() => {
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
   const [designSortBy, setDesignSortBy] = useState('default');
+  const [designPdfBridgeUrl, setDesignPdfBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
+  const [designPdfBridgeToken, setDesignPdfBridgeToken] = useState('');
+  const [designPdfBusy, setDesignPdfBusy] = useState(false);
+  const [designPdfMatches, setDesignPdfMatches] = useState({});
+  const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -433,6 +505,14 @@ useEffect(() => {
   const [savingAdminPasswordIds, setSavingAdminPasswordIds] = useState(new Set());
   const { getStatus } = usePresence(supabase);
 
+  // Operators
+  const [operators, setOperators] = useState([]);
+  const [loadingOperators, setLoadingOperators] = useState(false);
+  const [operatorsError, setOperatorsError] = useState('');
+  const [operatorForm, setOperatorForm] = useState({ name: '', phone: '', email: '' });
+  const [creatingOperator, setCreatingOperator] = useState(false);
+  const [operatorCreateResult, setOperatorCreateResult] = useState(null);
+
   // Admins
   const [admins, setAdmins] = useState([]);
   const [adminPresence, setAdminPresence] = useState([]);
@@ -453,7 +533,7 @@ useEffect(() => {
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
-  const [ordersView, setOrdersView] = useState('active'); // 'active' | 'archived'
+  const [ordersView, setOrdersView] = useState(initialOrdersView); // 'active' | 'archived'
   const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
   const lastSelectedOrderIdRef = useRef(null);
   const [orderFilterStatus, setOrderFilterStatus] = useState('all');
@@ -483,6 +563,7 @@ useEffect(() => {
   const [visibilityTab, setVisibilityTab] = useState('products');
   const [visibilitySearch, setVisibilitySearch] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState('all');
+  const [visibilityQuickFilters, setVisibilityQuickFilters] = useState({ productId: 'all', variantId: 'all', category: 'all' });
   const [visibilitySelection, setVisibilitySelection] = useState(new Set());
   const visibilityLastSelectedRef = useRef(null);
   const [savingUserScaleKey, setSavingUserScaleKey] = useState(null);
@@ -499,6 +580,10 @@ useEffect(() => {
   const [versionSnapshotViewer, setVersionSnapshotViewer] = useState({ open: false, snapshot: null, data: null, loading: false, error: '' });
   const [adminDataReadyForSnapshots, setAdminDataReadyForSnapshots] = useState(false);
   const autoSnapshotSavingRef = useRef(false);
+  const [adminUrlHydrated, setAdminUrlHydrated] = useState(false);
+  const [adminUrlApplyTick, setAdminUrlApplyTick] = useState(0);
+  const applyingAdminUrlRef = useRef(false);
+  const lastAppliedAdminLocationRef = useRef('');
 
   useEffect(() => {
     if (!productManageModal && !allScalesModalOpen && !userProductsModal) return;
@@ -712,12 +797,420 @@ useEffect(() => {
         loadSettings(),
         loadSellers(),
         loadUsers(),
+        loadOperators(),
         loadUserProductLocalities(),
         loadVersionSnapshots(),
       ]).finally(() => setAdminDataReadyForSnapshots(true));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
+
+  function normalizeAdminUrlValue(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function adminPathTabSlug() {
+    if (typeof window === 'undefined') return '';
+    return decodeURIComponent(window.location.pathname.split('/admin/')[1] || '').split('/')[0];
+  }
+
+  function findProductFromAdminUrl(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeAdminUrlValue(raw);
+    if (!normalized) return null;
+    return products.find(product => {
+      const candidates = [
+        product.id,
+        product.slug,
+        product.name,
+        product.variant_name,
+        productDisplayName(product),
+        catalogSlug(product.slug),
+        catalogSlug(product.name),
+        catalogSlug(product.variant_name),
+        catalogSlug(productDisplayName(product)),
+      ];
+      return candidates.some(candidate => normalizeAdminUrlValue(candidate) === normalized);
+    }) || null;
+  }
+
+  function findUserFromAdminUrl(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeAdminUrlValue(raw);
+    if (!normalized) return null;
+    return users.find(user => {
+      const candidates = [
+        user.id,
+        user.email,
+        user.name,
+        catalogSlug(user.email),
+        catalogSlug(user.name),
+      ];
+      return candidates.some(candidate => normalizeAdminUrlValue(candidate) === normalized);
+    }) || null;
+  }
+
+  function findOrderFromAdminUrl(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeAdminUrlValue(raw);
+    if (!normalized) return null;
+    return orders.find(order => {
+      const candidates = [order.id, order.order_code, catalogSlug(order.order_code)];
+      return candidates.some(candidate => normalizeAdminUrlValue(candidate) === normalized);
+    }) || null;
+  }
+
+  function findVersionSnapshotFromAdminUrl(value) {
+    const raw = String(value || '').trim();
+    const normalized = normalizeAdminUrlValue(raw);
+    if (!normalized) return null;
+    return versionSnapshots.find(snapshot => normalizeAdminUrlValue(snapshot.id) === normalized) || null;
+  }
+
+  function resetUrlModalState() {
+    setProductManageModal(null);
+    setInfoTagsModal(null);
+    setModelConfigPopup(null);
+    setPopupPreviewModel(null);
+    setAllScalesModalOpen(false);
+    setUserProductsModal(null);
+    setUserScaleModal(null);
+    setInviteLinksModal(null);
+    setOrderDetail(null);
+    setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+  }
+
+  function buildAdminUrlFromState() {
+    const params = new URLSearchParams();
+    const setTab = (tab) => params.set('tab', TAB_SLUGS[tab] || tab);
+    setTab(activeTab);
+
+    if (activeTab === 'tracking') {
+      params.set('vista', TRACKING_SUBTAB_SLUGS[trackingSubtab] || trackingSubtab);
+    }
+
+    if (activeTab === 'orders') {
+      params.set('vista', ORDER_VIEW_SLUGS[ordersView] || ordersView);
+    }
+
+    if (activeTab === 'users') {
+      params.set('vista', USERS_SUBTAB_SLUGS[usersSubtab] || usersSubtab);
+    }
+
+    if (activeTab === 'production') {
+      params.set('vista', PRODUCTION_SUBTAB_SLUGS[productionSubtab] || productionSubtab);
+      if (productionSubtab === 'produce' && productionSelectedOrderId) params.set('pedido', productionSelectedOrderId);
+    }
+
+    if (activeTab === 'designs' && selectedProductId) {
+      params.set('producto', selectedProductId);
+    }
+
+    if (allScalesModalOpen) {
+      setTab('products');
+      params.set('modal', 'escalas-generales');
+    } else if (productManageModal?.productId) {
+      setTab('products');
+      params.set('modal', `producto-${PRODUCT_MODAL_SLUGS[productManageModal.type] || productManageModal.type}`);
+      params.set('producto', productManageModal.productId);
+    } else if (infoTagsModal?.productId) {
+      setTab('products');
+      params.set('modal', 'producto-info');
+      params.set('producto', infoTagsModal.productId);
+    } else if (modelConfigPopup) {
+      setTab('products');
+      params.set('modal', 'producto-modelo-3d');
+      params.set('producto', modelConfigPopup);
+    } else if (userProductsModal) {
+      setTab('users');
+      params.set('modal', userProductsModal.type === 'anonymous' ? 'usuarios-no-logueados' : 'productos-usuario');
+      if (userProductsModal.type === 'user' && userProductsModal.user?.id) params.set('usuario', userProductsModal.user.id);
+      params.set('vista', VISIBILITY_TAB_SLUGS[visibilityTab] || visibilityTab);
+      if (visibilityQuickFilters.productId !== 'all') params.set('filtro_producto', visibilityQuickFilters.productId);
+      if (visibilityQuickFilters.variantId !== 'all') params.set('filtro_variante', visibilityQuickFilters.variantId);
+      if (visibilityQuickFilters.category !== 'all') params.set('filtro_categoria', visibilityQuickFilters.category);
+    } else if (userScaleModal?.id) {
+      setTab('users');
+      params.set('modal', 'precios-usuario');
+      params.set('usuario', userScaleModal.id);
+    } else if (inviteLinksModal?.id) {
+      setTab('users');
+      params.set('modal', 'links-invitacion');
+      params.set('usuario', inviteLinksModal.id);
+    } else if (orderDetail?.id) {
+      setTab('orders');
+      params.set('modal', 'pedido');
+      params.set('pedido', orderDetail.id);
+      params.set('vista', ORDER_VIEW_SLUGS[orderDetail.archived_at ? 'archived' : ordersView] || ORDER_VIEW_SLUGS[ordersView] || ordersView);
+    } else if (versionSnapshotViewer.open && versionSnapshotViewer.snapshot?.id) {
+      setTab('version_history');
+      params.set('modal', 'version');
+      params.set('version', versionSnapshotViewer.snapshot.id);
+    }
+
+    const query = params.toString();
+    return `/admin${query ? `?${query}` : ''}`;
+  }
+
+  function replaceAdminUrlFromState() {
+    if (typeof window === 'undefined') return;
+    const nextUrl = buildAdminUrlFromState();
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== nextUrl) {
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }
+
+  function applyAdminUrlFromLocation() {
+    if (typeof window === 'undefined') return true;
+    const locationKey = `${window.location.pathname}${window.location.search}`;
+    if (lastAppliedAdminLocationRef.current === locationKey && adminUrlHydrated) return true;
+
+    const params = new URLSearchParams(window.location.search);
+    const tabSlug = params.get('tab') || adminPathTabSlug();
+    let nextTab = SLUG_TABS[tabSlug] || (tabSlug === 'actividad' || tabSlug === 'estadisticas' ? 'tracking' : 'products');
+    if (nextTab === 'admins') nextTab = 'users';
+    const modal = normalizeAdminUrlValue(params.get('modal'));
+    let pending = false;
+
+    applyingAdminUrlRef.current = true;
+
+    if (modal.startsWith('producto-') || modal === 'escalas-generales') nextTab = 'products';
+    if (modal === 'usuarios-no-logueados' || modal === 'productos-usuario' || modal === 'precios-usuario' || modal === 'links-invitacion') nextTab = 'users';
+    if (modal === 'pedido') nextTab = 'orders';
+    if (modal === 'version') nextTab = 'version_history';
+
+    setActiveTab(nextTab);
+
+    const trackingView = params.get('vista') || params.get('subtab') || '';
+    if (nextTab === 'tracking') {
+      setTrackingSubtab(SLUG_TRACKING_SUBTABS[trackingView] || (tabSlug === 'estadisticas' ? 'stats' : 'activity'));
+    }
+
+    if (nextTab === 'orders') {
+      setOrdersView(SLUG_ORDER_VIEWS[params.get('vista') || ''] || 'active');
+    }
+
+    if (nextTab === 'users') {
+      const view = params.get('vista') || params.get('subtab') || '';
+      setUsersSubtab(SLUG_USERS_SUBTABS[view] || (SLUG_TABS[tabSlug] === 'admins' ? 'admins' : 'clients'));
+    }
+
+    if (nextTab === 'production') {
+      const view = params.get('vista') || params.get('subtab') || '';
+      setProductionSubtab(SLUG_PRODUCTION_SUBTABS[view] || 'produce');
+      setProductionSelectedOrderId(params.get('pedido') || null);
+    }
+
+    if (nextTab === 'designs') {
+      const productParam = params.get('producto');
+      if (productParam) {
+        const product = findProductFromAdminUrl(productParam);
+        if (product) {
+          setSelectedProductId(product.id);
+        } else if (!adminDataReadyForSnapshots) {
+          pending = true;
+        }
+      }
+    }
+
+    if (!modal) {
+      resetUrlModalState();
+    } else if (modal === 'escalas-generales') {
+      setProductManageModal(null);
+      setInfoTagsModal(null);
+      setModelConfigPopup(null);
+      setUserProductsModal(null);
+      setUserScaleModal(null);
+      setInviteLinksModal(null);
+      setOrderDetail(null);
+      setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+      setAllScalesModalOpen(true);
+    } else if (modal.startsWith('producto-')) {
+      const product = findProductFromAdminUrl(params.get('producto'));
+      if (!product && !adminDataReadyForSnapshots) {
+        pending = true;
+      } else {
+        setAllScalesModalOpen(false);
+        setUserProductsModal(null);
+        setUserScaleModal(null);
+        setInviteLinksModal(null);
+        setOrderDetail(null);
+        setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+
+        const productModalType = SLUG_PRODUCT_MODALS[modal.replace(/^producto-/, '')];
+        if (product && productModalType) {
+          setInfoTagsModal(null);
+          setModelConfigPopup(null);
+          setProductManageModal({ type: productModalType, productId: product.id });
+        } else if (product && modal === 'producto-info') {
+          setProductManageModal(null);
+          setModelConfigPopup(null);
+          setInfoTagsModal({ productId: product.id, tags: Array.isArray(product.info_tags) ? product.info_tags : [] });
+        } else if (product && modal === 'producto-modelo-3d') {
+          setProductManageModal(null);
+          setInfoTagsModal(null);
+          setPopupPreviewModel(null);
+          setLiveModelConfig(productForms[product.id]?.model_config || product.model_config || { mode: 'static', speed: 5 });
+          setPopupPos({ top: 130, left: Math.max(20, Math.min(520, window.innerWidth - 380)) });
+          setModelConfigPopup(product.id);
+        } else {
+          setProductManageModal(null);
+          setInfoTagsModal(null);
+          setModelConfigPopup(null);
+        }
+      }
+    } else if (modal === 'usuarios-no-logueados' || modal === 'productos-usuario') {
+      const view = SLUG_VISIBILITY_TABS[params.get('vista') || ''] || 'products';
+      const nextQuickFilters = {
+        productId: params.get('filtro_producto') || 'all',
+        variantId: params.get('filtro_variante') || 'all',
+        category: params.get('filtro_categoria') || 'all',
+      };
+      setAllScalesModalOpen(false);
+      setProductManageModal(null);
+      setInfoTagsModal(null);
+      setModelConfigPopup(null);
+      setUserScaleModal(null);
+      setInviteLinksModal(null);
+      setOrderDetail(null);
+      setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+      setVisibilityTab(view);
+      setVisibilityQuickFilters(nextQuickFilters);
+      resetVisibilitySelection();
+
+      if (modal === 'usuarios-no-logueados') {
+        setUserProductsModal({ type: 'anonymous' });
+      } else {
+        const user = findUserFromAdminUrl(params.get('usuario'));
+        if (user) {
+          setUserProductsModal({ type: 'user', user });
+        } else if (!adminDataReadyForSnapshots || loadingUsers) {
+          pending = true;
+        } else {
+          setUserProductsModal(null);
+        }
+      }
+    } else if (modal === 'precios-usuario' || modal === 'links-invitacion') {
+      const user = findUserFromAdminUrl(params.get('usuario'));
+      if (!user && (!adminDataReadyForSnapshots || loadingUsers)) {
+        pending = true;
+      } else {
+        setAllScalesModalOpen(false);
+        setProductManageModal(null);
+        setInfoTagsModal(null);
+        setModelConfigPopup(null);
+        setUserProductsModal(null);
+        setOrderDetail(null);
+        setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+
+        if (user && modal === 'precios-usuario') {
+          setInviteLinksModal(null);
+          setUserScaleModal(user);
+        } else if (user && modal === 'links-invitacion') {
+          setUserScaleModal(null);
+          if (inviteLinksModal?.id !== user.id) openInviteLinksModal(user);
+        } else {
+          setUserScaleModal(null);
+          setInviteLinksModal(null);
+        }
+      }
+    } else if (modal === 'pedido') {
+      const order = findOrderFromAdminUrl(params.get('pedido'));
+      if (!order && !adminDataReadyForSnapshots) {
+        pending = true;
+      } else {
+        setAllScalesModalOpen(false);
+        setProductManageModal(null);
+        setInfoTagsModal(null);
+        setModelConfigPopup(null);
+        setUserProductsModal(null);
+        setUserScaleModal(null);
+        setInviteLinksModal(null);
+        setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+        if (order) {
+          setOrdersView(order.archived_at ? 'archived' : 'active');
+          setOrderDetail(order);
+        } else {
+          setOrderDetail(null);
+        }
+      }
+    } else if (modal === 'version') {
+      const snapshot = findVersionSnapshotFromAdminUrl(params.get('version'));
+      if (!snapshot && !adminDataReadyForSnapshots) {
+        pending = true;
+      } else {
+        setAllScalesModalOpen(false);
+        setProductManageModal(null);
+        setInfoTagsModal(null);
+        setModelConfigPopup(null);
+        setUserProductsModal(null);
+        setUserScaleModal(null);
+        setInviteLinksModal(null);
+        setOrderDetail(null);
+        if (snapshot) {
+          if (versionSnapshotViewer.snapshot?.id !== snapshot.id || !versionSnapshotViewer.open) openVersionSnapshotViewer(snapshot);
+        } else {
+          setVersionSnapshotViewer({ open: false, snapshot: null, data: null, loading: false, error: '' });
+        }
+      }
+    }
+
+    applyingAdminUrlRef.current = false;
+
+    if (!pending) {
+      lastAppliedAdminLocationRef.current = locationKey;
+      setAdminUrlHydrated(true);
+    }
+
+    return !pending;
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    function handleAdminPopState() {
+      setAdminUrlHydrated(false);
+      lastAppliedAdminLocationRef.current = '';
+      setAdminUrlApplyTick(tick => tick + 1);
+    }
+    window.addEventListener('popstate', handleAdminPopState);
+    return () => window.removeEventListener('popstate', handleAdminPopState);
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'panel') return;
+    if (!adminDataReadyForSnapshots && (window.location.search.includes('modal=') || window.location.search.includes('producto=') || window.location.search.includes('pedido=') || window.location.search.includes('usuario=') || window.location.search.includes('version='))) return;
+    applyAdminUrlFromLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, adminDataReadyForSnapshots, adminUrlApplyTick, products, users, orders, versionSnapshots]);
+
+  useEffect(() => {
+    if (screen !== 'panel' || !adminUrlHydrated || applyingAdminUrlRef.current) return;
+    replaceAdminUrlFromState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    screen,
+    adminUrlHydrated,
+    activeTab,
+    trackingSubtab,
+    ordersView,
+    usersSubtab,
+    productionSubtab,
+    productionSelectedOrderId,
+    selectedProductId,
+    productManageModal,
+    infoTagsModal,
+    modelConfigPopup,
+    allScalesModalOpen,
+    userProductsModal,
+    userScaleModal,
+    inviteLinksModal,
+    visibilityTab,
+    visibilityQuickFilters,
+    orderDetail,
+    versionSnapshotViewer.open,
+    versionSnapshotViewer.snapshot?.id,
+  ]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || screen !== 'panel') return;
@@ -859,6 +1352,7 @@ useEffect(() => {
       watch('settings', loadSettings),
       watch('sellers', () => { loadSellers(); loadUsers(); }),
       watch('profiles', loadUsers),
+      watch('production_operators', loadOperators),
       watch('admin_presence', loadAdminPresence),
       watch('admin_version_snapshots', loadVersionSnapshots),
     ];
@@ -1082,6 +1576,134 @@ useEffect(() => {
     return product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
   }
 
+  function designPdfEnabledIds() {
+    return parseDesignPdfEnabledIds(settings[DESIGN_PDF_LINK_ENABLED_KEY]);
+  }
+
+  function isDesignPdfLinkEnabled(designId) {
+    return designPdfEnabledIds().includes(String(designId));
+  }
+
+  function designMatchesCurrentFilters(d) {
+    const cats = Array.isArray(d.categories) && d.categories.length > 0
+      ? d.categories
+      : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+
+    return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
+      && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
+      && (!designCatFilter || cats.includes(designCatFilter));
+  }
+
+  function getDesignPdfCandidates() {
+    return designs
+      .filter(designMatchesCurrentFilters)
+      .filter(design => isDesignPdfLinkEnabled(design.id))
+      .slice(0, 1500)
+      .map(design => ({
+        id: design.id,
+        name: design.name,
+        productName: design.products?.name || productDisplayName(products.find(product => product.id === design.product_id)) || '',
+      }));
+  }
+
+  async function setDesignPdfLinkEnabled(designId, enabled) {
+    const targetIds = selectedIds.has(designId) && selectedIds.size > 1 ? [...selectedIds] : [designId];
+    const current = new Set(designPdfEnabledIds());
+    targetIds.forEach(id => {
+      if (enabled) current.add(String(id));
+      else current.delete(String(id));
+    });
+    const serialized = serializeDesignPdfEnabledIds([...current]);
+    setSettings(prev => ({ ...prev, [DESIGN_PDF_LINK_ENABLED_KEY]: serialized }));
+    await supabase.from('settings').upsert({ key: DESIGN_PDF_LINK_ENABLED_KEY, value: serialized });
+    trackAdminActivity('design_pdf_link_toggle', { design_ids: targetIds, enabled }, 'designs');
+  }
+
+  async function refreshDesignPdfLinks({ scan = false } = {}) {
+    const token = designPdfBridgeToken.trim();
+    const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+    if (!token) {
+      setDesignPdfSummary({ state: 'token', message: 'Pegá el token del Bridge para vincular PDFs.', found: 0, missing: 0, pdfCount: 0, roots: [] });
+      return;
+    }
+
+    const candidates = getDesignPdfCandidates();
+    if (candidates.length === 0) {
+      setDesignPdfSummary({ state: 'idle', message: 'No hay diseños visibles para vincular.', found: 0, missing: 0, pdfCount: 0, roots: [] });
+      return;
+    }
+
+    setDesignPdfBusy(true);
+    try {
+      saveStoredBridgeConfig({ url, token });
+      let rootsPayload = await getBridgePdfRoots(url, token);
+      if (scan) {
+        rootsPayload = await scanBridgePdfs(url, token);
+      }
+
+      const payload = await matchBridgeDesignPdfs(url, token, candidates);
+      const nextMatches = {};
+      (payload.matches || []).forEach(match => {
+        nextMatches[match.id] = match;
+      });
+
+      setDesignPdfMatches(prev => ({ ...prev, ...nextMatches }));
+      setDesignPdfSummary({
+        state: 'ready',
+        message: `PDFs vinculados: ${payload.found || 0}/${candidates.length}`,
+        found: payload.found || 0,
+        missing: payload.missing || 0,
+        pdfCount: payload.pdfCount ?? rootsPayload?.pdfCount ?? 0,
+        roots: payload.roots || rootsPayload?.roots || [],
+      });
+    } catch (error) {
+      setDesignPdfSummary({
+        state: error?.status === 401 ? 'token' : 'error',
+        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo consultar PDFs: ${error.message || error}`,
+        found: 0,
+        missing: 0,
+        pdfCount: 0,
+        roots: [],
+      });
+    } finally {
+      setDesignPdfBusy(false);
+    }
+  }
+
+  async function addDesignPdfRootFromAdmin() {
+    const token = designPdfBridgeToken.trim();
+    const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+    if (!token) {
+      setDesignPdfSummary({ state: 'token', message: 'Pegá el token del Bridge para agregar carpetas PDF.', found: 0, missing: 0, pdfCount: 0, roots: [] });
+      return;
+    }
+
+    setDesignPdfBusy(true);
+    try {
+      saveStoredBridgeConfig({ url, token });
+      const payload = await addBridgePdfRoot(url, token);
+      setDesignPdfSummary({
+        state: 'ready',
+        message: `Carpetas PDF autorizadas: ${(payload.roots || []).length}. Ahora podés escanear.`,
+        found: 0,
+        missing: 0,
+        pdfCount: payload.pdfCount || 0,
+        roots: payload.roots || [],
+      });
+    } catch (error) {
+      setDesignPdfSummary({
+        state: error?.status === 401 ? 'token' : 'error',
+        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo abrir el selector de carpeta: ${error.message || error}`,
+        found: 0,
+        missing: 0,
+        pdfCount: 0,
+        roots: [],
+      });
+    } finally {
+      setDesignPdfBusy(false);
+    }
+  }
+
   function isDefault3dDesignProduct(product) {
     const name = String(productDisplayName(product) || product?.name || '').toLowerCase();
     return name.includes('llaveros 3d librer') || name.includes('llaveros 3d motos');
@@ -1258,10 +1880,14 @@ useEffect(() => {
     const rules = getDesignLimitRules();
     const product = products.find(p => p.id === productId);
     const effective = getProductDesignLimitConfig(product);
-    const current = rules[productId] || { inheritParent: false, tiers: effective.tiers || [] };
+    const current = rules[productId] || { enabled: true, inheritParent: false, tiers: effective.tiers || [] };
     const nextRules = {
       ...rules,
-      [productId]: updater({ inheritParent: current.inheritParent === true, tiers: Array.isArray(current.tiers) ? current.tiers : [] }),
+      [productId]: updater({
+        enabled: current.enabled !== false,
+        inheritParent: current.inheritParent === true,
+        tiers: Array.isArray(current.tiers) ? current.tiers : [],
+      }),
     };
     await saveDesignLimitRules(nextRules);
     trackAdminActivity('product_design_limits_update', { product_id: productId, product_name: product?.name }, 'products');
@@ -1298,6 +1924,10 @@ useEffect(() => {
 
   function toggleDesignLimitInheritance(productId) {
     updateDesignLimitConfig(productId, config => ({ ...config, inheritParent: !config.inheritParent }));
+  }
+
+  function toggleDesignLimitsEnabled(productId) {
+    updateDesignLimitConfig(productId, config => ({ ...config, enabled: !config.enabled }));
   }
 
   function updateProductDesignFormat(productId, format, enabled) {
@@ -2047,6 +2677,72 @@ useEffect(() => {
     setLoadingUsers(false);
   }
 
+  async function loadOperators() {
+    setLoadingOperators(true);
+    setOperatorsError('');
+    const { data, error } = await supabase.from('production_operators').select('*').order('name', { ascending: true });
+    if (error) {
+      const msg = error.message || '';
+      if (msg.toLowerCase().includes('does not exist') || msg.includes('42P01')) {
+        setOperatorsError('Falta aplicar el SQL de producción y operarios.');
+      } else {
+        setOperatorsError('No se pudieron cargar los operarios.');
+        console.error('Error loading operators:', error);
+      }
+      setOperators([]);
+    } else {
+      setOperators(data || []);
+    }
+    setLoadingOperators(false);
+  }
+
+  async function createOperator(e) {
+    e?.preventDefault?.();
+    const payload = {
+      name: operatorForm.name.trim(),
+      phone: operatorForm.phone.trim(),
+      email: operatorForm.email.trim(),
+    };
+    if (!payload.name || !payload.email) {
+      setOperatorCreateResult({ error: 'Completá nombre y email.' });
+      return;
+    }
+
+    setCreatingOperator(true);
+    setOperatorCreateResult(null);
+    try {
+      const res = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear el operario.');
+      setOperatorForm({ name: '', phone: '', email: '' });
+      setOperatorCreateResult({ success: true });
+      trackAdminActivity('operator_create', { operator_email: payload.email, operator_name: payload.name }, 'users');
+      loadOperators();
+    } catch (err) {
+      setOperatorCreateResult({ error: err.message || 'No se pudo crear el operario.' });
+    } finally {
+      setCreatingOperator(false);
+    }
+  }
+
+  async function toggleOperator(operator) {
+    const nextActive = operator.active === false;
+    const { error } = await supabase
+      .from('production_operators')
+      .update({ active: nextActive, updated_at: new Date().toISOString() })
+      .eq('id', operator.id);
+    if (error) {
+      alert('No se pudo actualizar el operario.');
+      return;
+    }
+    setOperators(prev => prev.map(op => op.id === operator.id ? { ...op, active: nextActive } : op));
+    trackAdminActivity('operator_toggle', { operator_id: operator.id, operator_email: operator.email, active: nextActive }, 'users');
+  }
+
   function setUserOverride(userId, patch, options = {}) {
     userOverridesRef.current[userId] = { ...userOverridesRef.current[userId], ...patch };
 
@@ -2205,8 +2901,28 @@ useEffect(() => {
     setVisibilityTab('products');
     setVisibilitySearch('');
     setVisibilityFilter('all');
+    setVisibilityQuickFilters({ productId: 'all', variantId: 'all', category: 'all' });
     setVisibilitySelection(new Set());
     visibilityLastSelectedRef.current = null;
+  }
+
+  function resetVisibilitySelection() {
+    setVisibilitySelection(new Set());
+    visibilityLastSelectedRef.current = null;
+  }
+
+  function resetVisibilityQuickFilters() {
+    setVisibilityQuickFilters({ productId: 'all', variantId: 'all', category: 'all' });
+    resetVisibilitySelection();
+  }
+
+  function updateVisibilityQuickFilter(field, value) {
+    setVisibilityQuickFilters(prev => {
+      if (field === 'productId') return { productId: value, variantId: 'all', category: 'all' };
+      if (field === 'variantId') return { ...prev, variantId: value, category: 'all' };
+      return { ...prev, [field]: value };
+    });
+    resetVisibilitySelection();
   }
 
   function currentVisibilityKey(target = userProductsModal) {
@@ -2237,6 +2953,15 @@ useEffect(() => {
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     const q = visibilitySearch.trim().toLowerCase();
     const rules = getVisibilityRules();
+    const useQuickFilters = Boolean(userProductsModal);
+    const productById = new Map(activeProducts.map(product => [product.id, product]));
+    const productContext = (product) => {
+      const root = productById.get(product?.parent_product_id) || product || null;
+      return {
+        rootProductId: root?.id || product?.id || null,
+        variantProductId: product?.id || null,
+      };
+    };
 
     let items = [];
     if (tab === 'products') {
@@ -2244,6 +2969,8 @@ useEffect(() => {
         type: 'product',
         id: product.id,
         productId: product.id,
+        rootProductId: product.id,
+        variantProductId: product.id,
         title: product.name,
         meta: `${getProductVariants(product).filter(p => p.active).length} variante${getProductVariants(product).filter(p => p.active).length !== 1 ? 's' : ''}`,
       }));
@@ -2254,11 +2981,14 @@ useEffect(() => {
           type: 'variant',
           id: product.id,
           productId: product.id,
+          rootProductId: root.id,
+          variantProductId: product.id,
           title: product.variant_name || product.name,
           meta: product.id === root.id ? `${root.name} · principal` : root.name,
         })));
     } else if (tab === 'categories') {
       items = activeProducts.flatMap(product => {
+        const context = productContext(product);
         const productCategories = Array.isArray(product.categories) ? product.categories : [];
         const designCategories = [...new Set(designs
           .filter(design => design.product_id === product.id)
@@ -2269,6 +2999,8 @@ useEffect(() => {
           type: 'category',
           id: `${product.id}::${category}`,
           productId: product.id,
+          rootProductId: context.rootProductId,
+          variantProductId: context.variantProductId,
           category,
           title: category,
           meta: productDisplayName(product),
@@ -2279,6 +3011,7 @@ useEffect(() => {
         .filter(design => design.active)
         .map(design => {
           const product = products.find(p => p.id === design.product_id);
+          const context = productContext(product);
           const cats = Array.isArray(design.categories) && design.categories.length > 0
             ? design.categories
             : (design.category ? [design.category] : []);
@@ -2286,6 +3019,9 @@ useEffect(() => {
             type: 'design',
             id: design.id,
             productId: design.product_id,
+            rootProductId: context.rootProductId,
+            variantProductId: context.variantProductId,
+            categories: cats,
             title: design.name,
             meta: `${productDisplayName(product) || 'Sin producto'}${cats.length ? ` · ${cats.join(', ')}` : ''}`,
           };
@@ -2293,12 +3029,47 @@ useEffect(() => {
     }
 
     return items.filter(item => {
+      if (useQuickFilters) {
+        if ((tab === 'variants' || tab === 'categories' || tab === 'designs') && visibilityQuickFilters.productId !== 'all' && item.rootProductId !== visibilityQuickFilters.productId) return false;
+        if ((tab === 'categories' || tab === 'designs') && visibilityQuickFilters.variantId !== 'all' && item.variantProductId !== visibilityQuickFilters.variantId) return false;
+        if (tab === 'designs' && visibilityQuickFilters.category !== 'all' && !(item.categories || []).includes(visibilityQuickFilters.category)) return false;
+      }
       const hidden = visibilityItemHidden(item, rules);
       if (visibilityFilter === 'hidden' && !hidden) return false;
       if (visibilityFilter === 'visible' && hidden) return false;
       if (!q) return true;
       return `${item.title} ${item.meta}`.toLowerCase().includes(q);
     });
+  }
+
+  function getVisibilityQuickFilterOptions(tab = visibilityTab) {
+    const activeProducts = products.filter(product => product.active);
+    const roots = activeProducts
+      .filter(product => !product.parent_product_id || !activeProducts.some(parent => parent.id === product.parent_product_id))
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const selectedRoot = visibilityQuickFilters.productId === 'all'
+      ? null
+      : roots.find(product => product.id === visibilityQuickFilters.productId);
+    const variants = selectedRoot && (tab === 'categories' || tab === 'designs')
+      ? getProductVariants(selectedRoot).filter(product => product.active)
+      : [];
+    const categorySource = designs.filter(design => {
+      if (!design.active) return false;
+      const product = activeProducts.find(p => p.id === design.product_id);
+      if (!product) return false;
+      const rootId = product.parent_product_id && activeProducts.some(parent => parent.id === product.parent_product_id)
+        ? product.parent_product_id
+        : product.id;
+      if (visibilityQuickFilters.productId !== 'all' && rootId !== visibilityQuickFilters.productId) return false;
+      if (visibilityQuickFilters.variantId !== 'all' && product.id !== visibilityQuickFilters.variantId) return false;
+      return true;
+    });
+    const categories = [...new Set(categorySource
+      .flatMap(design => Array.isArray(design.categories) && design.categories.length > 0 ? design.categories : (design.category ? [design.category] : []))
+      .filter(category => category && category !== 'Sin categoria' && category !== 'Sin categoría'))]
+      .sort((a, b) => String(a).localeCompare(String(b), 'es'));
+
+    return { roots, variants, categories };
   }
 
   function selectVisibilityItem(e, item, orderedItems) {
@@ -3465,6 +4236,182 @@ useEffect(() => {
     ? products.find(p => p.id === productManageModal.productId)
     : null;
 
+  function goToProductionOrder(orderId) {
+    setActiveTab('production');
+    setProductionSubtab('produce');
+    setProductionSelectedOrderId(orderId);
+  }
+
+  function renderUsersSubtabs() {
+    const tabs = [
+      ['clients', `Clientes (${users.length})`],
+      ['operators', `Operarios (${operators.length})`],
+      ['admins', `Admins (${admins.length})`],
+    ];
+    return (
+      <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setUsersSubtab(id)}
+            style={{ border: 'none', borderRight: '1.5px solid #dde1ef', padding: '10px 20px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: usersSubtab === id ? '#1B2F5E' : 'white', color: usersSubtab === id ? 'white' : '#8b95b3' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderOperatorsPanel() {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={s.card}>
+          <h2 style={s.sectionTitle}>Crear operario</h2>
+          <form onSubmit={createOperator} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(160px, 1fr) minmax(190px, 1.2fr) auto', gap: 10, alignItems: 'end' }}>
+            <div style={{ ...s.formGroup, marginBottom: 0 }}>
+              <label style={s.label}>Nombre</label>
+              <input style={s.input} value={operatorForm.name} onChange={e => setOperatorForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre completo" />
+            </div>
+            <div style={{ ...s.formGroup, marginBottom: 0 }}>
+              <label style={s.label}>Teléfono</label>
+              <input style={s.input} value={operatorForm.phone} onChange={e => setOperatorForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="Opcional" />
+            </div>
+            <div style={{ ...s.formGroup, marginBottom: 0 }}>
+              <label style={s.label}>Email</label>
+              <input style={s.input} type="email" value={operatorForm.email} onChange={e => setOperatorForm(prev => ({ ...prev, email: e.target.value }))} placeholder="operario@email.com" />
+            </div>
+            <button type="submit" disabled={creatingOperator} style={{ ...s.btnPrimary, opacity: creatingOperator ? 0.65 : 1, cursor: creatingOperator ? 'not-allowed' : 'pointer', height: 38 }}>
+              {creatingOperator ? 'Creando...' : 'Crear'}
+            </button>
+          </form>
+          {operatorCreateResult?.error && <div style={{ marginTop: 10, background: '#fff5f5', border: '1.5px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '9px 11px', fontSize: 12, fontWeight: 700 }}>{operatorCreateResult.error}</div>}
+          {operatorCreateResult?.success && <div style={{ marginTop: 10, background: '#e8f7ef', border: '1.5px solid #bbf7d0', color: '#15803d', borderRadius: 8, padding: '9px 11px', fontSize: 12, fontWeight: 700 }}>Operario habilitado. Ingresa con Google usando ese email.</div>}
+        </div>
+
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <h2 style={{ ...s.sectionTitle, marginBottom: 0 }}>Operarios ({operators.length})</h2>
+            <button type="button" onClick={loadOperators} disabled={loadingOperators} style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#1B2F5E', fontSize: 12, fontWeight: 800, cursor: loadingOperators ? 'not-allowed' : 'pointer' }}>
+              Actualizar
+            </button>
+          </div>
+          {operatorsError && <div style={{ background: '#fff7ed', border: '1.5px solid #fed7aa', color: '#c2410c', borderRadius: 8, padding: '10px 12px', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>{operatorsError}</div>}
+          {loadingOperators && operators.length === 0 ? (
+            <p style={s.emptyMsg}>Cargando operarios...</p>
+          ) : operators.length === 0 ? (
+            <p style={s.emptyMsg}>Todavía no hay operarios.</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={s.tbl}>
+                <thead>
+                  <tr>
+                    <th style={s.th}>Nombre</th>
+                    <th style={s.th}>Email</th>
+                    <th style={s.th}>Teléfono</th>
+                    <th style={s.th}>Estado</th>
+                    <th style={s.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {operators.map(op => (
+                    <tr key={op.id}>
+                      <td style={s.td}><span style={{ fontWeight: 800, color: '#1B2F5E' }}>{op.name || 'Sin nombre'}</span></td>
+                      <td style={s.td}>{op.email}</td>
+                      <td style={s.td}>{op.phone || '—'}</td>
+                      <td style={s.td}>
+                        <span style={{ background: op.active === false ? '#fee2e2' : '#e8f7ef', color: op.active === false ? '#b91c1c' : '#15803d', borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
+                          {op.active === false ? 'Inactivo' : 'Activo'}
+                        </span>
+                      </td>
+                      <td style={s.td}>
+                        <button type="button" onClick={() => toggleOperator(op)} style={{ ...s.editBtn, color: op.active === false ? '#18a36a' : '#e53e3e' }}>
+                          {op.active === false ? 'Habilitar' : 'Deshabilitar'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderProductionOrdersPanel() {
+    return (
+      <div style={s.card} data-orders-table>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+          <div>
+            <h2 style={{ ...s.sectionTitle, marginBottom: 8 }}>Pedidos ({filteredOrders.length})</h2>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => setOrdersView('active')} style={{ border: '1.5px solid #2D6BE4', background: ordersView === 'active' ? '#2D6BE4' : 'white', color: ordersView === 'active' ? 'white' : '#2D6BE4', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Activos ({activeOrders.length})</button>
+              <button type="button" onClick={() => setOrdersView('archived')} style={{ border: '1.5px solid #9aa3bc', background: ordersView === 'archived' ? '#5a6380' : 'white', color: ordersView === 'archived' ? 'white' : '#5a6380', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Archivados ({archivedOrders.length})</button>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
+          <input data-admin-search="true" style={{ ...s.input, maxWidth: 220 }} placeholder="Código, nombre o email..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
+          <select value={orderFilterStatus} onChange={e => setOrderFilterStatus(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+            <option value="all">Todos los estados</option>
+            {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+          </select>
+          <select value={orderFilterSeller} onChange={e => setOrderFilterSeller(e.target.value)} style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 9px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}>
+            <option value="all">Todos los vendedores</option>
+            <option value="none">Sin vendedor</option>
+            {sellers.map(sel => <option key={sel.id} value={sel.id}>{sel.name}</option>)}
+          </select>
+          {(orderSearch || orderFilterStatus !== 'all' || orderFilterSeller !== 'all' || orderFilterProduct !== 'all' || orderFilterDateFrom || orderFilterDateTo) && (
+            <button type="button" onClick={() => { setOrderSearch(''); setOrderFilterStatus('all'); setOrderFilterSeller('all'); setOrderFilterProduct('all'); setOrderFilterDateFrom(''); setOrderFilterDateTo(''); }} style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'white', color: '#9aa3bc' }}>
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+        {filteredOrders.length === 0 ? (
+          <p style={s.emptyMsg}>No hay pedidos para mostrar.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={s.tbl}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Código</th>
+                  <th style={s.th}>Fecha</th>
+                  <th style={s.th}>Cliente</th>
+                  <th style={s.th}>Items</th>
+                  <th style={s.th}>Estado</th>
+                  <th style={s.th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOrders.map(o => {
+                  const sc = getStatusCfg(o.status);
+                  return (
+                    <tr key={o.id}>
+                      <td style={s.td}><span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 800, color: '#1B2F5E' }}>{o.order_code}</span></td>
+                      <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', whiteSpace: 'nowrap' }}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span></td>
+                      <td style={s.td}><span style={{ fontSize: 13, fontWeight: 700, color: '#2d3352' }}>{o.customer_name || '—'}</span></td>
+                      <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', maxWidth: 240, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summarizeItems(o.items)}</span></td>
+                      <td style={s.td}><span style={{ border: `1.5px solid ${sc.color}`, background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 12, fontWeight: 800 }}>{sc.label}</span></td>
+                      <td style={s.td}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button type="button" style={s.editBtn} onClick={() => goToProductionOrder(o.id)}>Producir</button>
+                          <button type="button" style={s.editBtn} onClick={() => setOrderDetail(o)}>Ver</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderInvitePathEditor(draft, setDraft, compact = false) {
     const selection = getInviteCatalogSelection(draft.next_path);
     const destinationValue = getInviteDestinationValue(draft.next_path);
@@ -3745,7 +4692,7 @@ useEffect(() => {
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -3753,7 +4700,7 @@ useEffect(() => {
                 onDragStart={undefined}
                 onDragOver={undefined}
                 onDragEnd={undefined}
-                onClick={() => { setActiveTab(id); window.history.replaceState(null, '', `/admin?tab=${TAB_SLUGS[id]}`); }}
+                onClick={() => setActiveTab(id)}
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
@@ -3761,8 +4708,7 @@ useEffect(() => {
                 {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
                 {id === 'notifications' && adminNotifications.length > 0 && <span style={s.orphanBadge}>{adminNotifications.length}</span>}
                 {id === 'carts' && carts.length > 0 && <span style={s.orphanBadge}>{carts.length}</span>}
-                {id === 'users' && users.length > 0 && <span style={s.userBadge}>{users.length}</span>}
-                {id === 'admins' && admins.length > 0 && <span style={s.userBadge}>{admins.length}</span>}
+                {id === 'users' && (users.length + operators.length + admins.length) > 0 && <span style={s.userBadge}>{users.length + operators.length + admins.length}</span>}
                 {renderAdminTabPresence(id)}
               </button>
             ));
@@ -4741,6 +5687,19 @@ useEffect(() => {
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
                   <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
                   {selectedIds.size > 1 && <span style={{background:'#2D6BE4', color:'white', borderRadius:10, padding:'2px 10px', fontSize:12, fontWeight:700}}>{selectedIds.size} seleccionados</span>}
+                  {selectedIds.size > 0 && (() => {
+                    const ids = [...selectedIds];
+                    const allEnabled = ids.every(id => isDesignPdfLinkEnabled(id));
+                    return (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setDesignPdfLinkEnabled(ids[0], !allEnabled); }}
+                        style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'4px 9px', background:allEnabled ? '#fff5f5' : '#e8f7ef', color:allEnabled ? '#b91c1c' : '#15803d', fontSize:11, fontWeight:900, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                      >
+                        {allEnabled ? 'Deshabilitar PDF' : 'Habilitar PDF'}
+                      </button>
+                    );
+                  })()}
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
                   <select
@@ -4785,6 +5744,86 @@ useEffect(() => {
                   ))}
                 </div>
               </div>
+              {(() => {
+                const tone = designPdfSummary.state === 'ready'
+                  ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', label: 'PDFs listos' }
+                  : designPdfSummary.state === 'token'
+                    ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
+                    : designPdfSummary.state === 'error'
+                      ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'Error' }
+                      : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+                const visibleDesignCount = getDesignPdfCandidates().length;
+                return (
+                  <div style={{border:`1.5px solid ${tone.border}`, borderRadius:8, background:'white', padding:'10px 12px', marginBottom:12, display:'grid', gap:8}}>
+                    <div style={{display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap'}}>
+                      <div>
+                        <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5}}>PDFs locales</div>
+                        <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginTop:3}}>
+                          <span style={{background:tone.bg, color:tone.color, border:`1px solid ${tone.border}`, borderRadius:999, padding:'2px 8px', fontSize:11, fontWeight:900}}>{tone.label}</span>
+                          <span style={{fontSize:12, color:'#5a6380', fontWeight:700}}>{designPdfSummary.message}</span>
+                          {designPdfSummary.pdfCount > 0 && <span style={{fontSize:11, color:'#8b95b3'}}>{designPdfSummary.pdfCount} PDFs escaneados</span>}
+                        </div>
+                      </div>
+                      <div style={{display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                        <button
+                          type="button"
+                          onClick={addDesignPdfRootFromAdmin}
+                          disabled={designPdfBusy}
+                          style={{border:'1.5px solid #1B2F5E', borderRadius:8, padding:'7px 12px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
+                        >
+                          Agregar carpeta PDFs
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => refreshDesignPdfLinks({ scan: true })}
+                          disabled={designPdfBusy}
+                          style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'7px 12px', background:'#f8faff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
+                        >
+                          {designPdfBusy ? 'Escaneando...' : `Escanear y vincular (${visibleDesignCount})`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => refreshDesignPdfLinks({ scan: false })}
+                          disabled={designPdfBusy}
+                          style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
+                        >
+                          Actualizar vínculos
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{display:'grid', gridTemplateColumns:'minmax(220px, 1fr) minmax(220px, 1fr)', gap:8}}>
+                      <label style={{display:'grid', gap:4, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
+                        URL Bridge
+                        <input
+                          value={designPdfBridgeUrl}
+                          onChange={e => setDesignPdfBridgeUrl(e.target.value)}
+                          onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })}
+                          style={{...s.input, fontSize:12, padding:'6px 8px', textTransform:'none', letterSpacing:0}}
+                        />
+                      </label>
+                      <label style={{display:'grid', gap:4, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
+                        Token Bridge
+                        <input
+                          value={designPdfBridgeToken}
+                          onChange={e => setDesignPdfBridgeToken(e.target.value)}
+                          onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })}
+                          placeholder="Copiar desde INKORA Print Bridge"
+                          style={{...s.input, fontSize:12, padding:'6px 8px', textTransform:'none', letterSpacing:0}}
+                        />
+                      </label>
+                    </div>
+                    {designPdfSummary.roots?.length > 0 && (
+                      <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+                        {designPdfSummary.roots.map(root => (
+                          <span key={root.path || root.name} title={root.path} style={{border:'1px solid #dde1ef', borderRadius:8, padding:'4px 8px', fontSize:11, fontWeight:800, color:root.exists ? '#15803d' : '#b91c1c', background:root.exists ? '#e8f7ef' : '#fff5f5', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                            {root.exists ? 'Carpeta' : 'No existe'}: {root.path || root.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div onClick={() => setSelectedIds(new Set())}>
               {(() => {
                 const getFileExt = d => {
@@ -4808,7 +5847,10 @@ useEffect(() => {
                     && (!designCatFilter || cats.includes(designCatFilter));
                 });
                 const sortFn = sortFns[designSortBy];
-                return (sortFn ? [...filtered].sort(sortFn) : filtered).map(d => (
+                return (sortFn ? [...filtered].sort(sortFn) : filtered).map(d => {
+                  const pdfMatch = designPdfMatches[d.id];
+                  const pdfLinkEnabled = isDesignPdfLinkEnabled(d.id);
+                  return (
                 <div
                   key={d.id}
                   draggable
@@ -4925,6 +5967,49 @@ useEffect(() => {
                           <span>{d.category}</span>
                         )}
                       </div>
+                      <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setDesignPdfLinkEnabled(d.id, !pdfLinkEnabled); }}
+                          onDragStart={e => e.stopPropagation()}
+                          style={{border:'1px solid', borderColor:pdfLinkEnabled ? '#b7ebcf' : '#dde1ef', background:pdfLinkEnabled ? '#e8f7ef' : '#f8faff', color:pdfLinkEnabled ? '#15803d' : '#5a6380', borderRadius:999, padding:'1px 7px', fontSize:10, fontWeight:900, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                          title={selectedIds.has(d.id) && selectedIds.size > 1 ? `Aplicar a ${selectedIds.size} diseños seleccionados` : 'Habilitar o deshabilitar vinculación PDF'}
+                        >
+                          {pdfLinkEnabled ? 'PDF vincular ON' : 'PDF vincular OFF'}
+                        </button>
+                      </div>
+                      {designPdfSummary.state === 'ready' && pdfLinkEnabled && (
+                        <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
+                          <span
+                            title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño'}
+                            style={{
+                              border:'1px solid',
+                              borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca',
+                              background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5',
+                              color: pdfMatch?.found ? '#15803d' : '#b91c1c',
+                              borderRadius:999,
+                              padding:'1px 7px',
+                              fontSize:10,
+                              fontWeight:900,
+                              display:'inline-flex',
+                              alignItems:'center',
+                              maxWidth:260,
+                              overflow:'hidden',
+                              textOverflow:'ellipsis',
+                              whiteSpace:'nowrap',
+                            }}
+                          >
+                            {pdfMatch?.found ? `PDF · ${pdfMatch.fileName}` : 'PDF sin vínculo'}
+                          </span>
+                        </div>
+                      )}
+                      {designPdfSummary.state === 'ready' && !pdfLinkEnabled && (
+                        <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
+                          <span style={{border:'1px solid #dde1ef', background:'#f8faff', color:'#8b95b3', borderRadius:999, padding:'1px 7px', fontSize:10, fontWeight:900}}>
+                            PDF no habilitado
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
@@ -4932,7 +6017,8 @@ useEffect(() => {
                     <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>
                 </div>
-              ));
+                  );
+                });
               })()}
               </div>
             </div>
@@ -5194,7 +6280,10 @@ useEffect(() => {
                             </select>
                           </td>
                           <td style={s.td}>
-                            <button style={s.editBtn} onClick={e => { e.stopPropagation(); setOrderDetail(o); }}>Ver</button>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button style={s.editBtn} onClick={e => { e.stopPropagation(); goToProductionOrder(o.id); }}>Producir</button>
+                              <button style={s.editBtn} onClick={e => { e.stopPropagation(); setOrderDetail(o); }}>Ver</button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -5350,8 +6439,10 @@ useEffect(() => {
           </>
         )}
 
-        {/* == USUARIOS == */}
-        {activeTab === 'users' && (
+        {activeTab === 'users' && renderUsersSubtabs()}
+
+        {/* == CLIENTES == */}
+        {activeTab === 'users' && usersSubtab === 'clients' && (
           <div style={s.card}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:14}}>
               <h2 style={{...s.sectionTitle, marginBottom:0}}>Usuarios registrados ({users.length})</h2>
@@ -6079,8 +7170,11 @@ useEffect(() => {
           </>
         )}
 
+        {/* == OPERARIOS == */}
+        {activeTab === 'users' && usersSubtab === 'operators' && renderOperatorsPanel()}
+
         {/* == ADMINS == */}
-        {activeTab === 'admins' && (
+        {activeTab === 'users' && usersSubtab === 'admins' && (
           <>
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Agregar administrador</h2>
@@ -6270,7 +7364,7 @@ useEffect(() => {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
@@ -6389,6 +7483,23 @@ useEffect(() => {
         const counts = visibilityCounts(rules);
         const visibleItems = getVisibilityItems();
         const selectedCount = visibilitySelection.size;
+        const showVisibilityQuickFilters = visibilityTab !== 'products';
+        const quickFilterOptions = showVisibilityQuickFilters
+          ? getVisibilityQuickFilterOptions()
+          : { roots: [], variants: [], categories: [] };
+        const hasActiveQuickFilter = visibilityQuickFilters.productId !== 'all'
+          || visibilityQuickFilters.variantId !== 'all'
+          || visibilityQuickFilters.category !== 'all';
+        const quickSelectStyle = {
+          ...s.input,
+          flex:'0 1 190px',
+          minWidth:150,
+          fontSize:12,
+          padding:'7px 10px',
+          fontWeight:700,
+          color:'#1B2F5E',
+          background:'white',
+        };
         const tabs = [
           { id: 'products', label: 'Productos', count: counts.products },
           { id: 'variants', label: 'Variantes', count: counts.variants },
@@ -6411,7 +7522,7 @@ useEffect(() => {
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => { setVisibilityTab(tab.id); setVisibilitySelection(new Set()); visibilityLastSelectedRef.current = null; }}
+                    onClick={() => { setVisibilityTab(tab.id); resetVisibilityQuickFilters(); }}
                     style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', fontSize:12, fontWeight:800, cursor:'pointer', fontFamily:'Barlow, sans-serif', background: visibilityTab === tab.id ? '#1B2F5E' : '#f8faff', color: visibilityTab === tab.id ? 'white' : '#1B2F5E'}}
                   >
                     {tab.label}
@@ -6450,6 +7561,57 @@ useEffect(() => {
                   </button>
                 )}
               </div>
+
+              {showVisibilityQuickFilters && (
+                <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', padding:'9px 10px', border:'1.5px solid #dde1ef', borderRadius:8, background:'#f8faff'}}>
+                  <select
+                    value={visibilityQuickFilters.productId}
+                    onChange={e => updateVisibilityQuickFilter('productId', e.target.value)}
+                    style={quickSelectStyle}
+                  >
+                    <option value="all">Producto: todos</option>
+                    {quickFilterOptions.roots.map(product => (
+                      <option key={product.id} value={product.id}>{product.name}</option>
+                    ))}
+                  </select>
+
+                  {(visibilityTab === 'categories' || visibilityTab === 'designs') && (
+                    <select
+                      value={visibilityQuickFilters.variantId}
+                      onChange={e => updateVisibilityQuickFilter('variantId', e.target.value)}
+                      disabled={visibilityQuickFilters.productId === 'all'}
+                      style={{...quickSelectStyle, opacity: visibilityQuickFilters.productId === 'all' ? 0.55 : 1}}
+                    >
+                      <option value="all">Variante: todas</option>
+                      {quickFilterOptions.variants.map(product => (
+                        <option key={product.id} value={product.id}>{product.variant_name || 'Principal'}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {visibilityTab === 'designs' && (
+                    <select
+                      value={visibilityQuickFilters.category}
+                      onChange={e => updateVisibilityQuickFilter('category', e.target.value)}
+                      style={quickSelectStyle}
+                    >
+                      <option value="all">Categoría: todas</option>
+                      {quickFilterOptions.categories.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {hasActiveQuickFilter && (
+                    <button
+                      onClick={resetVisibilityQuickFilters}
+                      style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'7px 11px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', background:'white', color:'#9aa3bc'}}
+                    >
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div style={{fontSize:11, color:'#9aa3bc', lineHeight:1.35}}>
                 Ctrl suma o quita items, Shift selecciona rangos. El ojo aplica el cambio a toda la selección.
@@ -6884,7 +8046,8 @@ useEffect(() => {
             {productManageModal.type === 'design_limits' && (() => {
               const rules = getDesignLimitRules();
               const hasOwnConfig = Object.prototype.hasOwnProperty.call(rules, modalProduct.id);
-              const ownConfig = rules[modalProduct.id] || { inheritParent: false, tiers: [] };
+              const ownConfig = rules[modalProduct.id] || { enabled: true, inheritParent: false, tiers: [] };
+              const designLimitsEnabled = ownConfig.enabled !== false;
               const effective = getProductDesignLimitConfig(modalProduct);
               const isVariant = !!modalProduct.parent_product_id;
               const parent = isVariant ? products.find(p => p.id === modalProduct.parent_product_id) : null;
@@ -6895,6 +8058,23 @@ useEffect(() => {
 
               return (
                 <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: designLimitsEnabled ? '#eef4ff' : '#f4f5f8', border:`1.5px solid ${designLimitsEnabled ? '#2D6BE4' : '#d8dce8'}`, borderRadius:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12, color: designLimitsEnabled ? '#2d3352' : '#8a91a6', fontWeight:700}}>Límite de diseños</div>
+                      <div style={{fontSize:11, color: designLimitsEnabled ? '#5a6380' : '#a5abbb', marginTop:2}}>
+                        {designLimitsEnabled ? 'Se aplica en el catálogo según las escalas configuradas.' : 'Deshabilitado: este producto no tiene límite de diseños en el catálogo.'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleDesignLimitsEnabled(modalProduct.id)}
+                      style={{border:`1.5px solid ${designLimitsEnabled ? '#2D6BE4' : '#c4c9d9'}`, borderRadius:20, padding:'4px 14px', fontSize:12, fontWeight:700, cursor:'pointer', background: designLimitsEnabled ? '#2D6BE4' : 'white', color: designLimitsEnabled ? 'white' : '#8a91a6', fontFamily:'Barlow, sans-serif'}}
+                    >
+                      {designLimitsEnabled ? 'Habilitado' : 'Deshabilitado'}
+                    </button>
+                  </div>
+
+                  <div style={{opacity: designLimitsEnabled ? 1 : 0.45, filter: designLimitsEnabled ? 'none' : 'grayscale(1)', pointerEvents: designLimitsEnabled ? 'auto' : 'none'}}>
+                  <div style={{display:'flex', flexDirection:'column', gap:10}}>
                   {isVariant && (
                     <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: ownConfig.inheritParent ? '#eef4ff' : '#f8faff', border:`1.5px solid ${ownConfig.inheritParent ? '#2D6BE4' : '#dde1ef'}`, borderRadius:8}}>
                       <div style={{flex:1}}>
@@ -6931,6 +8111,7 @@ useEffect(() => {
                               type="number"
                               min="1"
                               value={tier.min_quantity}
+                              disabled={!designLimitsEnabled}
                               onChange={e => updateDesignLimitTier(modalProduct.id, i, 'min_quantity', e.target.value)}
                             />
                           </div>
@@ -6940,6 +8121,7 @@ useEffect(() => {
                               type="number"
                               min="1"
                               value={tier.max_designs}
+                              disabled={!designLimitsEnabled}
                               onChange={e => updateDesignLimitTier(modalProduct.id, i, 'max_designs', e.target.value)}
                             />
                           </div>
@@ -6954,6 +8136,7 @@ useEffect(() => {
                             min="1"
                             placeholder="Ej. 50"
                             value={draft.min_quantity}
+                            disabled={!designLimitsEnabled}
                             onChange={e => setNewDesignLimitTiers(prev => ({...prev, [modalProduct.id]: {...draft, min_quantity: e.target.value}}))}
                             onKeyDown={e => { if (e.key === 'Enter') addDesignLimitTier(modalProduct.id); }}
                           />
@@ -6965,15 +8148,18 @@ useEffect(() => {
                             min="1"
                             placeholder="Ej. 30"
                             value={draft.max_designs}
+                            disabled={!designLimitsEnabled}
                             onChange={e => setNewDesignLimitTiers(prev => ({...prev, [modalProduct.id]: {...draft, max_designs: e.target.value}}))}
                             onKeyDown={e => { if (e.key === 'Enter') addDesignLimitTier(modalProduct.id); }}
                           />
                         </div>
                         <div style={{padding:'6px 8px'}}>
-                          <button style={{...s.editBtn, width:'100%'}} onClick={() => addDesignLimitTier(modalProduct.id)}>Agregar</button>
+                          <button style={{...s.editBtn, width:'100%', opacity: designLimitsEnabled ? 1 : 0.55}} disabled={!designLimitsEnabled} onClick={() => addDesignLimitTier(modalProduct.id)}>Agregar</button>
                         </div>
                       </div>
                     </div>
+                  </div>
+                  </div>
                   </div>
                 </div>
               );
@@ -7216,6 +8402,13 @@ useEffect(() => {
             sellers={sellers}
             products={products}
             orders={activeOrders}
+            operators={operators}
+            activeSubtab={productionSubtab}
+            selectedOrderId={productionSelectedOrderId}
+            onChangeSubtab={setProductionSubtab}
+            onSelectOrder={setProductionSelectedOrderId}
+            renderOrdersPanel={renderProductionOrdersPanel}
+            renderOperatorsPanel={renderOperatorsPanel}
           />
         )}
 

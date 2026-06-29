@@ -1,5 +1,17 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  DEFAULT_BRIDGE_URL,
+  getStoredBridgeConfig,
+  saveStoredBridgeConfig,
+  getBridgeHealth,
+  getBridgePrinters,
+  readBridgeDevMode,
+  openBridgePrinterPreferences,
+  addBridgePdfRoot,
+  scanBridgePdfs,
+  matchBridgeDesignPdfs,
+} from '../lib/print-bridge-client';
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En proceso', done: 'Terminado' };
@@ -21,6 +33,13 @@ const REPORT_COLUMNS = [
   { key: 'orders', label: 'Pedidos', width: 8, align: 'right', value: row => row.orders.length },
 ];
 const DEFAULT_REPORT_COLUMNS = ['design', 'demand', 'stock', 'falta', 'status'];
+const PRODUCTION_SUBTAB_LABELS = {
+  produce: 'Producir',
+  orders: 'Pedidos',
+  stock: 'Stock',
+  log: 'Historial',
+  operators: 'Operarios',
+};
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -56,6 +75,67 @@ function compareValues(a, b) {
 
 function stockInputValue(qty) {
   return qty === 0 ? '' : String(qty);
+}
+
+function getItemDesignKey(item) {
+  return String(item?.design_id || item?.designId || item?.id || item?.name || '').trim();
+}
+
+function getOrderProductionItems(order) {
+  const byKey = {};
+  (Array.isArray(order?.items) ? order.items : []).forEach(item => {
+    const key = getItemDesignKey(item);
+    if (!key) return;
+    if (!byKey[key]) {
+      byKey[key] = {
+        id: null,
+        order_id: order.id,
+        order_code: order.order_code,
+        order_created_at: order.created_at,
+        customer_name: order.customer_name,
+        customer_email: order.customer_email,
+        seller_id: order.seller_id,
+        design_key: key,
+        design_id: item.design_id || item.designId || item.id || null,
+        design_name: String(item.name || '').trim() || 'Sin nombre',
+        product_id: item.product_id || null,
+        product_name: item.productName || item.product_name || 'Sin producto',
+        required_qty: 0,
+        produced_qty: 0,
+        waste_qty: 0,
+        note: '',
+        operator_id: null,
+      };
+    }
+    byKey[key].required_qty += toQty(item.qty);
+  });
+  return Object.values(byKey);
+}
+
+function getProductionStatus(items) {
+  const rows = Array.isArray(items) ? items : [];
+  if (rows.length === 0) return 'pending';
+  const requiredRows = rows.filter(row => toQty(row.required_qty) > 0);
+  if (requiredRows.length === 0) return 'pending';
+  const producedTotal = requiredRows.reduce((sum, row) => sum + toQty(row.produced_qty), 0);
+  if (producedTotal <= 0) return 'pending';
+  const complete = requiredRows.every(row => toQty(row.produced_qty) >= toQty(row.required_qty));
+  return complete ? 'done' : 'in_press';
+}
+
+function summarizeOrderProducts(items) {
+  const grouped = {};
+  (Array.isArray(items) ? items : []).forEach(item => {
+    const product = item.productName || item.product_name || 'Sin producto';
+    grouped[product] = (grouped[product] || 0) + toQty(item.qty || item.required_qty);
+  });
+  const text = Object.entries(grouped).map(([product, qty]) => `${product} x${qty}`).join(', ');
+  return text || DASH;
+}
+
+function formatShortDate(iso) {
+  if (!iso) return DASH;
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function fitReportValue(value, width, align = 'left') {
@@ -293,8 +373,31 @@ function SortFilterHeader({ label, filter, active, align = 'left', sortKey, sort
   );
 }
 
-export default function ProductionTab({ supabase, sellers = [], products = [], orders = [] }) {
-  const [activeSubTab, setActiveSubTab] = useState('queue');
+export default function ProductionTab({
+  supabase,
+  sellers = [],
+  products = [],
+  orders = [],
+  operators = [],
+  activeSubtab,
+  selectedOrderId,
+  onChangeSubtab,
+  onSelectOrder,
+  renderOrdersPanel,
+  renderOperatorsPanel,
+}) {
+  const [internalActiveSubTab, setInternalActiveSubTab] = useState('produce');
+  const activeSubTab = activeSubtab || internalActiveSubTab;
+  const changeSubTab = (id) => {
+    setInternalActiveSubTab(id);
+    onChangeSubtab?.(id);
+  };
+  const [internalSelectedOrderId, setInternalSelectedOrderId] = useState('');
+  const selectedProductionOrderId = selectedOrderId ?? internalSelectedOrderId;
+  const selectProductionOrder = (id) => {
+    setInternalSelectedOrderId(id);
+    onSelectOrder?.(id);
+  };
 
   // Filtros — FIX: filterDesign separado de filterSearch (cliente)
   const [filterSeller, setFilterSeller] = useState('all');
@@ -309,16 +412,36 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
   const [reportColumns, setReportColumns] = useState(DEFAULT_REPORT_COLUMNS);
   const [showTextReport, setShowTextReport] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [operatorLinkFeedback, setOperatorLinkFeedback] = useState('');
+  const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
+  const [bridgeToken, setBridgeToken] = useState('');
+  const [bridgeStatus, setBridgeStatus] = useState({ state: 'idle', message: 'Sin verificar', health: null });
+  const [bridgePrinters, setBridgePrinters] = useState([]);
+  const [bridgeBusy, setBridgeBusy] = useState(false);
+  const [bridgeDevMode, setBridgeDevMode] = useState(null);
+  const [orderPdfBusy, setOrderPdfBusy] = useState(false);
+  const [orderPdfMatches, setOrderPdfMatches] = useState({});
+  const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
 
   // Datos
   const [stock, setStock] = useState([]);
   const [prodStatus, setProdStatus] = useState([]);
   const [stockLog, setStockLog] = useState([]);
+  const [productionTasks, setProductionTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [savingTaskIds, setSavingTaskIds] = useState({});
+  const [syncingOrderIds, setSyncingOrderIds] = useState({});
 
   // UI
   const [expandedRow, setExpandedRow] = useState(null);
   const [savingStatus, setSavingStatus] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    const stored = getStoredBridgeConfig();
+    setBridgeUrl(stored.url || DEFAULT_BRIDGE_URL);
+    setBridgeToken(stored.token || '');
+  }, []);
 
   function toggleSort(key) {
     setSortRules(prev => {
@@ -334,6 +457,147 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
       if (prev.includes(key)) return prev.length > 1 ? prev.filter(col => col !== key) : prev;
       return REPORT_COLUMNS.filter(col => prev.includes(col.key) || col.key === key).map(col => col.key);
     });
+  }
+
+  async function checkPrintBridge({ includePrinters = true } = {}) {
+    setBridgeBusy(true);
+    setBridgeDevMode(null);
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken });
+      const health = await getBridgeHealth(bridgeUrl);
+      let printers = bridgePrinters;
+      let message = 'Bridge conectado';
+
+      if (includePrinters) {
+        if (!bridgeToken.trim()) {
+          setBridgePrinters([]);
+          setBridgeStatus({ state: 'token', message: 'Bridge conectado. Pegue el token para leer impresoras.', health });
+          return;
+        }
+
+        const printerPayload = await getBridgePrinters(bridgeUrl, bridgeToken.trim());
+        printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
+        setBridgePrinters(printers);
+        const target = printers.find(printer => printer.isTargetL8050);
+        message = target ? `Bridge conectado: ${target.name}` : 'Bridge conectado. No detecto L8050 por nombre.';
+      }
+
+      setBridgeStatus({ state: 'connected', message, health });
+    } catch (error) {
+      const tokenMessage = error?.status === 401 ? 'Token Bridge incorrecto o faltante.' : '';
+      setBridgePrinters([]);
+      setBridgeStatus({
+        state: error?.status === 401 ? 'token' : 'offline',
+        message: tokenMessage || `No se pudo conectar al Bridge: ${error.message || error}`,
+        health: null,
+      });
+    } finally {
+      setBridgeBusy(false);
+    }
+  }
+
+  async function inspectBridgeDevMode() {
+    const printer = bridgePrinters.find(item => item.isTargetL8050) || bridgePrinters.find(item => item.isDefault) || bridgePrinters[0];
+    if (!printer) {
+      setBridgeStatus(prev => ({ ...prev, state: 'token', message: 'Primero detecta impresoras del Bridge.' }));
+      return;
+    }
+
+    setBridgeBusy(true);
+    try {
+      const payload = await readBridgeDevMode(bridgeUrl, bridgeToken.trim(), printer.name);
+      setBridgeDevMode(payload?.devMode || null);
+      setBridgeStatus(prev => ({ ...prev, state: 'connected', message: `DEVMODE leido: ${printer.name}` }));
+    } catch (error) {
+      setBridgeStatus(prev => ({ ...prev, state: 'offline', message: `No se pudo leer DEVMODE: ${error.message || error}` }));
+    } finally {
+      setBridgeBusy(false);
+    }
+  }
+
+  async function openBridgePreferences() {
+    const printer = bridgePrinters.find(item => item.isTargetL8050) || bridgePrinters.find(item => item.isDefault) || bridgePrinters[0];
+    if (!printer) {
+      setBridgeStatus(prev => ({ ...prev, state: 'token', message: 'Primero detecta impresoras del Bridge.' }));
+      return;
+    }
+
+    setBridgeBusy(true);
+    try {
+      await openBridgePrinterPreferences(bridgeUrl, bridgeToken.trim(), printer.name);
+      setBridgeStatus(prev => ({ ...prev, state: 'connected', message: `Preferencias abiertas: ${printer.name}` }));
+    } catch (error) {
+      setBridgeStatus(prev => ({ ...prev, state: 'offline', message: `No se pudieron abrir preferencias: ${error.message || error}` }));
+    } finally {
+      setBridgeBusy(false);
+    }
+  }
+
+  async function matchSelectedOrderPdfs({ scan = false } = {}) {
+    if (!selectedOrderRow || selectedOrderTasks.length === 0) {
+      setOrderPdfStatus({ state: 'idle', message: 'Selecciona un pedido con diseños.', roots: orderPdfStatus.roots || [] });
+      return;
+    }
+
+    const token = bridgeToken.trim();
+    if (!token) {
+      setOrderPdfStatus({ state: 'token', message: 'Pegá el token Bridge para consultar PDFs.', roots: orderPdfStatus.roots || [] });
+      return;
+    }
+
+    const candidates = selectedOrderTasks.map(task => ({
+      id: String(task.design_id || task.design_key || task.design_name || ''),
+      name: task.design_name || '',
+      productName: task.product_name || '',
+    }));
+
+    setOrderPdfBusy(true);
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      if (scan) await scanBridgePdfs(bridgeUrl, token);
+      const payload = await matchBridgeDesignPdfs(bridgeUrl, token, candidates);
+      const nextMatches = {};
+      (payload.matches || []).forEach(match => {
+        nextMatches[match.id] = match;
+      });
+      setOrderPdfMatches(nextMatches);
+      setOrderPdfStatus({
+        state: 'ready',
+        message: `PDFs del pedido: ${payload.found || 0}/${candidates.length}`,
+        roots: payload.roots || orderPdfStatus.roots || [],
+      });
+    } catch (error) {
+      setOrderPdfStatus({
+        state: error?.status === 401 ? 'token' : 'error',
+        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudieron consultar PDFs: ${error.message || error}`,
+        roots: orderPdfStatus.roots || [],
+      });
+    } finally {
+      setOrderPdfBusy(false);
+    }
+  }
+
+  async function addPdfRootFromProduction() {
+    const token = bridgeToken.trim();
+    if (!token) {
+      setOrderPdfStatus({ state: 'token', message: 'Pegá el token Bridge para agregar carpetas PDF.', roots: orderPdfStatus.roots || [] });
+      return;
+    }
+
+    setBridgeBusy(true);
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      const payload = await addBridgePdfRoot(bridgeUrl, token);
+      setOrderPdfStatus({ state: 'ready', message: `Carpetas PDF autorizadas: ${(payload.roots || []).length}`, roots: payload.roots || [] });
+    } catch (error) {
+      setOrderPdfStatus({
+        state: error?.status === 401 ? 'token' : 'error',
+        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo abrir carpeta PDF: ${error.message || error}`,
+        roots: orderPdfStatus.roots || [],
+      });
+    } finally {
+      setBridgeBusy(false);
+    }
   }
 
   const loadStock = useCallback(async () => {
@@ -366,10 +630,33 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     setStockLog(data || []);
   }, [supabase]);
 
+  const loadProductionTasks = useCallback(async () => {
+    setLoadingTasks(true);
+    const { data, error } = await supabase.rpc('get_operator_production_tasks');
+    if (error) {
+      console.error('Error loading production tasks', error);
+      const missing = error.code === '42883' || error.code === '42P01' || /production_order_tasks|production_operators|get_operator_production_tasks/i.test(error.message || '');
+      setErrorMessage(missing
+        ? 'Falta ejecutar sql/production_orders_and_operators.sql en Supabase para activar Producir.'
+        : 'No se pudieron cargar las tareas de produccion.'
+      );
+      setProductionTasks([]);
+      setLoadingTasks(false);
+      return;
+    }
+    setProductionTasks((data || []).map(task => ({
+      ...task,
+      id: task.id || task.task_id,
+      note: task.note ?? task.task_note ?? '',
+    })));
+    setLoadingTasks(false);
+  }, [supabase]);
+
   useEffect(() => {
     loadStock();
     loadProdStatus();
     loadStockLog();
+    loadProductionTasks();
 
     const stockSub = supabase.channel('production-stock-' + Math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_stock' }, () => loadStock())
@@ -380,13 +667,17 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     const logSub = supabase.channel('production-log-' + Math.random())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_stock_log' }, () => loadStockLog())
       .subscribe();
+    const tasksSub = supabase.channel('production-order-tasks-' + Math.random())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, () => loadProductionTasks())
+      .subscribe();
 
     return () => {
       supabase.removeChannel(stockSub);
       supabase.removeChannel(statusSub);
       supabase.removeChannel(logSub);
+      supabase.removeChannel(tasksSub);
     };
-  }, [supabase, loadStock, loadProdStatus, loadStockLog]);
+  }, [supabase, loadStock, loadProdStatus, loadStockLog, loadProductionTasks]);
 
   // Filtrar pedidos (por vendedor, estado pedido, fecha, cliente)
   const filteredOrders = (orders || []).filter(o => {
@@ -488,6 +779,95 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     setFilterSearch('');
     setFilterDesign('');
   }
+
+  async function syncOrderTasks(orderId) {
+    if (!orderId) return [];
+    setErrorMessage('');
+    setSyncingOrderIds(prev => ({ ...prev, [orderId]: true }));
+    try {
+      const { data, error } = await supabase.rpc('admin_sync_order_production_tasks', { p_order_id: orderId });
+      if (error) throw error;
+      await loadProductionTasks();
+      return data || [];
+    } catch (error) {
+      console.error('Error syncing production tasks', error);
+      setErrorMessage(formatProductionError(error, 'No se pudo preparar este pedido para producir.'));
+      return [];
+    } finally {
+      setSyncingOrderIds(prev => ({ ...prev, [orderId]: false }));
+    }
+  }
+
+  async function handleSelectProductionOrder(orderId) {
+    selectProductionOrder(orderId);
+    if (orderId) await syncOrderTasks(orderId);
+  }
+
+  async function assignOrderOperator(orderId, operatorId) {
+    if (!orderId) return;
+    setErrorMessage('');
+    setSyncingOrderIds(prev => ({ ...prev, [orderId]: true }));
+    try {
+      const { error } = await supabase.rpc('admin_assign_order_operator', {
+        p_order_id: orderId,
+        p_operator_id: operatorId || null,
+      });
+      if (error) throw error;
+      await loadProductionTasks();
+    } catch (error) {
+      console.error('Error assigning operator', error);
+      setErrorMessage(formatProductionError(error, 'No se pudo asignar el operario.'));
+    } finally {
+      setSyncingOrderIds(prev => ({ ...prev, [orderId]: false }));
+    }
+  }
+
+  async function saveProductionTask(task, patch) {
+    if (!task?.id) {
+      setErrorMessage('Primero selecciona el pedido para preparar sus tareas de produccion.');
+      return;
+    }
+    const taskId = task.id;
+    const nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : Number(task.produced_qty || 0);
+    const nextWaste = patch.waste_qty !== undefined ? Number(patch.waste_qty) : Number(task.waste_qty || 0);
+    const nextNote = patch.note !== undefined ? patch.note : (task.note || '');
+    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
+    setErrorMessage('');
+
+    const previousTasks = productionTasks;
+    setProductionTasks(prev => prev.map(row => row.id === taskId ? {
+      ...row,
+      produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
+      waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
+      note: String(nextNote || ''),
+    } : row));
+
+    try {
+      const { error } = await supabase.rpc('update_production_task_progress', {
+        p_task_id: taskId,
+        p_produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
+        p_waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
+        p_note: String(nextNote || ''),
+      });
+      if (error) throw error;
+      await Promise.all([loadProductionTasks(), loadStock(), loadStockLog()]);
+    } catch (error) {
+      console.error('Error saving production task', error);
+      setProductionTasks(previousTasks);
+      setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
+    } finally {
+      setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
+    }
+  }
+
+  useEffect(() => {
+    if (activeSubTab !== 'produce' || !selectedProductionOrderId) return;
+    const hasTasks = productionTasks.some(task => task.order_id === selectedProductionOrderId);
+    if (!hasTasks && !syncingOrderIds[selectedProductionOrderId]) {
+      syncOrderTasks(selectedProductionOrderId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSubTab, selectedProductionOrderId]);
 
   async function cycleStatus(row) {
     setErrorMessage('');
@@ -611,6 +991,29 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     }
   }
 
+  async function shareOperatorAccessLink() {
+    const fallbackOrigin = 'https://www.inkora.com.ar';
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : fallbackOrigin;
+    const url = `${origin}/operarios`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'INKORA Produccion', url });
+        setOperatorLinkFeedback('Compartido');
+      } else {
+        await navigator.clipboard.writeText(url);
+        setOperatorLinkFeedback('Link copiado');
+      }
+      setTimeout(() => setOperatorLinkFeedback(''), 1800);
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        setOperatorLinkFeedback('');
+        return;
+      }
+      setOperatorLinkFeedback('No se pudo compartir');
+      setTimeout(() => setOperatorLinkFeedback(''), 2200);
+    }
+  }
+
   const inp = { border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px', fontFamily: 'Barlow, sans-serif', fontSize: 13, color: '#2d3352', background: 'white', boxSizing: 'border-box' };
   const lbl = { fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3, display: 'block' };
 
@@ -632,6 +1035,57 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
     }, {})
   ).sort((a, b) => a.localeCompare(b, 'es'));
 
+  const tasksByOrder = productionTasks.reduce((acc, task) => {
+    if (!acc[task.order_id]) acc[task.order_id] = [];
+    acc[task.order_id].push(task);
+    return acc;
+  }, {});
+
+  const produceOrderRows = (orders || []).map(order => {
+    const taskRows = tasksByOrder[order.id] || [];
+    const itemRows = taskRows.length > 0 ? taskRows : getOrderProductionItems(order);
+    const status = getProductionStatus(itemRows);
+    const operatorIds = [...new Set(itemRows.map(row => row.operator_id).filter(Boolean))];
+    const operatorId = operatorIds.length === 1 ? operatorIds[0] : '';
+    const operatorName = operatorId
+      ? operators.find(op => op.id === operatorId)?.name || itemRows.find(row => row.operator_id === operatorId)?.operator_name || 'Operario'
+      : '';
+    return {
+      id: order.id,
+      order,
+      order_code: order.order_code,
+      created_at: order.created_at,
+      customer_name: order.customer_name,
+      seller_name: sellers.find(seller => seller.id === order.seller_id)?.name || 'Sin vendedor',
+      notes: order.notes || '',
+      itemsSummary: summarizeOrderProducts(order.items),
+      items: itemRows,
+      productionStatus: status,
+      operator_id: operatorId,
+      operator_name: operatorName,
+      producedTotal: itemRows.reduce((sum, row) => sum + toQty(row.produced_qty), 0),
+      requiredTotal: itemRows.reduce((sum, row) => sum + toQty(row.required_qty), 0),
+    };
+  });
+
+  const selectedOrderRow = produceOrderRows.find(row => row.id === selectedProductionOrderId) || produceOrderRows[0] || null;
+  const selectedOrder = selectedOrderRow?.order || null;
+  const selectedOrderTasks = selectedOrder
+    ? (tasksByOrder[selectedOrder.id] && tasksByOrder[selectedOrder.id].length > 0 ? tasksByOrder[selectedOrder.id] : getOrderProductionItems(selectedOrder))
+    : [];
+  const activeOperators = operators.filter(op => op.active !== false);
+  const bridgeTargetPrinter = bridgePrinters.find(printer => printer.isTargetL8050)
+    || bridgePrinters.find(printer => printer.isDefault)
+    || bridgePrinters[0]
+    || null;
+  const bridgeTone = bridgeStatus.state === 'connected'
+    ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', label: 'Conectado' }
+    : bridgeStatus.state === 'token'
+      ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
+      : bridgeStatus.state === 'offline'
+        ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
+        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {errorMessage && (
@@ -642,15 +1096,336 @@ export default function ProductionTab({ supabase, sellers = [], products = [], o
 
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start' }}>
-        {[['queue', 'Cola de producción'], ['log', 'Historial de stock']].map(([id, label]) => (
-          <button key={id} onClick={() => setActiveSubTab(id)}
+        {[
+          ['produce', 'Producir'],
+          ['orders', 'Pedidos'],
+          ['stock', 'Stock'],
+          ['log', 'Historial'],
+          ['operators', 'Operarios'],
+        ].map(([id, label]) => (
+          <button key={id} onClick={() => changeSubTab(id)}
             style={{ border: 'none', padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef' }}>
             {label}
           </button>
         ))}
       </div>
 
-      {activeSubTab === 'queue' && (
+      {activeSubTab === 'produce' && (
+        <>
+          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Acceso operarios</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>inkora.com.ar/operarios</div>
+            </div>
+            <button
+              type="button"
+              onClick={shareOperatorAccessLink}
+              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: operatorLinkFeedback ? '#e8f7ef' : '#f8faff', color: operatorLinkFeedback ? '#15803d' : '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
+            >
+              {operatorLinkFeedback || 'Compartir acceso'}
+            </button>
+          </div>
+
+          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '12px 14px', display: 'grid', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 220 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Impresion local</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+                  <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 900 }}>
+                    {bridgeTone.label}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{bridgeTargetPrinter?.name || 'INKORA Print Bridge'}</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#5a6380', marginTop: 5 }}>{bridgeStatus.message}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => checkPrintBridge({ includePrinters: true })}
+                  disabled={bridgeBusy}
+                  style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: bridgeBusy ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                >
+                  {bridgeBusy ? 'Verificando...' : 'Detectar Bridge'}
+                </button>
+                <button
+                  type="button"
+                  onClick={inspectBridgeDevMode}
+                  disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                >
+                  Leer DEVMODE
+                </button>
+                <button
+                  type="button"
+                  onClick={openBridgePreferences}
+                  disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                >
+                  Preferencias driver
+                </button>
+                <button
+                  type="button"
+                  onClick={addPdfRootFromProduction}
+                  disabled={bridgeBusy || !bridgeToken.trim()}
+                  style={{ border: '1.5px solid #1B2F5E', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                >
+                  Agregar carpeta PDFs
+                </button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr)', gap: 10 }}>
+              <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                URL local
+                <input
+                  value={bridgeUrl}
+                  onChange={e => setBridgeUrl(e.target.value)}
+                  onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                Token Bridge
+                <input
+                  value={bridgeToken}
+                  onChange={e => setBridgeToken(e.target.value)}
+                  onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
+                  placeholder="Pegar token copiado desde el Bridge"
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
+                />
+              </label>
+            </div>
+            {bridgePrinters.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {bridgePrinters.slice(0, 5).map(printer => (
+                  <span key={printer.name} style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: printer.isTargetL8050 ? '#15803d' : '#5a6380', background: printer.isTargetL8050 ? '#e8f7ef' : '#f8faff' }}>
+                    {printer.name}{printer.isDefault ? ' · default' : ''}
+                  </span>
+                ))}
+                {bridgePrinters.length > 5 && (
+                  <span style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#5a6380', background: '#f8faff' }}>
+                    +{bridgePrinters.length - 5}
+                  </span>
+                )}
+              </div>
+            )}
+            {orderPdfStatus.roots?.length > 0 && (
+              <div style={{ display: 'grid', gap: 5 }}>
+                {orderPdfStatus.roots.map(root => (
+                  <div key={root.path || root.name} title={root.path} style={{ border: '1px solid #dde1ef', borderRadius: 8, padding: '5px 8px', fontSize: 11, fontWeight: 800, color: root.exists ? '#15803d' : '#b91c1c', background: root.exists ? '#e8f7ef' : '#fff5f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {root.exists ? 'Carpeta PDF' : 'Carpeta no encontrada'}: {root.path || root.name}
+                  </div>
+                ))}
+              </div>
+            )}
+            {bridgeDevMode && (
+              <div style={{ background: '#fbfcff', border: '1px solid #eef0f6', borderRadius: 8, padding: '8px 10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+                {[
+                  ['Printer', bridgeDevMode.printerName],
+                  ['Size', bridgeDevMode.querySize],
+                  ['Extra', bridgeDevMode.driverExtra],
+                  ['Driver', bridgeDevMode.driverVersion],
+                  ['Fields', bridgeDevMode.fieldsHex],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(value ?? DASH)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 0.95fr) minmax(520px, 1.45fr)', gap: 14, alignItems: 'start' }}>
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1.5px solid #dde1ef' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
+              <div style={{ fontSize: 12, color: '#8b95b3', marginTop: 3 }}>Selecciona un pedido para ver sus diseños asignados.</div>
+            </div>
+            <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+              {loadingTasks && produceOrderRows.length === 0 ? (
+                <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>Cargando pedidos...</p>
+              ) : produceOrderRows.length === 0 ? (
+                <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>No hay pedidos de producción todavía.</p>
+              ) : (
+                produceOrderRows.map(row => {
+                  const selected = selectedProductionOrderId === row.id;
+                  const tone = row.productionStatus === 'done'
+                    ? { label: 'Terminado', bg: '#e8f7ef', color: '#18a36a' }
+                    : row.productionStatus === 'in_press'
+                      ? { label: 'En proceso', bg: '#fff7ed', color: '#f59e0b' }
+                      : { label: 'Pendiente', bg: '#f3f5fb', color: '#5a6380' };
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => handleSelectProductionOrder(row.id)}
+                      style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '12px 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 7 }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: '#1B2F5E' }}>{row.order_code || row.id}</span>
+                        <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>{tone.label}</span>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#2d3352' }}>{row.customer_name || 'Sin cliente'}</div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#8b95b3' }}>
+                        <span>{formatShortDate(row.created_at)}</span>
+                        <span>{row.seller_name || 'Sin vendedor'}</span>
+                        {row.operator_name && <span>Operario: {row.operator_name}</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#5a6380', lineHeight: 1.35 }}>{row.itemsSummary}</div>
+                      {row.notes && <div style={{ fontSize: 11, color: '#8b95b3', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Nota: {row.notes}</div>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1.5px solid #dde1ef', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>
+                  {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : 'Detalle de producción'}
+                </h2>
+                {selectedOrderRow && (
+                  <div style={{ fontSize: 12, color: '#8b95b3', marginTop: 3 }}>
+                    {selectedOrderRow.customer_name || 'Sin cliente'} · {formatShortDate(selectedOrderRow.created_at)}
+                  </div>
+                )}
+              </div>
+              {selectedOrderRow && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
+                    {orderPdfStatus.message}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => matchSelectedOrderPdfs({ scan: true })}
+                    disabled={orderPdfBusy || !bridgeToken.trim()}
+                    style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                  >
+                    {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
+                  </button>
+                  <select
+                    value={selectedOrderRow.operator_id || ''}
+                    onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
+                    disabled={Boolean(syncingOrderIds[selectedOrderRow.id])}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 190 }}
+                  >
+                    <option value="">Sin operario</option>
+                    {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {!selectedOrderRow ? (
+              <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
+            ) : (
+              <>
+                <div style={{ padding: '12px 16px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                  {[
+                    ['Fecha', formatShortDate(selectedOrderRow.created_at)],
+                    ['Cliente', selectedOrderRow.customer_name || 'Sin cliente'],
+                    ['Vendedor', selectedOrderRow.seller_name || 'Sin vendedor'],
+                    ['Estado', STATUS_LABEL[selectedOrderRow.productionStatus] || selectedOrderRow.productionStatus],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+                      <div style={{ fontSize: 12, color: '#2d3352', fontWeight: 700, marginTop: 2 }}>{value}</div>
+                    </div>
+                  ))}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Items</div>
+                    <div style={{ fontSize: 12, color: '#5a6380', marginTop: 2 }}>{selectedOrderRow.itemsSummary}</div>
+                  </div>
+                  {selectedOrderRow.notes && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Observaciones</div>
+                      <div style={{ fontSize: 12, color: '#5a6380', marginTop: 2 }}>{selectedOrderRow.notes}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones'].map(h => (
+                          <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedOrderTasks.map(task => {
+                        const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
+                        const pdfMatch = orderPdfMatches[pdfKey];
+                        return (
+                        <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                          <td style={{ padding: '8px 10px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '8px 10px', fontWeight: 800, color: '#1B2F5E' }}>
+                            <div>{task.design_name}</div>
+                            {orderPdfStatus.state === 'ready' && (
+                              <span
+                                title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
+                                style={{ display: 'inline-flex', marginTop: 3, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 7px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 10, fontWeight: 900, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              >
+                                {pdfMatch?.found ? `PDF · ${pdfMatch.fileName}` : 'PDF sin vínculo'}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <StockCell
+                              qtyProduced={task.produced_qty || 0}
+                              onSave={qty => saveProductionTask(task, { produced_qty: qty })}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <StockCell
+                              qtyProduced={task.waste_qty || 0}
+                              onSave={qty => saveProductionTask(task, { waste_qty: qty })}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <input
+                              defaultValue={task.note || ''}
+                              disabled={Boolean(savingTaskIds[task.id])}
+                              onBlur={e => saveProductionTask(task, { note: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                              placeholder="Agregar observación..."
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', minWidth: 170, color: '#2d3352' }}
+                            />
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+          </div>
+        </>
+      )}
+
+      {activeSubTab === 'orders' && (
+        renderOrdersPanel ? renderOrdersPanel() : (
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
+            No se pudo cargar la pestaña de pedidos.
+          </div>
+        )
+      )}
+
+      {activeSubTab === 'operators' && (
+        renderOperatorsPanel ? renderOperatorsPanel() : (
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
+            No se pudo cargar la pestaña de operarios.
+          </div>
+        )
+      )}
+
+      {activeSubTab === 'stock' && (
         <>
           {/* Resumen */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>

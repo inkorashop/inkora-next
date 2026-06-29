@@ -99,7 +99,10 @@ function track(eventType, metadata = {}) {
 }
 
 export function CartProvider({ children }) {
-  const cartRef = useRef({});
+  const initialCartRef = useRef(null);
+  if (initialCartRef.current === null) initialCartRef.current = getInitialAnonymousCart();
+
+  const cartRef = useRef(initialCartRef.current);
   const syncTimerRef = useRef(null);
   const anonSessionIdRef = useRef('');
   const modeRef = useRef('anonymous');
@@ -110,8 +113,13 @@ export function CartProvider({ children }) {
   const accountChannelRef = useRef(null);
   const lastSavedAccountRef = useRef('');
   const lastSavedAnonRef = useRef('');
+  const localRevisionRef = useRef(0);
+  const pendingLocalSaveRef = useRef(false);
+  const savingRevisionRef = useRef(null);
+  const locallyTouchedIdsRef = useRef(new Set());
+  const localClearPendingRef = useRef(false);
 
-  const [cart, setCart] = useState(getInitialAnonymousCart);
+  const [cart, setCart] = useState(() => initialCartRef.current);
 
   async function loadAccountCart(userId) {
     const { data, error } = await supabase
@@ -130,12 +138,13 @@ export function CartProvider({ children }) {
   async function saveAccountItems(userId, items) {
     if (!userId) return;
     const safeItems = Array.isArray(items) ? items.filter(item => Number(item?.qty) > 0) : [];
+    const updatedAt = new Date().toISOString();
     const { error } = await supabase.from('carts').upsert({
       id: userId,
       user_id: userId,
       session_id: null,
       items: safeItems,
-      updated_at: new Date().toISOString(),
+      updated_at: updatedAt,
     }, { onConflict: 'id' });
     if (error) throw error;
     lastSavedAccountRef.current = JSON.stringify(safeItems);
@@ -153,8 +162,87 @@ export function CartProvider({ children }) {
     lastSavedAnonRef.current = JSON.stringify(safeItems);
   }
 
+  function commitLocalCart(nextCart, touchedIds = [], options = {}) {
+    const safeCart = nextCart && typeof nextCart === 'object' ? nextCart : {};
+    cartRef.current = safeCart;
+    localRevisionRef.current += 1;
+    pendingLocalSaveRef.current = true;
+    if (options.replaceAll) localClearPendingRef.current = true;
+    touchedIds.forEach(id => {
+      if (id) locallyTouchedIdsRef.current.add(String(id));
+    });
+    if (modeRef.current === 'anonymous') writeStoredCart(ANON_CART_STORAGE_KEY, safeCart);
+    setCart(safeCart);
+  }
+
+  function mergeRemoteWithPendingLocal(remoteCart) {
+    const localCart = cartRef.current || {};
+    if (localClearPendingRef.current) return localCart;
+    const merged = { ...(remoteCart || {}), ...localCart };
+    locallyTouchedIdsRef.current.forEach(id => {
+      if (!localCart[id]) delete merged[id];
+    });
+    return merged;
+  }
+
+  function applyRemoteCart(remoteCart, items, source) {
+    const hasLocalWork = pendingLocalSaveRef.current || savingRevisionRef.current !== null;
+    if (hasLocalWork) {
+      const merged = mergeRemoteWithPendingLocal(remoteCart);
+      cartRef.current = merged;
+      setCart(merged);
+      return false;
+    }
+
+    remoteApplyingRef.current = true;
+    cartRef.current = remoteCart;
+    if (source === 'account') lastSavedAccountRef.current = JSON.stringify(items || []);
+    if (source === 'anonymous') lastSavedAnonRef.current = JSON.stringify(items || []);
+    setCart(remoteCart);
+    return true;
+  }
+
+  async function persistCurrentCart(reason = 'sync') {
+    if (!hydratedRef.current || hydratingRef.current || !pendingLocalSaveRef.current) return;
+    if (savingRevisionRef.current !== null) return;
+
+    const saveRevision = localRevisionRef.current;
+    const items = cartMapToItems(cartRef.current);
+    savingRevisionRef.current = saveRevision;
+
+    try {
+      if (modeRef.current === 'account' && currentUserIdRef.current) {
+        const serialized = JSON.stringify(items);
+        if (serialized !== lastSavedAccountRef.current) {
+          await saveAccountItems(currentUserIdRef.current, items);
+        }
+      } else {
+        writeStoredCart(ANON_CART_STORAGE_KEY, cartRef.current);
+        const serialized = JSON.stringify(items);
+        if (serialized !== lastSavedAnonRef.current) {
+          await saveAnonymousItems(items);
+        }
+      }
+
+      if (localRevisionRef.current === saveRevision) {
+        pendingLocalSaveRef.current = false;
+        locallyTouchedIdsRef.current.clear();
+        localClearPendingRef.current = false;
+      }
+    } catch (error) {
+      console.warn(`No se pudo sincronizar el carrito (${reason}):`, error?.message || error);
+    } finally {
+      if (savingRevisionRef.current === saveRevision) savingRevisionRef.current = null;
+      if (pendingLocalSaveRef.current && localRevisionRef.current !== saveRevision) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = setTimeout(() => persistCurrentCart('followup'), 80);
+      }
+    }
+  }
+
   async function applyAccountCart(userId, reason = 'load') {
     if (!userId) return;
+    const requestRevision = localRevisionRef.current;
     hydratingRef.current = true;
 
     try {
@@ -169,32 +257,38 @@ export function CartProvider({ children }) {
       const nextItems = shouldImportAnonymous ? anonItems : accountCart.items;
       const nextCart = itemsToCartMap(nextItems);
 
-      remoteApplyingRef.current = true;
-      cartRef.current = nextCart;
-      setCart(nextCart);
-      lastSavedAccountRef.current = JSON.stringify(nextItems);
+      if (localRevisionRef.current !== requestRevision || pendingLocalSaveRef.current || savingRevisionRef.current !== null) {
+        const previousSerialized = serializeCart(cartRef.current);
+        const mergedCart = mergeRemoteWithPendingLocal(nextCart);
+        cartRef.current = mergedCart;
+        setCart(mergedCart);
+        if (serializeCart(mergedCart) !== previousSerialized) {
+          localRevisionRef.current += 1;
+          pendingLocalSaveRef.current = true;
+        }
+      } else {
+        applyRemoteCart(nextCart, nextItems, 'account');
+      }
 
       if (shouldImportAnonymous || !accountCart.exists) {
-        await saveAccountItems(userId, nextItems);
+        await saveAccountItems(userId, cartMapToItems(cartRef.current));
       }
       markAccountInitialized(userId);
     } catch (error) {
       console.warn(`No se pudo cargar el carrito de la cuenta (${reason}):`, error?.message || error);
-      remoteApplyingRef.current = true;
-      cartRef.current = {};
-      setCart({});
     } finally {
       hydratingRef.current = false;
       hydratedRef.current = true;
+      if (pendingLocalSaveRef.current) persistCurrentCart(`hydrate-${reason}`);
     }
   }
 
   function applyAnonymousCart() {
+    if (pendingLocalSaveRef.current || savingRevisionRef.current !== null) return cartRef.current;
     hydratingRef.current = true;
     const anonCart = readStoredCart(ANON_CART_STORAGE_KEY);
-    remoteApplyingRef.current = true;
-    cartRef.current = anonCart;
-    setCart(anonCart);
+    const anonItems = cartMapToItems(anonCart);
+    applyRemoteCart(anonCart, anonItems, 'anonymous');
     hydratingRef.current = false;
     hydratedRef.current = true;
     return anonCart;
@@ -219,10 +313,7 @@ export function CartProvider({ children }) {
               : [];
           const nextCart = itemsToCartMap(items);
           if (serializeCart(nextCart) === serializeCart(cartRef.current)) return;
-          remoteApplyingRef.current = true;
-          cartRef.current = nextCart;
-          lastSavedAccountRef.current = JSON.stringify(items);
-          setCart(nextCart);
+          applyRemoteCart(nextCart, items, 'account');
         }
       )
       .subscribe();
@@ -280,6 +371,8 @@ export function CartProvider({ children }) {
     });
 
     const handleResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (pendingLocalSaveRef.current || savingRevisionRef.current !== null) return;
       if (modeRef.current === 'account' && currentUserIdRef.current) {
         applyAccountCart(currentUserIdRef.current, 'resume');
       }
@@ -288,6 +381,7 @@ export function CartProvider({ children }) {
     const handleStorage = (event) => {
       if (modeRef.current !== 'anonymous') return;
       if (event.key !== ANON_CART_STORAGE_KEY) return;
+      if (pendingLocalSaveRef.current || savingRevisionRef.current !== null) return;
       applyAnonymousCart();
     };
 
@@ -317,24 +411,8 @@ export function CartProvider({ children }) {
     }
 
     clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(async () => {
-      const items = cartMapToItems(cartRef.current);
-      try {
-        if (modeRef.current === 'account' && currentUserIdRef.current) {
-          const serialized = JSON.stringify(items);
-          if (serialized !== lastSavedAccountRef.current) {
-            await saveAccountItems(currentUserIdRef.current, items);
-          }
-        } else {
-          writeStoredCart(ANON_CART_STORAGE_KEY, cartRef.current);
-          const serialized = JSON.stringify(items);
-          if (serialized !== lastSavedAnonRef.current) {
-            await saveAnonymousItems(items);
-          }
-        }
-      } catch (error) {
-        console.warn('No se pudo sincronizar el carrito:', error?.message || error);
-      }
+    syncTimerRef.current = setTimeout(() => {
+      persistCurrentCart('debounced');
     }, 700);
 
     return () => clearTimeout(syncTimerRef.current);
@@ -350,8 +428,8 @@ export function CartProvider({ children }) {
       price: product?.price_per_unit ?? 0,
     });
 
-    setCart(prev => ({
-      ...prev,
+    commitLocalCart({
+      ...(cartRef.current || {}),
       [design.id]: {
         ...design,
         qty: safeQty,
@@ -359,78 +437,66 @@ export function CartProvider({ children }) {
         showPrice: product?.show_price !== false,
         productName: product?.name ?? '',
       },
-    }));
+    }, [design.id]);
   }
 
   function changeQty(id, delta) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      const newQty = item.qty + delta;
-      track('cart_qty_change', {
-        design_id: id,
-        design_name: item.name,
-        product_name: item.productName,
-        old_qty: item.qty,
-        new_qty: Math.max(0, newQty),
-        delta,
-      });
-      if (newQty <= 0) {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      }
-      return { ...prev, [id]: { ...item, qty: newQty } };
+    const current = cartRef.current || {};
+    const item = current[id];
+    if (!item) return;
+    const newQty = item.qty + delta;
+    track('cart_qty_change', {
+      design_id: id,
+      design_name: item.name,
+      product_name: item.productName,
+      old_qty: item.qty,
+      new_qty: Math.max(0, newQty),
+      delta,
     });
+    const next = { ...current };
+    if (newQty <= 0) {
+      delete next[id];
+    } else {
+      next[id] = { ...item, qty: newQty };
+    }
+    commitLocalCart(next, [id]);
   }
 
   function removeFromCart(id) {
-    setCart(prev => {
-      const item = prev[id];
-      if (item) track('cart_remove', { design_id: id, design_name: item.name, product_name: item.productName });
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    const current = cartRef.current || {};
+    const item = current[id];
+    if (!item) return;
+    track('cart_remove', { design_id: id, design_name: item.name, product_name: item.productName });
+    const next = { ...current };
+    delete next[id];
+    commitLocalCart(next, [id]);
   }
 
   function clearCart() {
-    cartRef.current = {};
-    setCart({});
     clearTimeout(syncTimerRef.current);
-
-    if (modeRef.current === 'account' && currentUserIdRef.current) {
-      saveAccountItems(currentUserIdRef.current, []).catch(error => {
-        console.warn('No se pudo limpiar el carrito de la cuenta:', error?.message || error);
-      });
-      return;
-    }
-
-    writeStoredCart(ANON_CART_STORAGE_KEY, {});
-    saveAnonymousItems([]).catch(error => {
-      console.warn('No se pudo limpiar el carrito anonimo:', error?.message || error);
-    });
+    commitLocalCart({}, [], { replaceAll: true });
+    persistCurrentCart('clear');
   }
 
   function setCartItem(id, qty) {
-    setCart(prev => {
-      const item = prev[id];
-      if (!item) return prev;
-      track('cart_qty_change', {
-        design_id: id,
-        design_name: item.name,
-        product_name: item.productName,
-        old_qty: item.qty,
-        new_qty: Math.max(0, qty),
-        delta: qty - item.qty,
-      });
-      if (qty <= 0) {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      }
-      return { ...prev, [id]: { ...item, qty } };
+    const current = cartRef.current || {};
+    const item = current[id];
+    if (!item) return;
+    track('cart_qty_change', {
+      design_id: id,
+      design_name: item.name,
+      product_name: item.productName,
+      old_qty: item.qty,
+      new_qty: Math.max(0, qty),
+      delta: qty - item.qty,
     });
+    const next = { ...current };
+    if (qty <= 0) {
+      delete next[id];
+    } else {
+      next[id] = { ...item, qty };
+    }
+    commitLocalCart(next, [id]);
   }
 
   const cartItems = Object.values(cart);
