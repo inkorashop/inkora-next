@@ -1,0 +1,4 @@
+bin/
+obj/
+diagnostic-logs/
+local-config/
