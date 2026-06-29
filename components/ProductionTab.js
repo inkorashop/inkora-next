@@ -11,6 +11,8 @@ import {
   addBridgePdfRoot,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
+  printBridgeJob,
+  getBridgePrintQueue,
 } from '../lib/print-bridge-client';
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -422,6 +424,9 @@ export default function ProductionTab({
   const [orderPdfBusy, setOrderPdfBusy] = useState(false);
   const [orderPdfMatches, setOrderPdfMatches] = useState({});
   const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
+  const [printingTasks, setPrintingTasks] = useState({});
+  const [printFeedback, setPrintFeedback] = useState({});
+  const [printQueue, setPrintQueue] = useState(null);
 
   // Datos
   const [stock, setStock] = useState([]);
@@ -597,6 +602,71 @@ export default function ProductionTab({
       });
     } finally {
       setBridgeBusy(false);
+    }
+  }
+
+  async function printSingleTask(task) {
+    const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
+    const pdfMatch = orderPdfMatches[pdfKey];
+    if (!pdfMatch?.found) return;
+
+    const token = bridgeToken.trim();
+    if (!token) return;
+
+    const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
+    const taskId = task.id || pdfKey;
+    setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
+    setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
+
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      const result = await printBridgeJob(bridgeUrl, token, {
+        designId: String(task.design_id || task.design_key || ''),
+        designName: task.design_name || '',
+        productName: task.product_name || '',
+        printerName: bridgeTargetPrinter?.name || '',
+        copies: remaining,
+        orderId: selectedOrder?.id || '',
+        orderCode: selectedOrder?.order_code || '',
+      });
+      const status = result?.job?.status || 'done';
+      setPrintFeedback(prev => ({
+        ...prev,
+        [taskId]: status === 'done' ? 'Enviado' : status === 'error' ? (result?.job?.error || 'Error') : status
+      }));
+      setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 3000);
+    } catch (error) {
+      setPrintFeedback(prev => ({ ...prev, [taskId]: error?.message || 'Error' }));
+      setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 4000);
+    } finally {
+      setPrintingTasks(prev => ({ ...prev, [taskId]: false }));
+    }
+  }
+
+  async function printAllOrderTasks() {
+    if (!selectedOrder || selectedOrderTasks.length === 0) return;
+    const token = bridgeToken.trim();
+    if (!token) return;
+
+    const printable = selectedOrderTasks.filter(task => {
+      const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
+      return orderPdfMatches[pdfKey]?.found;
+    });
+
+    if (printable.length === 0) return;
+    for (const task of printable) {
+      await printSingleTask(task);
+    }
+  }
+
+  async function loadPrintQueue() {
+    const token = bridgeToken.trim();
+    if (!token) return;
+    try {
+      const result = await getBridgePrintQueue(bridgeUrl, token);
+      setPrintQueue(result?.queue || null);
+    } catch {
+      setPrintQueue(null);
     }
   }
 
@@ -1305,6 +1375,24 @@ export default function ProductionTab({
                   >
                     {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
                   </button>
+                  {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
+                    <button
+                      type="button"
+                      onClick={printAllOrderTasks}
+                      disabled={Object.values(printingTasks).some(Boolean) || !bridgeToken.trim()}
+                      style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      Imprimir todo
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={loadPrintQueue}
+                    disabled={!bridgeToken.trim()}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 900, cursor: !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                  >
+                    Cola
+                  </button>
                   <select
                     value={selectedOrderRow.operator_id || ''}
                     onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
@@ -1322,6 +1410,40 @@ export default function ProductionTab({
               <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
             ) : (
               <>
+                {printQueue && printQueue.jobs && printQueue.jobs.length > 0 && (
+                  <div style={{ padding: '10px 16px', background: '#fbfcff', borderBottom: '1px solid #eef0f6' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 900, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Cola de impresion</span>
+                      <span style={{ fontSize: 11, color: '#8b95b3' }}>
+                        {printQueue.done || 0} enviados · {printQueue.error || 0} errores · via {printQueue.printMethod || 'shell'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {printQueue.jobs.slice(0, 8).map(job => (
+                        <span
+                          key={job.id}
+                          title={`${job.designName} x${job.copies} -> ${job.printerName}\n${job.pdfFileName}\n${job.error || ''}`}
+                          style={{
+                            border: '1px solid',
+                            borderColor: job.status === 'done' ? '#b7ebcf' : job.status === 'error' ? '#fecaca' : job.status === 'printing' ? '#fed7aa' : '#dde1ef',
+                            borderRadius: 999,
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 800,
+                            color: job.status === 'done' ? '#15803d' : job.status === 'error' ? '#b91c1c' : job.status === 'printing' ? '#c2410c' : '#5a6380',
+                            background: job.status === 'done' ? '#e8f7ef' : job.status === 'error' ? '#fff5f5' : job.status === 'printing' ? '#fff7ed' : '#f8faff',
+                            maxWidth: 180,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {job.designName} x{job.copies} · {job.status === 'done' ? 'OK' : job.status === 'error' ? 'Error' : job.status}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ padding: '12px 16px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
                   {[
                     ['Fecha', formatShortDate(selectedOrderRow.created_at)],
@@ -1350,7 +1472,7 @@ export default function ProductionTab({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones'].map(h => (
+                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones', 'Imprimir'].map(h => (
                           <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -1395,6 +1517,44 @@ export default function ProductionTab({
                               placeholder="Agregar observación..."
                               style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', minWidth: 170, color: '#2d3352' }}
                             />
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {(() => {
+                              const taskId = task.id || pdfKey;
+                              const isPrinting = printingTasks[taskId];
+                              const feedback = printFeedback[taskId];
+                              const hasPdf = pdfMatch?.found;
+                              const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
+                              if (feedback) {
+                                return (
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: feedback === 'Enviado' ? '#15803d' : '#b91c1c' }}>
+                                    {feedback}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => printSingleTask(task)}
+                                  disabled={!hasPdf || isPrinting || !bridgeToken.trim() || bridgeStatus.state !== 'connected'}
+                                  title={!hasPdf ? 'Sin PDF vinculado' : `Imprimir ${remaining} copia(s)`}
+                                  style={{
+                                    border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
+                                    borderRadius: 8,
+                                    padding: '5px 10px',
+                                    background: hasPdf ? '#e8f7ef' : '#f7f8fc',
+                                    color: hasPdf ? '#15803d' : '#c4c9d9',
+                                    fontSize: 11,
+                                    fontWeight: 900,
+                                    cursor: !hasPdf || isPrinting || !bridgeToken.trim() ? 'not-allowed' : 'pointer',
+                                    fontFamily: 'Barlow, sans-serif',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {isPrinting ? 'Enviando...' : remaining > 0 ? `Imprimir x${remaining}` : 'Imprimir x1'}
+                                </button>
+                              );
+                            })()}
                           </td>
                         </tr>
                         );
