@@ -1901,7 +1901,7 @@ export default function ProductionTab({
             Object.values(designPdfMatches || {}).forEach(m => {
               if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
             });
-            const matchedPdfs = Object.values(uniqueMap);
+            const matchedPdfs = Object.values(uniqueMap).sort((a, b) => (a.fileName || a.name || '').localeCompare(b.fileName || b.name || '', 'es', { sensitivity: 'base' }));
             const search = quickPrintSearch.toLowerCase();
             const visiblePdfs = matchedPdfs.length > 0 && search
               ? matchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
