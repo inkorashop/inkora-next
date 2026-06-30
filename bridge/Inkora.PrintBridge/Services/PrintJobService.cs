@@ -14,6 +14,7 @@ public sealed class PrintJobService
 
     private readonly PdfCatalogService _pdfCatalogService;
     private readonly PrinterService _printerService;
+    private readonly DevModeService _devModeService;
     private readonly BridgeLogService _logService;
     private readonly object _lock = new();
     private readonly List<PrintJob> _jobs = [];
@@ -21,10 +22,11 @@ public sealed class PrintJobService
     public string? SumatraPdfPath { get; private set; }
     public string PrintMethod => SumatraPdfPath is not null ? "SumatraPDF" : "shell-printto";
 
-    public PrintJobService(PdfCatalogService pdfCatalogService, PrinterService printerService, BridgeLogService logService)
+    public PrintJobService(PdfCatalogService pdfCatalogService, PrinterService printerService, DevModeService devModeService, BridgeLogService logService)
     {
         _pdfCatalogService = pdfCatalogService;
         _printerService = printerService;
+        _devModeService = devModeService;
         _logService = logService;
         DetectSumatraPdf();
     }
@@ -194,37 +196,78 @@ public sealed class PrintJobService
 
     private void PrintWithSumatra(PrintJob job)
     {
-        var settings = job.Copies > 1 ? $"copies {job.Copies}" : "";
-        var args = $"-print-to \"{job.PrinterName}\" -silent";
-        if (!string.IsNullOrWhiteSpace(settings))
+        // Aplicar dmCopies en DEVMODE antes de imprimir (SumatraPDF ignora -print-settings copies)
+        byte[]? origDevMode = null;
+        var devModeModified = false;
+        if (job.Copies > 1)
         {
-            args += $" -print-settings \"{settings}\"";
-        }
-        args += $" \"{job.PdfFullPath}\"";
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = SumatraPdfPath!,
-            Arguments = args,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
-
-        using var process = Process.Start(psi);
-        process?.WaitForExit(60000);
-
-        if (process is not null && !process.HasExited)
-        {
-            _logService.Error($"SumatraPDF timeout para {job.Id}. Matando proceso.");
-            process.Kill();
-            throw new TimeoutException("SumatraPDF no termino en 60 segundos.");
+            try
+            {
+                origDevMode = _devModeService.ReadDefaultDevModeBytes(job.PrinterName);
+                var modified = SetDevModeCopies(origDevMode, job.Copies);
+                _devModeService.ApplyDevModeBytes(job.PrinterName, modified);
+                devModeModified = true;
+                _logService.Info($"DEVMODE dmCopies={job.Copies} aplicado para {job.PrinterName}");
+            }
+            catch (Exception ex)
+            {
+                _logService.Info($"No se pudo modificar DEVMODE: {ex.Message}. Se imprimira con copia unica.");
+            }
         }
 
-        if (process?.ExitCode != 0)
+        try
         {
-            _logService.Error($"SumatraPDF salio con codigo {process?.ExitCode} para {job.Id}.");
+            var args = $"-print-to \"{job.PrinterName}\" -silent \"{job.PdfFullPath}\"";
+            var psi = new ProcessStartInfo
+            {
+                FileName = SumatraPdfPath!,
+                Arguments = args,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            using var process = Process.Start(psi);
+            process?.WaitForExit(60000);
+
+            if (process is not null && !process.HasExited)
+            {
+                _logService.Error($"SumatraPDF timeout para {job.Id}. Matando proceso.");
+                process.Kill();
+                throw new TimeoutException("SumatraPDF no termino en 60 segundos.");
+            }
+
+            if (process?.ExitCode != 0)
+            {
+                _logService.Error($"SumatraPDF salio con codigo {process?.ExitCode} para {job.Id}.");
+            }
         }
+        finally
+        {
+            if (devModeModified && origDevMode is not null)
+            {
+                try { _devModeService.ApplyDevModeBytes(job.PrinterName, origDevMode); }
+                catch (Exception ex) { _logService.Info($"No se pudo restaurar DEVMODE: {ex.Message}"); }
+            }
+        }
+    }
+
+    // dmFields en offset 72 (uint), DM_COPIES = 0x100; dmCopies en offset 86 (short)
+    private static byte[] SetDevModeCopies(byte[] devMode, int copies)
+    {
+        var m = (byte[])devMode.Clone();
+        if (m.Length >= 76)
+        {
+            var fields = BitConverter.ToUInt32(m, 72);
+            fields |= 0x00000100u; // DM_COPIES
+            Buffer.BlockCopy(BitConverter.GetBytes(fields), 0, m, 72, 4);
+        }
+        if (m.Length >= 88)
+        {
+            var clamped = (short)Math.Clamp(copies, 1, 999);
+            Buffer.BlockCopy(BitConverter.GetBytes(clamped), 0, m, 86, 2);
+        }
+        return m;
     }
 
     private void PrintWithShellVerb(PrintJob job)

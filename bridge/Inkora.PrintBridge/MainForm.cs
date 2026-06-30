@@ -39,7 +39,7 @@ public sealed class MainForm : Form
     {
         _bridgeToken = _configService.GetOrCreatePairingToken();
         _pdfCatalogService = new PdfCatalogService(_configService, _logService);
-        _printJobService = new PrintJobService(_pdfCatalogService, _printerService, _logService);
+        _printJobService = new PrintJobService(_pdfCatalogService, _printerService, _devModeService, _logService);
         _devModeProfileService = new DevModeProfileService(_configService, _devModeService, _logService);
         _localApiServer = new LocalApiServer(
             _printerService,
