@@ -9,26 +9,38 @@ try {
     $inUse = $true
 } catch {}
 
-if ($inUse) {
-    exit 0
+if ($inUse) { exit 0 }
+
+# Buscar dotnet en ubicaciones conocidas
+$dotnetCandidates = @(
+    (Join-Path $env:ProgramFiles "dotnet\dotnet.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe"),
+    (Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"),
+    "dotnet.exe"
+)
+
+$dotnetExe = $null
+foreach ($candidate in $dotnetCandidates) {
+    try {
+        if ($candidate -eq "dotnet.exe") {
+            $resolved = (Get-Command dotnet -ErrorAction Stop).Source
+            $dotnetExe = $resolved
+            break
+        } elseif (Test-Path $candidate) {
+            $dotnetExe = $candidate
+            break
+        }
+    } catch {}
 }
 
-$dotnetDir = Join-Path $env:USERPROFILE ".dotnet"
-$dotnetExe = Join-Path $dotnetDir "dotnet.exe"
-
-if (-not (Test-Path $dotnetExe)) {
-    throw "No se encontro dotnet en $dotnetExe. Instala .NET 8 SDK o ajusta la ruta."
+if (-not $dotnetExe) {
+    throw "No se encontro dotnet.exe. Instala .NET 8 SDK."
 }
-
-$env:DOTNET_ROOT = $dotnetDir
-$env:Path = "$dotnetDir;$env:Path"
 
 $projectPath = Join-Path $PSScriptRoot "Inkora.PrintBridge.csproj"
-$outputPath = Join-Path $PSScriptRoot "bin\LocalRun"
+$outputPath  = Join-Path $PSScriptRoot "bin\LocalRun"
 
 & $dotnetExe build $projectPath -o $outputPath
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
-}
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $dotnetExe (Join-Path $outputPath "Inkora.PrintBridge.dll")
