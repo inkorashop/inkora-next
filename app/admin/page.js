@@ -66,6 +66,15 @@ const INVITE_DESTINATIONS = [
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 
+function formatBridgeError(error) {
+  if (error?.status === 401) return 'Token Bridge incorrecto.';
+  const msg = String(error?.message || error || '');
+  if (/failed to fetch|load failed|err_connection_refused|err_network/i.test(msg)) {
+    return 'Bridge no disponible. ¿Está corriendo el Print Bridge?';
+  }
+  return msg || 'Error desconocido.';
+}
+
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
@@ -1668,7 +1677,7 @@ useEffect(() => {
     } catch (error) {
       setDesignPdfSummary({
         state: error?.status === 401 ? 'token' : 'error',
-        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo consultar PDFs: ${error.message || error}`,
+        message: formatBridgeError(error),
         found: 0,
         missing: 0,
         pdfCount: 0,
@@ -1702,7 +1711,7 @@ useEffect(() => {
     } catch (error) {
       setDesignPdfSummary({
         state: error?.status === 401 ? 'token' : 'error',
-        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo abrir el selector de carpeta: ${error.message || error}`,
+        message: formatBridgeError(error),
         found: 0,
         missing: 0,
         pdfCount: 0,
@@ -5979,6 +5988,36 @@ useEffect(() => {
                     </div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && pdfMatch?.found && (
+                      <span
+                        title={`PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}`}
+                        style={{
+                          fontSize:10,
+                          fontWeight:800,
+                          color:'#15803d',
+                          background:'#e8f7ef',
+                          border:'1px solid #b7ebcf',
+                          borderRadius:5,
+                          padding:'3px 6px',
+                          maxWidth:120,
+                          overflow:'hidden',
+                          textOverflow:'ellipsis',
+                          whiteSpace:'nowrap',
+                          lineHeight:1.3,
+                          cursor:'default',
+                        }}
+                      >
+                        {pdfMatch.fileName}
+                      </span>
+                    )}
+                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && !pdfMatch?.found && (
+                      <span
+                        title="No se encontró PDF local para este diseño"
+                        style={{border:'1px solid #fecaca', background:'#fff5f5', color:'#b91c1c', borderRadius:5, padding:'3px 5px', fontSize:10, fontWeight:900, lineHeight:1, display:'inline-flex', alignItems:'center'}}
+                      >
+                        <PdfIcon />!
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); setDesignPdfLinkEnabled(d.id, !pdfLinkEnabled); }}
@@ -5988,27 +6027,6 @@ useEffect(() => {
                     >
                       <LinkIcon />
                     </button>
-                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && (
-                      <span
-                        title={pdfMatch?.found ? `PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño'}
-                        style={{
-                          border:'1px solid',
-                          borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca',
-                          background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5',
-                          color: pdfMatch?.found ? '#15803d' : '#b91c1c',
-                          borderRadius:6,
-                          padding:'4px 6px',
-                          fontSize:10,
-                          fontWeight:900,
-                          display:'inline-flex',
-                          alignItems:'center',
-                          gap:2,
-                          lineHeight:1,
-                        }}
-                      >
-                        <PdfIcon />{pdfMatch?.found ? <CheckIcon /> : '!'}
-                      </span>
-                    )}
                     <button style={s.iconBtn} onClick={e => { e.stopPropagation(); toggleDesign(d.id, d.active); }}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
                     <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>
