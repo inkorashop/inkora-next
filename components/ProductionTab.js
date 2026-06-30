@@ -1594,7 +1594,7 @@ export default function ProductionTab({
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 ? 'minmax(200px, 0.6fr) minmax(380px, 1.1fr) minmax(210px, 0.7fr)' : 'minmax(260px, 0.85fr) minmax(460px, 1.4fr)', gap: 10, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(200px, 0.6fr) minmax(380px, 1.1fr) minmax(210px, 0.7fr)' : 'minmax(260px, 0.85fr) minmax(460px, 1.4fr)', gap: 10, alignItems: 'start' }}>
             <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
             <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef' }}>
               <h2 style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
@@ -2249,32 +2249,40 @@ export default function ProductionTab({
                   </tbody>
                 </table>
               </div>
-          {bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 && (() => {
+          {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
             const search = quickPrintSearch.toLowerCase();
-            const visiblePdfs = search
+            const visiblePdfs = quickPrintCatalog.length > 0 && search
               ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search))
               : quickPrintCatalog;
             return (
               <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 560 }}>
                 <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
                   <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
-                    Imprimir diseño · {quickPrintCatalog.length} PDFs
+                    Imprimir diseño{quickPrintCatalog.length > 0 ? ` · ${quickPrintCatalog.length} PDFs` : ''}
                   </div>
                   <input
                     type="text"
                     placeholder="Buscar..."
                     value={quickPrintSearch}
                     onChange={e => setQuickPrintSearch(e.target.value)}
-                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box' }}
+                    disabled={quickPrintCatalog.length === 0}
+                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: quickPrintCatalog.length === 0 ? 0.5 : 1 }}
                   />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
-                    <span />
-                  </div>
+                  {quickPrintCatalog.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
+                      <span />
+                    </div>
+                  )}
                 </div>
                 <div style={{ overflowY: 'auto', flex: 1 }}>
-                  {visiblePdfs.length === 0 && (
+                  {quickPrintCatalog.length === 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '20px 10px', lineHeight: 1.5 }}>
+                      Sin PDFs disponibles.<br />Actualizá el bridge e instalalo.
+                    </p>
+                  )}
+                  {visiblePdfs.length === 0 && quickPrintCatalog.length > 0 && (
                     <p style={{ color: '#9aa3bc', fontSize: 12, textAlign: 'center', padding: '18px 8px' }}>Sin resultados</p>
                   )}
                   {visiblePdfs.map(pdf => {
