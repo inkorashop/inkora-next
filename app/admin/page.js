@@ -29,6 +29,7 @@ import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
   saveStoredBridgeConfig,
+  getBridgeHealth,
   addBridgePdfRoot,
   getBridgePdfRoots,
   scanBridgePdfs,
@@ -1720,6 +1721,38 @@ useEffect(() => {
     } finally {
       setDesignPdfBusy(false);
     }
+  }
+
+  async function launchBridgeAndRetry() {
+    const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+    setDesignPdfBusy(true);
+    setDesignPdfSummary({ state: 'launching', message: 'Iniciando Bridge...', found: 0, missing: 0, pdfCount: 0, roots: [] });
+
+    // Trigger the OS to launch the Bridge via custom URI scheme
+    const anchor = document.createElement('a');
+    anchor.href = 'inkora-bridge://start';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
+    // Poll /health until the Bridge responds (up to ~18s)
+    for (let i = 0; i < 12; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      try {
+        await getBridgeHealth(url);
+        // Bridge is up — auto-scan
+        setDesignPdfSummary(prev => ({ ...prev, message: 'Bridge listo. Escaneando PDFs...' }));
+        await refreshDesignPdfLinks({ scan: true });
+        return;
+      } catch {
+        // Still starting
+        setDesignPdfSummary(prev => ({ ...prev, message: `Iniciando Bridge... (${i + 1}/12)` }));
+      }
+    }
+
+    setDesignPdfBusy(false);
+    setDesignPdfSummary({ state: 'error', message: 'No respondió en 18 segundos. Abrilo manualmente.', found: 0, missing: 0, pdfCount: 0, roots: [] });
   }
 
   function isDefault3dDesignProduct(product) {
@@ -5769,7 +5802,9 @@ useEffect(() => {
                     ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
                     : designPdfSummary.state === 'error'
                       ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'Error' }
-                      : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+                      : designPdfSummary.state === 'launching'
+                        ? { bg: '#eef4ff', border: '#bfcfff', color: '#2D6BE4', label: 'Iniciando...' }
+                        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
                 const visibleDesignCount = getDesignPdfCandidates().length;
                 return (
                   <div style={{border:`1.5px solid ${tone.border}`, borderRadius:8, background:'white', padding:'10px 12px', marginBottom:12, display:'grid', gap:8}}>
@@ -5783,6 +5818,16 @@ useEffect(() => {
                         </div>
                       </div>
                       <div style={{display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
+                        {(designPdfSummary.state === 'error' || designPdfSummary.state === 'launching') && (
+                          <button
+                            type="button"
+                            onClick={launchBridgeAndRetry}
+                            disabled={designPdfBusy}
+                            style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'7px 12px', background:'#eef4ff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
+                          >
+                            {designPdfSummary.state === 'launching' ? 'Iniciando...' : 'Iniciar Bridge'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={addDesignPdfRootFromAdmin}
@@ -5797,7 +5842,7 @@ useEffect(() => {
                           disabled={designPdfBusy}
                           style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'7px 12px', background:'#f8faff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
                         >
-                          {designPdfBusy ? 'Escaneando...' : `Escanear y vincular (${visibleDesignCount})`}
+                          {designPdfBusy && designPdfSummary.state !== 'launching' ? 'Escaneando...' : `Escanear y vincular (${visibleDesignCount})`}
                         </button>
                         <button
                           type="button"
