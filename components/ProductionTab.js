@@ -1078,8 +1078,10 @@ export default function ProductionTab({
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
 
-  // Auto-match PDFs al seleccionar pedido o al conectar bridge.
-  // Escanea el directorio la primera vez que el bridge conecta (cache vacía al arrancar).
+  // Auto-match PDFs al seleccionar pedido, conectar bridge, o cargar orders.
+  // orders.length como dep porque el bridge suele conectar antes que lleguen las orders;
+  // sin esa dep, selectedOrderRow es null (produceOrderRows vacío) y el match sale temprano.
+  // Escanea el directorio la primera vez (cache vacía al arrancar).
   useEffect(() => {
     if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
       const scan = !hasScannedOnBridgeConnectRef.current;
@@ -1087,7 +1089,7 @@ export default function ProductionTab({
       matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state]);
+  }, [selectedProductionOrderId, bridgeStatus.state, orders.length]);
 
   // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
