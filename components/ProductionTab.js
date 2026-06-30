@@ -422,6 +422,7 @@ export default function ProductionTab({
   const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
   const [bridgeToken, setBridgeToken] = useState('');
   const [bridgeStatus, setBridgeStatus] = useState({ state: 'idle', message: 'Sin verificar', health: null });
+  const hasScannedOnBridgeConnectRef = useRef(false);
   const [bridgePrinters, setBridgePrinters] = useState([]);
   const [bridgeBusy, setBridgeBusy] = useState(false);
   const [bridgeDevMode, setBridgeDevMode] = useState(null);
@@ -1077,14 +1078,16 @@ export default function ProductionTab({
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
 
-  // Auto-match PDFs al seleccionar pedido, al conectar bridge, o al cargar tareas
+  // Auto-match PDFs al seleccionar pedido o al conectar bridge.
+  // Escanea el directorio la primera vez que el bridge conecta (cache vacía al arrancar).
   useEffect(() => {
     if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
-      const hasTasks = productionTasks.some(t => t.order_id === selectedProductionOrderId);
-      if (hasTasks) matchSelectedOrderPdfs({ scan: false });
+      const scan = !hasScannedOnBridgeConnectRef.current;
+      hasScannedOnBridgeConnectRef.current = true;
+      matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, productionTasks.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state]);
 
   // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
