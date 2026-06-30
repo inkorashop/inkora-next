@@ -2249,7 +2249,6 @@ export default function ProductionTab({
                   </tbody>
                 </table>
               </div>
-          </div>
           {bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 && (() => {
             const search = quickPrintSearch.toLowerCase();
             const visiblePdfs = search
@@ -2316,6 +2315,7 @@ export default function ProductionTab({
               </div>
             );
           })()}
+          </div>
         </>
       )}
 
