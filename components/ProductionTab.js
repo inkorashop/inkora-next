@@ -1903,6 +1903,80 @@ export default function ProductionTab({
               </>
             )}
           </div>
+          {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
+            const search = quickPrintSearch.toLowerCase();
+            const visiblePdfs = quickPrintCatalog.length > 0 && search
+              ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search))
+              : quickPrintCatalog;
+            return (
+              <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 560 }}>
+                <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
+                    Imprimir diseño{quickPrintCatalog.length > 0 ? ` · ${quickPrintCatalog.length} PDFs` : ''}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={quickPrintSearch}
+                    onChange={e => setQuickPrintSearch(e.target.value)}
+                    disabled={quickPrintCatalog.length === 0}
+                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: quickPrintCatalog.length === 0 ? 0.5 : 1 }}
+                  />
+                  {quickPrintCatalog.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
+                      <span />
+                    </div>
+                  )}
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {quickPrintCatalog.length === 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '20px 10px', lineHeight: 1.5 }}>
+                      Sin PDFs disponibles.<br />Actualizá el bridge e instalalo.
+                    </p>
+                  )}
+                  {visiblePdfs.length === 0 && quickPrintCatalog.length > 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 12, textAlign: 'center', padding: '18px 8px' }}>Sin resultados</p>
+                  )}
+                  {visiblePdfs.map(pdf => {
+                    const key = pdf.relativePath;
+                    const qty = quickPrintQtyMap[key] ?? 1;
+                    const printing = quickPrintingMap[key] ?? false;
+                    return (
+                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, padding: '5px 8px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>
+                          {pdf.fileName.replace(/\.pdf$/i, '')}
+                        </span>
+                        <input
+                          type="number" min={1} max={99} value={qty}
+                          onChange={e => setQuickPrintQtyMap(prev => ({ ...prev, [key]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (e.key === 'Enter') handleQuickPrint(pdf); }}
+                          style={{ width: '100%', textAlign: 'center', padding: '3px 2px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPrint(pdf)}
+                          disabled={printing}
+                          style={{ border: 'none', borderRadius: 6, padding: '5px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}
+                        >
+                          {printing ? '...' : (
+                            <>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
+                              </svg>
+                              Impr.
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           </div>
         </>
       )}
@@ -2254,80 +2328,6 @@ export default function ProductionTab({
                   </tbody>
                 </table>
               </div>
-          {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
-            const search = quickPrintSearch.toLowerCase();
-            const visiblePdfs = quickPrintCatalog.length > 0 && search
-              ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search))
-              : quickPrintCatalog;
-            return (
-              <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 560 }}>
-                <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
-                    Imprimir diseño{quickPrintCatalog.length > 0 ? ` · ${quickPrintCatalog.length} PDFs` : ''}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Buscar..."
-                    value={quickPrintSearch}
-                    onChange={e => setQuickPrintSearch(e.target.value)}
-                    disabled={quickPrintCatalog.length === 0}
-                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: quickPrintCatalog.length === 0 ? 0.5 : 1 }}
-                  />
-                  {quickPrintCatalog.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
-                      <span />
-                    </div>
-                  )}
-                </div>
-                <div style={{ overflowY: 'auto', flex: 1 }}>
-                  {quickPrintCatalog.length === 0 && (
-                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '20px 10px', lineHeight: 1.5 }}>
-                      Sin PDFs disponibles.<br />Actualizá el bridge e instalalo.
-                    </p>
-                  )}
-                  {visiblePdfs.length === 0 && quickPrintCatalog.length > 0 && (
-                    <p style={{ color: '#9aa3bc', fontSize: 12, textAlign: 'center', padding: '18px 8px' }}>Sin resultados</p>
-                  )}
-                  {visiblePdfs.map(pdf => {
-                    const key = pdf.relativePath;
-                    const qty = quickPrintQtyMap[key] ?? 1;
-                    const printing = quickPrintingMap[key] ?? false;
-                    return (
-                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, padding: '5px 8px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>
-                          {pdf.fileName.replace(/\.pdf$/i, '')}
-                        </span>
-                        <input
-                          type="number" min={1} max={99} value={qty}
-                          onChange={e => setQuickPrintQtyMap(prev => ({ ...prev, [key]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
-                          onFocus={e => e.target.select()}
-                          onKeyDown={e => { if (e.key === 'Enter') handleQuickPrint(pdf); }}
-                          style={{ width: '100%', textAlign: 'center', padding: '3px 2px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleQuickPrint(pdf)}
-                          disabled={printing}
-                          style={{ border: 'none', borderRadius: 6, padding: '5px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}
-                        >
-                          {printing ? '...' : (
-                            <>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
-                              </svg>
-                              Impr.
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
           </div>
         </>
       )}

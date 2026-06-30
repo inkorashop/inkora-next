@@ -21,6 +21,15 @@ Write-Host ""
 Write-Host "=== INKORA Print Bridge - Instalacion ===" -ForegroundColor Cyan
 Write-Host ""
 
+# Detener el Bridge si esta corriendo (sino el .exe/.dll quedan bloqueados y falla la compilacion)
+$running = Get-Process -Name "Inkora.PrintBridge" -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Host "Deteniendo Bridge en ejecucion..." -ForegroundColor Yellow
+    $running | Stop-Process -Force
+    Start-Sleep -Seconds 1
+    Write-Host "Bridge detenido OK" -ForegroundColor Green
+}
+
 # Buscar dotnet
 $dotnetExe = $null
 $candidates = @(
