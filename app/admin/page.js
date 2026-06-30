@@ -481,6 +481,8 @@ useEffect(() => {
   const [designPdfBusy, setDesignPdfBusy] = useState(false);
   const [designPdfMatches, setDesignPdfMatches] = useState({});
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
+  const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
+  const autoLaunchTriedRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -1756,6 +1758,19 @@ useEffect(() => {
     setDesignPdfBusy(false);
     setDesignPdfSummary({ state: 'error', message: 'No respondió en 18 segundos. Abrilo manualmente.', found: 0, missing: 0, pdfCount: 0, roots: [] });
   }
+
+  // Auto-launch Bridge cuando hay error de conexión (solo una vez por sesión de error)
+  useEffect(() => {
+    if (designPdfSummary.state === 'error' && !autoLaunchTriedRef.current && designPdfBridgeToken.trim()) {
+      autoLaunchTriedRef.current = true;
+      setBridgePanelOpen(true);
+      launchBridgeAndRetry();
+    }
+    if (designPdfSummary.state !== 'error') {
+      autoLaunchTriedRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designPdfSummary.state]);
 
   function isDefault3dDesignProduct(product) {
     const name = String(productDisplayName(product) || product?.name || '').toLowerCase();
@@ -5799,91 +5814,84 @@ useEffect(() => {
               </div>
               {(() => {
                 const tone = designPdfSummary.state === 'ready'
-                  ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', label: 'PDFs listos' }
+                  ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', dot: '#18a36a', label: 'PDFs listos' }
                   : designPdfSummary.state === 'token'
-                    ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
+                    ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', dot: '#f59e0b', label: 'Token requerido' }
                     : designPdfSummary.state === 'error'
-                      ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'Error' }
+                      ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', dot: '#ef4444', label: 'Error' }
                       : designPdfSummary.state === 'launching'
-                        ? { bg: '#eef4ff', border: '#bfcfff', color: '#2D6BE4', label: 'Iniciando...' }
-                        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+                        ? { bg: '#eef4ff', border: '#bfcfff', color: '#2D6BE4', dot: '#2D6BE4', label: 'Iniciando...' }
+                        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', dot: '#9aa3bc', label: 'Sin verificar' };
                 const visibleDesignCount = getDesignPdfCandidates().length;
+                const pdfFoundCount = designPdfSummary.found || 0;
                 return (
-                  <div style={{border:`1.5px solid ${tone.border}`, borderRadius:8, background:'white', padding:'10px 12px', marginBottom:12, display:'grid', gap:8}}>
-                    <div style={{display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap'}}>
-                      <div>
-                        <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5}}>PDFs locales</div>
-                        <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginTop:3}}>
-                          <span style={{background:tone.bg, color:tone.color, border:`1px solid ${tone.border}`, borderRadius:999, padding:'2px 8px', fontSize:11, fontWeight:900}}>{tone.label}</span>
-                          <span style={{fontSize:12, color:'#5a6380', fontWeight:700}}>{designPdfSummary.message}</span>
-                          {designPdfSummary.pdfCount > 0 && <span style={{fontSize:11, color:'#8b95b3'}}>{designPdfSummary.pdfCount} PDFs escaneados</span>}
-                        </div>
-                      </div>
-                      <div style={{display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end'}}>
-                        {(designPdfSummary.state === 'error' || designPdfSummary.state === 'launching') && (
+                  <div style={{marginBottom:12}}>
+                    {/* Header colapsable */}
+                    <button
+                      type="button"
+                      onClick={() => setBridgePanelOpen(o => !o)}
+                      style={{width:'100%', display:'flex', alignItems:'center', gap:8, background:'white', border:'1.5px solid #dde1ef', borderRadius: bridgePanelOpen ? '8px 8px 0 0' : 8, padding:'7px 12px', cursor:'pointer', fontFamily:'Barlow, sans-serif', textAlign:'left'}}
+                    >
+                      {/* Link icon */}
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{flexShrink:0, color:'#5a6380'}}><path d="M13 7H7v6h6V7z" fill="none"/><path d="M8.5 3.5a4.5 4.5 0 0 1 6.364 6.364l-1.5 1.5-1.414-1.414 1.5-1.5A2.5 2.5 0 0 0 9.914 4.914L8.414 6.414 7 5l1.5-1.5zm3 13a4.5 4.5 0 0 1-6.364-6.364l1.5-1.5 1.414 1.414-1.5 1.5a2.5 2.5 0 0 0 3.536 3.536l1.5-1.5L12 14.5l-1.5 1.5zM7 7l6 6-1.414 1.414L5.586 8.414 7 7z" fill="currentColor"/></svg>
+                      <span style={{fontSize:11, fontWeight:900, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5}}>Vincular PDFs</span>
+                      {/* Status dot */}
+                      <span style={{width:7, height:7, borderRadius:'50%', background:tone.dot, flexShrink:0}} />
+                      {designPdfSummary.state !== 'idle' && (
+                        <span style={{fontSize:11, color:tone.color, fontWeight:700}}>{tone.label}{pdfFoundCount > 0 ? ` · ${pdfFoundCount}/${visibleDesignCount}` : ''}</span>
+                      )}
+                      {designPdfBusy && <span style={{fontSize:11, color:'#2D6BE4', fontWeight:700}}>...</span>}
+                      <span style={{marginLeft:'auto', fontSize:12, color:'#9aa3bc'}}>{bridgePanelOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {/* Panel expandido */}
+                    {bridgePanelOpen && (
+                      <div style={{border:'1.5px solid #dde1ef', borderTop:'none', borderRadius:'0 0 8px 8px', background:'white', padding:'10px 12px', display:'grid', gap:8}}>
+                        <div style={{display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end', alignItems:'center'}}>
+                          <span style={{fontSize:12, color:tone.color, fontWeight:700, flex:1, minWidth:0}}>{designPdfSummary.message}</span>
                           <button
                             type="button"
-                            onClick={launchBridgeAndRetry}
+                            onClick={addDesignPdfRootFromAdmin}
                             disabled={designPdfBusy}
-                            style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'7px 12px', background:'#eef4ff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
+                            style={{border:'1.5px solid #1B2F5E', borderRadius:8, padding:'6px 11px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif', whiteSpace:'nowrap'}}
                           >
-                            {designPdfSummary.state === 'launching' ? 'Iniciando...' : 'Iniciar Bridge'}
+                            Agregar carpeta PDFs
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => refreshDesignPdfLinks({ scan: true })}
+                            disabled={designPdfBusy}
+                            style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'6px 11px', background:'#f8faff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif', whiteSpace:'nowrap'}}
+                          >
+                            {designPdfBusy && designPdfSummary.state !== 'launching' ? 'Escaneando...' : `Escanear y vincular (${visibleDesignCount})`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => refreshDesignPdfLinks({ scan: false })}
+                            disabled={designPdfBusy}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'6px 11px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif', whiteSpace:'nowrap'}}
+                          >
+                            Actualizar
+                          </button>
+                        </div>
+                        <div style={{display:'grid', gridTemplateColumns:'minmax(180px, 1fr) minmax(180px, 1fr)', gap:8}}>
+                          <label style={{display:'grid', gap:3, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
+                            URL Bridge
+                            <input value={designPdfBridgeUrl} onChange={e => setDesignPdfBridgeUrl(e.target.value)} onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })} style={{...s.input, fontSize:12, padding:'5px 8px', textTransform:'none', letterSpacing:0}} />
+                          </label>
+                          <label style={{display:'grid', gap:3, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
+                            Token Bridge
+                            <input value={designPdfBridgeToken} onChange={e => setDesignPdfBridgeToken(e.target.value)} onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })} placeholder="Copiar desde INKORA Print Bridge" style={{...s.input, fontSize:12, padding:'5px 8px', textTransform:'none', letterSpacing:0}} />
+                          </label>
+                        </div>
+                        {designPdfSummary.roots?.length > 0 && (
+                          <div style={{display:'flex', flexWrap:'wrap', gap:5}}>
+                            {designPdfSummary.roots.map(root => (
+                              <span key={root.path || root.name} title={root.path} style={{border:'1px solid #dde1ef', borderRadius:7, padding:'3px 7px', fontSize:10, fontWeight:800, color:root.exists ? '#15803d' : '#b91c1c', background:root.exists ? '#e8f7ef' : '#fff5f5', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                                {root.exists ? '' : 'No existe: '}{root.path || root.name}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                        <button
-                          type="button"
-                          onClick={addDesignPdfRootFromAdmin}
-                          disabled={designPdfBusy}
-                          style={{border:'1.5px solid #1B2F5E', borderRadius:8, padding:'7px 12px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
-                        >
-                          Agregar carpeta PDFs
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => refreshDesignPdfLinks({ scan: true })}
-                          disabled={designPdfBusy}
-                          style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'7px 12px', background:'#f8faff', color:'#2D6BE4', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
-                        >
-                          {designPdfBusy && designPdfSummary.state !== 'launching' ? 'Escaneando...' : `Escanear y vincular (${visibleDesignCount})`}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => refreshDesignPdfLinks({ scan: false })}
-                          disabled={designPdfBusy}
-                          style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', background:'white', color:'#1B2F5E', fontSize:12, fontWeight:900, cursor:designPdfBusy ? 'wait' : 'pointer', fontFamily:'Barlow, sans-serif'}}
-                        >
-                          Actualizar vínculos
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{display:'grid', gridTemplateColumns:'minmax(220px, 1fr) minmax(220px, 1fr)', gap:8}}>
-                      <label style={{display:'grid', gap:4, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
-                        URL Bridge
-                        <input
-                          value={designPdfBridgeUrl}
-                          onChange={e => setDesignPdfBridgeUrl(e.target.value)}
-                          onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })}
-                          style={{...s.input, fontSize:12, padding:'6px 8px', textTransform:'none', letterSpacing:0}}
-                        />
-                      </label>
-                      <label style={{display:'grid', gap:4, fontSize:10, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4}}>
-                        Token Bridge
-                        <input
-                          value={designPdfBridgeToken}
-                          onChange={e => setDesignPdfBridgeToken(e.target.value)}
-                          onBlur={() => saveStoredBridgeConfig({ url: designPdfBridgeUrl, token: designPdfBridgeToken })}
-                          placeholder="Copiar desde INKORA Print Bridge"
-                          style={{...s.input, fontSize:12, padding:'6px 8px', textTransform:'none', letterSpacing:0}}
-                        />
-                      </label>
-                    </div>
-                    {designPdfSummary.roots?.length > 0 && (
-                      <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
-                        {designPdfSummary.roots.map(root => (
-                          <span key={root.path || root.name} title={root.path} style={{border:'1px solid #dde1ef', borderRadius:8, padding:'4px 8px', fontSize:11, fontWeight:800, color:root.exists ? '#15803d' : '#b91c1c', background:root.exists ? '#e8f7ef' : '#fff5f5', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                            {root.exists ? 'Carpeta' : 'No existe'}: {root.path || root.name}
-                          </span>
-                        ))}
                       </div>
                     )}
                   </div>

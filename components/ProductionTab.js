@@ -1023,15 +1023,19 @@ export default function ProductionTab({
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
 
-  // Cargar perfiles al detectar impresora
+  // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
-    if (bridgeTargetPrinter && bridgeStatus.state === 'connected' && bridgeToken.trim()) {
-      loadDevModeProfilesForPrinter(bridgeTargetPrinter);
+    const target = bridgePrinters.find(p => p.isTargetL8050)
+      || bridgePrinters.find(p => p.isDefault)
+      || bridgePrinters[0]
+      || null;
+    if (target && bridgeStatus.state === 'connected' && bridgeToken.trim()) {
+      loadDevModeProfilesForPrinter(target);
     } else {
       setDevModeProfiles([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridgeTargetPrinter?.name, bridgeStatus.state]);
+  }, [bridgePrinters, bridgeStatus.state]);
 
   async function cycleStatus(row) {
     setErrorMessage('');
