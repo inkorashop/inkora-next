@@ -7,6 +7,7 @@ public sealed class PrintJobService
 {
     private static readonly string[] SumatraSearchPaths =
     [
+        Path.Combine(AppContext.BaseDirectory, "SumatraPDF.exe"), // bundled junto al exe del Bridge
         @"C:\Program Files\SumatraPDF\SumatraPDF.exe",
         @"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe",
     ];

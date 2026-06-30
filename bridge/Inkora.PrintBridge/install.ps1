@@ -48,6 +48,24 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "Bridge compilado OK" -ForegroundColor Green
 
+# Descargar SumatraPDF portable si no está instalado (necesario para copias correctas)
+$sumatraDst = Join-Path $publishPath "SumatraPDF.exe"
+$sumatraSystem = "C:\Program Files\SumatraPDF\SumatraPDF.exe"
+if (-not (Test-Path $sumatraDst) -and -not (Test-Path $sumatraSystem)) {
+    Write-Host "Descargando SumatraPDF (impresion silenciosa con copias correctas)..." -ForegroundColor Yellow
+    try {
+        $sumatraUrl = "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.exe"
+        Invoke-WebRequest -Uri $sumatraUrl -OutFile $sumatraDst -UseBasicParsing -TimeoutSec 60
+        Write-Host "SumatraPDF OK" -ForegroundColor Green
+    } catch {
+        Write-Host "No se pudo descargar SumatraPDF. Copias multiples se imprimiran como trabajos separados." -ForegroundColor Yellow
+    }
+} elseif (Test-Path $sumatraDst) {
+    Write-Host "SumatraPDF ya presente en carpeta Bridge OK" -ForegroundColor Green
+} else {
+    Write-Host "SumatraPDF del sistema detectado OK" -ForegroundColor Green
+}
+
 # Registrar URI scheme inkora-bridge:// -> exe directo (HKCU, no necesita admin)
 $origins = '{"protocol":"inkora-bridge","allowed_origins":["https://inkora.com.ar","https://www.inkora.com.ar","http://localhost:3000","http://127.0.0.1:3000"]}'
 $regPath = "HKCU:\Software\Classes\inkora-bridge"

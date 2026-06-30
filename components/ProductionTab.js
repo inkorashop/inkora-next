@@ -663,6 +663,7 @@ export default function ProductionTab({
     if (!token) return;
 
     const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
+    const sheets = Math.ceil(remaining / 2); // 2 planchas por hoja
     const taskId = task.id || pdfKey;
     setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
     setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
@@ -674,7 +675,7 @@ export default function ProductionTab({
         designName: task.design_name || '',
         productName: task.product_name || '',
         printerName: bridgeTargetPrinter?.name || '',
-        copies: remaining,
+        copies: sheets,
         orderId: selectedOrder?.id || '',
         orderCode: selectedOrder?.order_code || '',
       });
@@ -1716,6 +1717,7 @@ export default function ProductionTab({
                               const feedback = printFeedback[taskId];
                               const hasPdf = pdfMatch?.found;
                               const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
+                              const sheets = Math.ceil(Math.max(1, remaining) / 2);
                               if (feedback) {
                                 return (
                                   <span style={{ fontSize: 11, fontWeight: 900, color: feedback === 'Enviado' ? '#15803d' : '#b91c1c' }}>
@@ -1728,7 +1730,7 @@ export default function ProductionTab({
                                   type="button"
                                   onClick={() => printSingleTask(task)}
                                   disabled={!hasPdf || isPrinting || !bridgeToken.trim() || bridgeStatus.state !== 'connected'}
-                                  title={!hasPdf ? 'Sin PDF vinculado' : `Imprimir ${remaining} copia(s)`}
+                                  title={!hasPdf ? 'Sin PDF vinculado' : `${sheets} hoja${sheets !== 1 ? 's' : ''} (${remaining} piezas, 2 por hoja)`}
                                   style={{
                                     border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
                                     borderRadius: 8,
@@ -1742,7 +1744,7 @@ export default function ProductionTab({
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  {isPrinting ? 'Enviando...' : remaining > 0 ? `Imprimir x${remaining}` : 'Imprimir x1'}
+                                  {isPrinting ? 'Enviando...' : `Imprimir ${sheets} hoja${sheets !== 1 ? 's' : ''}`}
                                 </button>
                               );
                             })()}
