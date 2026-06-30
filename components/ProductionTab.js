@@ -1325,7 +1325,7 @@ export default function ProductionTab({
           <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Acceso operarios</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>inkora.com.ar/operarios</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>inkora.com.ar/produccion</div>
             </div>
             <button
               type="button"
