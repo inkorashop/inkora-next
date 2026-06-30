@@ -34,6 +34,8 @@ public sealed class MainForm : Form
     private readonly Button _scanPdfsButton = new();
 
     private BindingList<PrinterInfo> _printers = new();
+    private NotifyIcon _notifyIcon = new();
+    private bool _allowClose;
 
     public MainForm()
     {
@@ -63,8 +65,53 @@ public sealed class MainForm : Form
         {
             StartLocalApi();
             RefreshPrinters();
+            InitTrayIcon();
+            HideToTray();
         };
-        FormClosing += (_, _) => _localApiServer.Dispose();
+        FormClosing += (s, e) =>
+        {
+            if (!_allowClose)
+            {
+                e.Cancel = true;
+                HideToTray();
+            }
+            else
+            {
+                _notifyIcon.Dispose();
+                _localApiServer.Dispose();
+            }
+        };
+    }
+
+    private void InitTrayIcon()
+    {
+        var menu = new ContextMenuStrip();
+        var showItem = (ToolStripMenuItem)menu.Items.Add("Mostrar panel");
+        showItem.Click += (_, _) => ShowForm();
+        menu.Items.Add(new ToolStripSeparator());
+        var exitItem = (ToolStripMenuItem)menu.Items.Add("Salir");
+        exitItem.Click += (_, _) => { _allowClose = true; Close(); };
+
+        _notifyIcon.Icon = SystemIcons.Application;
+        _notifyIcon.Text = "INKORA Print Bridge";
+        _notifyIcon.ContextMenuStrip = menu;
+        _notifyIcon.DoubleClick += (_, _) => ShowForm();
+        _notifyIcon.Visible = true;
+    }
+
+    private void ShowForm()
+    {
+        Visible = true;
+        ShowInTaskbar = true;
+        WindowState = FormWindowState.Normal;
+        Activate();
+        BringToFront();
+    }
+
+    private void HideToTray()
+    {
+        Visible = false;
+        ShowInTaskbar = false;
     }
 
     private void BuildLayout()
@@ -262,8 +309,10 @@ public sealed class MainForm : Form
 
         void RunDialog()
         {
+            var wasVisible = Visible;
             try
             {
+                if (!wasVisible) ShowForm();
                 var rootCount = _pdfCatalogService.AddRootFromDialog(this);
                 var roots = _pdfCatalogService.GetRoots();
                 _pdfLabel.Text = $"Carpetas PDF autorizadas: {rootCount}. Ejecuta Escanear PDFs para actualizar.";
@@ -275,6 +324,10 @@ public sealed class MainForm : Form
                 AppendDiagnostic($"ERROR agregando carpeta PDF desde admin web: {exception.Message}");
                 _logService.Error(exception.ToString());
                 completion.SetException(exception);
+            }
+            finally
+            {
+                if (!wasVisible) HideToTray();
             }
         }
 

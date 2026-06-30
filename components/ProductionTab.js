@@ -429,6 +429,9 @@ export default function ProductionTab({
   const [orderPdfMatches, setOrderPdfMatches] = useState({});
   const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
   const [printingTasks, setPrintingTasks] = useState({});
+  const [printQtyOverrides, setPrintQtyOverrides] = useState({});
+  const [bridgeCardOpen, setBridgeCardOpen] = useState(false);
+  const [selectedPrinterOverride, setSelectedPrinterOverride] = useState('');
   const [printFeedback, setPrintFeedback] = useState({});
   const [printQueue, setPrintQueue] = useState(null);
   const [devModeProfiles, setDevModeProfiles] = useState([]);
@@ -654,7 +657,7 @@ export default function ProductionTab({
     }
   }
 
-  async function printSingleTask(task) {
+  async function printSingleTask(task, customSheets = null) {
     const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
     const pdfMatch = orderPdfMatches[pdfKey];
     if (!pdfMatch?.found) return;
@@ -663,7 +666,7 @@ export default function ProductionTab({
     if (!token) return;
 
     const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
-    const sheets = Math.ceil(remaining / 2); // 2 planchas por hoja
+    const sheets = customSheets ?? Math.ceil(remaining / 2);
     const taskId = task.id || pdfKey;
     setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
     setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
@@ -674,7 +677,7 @@ export default function ProductionTab({
         designId: String(task.design_id || task.design_key || ''),
         designName: task.design_name || '',
         productName: task.product_name || '',
-        printerName: bridgeTargetPrinter?.name || '',
+        printerName: effectivePrinterName,
         copies: sheets,
         orderId: selectedOrder?.id || '',
         orderCode: selectedOrder?.order_code || '',
@@ -1284,6 +1287,7 @@ export default function ProductionTab({
     || bridgePrinters.find(printer => printer.isDefault)
     || bridgePrinters[0]
     || null;
+  const effectivePrinterName = selectedPrinterOverride || bridgeTargetPrinter?.name || '';
   const bridgeTone = bridgeStatus.state === 'connected'
     ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', label: 'Conectado' }
     : bridgeStatus.state === 'token'
@@ -1332,119 +1336,156 @@ export default function ProductionTab({
             </button>
           </div>
 
-          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '12px 14px', display: 'grid', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 220 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Impresion local</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                  <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 900 }}>
-                    {bridgeTone.label}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{bridgeTargetPrinter?.name || 'INKORA Print Bridge'}</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#5a6380', marginTop: 5 }}>{bridgeStatus.message}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, overflow: 'hidden' }}>
+            {/* Header colapsable */}
+            <button
+              type="button"
+              onClick={() => setBridgeCardOpen(o => !o)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'left', minHeight: 44 }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion local</div>
+              <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+                {bridgeTone.label}
+              </span>
+              {!bridgeCardOpen && bridgePrinters.length > 0 && (
+                <select
+                  value={selectedPrinterOverride || bridgeTargetPrinter?.name || ''}
+                  onChange={e => setSelectedPrinterOverride(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  disabled={bridgeBusy || bridgeStatus.state !== 'connected'}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', cursor: bridgeStatus.state === 'connected' ? 'pointer' : 'default' }}
+                >
+                  {bridgePrinters.map(p => (
+                    <option key={p.name} value={p.name}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
+                  ))}
+                </select>
+              )}
+              {!bridgeCardOpen && bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
                 <button
                   type="button"
-                  onClick={() => checkPrintBridge({ includePrinters: true })}
+                  onClick={e => { e.stopPropagation(); openBridgePreferences(); }}
                   disabled={bridgeBusy}
-                  style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: bridgeBusy ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
                 >
-                  {bridgeBusy ? 'Verificando...' : 'Detectar Bridge'}
+                  Preferencias
                 </button>
-                <button
-                  type="button"
-                  onClick={inspectBridgeDevMode}
-                  disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                >
-                  Leer DEVMODE
-                </button>
-                <button
-                  type="button"
-                  onClick={openBridgePreferences}
-                  disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                >
-                  Preferencias driver
-                </button>
-                <button
-                  type="button"
-                  onClick={addPdfRootFromProduction}
-                  disabled={bridgeBusy || !bridgeToken.trim()}
-                  style={{ border: '1.5px solid #1B2F5E', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                >
-                  Agregar carpeta PDFs
-                </button>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr)', gap: 10 }}>
-              <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                URL local
-                <input
-                  value={bridgeUrl}
-                  onChange={e => setBridgeUrl(e.target.value)}
-                  onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
-                />
-              </label>
-              <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                Token Bridge
-                <input
-                  value={bridgeToken}
-                  onChange={e => setBridgeToken(e.target.value)}
-                  onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
-                  placeholder="Pegar token copiado desde el Bridge"
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
-                />
-              </label>
-            </div>
-            {bridgePrinters.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {bridgePrinters.slice(0, 5).map(printer => (
-                  <span key={printer.name} style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: printer.isTargetL8050 ? '#15803d' : '#5a6380', background: printer.isTargetL8050 ? '#e8f7ef' : '#f8faff' }}>
-                    {printer.name}{printer.isDefault ? ' · default' : ''}
-                  </span>
-                ))}
-                {bridgePrinters.length > 5 && (
-                  <span style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#5a6380', background: '#f8faff' }}>
-                    +{bridgePrinters.length - 5}
-                  </span>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9aa3bc', flexShrink: 0 }}>{bridgeCardOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {bridgeCardOpen && (
+              <div style={{ padding: '0 14px 12px', display: 'grid', gap: 10, borderTop: '1px solid #f0f2f7' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', paddingTop: 10 }}>
+                  <div style={{ minWidth: 220 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 900 }}>
+                        {bridgeTone.label}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{effectivePrinterName || 'INKORA Print Bridge'}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#5a6380', marginTop: 5 }}>{bridgeStatus.message}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => checkPrintBridge({ includePrinters: true })}
+                      disabled={bridgeBusy}
+                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: bridgeBusy ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      {bridgeBusy ? 'Verificando...' : 'Detectar Bridge'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={inspectBridgeDevMode}
+                      disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      Leer DEVMODE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openBridgePreferences}
+                      disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      Preferencias driver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addPdfRootFromProduction}
+                      disabled={bridgeBusy || !bridgeToken.trim()}
+                      style={{ border: '1.5px solid #1B2F5E', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      Agregar carpeta PDFs
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr)', gap: 10 }}>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    URL local
+                    <input
+                      value={bridgeUrl}
+                      onChange={e => setBridgeUrl(e.target.value)}
+                      onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    Token Bridge
+                    <input
+                      value={bridgeToken}
+                      onChange={e => setBridgeToken(e.target.value)}
+                      onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
+                      placeholder="Pegar token copiado desde el Bridge"
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
+                    />
+                  </label>
+                </div>
+                {bridgePrinters.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {bridgePrinters.slice(0, 5).map(printer => (
+                      <span key={printer.name} style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: printer.isTargetL8050 ? '#15803d' : '#5a6380', background: printer.isTargetL8050 ? '#e8f7ef' : '#f8faff' }}>
+                        {printer.name}{printer.isDefault ? ' · default' : ''}
+                      </span>
+                    ))}
+                    {bridgePrinters.length > 5 && (
+                      <span style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#5a6380', background: '#f8faff' }}>
+                        +{bridgePrinters.length - 5}
+                      </span>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-            {orderPdfStatus.roots?.length > 0 && (
-              <div style={{ display: 'grid', gap: 5 }}>
-                {orderPdfStatus.roots.map(root => (
-                  <div key={root.path || root.name} title={root.path} style={{ border: '1px solid #dde1ef', borderRadius: 8, padding: '5px 8px', fontSize: 11, fontWeight: 800, color: root.exists ? '#15803d' : '#b91c1c', background: root.exists ? '#e8f7ef' : '#fff5f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {root.exists ? 'Carpeta PDF' : 'Carpeta no encontrada'}: {root.path || root.name}
+                {orderPdfStatus.roots?.length > 0 && (
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    {orderPdfStatus.roots.map(root => (
+                      <div key={root.path || root.name} title={root.path} style={{ border: '1px solid #dde1ef', borderRadius: 8, padding: '5px 8px', fontSize: 11, fontWeight: 800, color: root.exists ? '#15803d' : '#b91c1c', background: root.exists ? '#e8f7ef' : '#fff5f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {root.exists ? 'Carpeta PDF' : 'Carpeta no encontrada'}: {root.path || root.name}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            {bridgeDevMode && (
-              <div style={{ background: '#fbfcff', border: '1px solid #eef0f6', borderRadius: 8, padding: '8px 10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
-                {[
-                  ['Printer', bridgeDevMode.printerName],
-                  ['Size', bridgeDevMode.querySize],
-                  ['Extra', bridgeDevMode.driverExtra],
-                  ['Driver', bridgeDevMode.driverVersion],
-                  ['Fields', bridgeDevMode.fieldsHex],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(value ?? DASH)}</div>
+                )}
+                {bridgeDevMode && (
+                  <div style={{ background: '#fbfcff', border: '1px solid #eef0f6', borderRadius: 8, padding: '8px 10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+                    {[
+                      ['Printer', bridgeDevMode.printerName],
+                      ['Size', bridgeDevMode.querySize],
+                      ['Extra', bridgeDevMode.driverExtra],
+                      ['Driver', bridgeDevMode.driverVersion],
+                      ['Fields', bridgeDevMode.fieldsHex],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(value ?? DASH)}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            {bridgeTargetPrinter && bridgeStatus.state === 'connected' && (
-              <div style={{ background: '#f8faff', border: '1px solid #dde1ef', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.5 }}>Perfiles DEVMODE</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    value={profileNameInput}
+                )}
+                {bridgeTargetPrinter && bridgeStatus.state === 'connected' && (
+                  <div style={{ background: '#f8faff', border: '1px solid #dde1ef', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.5 }}>Perfiles DEVMODE</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        value={profileNameInput}
                     onChange={e => setProfileNameInput(e.target.value)}
                     placeholder="Nombre del perfil..."
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '5px 9px', fontSize: 12, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 150, flex: 1 }}
@@ -1492,6 +1533,8 @@ export default function ProductionTab({
                   <div style={{ fontSize: 12, fontWeight: 700, color: profileFeedback.toLowerCase().includes('error') || profileFeedback.toLowerCase().includes('error') ? '#b91c1c' : '#15803d' }}>
                     {profileFeedback}
                   </div>
+                )}
+                </div>
                 )}
               </div>
             )}
@@ -1717,7 +1760,9 @@ export default function ProductionTab({
                               const feedback = printFeedback[taskId];
                               const hasPdf = pdfMatch?.found;
                               const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
-                              const sheets = Math.ceil(Math.max(1, remaining) / 2);
+                              const defaultSheets = Math.ceil(Math.max(1, remaining) / 2);
+                              const sheets = printQtyOverrides[taskId] ?? defaultSheets;
+                              const disabled = !hasPdf || isPrinting || !bridgeToken.trim() || bridgeStatus.state !== 'connected';
                               if (feedback) {
                                 return (
                                   <span style={{ fontSize: 11, fontWeight: 900, color: feedback === 'Enviado' ? '#15803d' : '#b91c1c' }}>
@@ -1726,26 +1771,52 @@ export default function ProductionTab({
                                 );
                               }
                               return (
-                                <button
-                                  type="button"
-                                  onClick={() => printSingleTask(task)}
-                                  disabled={!hasPdf || isPrinting || !bridgeToken.trim() || bridgeStatus.state !== 'connected'}
-                                  title={!hasPdf ? 'Sin PDF vinculado' : `${sheets} hoja${sheets !== 1 ? 's' : ''} (${remaining} piezas, 2 por hoja)`}
-                                  style={{
-                                    border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
-                                    borderRadius: 8,
-                                    padding: '5px 10px',
-                                    background: hasPdf ? '#e8f7ef' : '#f7f8fc',
-                                    color: hasPdf ? '#15803d' : '#c4c9d9',
-                                    fontSize: 11,
-                                    fontWeight: 900,
-                                    cursor: !hasPdf || isPrinting || !bridgeToken.trim() ? 'not-allowed' : 'pointer',
-                                    fontFamily: 'Barlow, sans-serif',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {isPrinting ? 'Enviando...' : `Imprimir ${sheets} hoja${sheets !== 1 ? 's' : ''}`}
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={99}
+                                    value={sheets}
+                                    onChange={e => {
+                                      const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                      setPrintQtyOverrides(prev => ({ ...prev, [taskId]: v }));
+                                    }}
+                                    disabled={disabled}
+                                    title={`Hojas a imprimir (${remaining} piezas, 2 por hoja = ${defaultSheets} auto)`}
+                                    style={{
+                                      width: 40,
+                                      border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
+                                      borderRadius: 6,
+                                      padding: '4px 3px',
+                                      fontSize: 12,
+                                      fontWeight: 900,
+                                      textAlign: 'center',
+                                      fontFamily: 'Barlow, sans-serif',
+                                      color: hasPdf ? '#15803d' : '#c4c9d9',
+                                      background: hasPdf ? '#f0fdf7' : '#f7f8fc',
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => printSingleTask(task, sheets)}
+                                    disabled={disabled}
+                                    title={!hasPdf ? 'Sin PDF vinculado' : `Imprimir ${sheets} hoja${sheets !== 1 ? 's' : ''}`}
+                                    style={{
+                                      border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
+                                      borderRadius: 8,
+                                      padding: '5px 8px',
+                                      background: hasPdf ? '#e8f7ef' : '#f7f8fc',
+                                      color: hasPdf ? '#15803d' : '#c4c9d9',
+                                      fontSize: 11,
+                                      fontWeight: 900,
+                                      cursor: disabled ? 'not-allowed' : 'pointer',
+                                      fontFamily: 'Barlow, sans-serif',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {isPrinting ? '...' : 'Imprimir'}
+                                  </button>
+                                </div>
                               );
                             })()}
                           </td>

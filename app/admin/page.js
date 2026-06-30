@@ -1700,17 +1700,21 @@ useEffect(() => {
       return;
     }
 
+    const prevRoots = designPdfSummary.roots || [];
     setDesignPdfBusy(true);
     try {
       saveStoredBridgeConfig({ url, token });
       const payload = await addBridgePdfRoot(url, token);
+      const newRoots = payload.roots || [];
+      const addedRoot = newRoots.find(r => !prevRoots.some(pr => pr.path === r.path));
+      setBridgePanelOpen(true);
       setDesignPdfSummary({
         state: 'ready',
-        message: `Carpeta agregada. Escaneando PDFs...`,
+        message: addedRoot ? `Carpeta agregada: ${addedRoot.path}` : 'Carpeta agregada. Escaneando PDFs...',
         found: 0,
         missing: 0,
         pdfCount: payload.pdfCount || 0,
-        roots: payload.roots || [],
+        roots: newRoots,
       });
       // Auto-scan inmediatamente después de agregar carpeta
       await refreshDesignPdfLinks({ scan: true });
@@ -1732,32 +1736,29 @@ useEffect(() => {
     const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
     setDesignPdfBusy(true);
     setDesignPdfSummary({ state: 'launching', message: 'Iniciando Bridge...', found: 0, missing: 0, pdfCount: 0, roots: [] });
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = 'inkora-bridge://start';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
 
-    // Trigger the OS to launch the Bridge via custom URI scheme
-    const anchor = document.createElement('a');
-    anchor.href = 'inkora-bridge://start';
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-
-    // Poll /health until the Bridge responds (up to ~18s)
-    for (let i = 0; i < 12; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      try {
-        await getBridgeHealth(url);
-        // Bridge is up — auto-scan
-        setDesignPdfSummary(prev => ({ ...prev, message: 'Bridge listo. Escaneando PDFs...' }));
-        await refreshDesignPdfLinks({ scan: true });
-        return;
-      } catch {
-        // Still starting
-        setDesignPdfSummary(prev => ({ ...prev, message: `Iniciando Bridge... (${i + 1}/12)` }));
+      for (let i = 0; i < 12; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+          await getBridgeHealth(url);
+          setDesignPdfSummary(prev => ({ ...prev, message: 'Bridge listo. Escaneando PDFs...' }));
+          await refreshDesignPdfLinks({ scan: true });
+          return;
+        } catch {
+          setDesignPdfSummary(prev => ({ ...prev, message: `Iniciando Bridge... (${i + 1}/12)` }));
+        }
       }
+      setDesignPdfSummary({ state: 'error', message: 'No respondió en 18 segundos. Abrilo manualmente.', found: 0, missing: 0, pdfCount: 0, roots: [] });
+    } finally {
+      setDesignPdfBusy(false);
     }
-
-    setDesignPdfBusy(false);
-    setDesignPdfSummary({ state: 'error', message: 'No respondió en 18 segundos. Abrilo manualmente.', found: 0, missing: 0, pdfCount: 0, roots: [] });
   }
 
   // Auto-init Bridge en segundo plano cuando hay token guardado y diseños cargados
@@ -1781,7 +1782,7 @@ useEffect(() => {
       setBridgePanelOpen(true);
       launchBridgeAndRetry();
     }
-    if (designPdfSummary.state !== 'error') {
+    if (designPdfSummary.state === 'idle' || designPdfSummary.state === 'ready') {
       autoLaunchTriedRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
