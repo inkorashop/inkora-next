@@ -1160,24 +1160,13 @@ export default function ProductionTab({
   }
 
   async function shareOperatorAccessLink() {
-    const fallbackOrigin = 'https://www.inkora.com.ar';
-    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : fallbackOrigin;
-    const url = `${origin}/operarios`;
+    const url = 'https://inkora.com.ar/produccion';
     try {
-      if (navigator.share) {
-        await navigator.share({ title: 'INKORA Produccion', url });
-        setOperatorLinkFeedback('Compartido');
-      } else {
-        await navigator.clipboard.writeText(url);
-        setOperatorLinkFeedback('Link copiado');
-      }
+      await navigator.clipboard.writeText(url);
+      setOperatorLinkFeedback('Link copiado');
       setTimeout(() => setOperatorLinkFeedback(''), 1800);
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        setOperatorLinkFeedback('');
-        return;
-      }
-      setOperatorLinkFeedback('No se pudo compartir');
+    } catch {
+      setOperatorLinkFeedback('No se pudo copiar');
       setTimeout(() => setOperatorLinkFeedback(''), 2200);
     }
   }
