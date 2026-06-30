@@ -143,7 +143,7 @@ function summarizeOrderProducts(items) {
 
 function formatShortDate(iso) {
   if (!iso) return DASH;
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function fitReportValue(value, width, align = 'left') {
@@ -427,10 +427,8 @@ export default function ProductionTab({
   const hasScannedOnBridgeConnectRef = useRef(false);
   const [quickPrintSearch, setQuickPrintSearch] = useState('');
   const [quickPrintCatalog, setQuickPrintCatalog] = useState([]);
-  const [quickPrintSelected, setQuickPrintSelected] = useState(null);
-  const [quickPrintQty, setQuickPrintQty] = useState(1);
-  const [quickPrinting, setQuickPrinting] = useState(false);
-  const [quickPrintOpen, setQuickPrintOpen] = useState(false);
+  const [quickPrintQtyMap, setQuickPrintQtyMap] = useState({});
+  const [quickPrintingMap, setQuickPrintingMap] = useState({});
   const [bridgePrinters, setBridgePrinters] = useState([]);
   const [bridgeBusy, setBridgeBusy] = useState(false);
   const [bridgeDevMode, setBridgeDevMode] = useState(null);
@@ -666,20 +664,22 @@ export default function ProductionTab({
     }
   }
 
-  async function handleQuickPrint() {
-    if (!quickPrintSelected || quickPrinting) return;
-    setQuickPrinting(true);
+  async function handleQuickPrint(pdf) {
+    const key = pdf.relativePath;
+    if (quickPrintingMap[key]) return;
+    const copies = quickPrintQtyMap[key] ?? 1;
+    setQuickPrintingMap(prev => ({ ...prev, [key]: true }));
     try {
       await printBridgeDirect(bridgeUrl, bridgeToken.trim(), {
-        rootName: quickPrintSelected.rootName,
-        relativePath: quickPrintSelected.relativePath,
+        rootName: pdf.rootName,
+        relativePath: pdf.relativePath,
         printerName: effectivePrinterName,
-        copies: quickPrintQty,
+        copies,
       });
     } catch (err) {
       console.error('Quick print error:', err);
     } finally {
-      setQuickPrinting(false);
+      setQuickPrintingMap(prev => ({ ...prev, [key]: false }));
     }
   }
 
@@ -1124,7 +1124,6 @@ export default function ProductionTab({
         .catch(() => {});
     } else {
       setQuickPrintCatalog([]);
-      setQuickPrintSelected(null);
       setQuickPrintSearch('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1595,153 +1594,12 @@ export default function ProductionTab({
             )}
           </div>
 
-          {/* === IMPRESIÓN RÁPIDA === */}
-          {bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 && (() => {
-            const search = quickPrintSearch.toLowerCase();
-            const filteredCatalog = quickPrintSearch && !quickPrintSelected
-              ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search)).slice(0, 40)
-              : [];
-            return (
-              <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
-                {/* Cabecera colapsable */}
-                <button
-                  type="button"
-                  onClick={() => setQuickPrintOpen(o => !o)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#5a6380', flexShrink: 0 }}>
-                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-                  </svg>
-                  <span style={{ fontSize: 11, fontWeight: 900, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Imprimir diseño</span>
-                  <span style={{ fontSize: 11, color: '#9aa3bc' }}>{quickPrintCatalog.length} PDFs disponibles</span>
-                  {quickPrintSelected && (
-                    <span style={{ fontSize: 11, color: '#2D6BE4', fontWeight: 700 }}>{quickPrintSelected.fileName.replace(/\.pdf$/i, '')}</span>
-                  )}
-                  <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9aa3bc' }}>{quickPrintOpen ? '▲' : '▼'}</span>
-                </button>
-
-                {quickPrintOpen && (
-                  <div style={{ borderTop: '1px solid #f0f2f7', padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Búsqueda con dropdown */}
-                    <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 180 }}>
-                      <input
-                        type="text"
-                        placeholder="Buscar por nombre de archivo..."
-                        value={quickPrintSearch}
-                        onChange={e => { setQuickPrintSearch(e.target.value); setQuickPrintSelected(null); }}
-                        style={{
-                          width: '100%', padding: '7px 10px', fontSize: 13,
-                          border: `1.5px solid ${quickPrintSelected ? '#2D6BE4' : '#dde1ef'}`,
-                          borderRadius: 8, fontFamily: 'Barlow, sans-serif', outline: 'none',
-                          background: quickPrintSelected ? '#f0f5ff' : 'white',
-                          color: '#1B2F5E', boxSizing: 'border-box',
-                        }}
-                      />
-                      {/* Dropdown resultados */}
-                      {filteredCatalog.length > 0 && (
-                        <div style={{
-                          position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
-                          background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
-                          zIndex: 300, maxHeight: 240, overflowY: 'auto',
-                          boxShadow: '0 4px 18px rgba(0,0,0,0.11)',
-                        }}>
-                          {filteredCatalog.map(pdf => (
-                            <button
-                              key={`${pdf.rootName}/${pdf.relativePath}`}
-                              type="button"
-                              onMouseDown={() => {
-                                setQuickPrintSelected(pdf);
-                                setQuickPrintSearch(pdf.fileName);
-                                setQuickPrintQty(1);
-                              }}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                width: '100%', padding: '8px 10px',
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                borderBottom: '1px solid #f0f2f8', textAlign: 'left',
-                                fontFamily: 'Barlow, sans-serif',
-                              }}
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="#b91c1c" style={{ flexShrink: 0 }}>
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1v5h5l-5-5zM6 4h6v5a1 1 0 0 0 1 1h5v10H6V4z"/>
-                              </svg>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {pdf.fileName.replace(/\.pdf$/i, '')}
-                              </span>
-                              <span style={{ fontSize: 10, color: '#9aa3bc', flexShrink: 0, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {pdf.rootName}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Limpiar selección */}
-                    {quickPrintSelected && (
-                      <button
-                        type="button"
-                        onClick={() => { setQuickPrintSelected(null); setQuickPrintSearch(''); }}
-                        style={{ background: 'none', border: '1.5px solid #dde1ef', borderRadius: 8, cursor: 'pointer', color: '#9aa3bc', fontSize: 16, lineHeight: 1, padding: '5px 9px', flexShrink: 0 }}
-                        title="Limpiar"
-                      >×</button>
-                    )}
-
-                    {/* Cantidad */}
-                    {quickPrintSelected && (
-                      <input
-                        type="number" min={1} max={99}
-                        value={quickPrintQty}
-                        onChange={e => setQuickPrintQty(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        onFocus={e => e.target.select()}
-                        onKeyDown={e => { if (e.key === 'Enter') handleQuickPrint(); }}
-                        style={{
-                          width: 52, textAlign: 'center', padding: '7px 4px',
-                          border: '1.5px solid #dde1ef', borderRadius: 8,
-                          fontSize: 13, fontWeight: 800, fontFamily: 'Barlow, sans-serif',
-                          color: '#1B2F5E', outline: 'none', flexShrink: 0,
-                        }}
-                      />
-                    )}
-
-                    {/* Botón imprimir */}
-                    {quickPrintSelected && (
-                      <button
-                        type="button"
-                        onClick={handleQuickPrint}
-                        disabled={quickPrinting}
-                        style={{
-                          border: '1.5px solid #18a36a', borderRadius: 8, padding: '7px 13px',
-                          background: quickPrinting ? '#e8f7ef' : '#f0fdf4',
-                          color: '#15803d', fontSize: 12, fontWeight: 900,
-                          cursor: quickPrinting ? 'wait' : 'pointer',
-                          fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap',
-                          display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-                        }}
-                      >
-                        {quickPrinting ? '...' : (
-                          <>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-                            </svg>
-                            Imprimir
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 0.95fr) minmax(520px, 1.45fr)', gap: 14, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 ? 'minmax(200px, 0.6fr) minmax(380px, 1.1fr) minmax(210px, 0.7fr)' : 'minmax(260px, 0.85fr) minmax(460px, 1.4fr)', gap: 10, alignItems: 'start' }}>
             <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1.5px solid #dde1ef' }}>
-              <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
-              <div style={{ fontSize: 12, color: '#8b95b3', marginTop: 3 }}>Selecciona un pedido para ver sus diseños asignados.</div>
+            <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef' }}>
+              <h2 style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
             </div>
-            <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
               {loadingTasks && produceOrderRows.length === 0 ? (
                 <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>Cargando pedidos...</p>
               ) : produceOrderRows.length === 0 ? (
@@ -1759,7 +1617,7 @@ export default function ProductionTab({
                       key={row.id}
                       type="button"
                       onClick={() => handleSelectProductionOrder(row.id)}
-                      style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '12px 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 7 }}
+                      style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 4 }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: '#1B2F5E' }}>{row.order_code || row.id}</span>
@@ -2392,6 +2250,72 @@ export default function ProductionTab({
                 </table>
               </div>
           </div>
+          {bridgeStatus.state === 'connected' && bridgeToken.trim() && quickPrintCatalog.length > 0 && (() => {
+            const search = quickPrintSearch.toLowerCase();
+            const visiblePdfs = search
+              ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search))
+              : quickPrintCatalog;
+            return (
+              <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 560 }}>
+                <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
+                    Imprimir diseño · {quickPrintCatalog.length} PDFs
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={quickPrintSearch}
+                    onChange={e => setQuickPrintSearch(e.target.value)}
+                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
+                    <span />
+                  </div>
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {visiblePdfs.length === 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 12, textAlign: 'center', padding: '18px 8px' }}>Sin resultados</p>
+                  )}
+                  {visiblePdfs.map(pdf => {
+                    const key = pdf.relativePath;
+                    const qty = quickPrintQtyMap[key] ?? 1;
+                    const printing = quickPrintingMap[key] ?? false;
+                    return (
+                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, padding: '5px 8px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>
+                          {pdf.fileName.replace(/\.pdf$/i, '')}
+                        </span>
+                        <input
+                          type="number" min={1} max={99} value={qty}
+                          onChange={e => setQuickPrintQtyMap(prev => ({ ...prev, [key]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (e.key === 'Enter') handleQuickPrint(pdf); }}
+                          style={{ width: '100%', textAlign: 'center', padding: '3px 2px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleQuickPrint(pdf)}
+                          disabled={printing}
+                          style={{ border: 'none', borderRadius: 6, padding: '5px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}
+                        >
+                          {printing ? '...' : (
+                            <>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
+                              </svg>
+                              Impr.
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 

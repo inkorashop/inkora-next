@@ -3419,6 +3419,7 @@ useEffect(() => {
     if (!iso) return 'Sin hora';
     try {
       return new Date(iso).toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
         day: '2-digit',
         month: '2-digit',
         year: '2-digit',
@@ -4476,7 +4477,7 @@ useEffect(() => {
                   return (
                     <tr key={o.id}>
                       <td style={s.td}><span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 800, color: '#1B2F5E' }}>{o.order_code}</span></td>
-                      <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', whiteSpace: 'nowrap' }}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span></td>
+                      <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', whiteSpace: 'nowrap' }}>{o.created_at ? new Date(o.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span></td>
                       <td style={s.td}><span style={{ fontSize: 13, fontWeight: 700, color: '#2d3352' }}>{o.customer_name || '—'}</span></td>
                       <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', maxWidth: 240, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summarizeItems(o.items)}</span></td>
                       <td style={s.td}><span style={{ border: `1.5px solid ${sc.color}`, background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 12, fontWeight: 800 }}>{sc.label}</span></td>
@@ -6354,7 +6355,7 @@ useEffect(() => {
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedOrderIds.has(o.id) ? '#2D6BE4' : '#eef0f6', margin: '0 auto' }} />
                           </td>
                           <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
+                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
                           <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
