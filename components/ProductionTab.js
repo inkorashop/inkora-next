@@ -456,6 +456,10 @@ export default function ProductionTab({
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [savingTaskIds, setSavingTaskIds] = useState({});
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
+  const [printHistory, setPrintHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
+  });
+  const [logSubTab, setLogSubTab] = useState('stock');
 
   // UI
   const [expandedRow, setExpandedRow] = useState(null);
@@ -665,20 +669,44 @@ export default function ProductionTab({
     }
   }
 
+  function addPrintHistory(entry) {
+    setPrintHistory(prev => {
+      const next = [{ ...entry, id: Date.now() + Math.random() }, ...prev].slice(0, 200);
+      try { localStorage.setItem('inkora_print_history', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
   async function handleQuickPrint(pdf) {
     const key = pdf.relativePath;
     if (quickPrintingMap[key]) return;
     const copies = quickPrintQtyMap[key] ?? 1;
     setQuickPrintingMap(prev => ({ ...prev, [key]: true }));
     try {
-      await printBridgeDirect(bridgeUrl, bridgeToken.trim(), {
+      const result = await printBridgeDirect(bridgeUrl, bridgeToken.trim(), {
         rootName: pdf.rootName,
         relativePath: pdf.relativePath,
         printerName: effectivePrinterName,
         copies,
       });
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: pdf.fileName || pdf.name || pdf.relativePath,
+        copias: copies,
+        hojas: result?.job?.pagesPrinted ?? null,
+        impresora: effectivePrinterName,
+        estado: result?.job?.status || 'done',
+      });
     } catch (err) {
       console.error('Quick print error:', err);
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: pdf.fileName || pdf.name || pdf.relativePath,
+        copias: copies,
+        hojas: null,
+        impresora: effectivePrinterName,
+        estado: 'error',
+      });
     } finally {
       setQuickPrintingMap(prev => ({ ...prev, [key]: false }));
     }
@@ -714,9 +742,25 @@ export default function ProductionTab({
         ...prev,
         [taskId]: status === 'done' ? 'Enviado' : status === 'error' ? (result?.job?.error || 'Error') : status
       }));
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: task.design_name || '',
+        copias: sheets,
+        hojas: result?.job?.pagesPrinted ?? null,
+        impresora: effectivePrinterName,
+        estado: status,
+      });
       setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 3000);
     } catch (error) {
       setPrintFeedback(prev => ({ ...prev, [taskId]: error?.message || 'Error' }));
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: task.design_name || '',
+        copias: sheets,
+        hojas: null,
+        impresora: effectivePrinterName,
+        estado: 'error',
+      });
       setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 4000);
     } finally {
       setPrintingTasks(prev => ({ ...prev, [taskId]: false }));
@@ -2344,40 +2388,93 @@ export default function ProductionTab({
 
       {/* Sub-tab: Historial */}
       {activeSubTab === 'log' && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #dde1ef' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de movimientos de stock</h2>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Inner tab bar */}
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            {[['stock','Troquelado'],['print','Impresión']].map(([id, label]) => (
+              <button key={id} onClick={() => setLogSubTab(id)} style={{ border: 'none', padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 7, cursor: 'pointer', background: logSubTab === id ? '#1B2F5E' : '#e8eaf4', color: logSubTab === id ? 'white' : '#5a6380', transition: 'background 0.15s' }}>{label}</button>
+            ))}
           </div>
-          <div style={{ padding: 20, overflowX: 'auto' }}>
-            {stockLog.length === 0 ? (
-              <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin movimientos registrados.</p>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    {['Diseño', 'Tipo', 'Cantidad', 'Nota', 'Fecha'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {stockLog.map(log => (
-                    <tr key={log.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 600, color: '#1B2F5E' }}>{log.design_name}</td>
-                      <td style={{ padding: '8px 10px' }}>
-                        <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700 }}>{log.type === 'add' ? '+ Entrada' : '− Salida'}</span>
-                      </td>
-                      <td style={{ padding: '8px 10px', fontWeight: 700, color: log.type === 'add' ? '#18a36a' : '#e53e3e' }}>{log.qty}</td>
-                      <td style={{ padding: '8px 10px', color: '#5a6380' }}>{log.note || '—'}</td>
-                      <td style={{ padding: '8px 10px', color: '#9aa3bc', whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+
+          {/* Troquelado */}
+          {logSubTab === 'stock' && (
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', flex: 1 }}>
+              <div style={{ padding: '10px 16px', borderBottom: '1.5px solid #dde1ef' }}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Movimientos de stock</h2>
+              </div>
+              <div style={{ padding: 16, overflowX: 'auto' }}>
+                {stockLog.length === 0 ? (
+                  <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin movimientos registrados.</p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {['Diseño', 'Tipo', 'Cantidad', 'Nota', 'Fecha'].map(h => (
+                          <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockLog.map(log => (
+                        <tr key={log.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                          <td style={{ padding: '6px 10px', fontWeight: 600, color: '#1B2F5E' }}>{log.design_name}</td>
+                          <td style={{ padding: '6px 10px' }}>
+                            <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700 }}>{log.type === 'add' ? '+ Entrada' : '− Salida'}</span>
+                          </td>
+                          <td style={{ padding: '6px 10px', fontWeight: 700, color: log.type === 'add' ? '#18a36a' : '#e53e3e' }}>{log.qty}</td>
+                          <td style={{ padding: '6px 10px', color: '#5a6380' }}>{log.note || '—'}</td>
+                          <td style={{ padding: '6px 10px', color: '#9aa3bc', whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Impresión */}
+          {logSubTab === 'print' && (
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', flex: 1 }}>
+              <div style={{ padding: '10px 16px', borderBottom: '1.5px solid #dde1ef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de impresión</h2>
+                {printHistory.length > 0 && (
+                  <button onClick={() => { setPrintHistory([]); try { localStorage.removeItem('inkora_print_history'); } catch {} }} style={{ fontSize: 11, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Limpiar</button>
+                )}
+              </div>
+              <div style={{ padding: 16, overflowX: 'auto' }}>
+                {printHistory.length === 0 ? (
+                  <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin impresiones registradas.</p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        {['Fecha', 'Diseño', 'Copias', 'Hojas impresas', 'Impresora', 'Estado'].map(h => (
+                          <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printHistory.map(entry => (
+                        <tr key={entry.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                          <td style={{ padding: '6px 10px', color: '#9aa3bc', whiteSpace: 'nowrap' }}>{entry.fecha ? new Date(entry.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+                          <td style={{ padding: '6px 10px', fontWeight: 600, color: '#1B2F5E', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.diseno || '—'}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'center' }}>{entry.copias ?? '—'}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700, color: entry.hojas != null ? '#1B2F5E' : '#9aa3bc' }}>{entry.hojas != null ? entry.hojas : '—'}</td>
+                          <td style={{ padding: '6px 10px', color: '#5a6380', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.impresora || '—'}</td>
+                          <td style={{ padding: '6px 10px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: entry.estado === 'done' || entry.estado === 'printed' ? '#dcfce7' : entry.estado === 'error' ? '#fee2e2' : entry.estado === 'cancelled' ? '#fef9c3' : '#f0f2f8', color: entry.estado === 'done' || entry.estado === 'printed' ? '#15803d' : entry.estado === 'error' ? '#dc2626' : entry.estado === 'cancelled' ? '#92400e' : '#5a6380' }}>
+                              {entry.estado === 'done' ? 'Enviado' : entry.estado === 'printed' ? 'Impreso' : entry.estado === 'error' ? 'Error' : entry.estado === 'cancelled' ? 'Cancelado' : entry.estado || '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

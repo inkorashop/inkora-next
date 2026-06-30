@@ -392,6 +392,7 @@ public sealed class LocalApiServer : IDisposable
                             directJob.PdfFileName,
                             directJob.Status,
                             directJob.Error,
+                            directJob.PagesPrinted,
                             directJob.CreatedAt,
                             directJob.StartedAt,
                             directJob.CompletedAt
@@ -471,6 +472,7 @@ public sealed class LocalApiServer : IDisposable
                             printJob.OrderCode,
                             printJob.Status,
                             printJob.Error,
+                            printJob.PagesPrinted,
                             printJob.CreatedAt,
                             printJob.StartedAt,
                             printJob.CompletedAt

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Inkora.PrintBridge.Models;
 
 namespace Inkora.PrintBridge.Services;
@@ -255,6 +256,9 @@ public sealed class PrintJobService
             }
         }
 
+        // Snapshot de jobs ANTES de enviar a SumatraPDF para detectar el nuevo job
+        var preJobIds = GetSpoolerJobIds(job.PrinterName);
+
         try
         {
             var args = $"-print-to \"{job.PrinterName}\" -silent \"{job.PdfFullPath}\"";
@@ -289,7 +293,93 @@ public sealed class PrintJobService
                 try { _devModeService.ApplyDevModeBytes(job.PrinterName, origDevMode); }
                 catch (Exception ex) { _logService.Info($"No se pudo restaurar DEVMODE: {ex.Message}"); }
             }
+
+            // Monitorear el job en el spooler para obtener hojas efectivamente impresas
+            try
+            {
+                var postJobIds = GetSpoolerJobIds(job.PrinterName);
+                var newJobId = postJobIds.Except(preJobIds).FirstOrDefault();
+                if (newJobId > 0)
+                {
+                    var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job.PrinterName, newJobId, 35_000);
+                    job.PagesPrinted = (int)pages;
+                    _logService.Info($"Spooler job {newJobId}: {pages} hojas, estado={spoolStatus}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logService.Info($"Spooler monitor: {ex.Message}");
+            }
         }
+    }
+
+    private HashSet<uint> GetSpoolerJobIds(string printerName)
+    {
+        var ids = new HashSet<uint>();
+        if (!WinSpoolApi.OpenPrinter(printerName, out var hPrinter, IntPtr.Zero))
+            return ids;
+        try
+        {
+            WinSpoolApi.EnumJobs(hPrinter, 0, 1000, 1, IntPtr.Zero, 0, out var needed, out _);
+            if (needed <= 0) return ids;
+            var buf = Marshal.AllocHGlobal(needed);
+            try
+            {
+                if (WinSpoolApi.EnumJobs(hPrinter, 0, 1000, 1, buf, needed, out _, out var returned) && returned > 0)
+                {
+                    var stride = Marshal.SizeOf<WinSpoolApi.JobInfo1>();
+                    for (var i = 0; i < returned; i++)
+                    {
+                        var j = Marshal.PtrToStructure<WinSpoolApi.JobInfo1>(buf + i * stride);
+                        ids.Add(j.JobId);
+                    }
+                }
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        finally { WinSpoolApi.ClosePrinter(hPrinter); }
+        return ids;
+    }
+
+    private (uint pages, string status) WaitForSpoolerJobCompletion(string printerName, uint jobId, int timeoutMs)
+    {
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            Thread.Sleep(700);
+            if (!WinSpoolApi.OpenPrinter(printerName, out var hPrinter, IntPtr.Zero))
+                return (0, "unknown");
+            try
+            {
+                WinSpoolApi.EnumJobs(hPrinter, 0, 1000, 1, IntPtr.Zero, 0, out var needed, out _);
+                if (needed <= 0) return (0, "completed"); // sin jobs = terminó
+                var buf = Marshal.AllocHGlobal(needed);
+                try
+                {
+                    if (!WinSpoolApi.EnumJobs(hPrinter, 0, 1000, 1, buf, needed, out _, out var returned))
+                        return (0, "unknown");
+                    var stride = Marshal.SizeOf<WinSpoolApi.JobInfo1>();
+                    WinSpoolApi.JobInfo1? found = null;
+                    for (var i = 0; i < returned; i++)
+                    {
+                        var j = Marshal.PtrToStructure<WinSpoolApi.JobInfo1>(buf + i * stride);
+                        if (j.JobId == jobId) { found = j; break; }
+                    }
+                    if (found is null) return (0, "completed"); // desapareció = terminó
+                    var s = found.Value.Status;
+                    if ((s & (WinSpoolApi.JOB_STATUS_PRINTED | WinSpoolApi.JOB_STATUS_COMPLETE)) != 0)
+                        return (found.Value.PagesPrinted, "printed");
+                    if ((s & WinSpoolApi.JOB_STATUS_DELETED) != 0)
+                        return (found.Value.PagesPrinted, "cancelled");
+                    if ((s & WinSpoolApi.JOB_STATUS_ERROR) != 0)
+                        return (found.Value.PagesPrinted, "error");
+                    // Todavía en cola/imprimiendo, seguir esperando
+                }
+                finally { Marshal.FreeHGlobal(buf); }
+            }
+            finally { WinSpoolApi.ClosePrinter(hPrinter); }
+        }
+        return (0, "timeout");
     }
 
     // dmFields en offset 72 (uint), DM_COPIES = 0x100; dmCopies en offset 86 (short)

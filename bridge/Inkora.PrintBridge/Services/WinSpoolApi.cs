@@ -63,6 +63,51 @@ internal static class WinSpoolApi
         public uint AveragePagesPerMinute;
     }
 
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
+    internal static extern bool EnumJobs(
+        IntPtr hPrinter,
+        int FirstJob,
+        int NoJobs,
+        int Level,
+        IntPtr pJob,
+        int cbBuf,
+        out int pcbNeeded,
+        out int pcReturned);
+
+    internal const uint JOB_STATUS_ERROR    = 0x00000002;
+    internal const uint JOB_STATUS_SPOOLING = 0x00000008;
+    internal const uint JOB_STATUS_PRINTING = 0x00000010;
+    internal const uint JOB_STATUS_PRINTED  = 0x00000080;
+    internal const uint JOB_STATUS_DELETED  = 0x00000100;
+    internal const uint JOB_STATUS_COMPLETE = 0x00001000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SystemTime
+    {
+        public ushort Year, Month, DayOfWeek, Day, Hour, Minute, Second, Milliseconds;
+    }
+
+    // JOB_INFO_1 layout (x64, Unicode): 6 LPTSTR pointers + 5 DWORDs + SYSTEMTIME
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct JobInfo1
+    {
+        public uint     JobId;
+        public uint     _pad;          // alignment before first pointer on x64
+        public IntPtr   pPrinterName;
+        public IntPtr   pMachineName;
+        public IntPtr   pUserName;
+        public IntPtr   pDocument;
+        public IntPtr   pDatatype;
+        public IntPtr   pStatus;
+        public uint     Status;
+        public uint     Priority;
+        public uint     Position;
+        public uint     TotalPages;
+        public uint     PagesPrinted;
+        public uint     _pad2;         // alignment before SYSTEMTIME
+        public SystemTime Submitted;
+    }
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     internal struct DevModeHeader
     {
