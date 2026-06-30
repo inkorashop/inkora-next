@@ -1067,13 +1067,13 @@ export default function ProductionTab({
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
 
-  // Auto-match PDFs al seleccionar pedido o al conectar bridge
+  // Auto-match PDFs al seleccionar pedido, al conectar bridge, o al cargar tareas
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
+    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim() && selectedOrderTasks.length > 0) {
       matchSelectedOrderPdfs({ scan: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state]);
+  }, [selectedProductionOrderId, bridgeStatus.state, selectedOrderTasks.length]);
 
   // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
@@ -1781,6 +1781,10 @@ export default function ProductionTab({
                                       const v = Math.max(1, parseInt(e.target.value, 10) || 1);
                                       setPrintQtyOverrides(prev => ({ ...prev, [taskId]: v }));
                                     }}
+                                    onFocus={e => e.target.select()}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') printSingleTask(task, sheets);
+                                    }}
                                     disabled={disabled}
                                     title={`Hojas a imprimir (${remaining} piezas, 2 por hoja = ${defaultSheets} auto)`}
                                     style={{
@@ -1812,9 +1816,21 @@ export default function ProductionTab({
                                       cursor: disabled ? 'not-allowed' : 'pointer',
                                       fontFamily: 'Barlow, sans-serif',
                                       whiteSpace: 'nowrap',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
                                     }}
                                   >
-                                    {isPrinting ? '...' : 'Imprimir'}
+                                    {isPrinting ? (
+                                      '...'
+                                    ) : (
+                                      <>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                                          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+                                        </svg>
+                                        Imprimir
+                                      </>
+                                    )}
                                   </button>
                                 </div>
                               );
