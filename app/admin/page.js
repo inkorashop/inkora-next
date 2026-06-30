@@ -1768,7 +1768,7 @@ useEffect(() => {
       adminBridgeInitDoneRef.current = true;
       const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
       getBridgeHealth(url).then(() => {
-        refreshDesignPdfLinks({ scan: false });
+        refreshDesignPdfLinks({ scan: true });
       }).catch(() => {
         launchBridgeAndRetry();
       });
@@ -8527,19 +8527,22 @@ useEffect(() => {
 
       {/* == PRODUCCIÓN == */}
         {activeTab === 'production' && (
-          <ProductionTab
-            supabase={supabase}
-            sellers={sellers}
-            products={products}
-            orders={activeOrders}
-            operators={operators}
-            activeSubtab={productionSubtab}
-            selectedOrderId={productionSelectedOrderId}
-            onChangeSubtab={setProductionSubtab}
-            onSelectOrder={setProductionSelectedOrderId}
-            renderOrdersPanel={renderProductionOrdersPanel}
-            renderOperatorsPanel={renderOperatorsPanel}
-          />
+          <div style={{ position: 'fixed', inset: 0, top: 88, overflow: 'hidden', background: '#f7f8fc', padding: 8, boxSizing: 'border-box', zIndex: 10 }}>
+            <ProductionTab
+              supabase={supabase}
+              sellers={sellers}
+              products={products}
+              orders={activeOrders}
+              operators={operators}
+              activeSubtab={productionSubtab}
+              selectedOrderId={productionSelectedOrderId}
+              onChangeSubtab={setProductionSubtab}
+              onSelectOrder={setProductionSelectedOrderId}
+              renderOrdersPanel={renderProductionOrdersPanel}
+              renderOperatorsPanel={renderOperatorsPanel}
+              designPdfMatches={designPdfMatches}
+            />
+          </div>
         )}
 
       {/* == HISTORIAL DE VERSIONES == */}

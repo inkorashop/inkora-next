@@ -12,7 +12,7 @@ import {
   scanBridgePdfs,
   matchBridgeDesignPdfs,
   printBridgeJob,
-  getBridgePdfCatalog,
+
   printBridgeDirect,
   getBridgePrintQueue,
   getDevModeProfiles,
@@ -393,6 +393,7 @@ export default function ProductionTab({
   onSelectOrder,
   renderOrdersPanel,
   renderOperatorsPanel,
+  designPdfMatches = {},
 }) {
   const [internalActiveSubTab, setInternalActiveSubTab] = useState('produce');
   const activeSubTab = activeSubtab || internalActiveSubTab;
@@ -426,7 +427,7 @@ export default function ProductionTab({
   const [bridgeStatus, setBridgeStatus] = useState({ state: 'idle', message: 'Sin verificar', health: null });
   const hasScannedOnBridgeConnectRef = useRef(false);
   const [quickPrintSearch, setQuickPrintSearch] = useState('');
-  const [quickPrintCatalog, setQuickPrintCatalog] = useState([]);
+
   const [quickPrintQtyMap, setQuickPrintQtyMap] = useState({});
   const [quickPrintingMap, setQuickPrintingMap] = useState({});
   const [bridgePrinters, setBridgePrinters] = useState([]);
@@ -630,11 +631,6 @@ export default function ProductionTab({
         message: `PDFs del pedido: ${payload.found || 0}/${candidates.length}`,
         roots: payload.roots || orderPdfStatus.roots || [],
       });
-      if (scan) {
-        getBridgePdfCatalog(bridgeUrl, token)
-          .then(data => setQuickPrintCatalog(data?.pdfs || []))
-          .catch(() => {});
-      }
     } catch (error) {
       setOrderPdfStatus({
         state: error?.status === 401 ? 'token' : 'error',
@@ -1121,29 +1117,11 @@ export default function ProductionTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductionOrderId, bridgeStatus.state, orders.length]);
 
-  // Carga catálogo de PDFs para impresión rápida al conectar bridge.
-  // Si el catálogo está vacío (bridge recién iniciado), auto-escanea usando
-  // las mismas carpetas raíz configuradas en la pestaña Diseños.
+  // Auto-escanear PDFs al conectar bridge (mantiene índice sincronizado con Diseños)
   useEffect(() => {
     if (bridgeStatus.state === 'connected' && bridgeToken.trim()) {
-      const url = bridgeUrl;
-      const token = bridgeToken.trim();
-      getBridgePdfCatalog(url, token)
-        .then(async data => {
-          const pdfs = data?.pdfs || [];
-          if (pdfs.length === 0) {
-            try {
-              await scanBridgePdfs(url, token);
-              const refreshed = await getBridgePdfCatalog(url, token);
-              setQuickPrintCatalog(refreshed?.pdfs || []);
-            } catch {}
-          } else {
-            setQuickPrintCatalog(pdfs);
-          }
-        })
-        .catch(() => {});
+      scanBridgePdfs(bridgeUrl, bridgeToken.trim()).catch(() => {});
     } else {
-      setQuickPrintCatalog([]);
       setQuickPrintSearch('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1371,7 +1349,7 @@ export default function ProductionTab({
         : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
       {errorMessage && (
         <div style={{ background: '#fff5f5', border: '1.5px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>
           {errorMessage}
@@ -1388,7 +1366,7 @@ export default function ProductionTab({
           ['operators', 'Operarios'],
         ].map(([id, label]) => (
           <button key={id} onClick={() => changeSubTab(id)}
-            style={{ border: 'none', padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef' }}>
+            style={{ border: 'none', padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef' }}>
             {label}
           </button>
         ))}
@@ -1396,7 +1374,7 @@ export default function ProductionTab({
 
       {activeSubTab === 'produce' && (
         <>
-          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Acceso operarios</div>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>inkora.com.ar/produccion</div>
@@ -1415,7 +1393,7 @@ export default function ProductionTab({
             <button
               type="button"
               onClick={() => setBridgeCardOpen(o => !o)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'left', minHeight: 44 }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'left', minHeight: 34 }}
             >
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion local</div>
               <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
@@ -1614,12 +1592,12 @@ export default function ProductionTab({
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(200px, 0.6fr) minmax(380px, 1.1fr) minmax(210px, 0.7fr)' : 'minmax(260px, 0.85fr) minmax(460px, 1.4fr)', gap: 10, alignItems: 'start' }}>
-            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-            <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef' }}>
-              <h2 style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '6px 10px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
+              <h2 style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
             </div>
-            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {loadingTasks && produceOrderRows.length === 0 ? (
                 <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>Cargando pedidos...</p>
               ) : produceOrderRows.length === 0 ? (
@@ -1658,8 +1636,8 @@ export default function ProductionTab({
             </div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 16px', borderBottom: '1.5px solid #dde1ef', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1.5px solid #dde1ef', display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', flexShrink: 0 }}>
               <div>
                 <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>
                   {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : 'Detalle de producción'}
@@ -1752,7 +1730,7 @@ export default function ProductionTab({
                     </div>
                   </div>
                 )}
-                <div style={{ padding: '12px 16px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                <div style={{ padding: '5px 10px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 4, flexShrink: 0 }}>
                   {[
                     ['Fecha', formatShortDate(selectedOrderRow.created_at)],
                     ['Cliente', selectedOrderRow.customer_name || 'Sin cliente'],
@@ -1776,12 +1754,12 @@ export default function ProductionTab({
                   )}
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr>
-                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones', 'Imprimir'].map(h => (
-                          <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
+                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 6 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1791,8 +1769,8 @@ export default function ProductionTab({
                         const pdfMatch = orderPdfMatches[pdfKey];
                         return (
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                          <td style={{ padding: '8px 10px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
-                          <td style={{ padding: '8px 10px', fontWeight: 800, color: '#1B2F5E' }}>
+                          <td style={{ padding: '4px 5px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E' }}>
                             <div>{task.design_name}</div>
                             {orderPdfStatus.state === 'ready' && (
                               <span
@@ -1803,30 +1781,30 @@ export default function ProductionTab({
                               </span>
                             )}
                           </td>
-                          <td style={{ padding: '8px 10px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
-                          <td style={{ padding: '8px 10px' }}>
+                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
+                          <td style={{ padding: '4px 5px' }}>
                             <StockCell
                               qtyProduced={task.produced_qty || 0}
                               onSave={qty => saveProductionTask(task, { produced_qty: qty })}
                             />
                           </td>
-                          <td style={{ padding: '8px 10px' }}>
+                          <td style={{ padding: '4px 5px' }}>
                             <StockCell
                               qtyProduced={task.waste_qty || 0}
                               onSave={qty => saveProductionTask(task, { waste_qty: qty })}
                             />
                           </td>
-                          <td style={{ padding: '8px 10px' }}>
+                          <td style={{ padding: '4px 5px' }}>
                             <input
                               defaultValue={task.note || ''}
                               disabled={Boolean(savingTaskIds[task.id])}
                               onBlur={e => saveProductionTask(task, { note: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                               placeholder="Agregar observación..."
-                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', minWidth: 170, color: '#2d3352' }}
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', minWidth: 85, color: '#2d3352' }}
                             />
                           </td>
-                          <td style={{ padding: '8px 10px' }}>
+                          <td style={{ padding: '4px 5px', position: 'sticky', right: 0, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' }}>
                             {(() => {
                               const taskId = task.id || pdfKey;
                               const isPrinting = printingTasks[taskId];
@@ -1919,66 +1897,70 @@ export default function ProductionTab({
             )}
           </div>
           {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
+            const uniqueMap = {};
+            Object.values(designPdfMatches || {}).forEach(m => {
+              if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
+            });
+            const matchedPdfs = Object.values(uniqueMap);
             const search = quickPrintSearch.toLowerCase();
-            const visiblePdfs = quickPrintCatalog.length > 0 && search
-              ? quickPrintCatalog.filter(p => p.fileName.toLowerCase().includes(search))
-              : quickPrintCatalog;
+            const visiblePdfs = matchedPdfs.length > 0 && search
+              ? matchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
+              : matchedPdfs;
             return (
-              <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 560 }}>
-                <div style={{ padding: '9px 12px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
-                    Imprimir diseño{quickPrintCatalog.length > 0 ? ` · ${quickPrintCatalog.length} PDFs` : ''}
+              <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                    Imprimir diseño{matchedPdfs.length > 0 ? ` · ${matchedPdfs.length} PDFs` : ''}
                   </div>
                   <input
                     type="text"
                     placeholder="Buscar..."
                     value={quickPrintSearch}
                     onChange={e => setQuickPrintSearch(e.target.value)}
-                    disabled={quickPrintCatalog.length === 0}
-                    style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: quickPrintCatalog.length === 0 ? 0.5 : 1 }}
+                    disabled={matchedPdfs.length === 0}
+                    style={{ width: '100%', padding: '4px 7px', fontSize: 11, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: matchedPdfs.length === 0 ? 0.5 : 1 }}
                   />
-                  {quickPrintCatalog.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, marginTop: 5, padding: '0 2px' }}>
+                  {matchedPdfs.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 50px', gap: 3, marginTop: 4, padding: '0 2px' }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
                       <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
                       <span />
                     </div>
                   )}
                 </div>
-                <div style={{ overflowY: 'auto', flex: 1 }}>
-                  {quickPrintCatalog.length === 0 && (
-                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '20px 10px', lineHeight: 1.5 }}>
-                      Sin PDFs disponibles.<br />Actualizá el bridge e instalalo.
+                <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                  {matchedPdfs.length === 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '18px 8px', lineHeight: 1.5 }}>
+                      Sin PDFs vinculados.<br />Escaneá en la pestaña Diseños.
                     </p>
                   )}
-                  {visiblePdfs.length === 0 && quickPrintCatalog.length > 0 && (
-                    <p style={{ color: '#9aa3bc', fontSize: 12, textAlign: 'center', padding: '18px 8px' }}>Sin resultados</p>
+                  {visiblePdfs.length === 0 && matchedPdfs.length > 0 && (
+                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '14px 8px' }}>Sin resultados</p>
                   )}
                   {visiblePdfs.map(pdf => {
                     const key = pdf.relativePath;
                     const qty = quickPrintQtyMap[key] ?? 1;
                     const printing = quickPrintingMap[key] ?? false;
+                    const label = (pdf.fileName || pdf.name || '').replace(/\.pdf$/i, '');
                     return (
-                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 36px 60px', gap: 4, padding: '5px 8px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>
-                          {pdf.fileName.replace(/\.pdf$/i, '')}
-                        </span>
+                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
                         <input
                           type="number" min={1} max={99} value={qty}
                           onChange={e => setQuickPrintQtyMap(prev => ({ ...prev, [key]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
                           onFocus={e => e.target.select()}
                           onKeyDown={e => { if (e.key === 'Enter') handleQuickPrint(pdf); }}
-                          style={{ width: '100%', textAlign: 'center', padding: '3px 2px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+                          style={{ width: '100%', textAlign: 'center', padding: '3px 1px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
                         />
                         <button
                           type="button"
                           onClick={() => handleQuickPrint(pdf)}
                           disabled={printing}
-                          style={{ border: 'none', borderRadius: 6, padding: '5px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}
+                          style={{ border: 'none', borderRadius: 6, padding: '4px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}
                         >
                           {printing ? '...' : (
                             <>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
                               </svg>
                               Impr.
