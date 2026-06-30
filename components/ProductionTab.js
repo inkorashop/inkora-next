@@ -291,7 +291,7 @@ function StockCell({ qtyProduced, onSave }) {
   };
 
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, width: 118 }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, width: 90 }}>
       <button
         type="button"
         onClick={() => adjust(-1)}
@@ -1121,11 +1121,26 @@ export default function ProductionTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductionOrderId, bridgeStatus.state, orders.length]);
 
-  // Carga catálogo de PDFs para impresión rápida al conectar bridge
+  // Carga catálogo de PDFs para impresión rápida al conectar bridge.
+  // Si el catálogo está vacío (bridge recién iniciado), auto-escanea usando
+  // las mismas carpetas raíz configuradas en la pestaña Diseños.
   useEffect(() => {
     if (bridgeStatus.state === 'connected' && bridgeToken.trim()) {
-      getBridgePdfCatalog(bridgeUrl, bridgeToken.trim())
-        .then(data => setQuickPrintCatalog(data?.pdfs || []))
+      const url = bridgeUrl;
+      const token = bridgeToken.trim();
+      getBridgePdfCatalog(url, token)
+        .then(async data => {
+          const pdfs = data?.pdfs || [];
+          if (pdfs.length === 0) {
+            try {
+              await scanBridgePdfs(url, token);
+              const refreshed = await getBridgePdfCatalog(url, token);
+              setQuickPrintCatalog(refreshed?.pdfs || []);
+            } catch {}
+          } else {
+            setQuickPrintCatalog(pdfs);
+          }
+        })
         .catch(() => {});
     } else {
       setQuickPrintCatalog([]);
@@ -1846,7 +1861,7 @@ export default function ProductionTab({
                                     disabled={disabled}
                                     title={`Hojas a imprimir (${remaining} piezas, 2 por hoja = ${defaultSheets} auto)`}
                                     style={{
-                                      width: 40,
+                                      width: 32,
                                       border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`,
                                       borderRadius: 6,
                                       padding: '4px 3px',
@@ -1886,7 +1901,7 @@ export default function ProductionTab({
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
                                           <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
                                         </svg>
-                                        Imprimir
+                                        Impr.
                                       </>
                                     )}
                                   </button>
