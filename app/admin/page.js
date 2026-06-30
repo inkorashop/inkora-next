@@ -1703,12 +1703,14 @@ useEffect(() => {
       const payload = await addBridgePdfRoot(url, token);
       setDesignPdfSummary({
         state: 'ready',
-        message: `Carpetas PDF autorizadas: ${(payload.roots || []).length}. Ahora podés escanear.`,
+        message: `Carpeta agregada. Escaneando PDFs...`,
         found: 0,
         missing: 0,
         pdfCount: payload.pdfCount || 0,
         roots: payload.roots || [],
       });
+      // Auto-scan inmediatamente después de agregar carpeta
+      await refreshDesignPdfLinks({ scan: true });
     } catch (error) {
       setDesignPdfSummary({
         state: error?.status === 401 ? 'token' : 'error',
