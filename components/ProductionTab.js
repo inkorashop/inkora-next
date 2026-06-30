@@ -630,6 +630,11 @@ export default function ProductionTab({
         message: `PDFs del pedido: ${payload.found || 0}/${candidates.length}`,
         roots: payload.roots || orderPdfStatus.roots || [],
       });
+      if (scan) {
+        getBridgePdfCatalog(bridgeUrl, token)
+          .then(data => setQuickPrintCatalog(data?.pdfs || []))
+          .catch(() => {});
+      }
     } catch (error) {
       setOrderPdfStatus({
         state: error?.status === 401 ? 'token' : 'error',
