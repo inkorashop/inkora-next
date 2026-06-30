@@ -13,6 +13,10 @@ import {
   matchBridgeDesignPdfs,
   printBridgeJob,
   getBridgePrintQueue,
+  getDevModeProfiles,
+  saveDevModeProfile,
+  applyDevModeProfile,
+  deleteDevModeProfile,
 } from '../lib/print-bridge-client';
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -427,6 +431,11 @@ export default function ProductionTab({
   const [printingTasks, setPrintingTasks] = useState({});
   const [printFeedback, setPrintFeedback] = useState({});
   const [printQueue, setPrintQueue] = useState(null);
+  const [devModeProfiles, setDevModeProfiles] = useState([]);
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [selectedProfileName, setSelectedProfileName] = useState('');
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState('');
 
   // Datos
   const [stock, setStock] = useState([]);
@@ -667,6 +676,70 @@ export default function ProductionTab({
       setPrintQueue(result?.queue || null);
     } catch {
       setPrintQueue(null);
+    }
+  }
+
+  async function loadDevModeProfilesForPrinter(printer) {
+    const token = bridgeToken.trim();
+    if (!token || !printer?.name) return;
+    try {
+      const result = await getDevModeProfiles(bridgeUrl, token, printer.name);
+      setDevModeProfiles(Array.isArray(result?.profiles) ? result.profiles : []);
+    } catch {
+      setDevModeProfiles([]);
+    }
+  }
+
+  async function saveCurrentAsProfile() {
+    const token = bridgeToken.trim();
+    if (!token || !bridgeTargetPrinter || !profileNameInput.trim()) return;
+    setProfileBusy(true);
+    setProfileFeedback('');
+    try {
+      await saveDevModeProfile(bridgeUrl, token, bridgeTargetPrinter.name, profileNameInput.trim());
+      setProfileFeedback('Perfil guardado');
+      await loadDevModeProfilesForPrinter(bridgeTargetPrinter);
+      setSelectedProfileName(profileNameInput.trim());
+      setProfileNameInput('');
+    } catch (error) {
+      setProfileFeedback(error?.message || 'Error guardando perfil');
+    } finally {
+      setProfileBusy(false);
+      setTimeout(() => setProfileFeedback(''), 3000);
+    }
+  }
+
+  async function applySelectedProfile() {
+    const token = bridgeToken.trim();
+    if (!token || !bridgeTargetPrinter || !selectedProfileName) return;
+    setProfileBusy(true);
+    setProfileFeedback('');
+    try {
+      await applyDevModeProfile(bridgeUrl, token, bridgeTargetPrinter.name, selectedProfileName);
+      setProfileFeedback('Perfil aplicado');
+    } catch (error) {
+      setProfileFeedback(error?.message || 'Error aplicando perfil');
+    } finally {
+      setProfileBusy(false);
+      setTimeout(() => setProfileFeedback(''), 3000);
+    }
+  }
+
+  async function deleteSelectedProfile() {
+    const token = bridgeToken.trim();
+    if (!token || !bridgeTargetPrinter || !selectedProfileName) return;
+    setProfileBusy(true);
+    setProfileFeedback('');
+    try {
+      await deleteDevModeProfile(bridgeUrl, token, bridgeTargetPrinter.name, selectedProfileName);
+      setProfileFeedback('Perfil eliminado');
+      await loadDevModeProfilesForPrinter(bridgeTargetPrinter);
+      setSelectedProfileName('');
+    } catch (error) {
+      setProfileFeedback(error?.message || 'Error eliminando perfil');
+    } finally {
+      setProfileBusy(false);
+      setTimeout(() => setProfileFeedback(''), 3000);
     }
   }
 
@@ -938,6 +1011,27 @@ export default function ProductionTab({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, selectedProductionOrderId]);
+
+  // Etapa F: auto-refresh de cola cada 5s cuando el bridge está conectado y hay pedido seleccionado
+  useEffect(() => {
+    if (bridgeStatus.state !== 'connected' || !selectedProductionOrderId || !bridgeToken.trim()) return;
+    const interval = setInterval(() => {
+      getBridgePrintQueue(bridgeUrl, bridgeToken.trim())
+        .then(result => setPrintQueue(result?.queue || null))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
+
+  // Cargar perfiles al detectar impresora
+  useEffect(() => {
+    if (bridgeTargetPrinter && bridgeStatus.state === 'connected' && bridgeToken.trim()) {
+      loadDevModeProfilesForPrinter(bridgeTargetPrinter);
+    } else {
+      setDevModeProfiles([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridgeTargetPrinter?.name, bridgeStatus.state]);
 
   async function cycleStatus(row) {
     setErrorMessage('');
@@ -1301,6 +1395,62 @@ export default function ProductionTab({
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(value ?? DASH)}</div>
                   </div>
                 ))}
+              </div>
+            )}
+            {bridgeTargetPrinter && bridgeStatus.state === 'connected' && (
+              <div style={{ background: '#f8faff', border: '1px solid #dde1ef', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.5 }}>Perfiles DEVMODE</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    value={profileNameInput}
+                    onChange={e => setProfileNameInput(e.target.value)}
+                    placeholder="Nombre del perfil..."
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '5px 9px', fontSize: 12, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 150, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveCurrentAsProfile}
+                    disabled={profileBusy || !profileNameInput.trim()}
+                    style={{ border: '1.5px solid #2D6BE4', borderRadius: 7, padding: '5px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: profileBusy || !profileNameInput.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
+                  >
+                    Guardar actual
+                  </button>
+                </div>
+                {devModeProfiles.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select
+                      value={selectedProfileName}
+                      onChange={e => setSelectedProfileName(e.target.value)}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '5px 9px', fontSize: 12, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', flex: 1, minWidth: 150 }}
+                    >
+                      <option value="">Seleccionar perfil...</option>
+                      {devModeProfiles.map(p => (
+                        <option key={p.name} value={p.name}>{p.name} ({p.sizeBytes}b)</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={applySelectedProfile}
+                      disabled={profileBusy || !selectedProfileName}
+                      style={{ border: '1.5px solid #18a36a', borderRadius: 7, padding: '5px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: profileBusy || !selectedProfileName ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
+                    >
+                      Aplicar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedProfile}
+                      disabled={profileBusy || !selectedProfileName}
+                      style={{ border: '1.5px solid #fecaca', borderRadius: 7, padding: '5px 10px', background: '#fff5f5', color: '#b91c1c', fontSize: 12, fontWeight: 900, cursor: profileBusy || !selectedProfileName ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                )}
+                {profileFeedback && (
+                  <div style={{ fontSize: 12, fontWeight: 700, color: profileFeedback.toLowerCase().includes('error') || profileFeedback.toLowerCase().includes('error') ? '#b91c1c' : '#15803d' }}>
+                    {profileFeedback}
+                  </div>
+                )}
               </div>
             )}
           </div>

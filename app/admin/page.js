@@ -179,6 +179,15 @@ function LinkIcon() {
   );
 }
 
+function PdfIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+    </svg>
+  );
+}
+
 function HoldButton({
   onConfirm,
   label = 'Mantené para eliminar',
@@ -5967,52 +5976,39 @@ useEffect(() => {
                           <span>{d.category}</span>
                         )}
                       </div>
-                      <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); setDesignPdfLinkEnabled(d.id, !pdfLinkEnabled); }}
-                          onDragStart={e => e.stopPropagation()}
-                          style={{border:'1px solid', borderColor:pdfLinkEnabled ? '#b7ebcf' : '#dde1ef', background:pdfLinkEnabled ? '#e8f7ef' : '#f8faff', color:pdfLinkEnabled ? '#15803d' : '#5a6380', borderRadius:999, padding:'1px 7px', fontSize:10, fontWeight:900, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
-                          title={selectedIds.has(d.id) && selectedIds.size > 1 ? `Aplicar a ${selectedIds.size} diseños seleccionados` : 'Habilitar o deshabilitar vinculación PDF'}
-                        >
-                          {pdfLinkEnabled ? 'PDF vincular ON' : 'PDF vincular OFF'}
-                        </button>
-                      </div>
-                      {designPdfSummary.state === 'ready' && pdfLinkEnabled && (
-                        <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
-                          <span
-                            title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño'}
-                            style={{
-                              border:'1px solid',
-                              borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca',
-                              background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5',
-                              color: pdfMatch?.found ? '#15803d' : '#b91c1c',
-                              borderRadius:999,
-                              padding:'1px 7px',
-                              fontSize:10,
-                              fontWeight:900,
-                              display:'inline-flex',
-                              alignItems:'center',
-                              maxWidth:260,
-                              overflow:'hidden',
-                              textOverflow:'ellipsis',
-                              whiteSpace:'nowrap',
-                            }}
-                          >
-                            {pdfMatch?.found ? `PDF · ${pdfMatch.fileName}` : 'PDF sin vínculo'}
-                          </span>
-                        </div>
-                      )}
-                      {designPdfSummary.state === 'ready' && !pdfLinkEnabled && (
-                        <div style={{display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:4}}>
-                          <span style={{border:'1px solid #dde1ef', background:'#f8faff', color:'#8b95b3', borderRadius:999, padding:'1px 7px', fontSize:10, fontWeight:900}}>
-                            PDF no habilitado
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setDesignPdfLinkEnabled(d.id, !pdfLinkEnabled); }}
+                      onDragStart={e => e.stopPropagation()}
+                      title={(selectedIds.has(d.id) && selectedIds.size > 1 ? `Aplicar a ${selectedIds.size} diseños seleccionados — ` : '') + (pdfLinkEnabled ? 'Vinculación PDF activada (click para desactivar)' : 'Vinculación PDF desactivada (click para activar)')}
+                      style={{border:'1px solid', borderColor:pdfLinkEnabled ? '#b7ebcf' : '#dde1ef', background:pdfLinkEnabled ? '#e8f7ef' : '#f8faff', color:pdfLinkEnabled ? '#15803d' : '#9aa3bc', borderRadius:6, padding:4, display:'flex', alignItems:'center', cursor:'pointer'}}
+                    >
+                      <LinkIcon />
+                    </button>
+                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && (
+                      <span
+                        title={pdfMatch?.found ? `PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño'}
+                        style={{
+                          border:'1px solid',
+                          borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca',
+                          background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5',
+                          color: pdfMatch?.found ? '#15803d' : '#b91c1c',
+                          borderRadius:6,
+                          padding:'4px 6px',
+                          fontSize:10,
+                          fontWeight:900,
+                          display:'inline-flex',
+                          alignItems:'center',
+                          gap:2,
+                          lineHeight:1,
+                        }}
+                      >
+                        <PdfIcon />{pdfMatch?.found ? <CheckIcon /> : '!'}
+                      </span>
+                    )}
                     <button style={s.iconBtn} onClick={e => { e.stopPropagation(); toggleDesign(d.id, d.active); }}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
                     <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>

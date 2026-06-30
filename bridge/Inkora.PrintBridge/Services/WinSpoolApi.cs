@@ -5,6 +5,7 @@ namespace Inkora.PrintBridge.Services;
 internal static class WinSpoolApi
 {
     internal const int DmOutBuffer = 2;
+    internal const int DmInBuffer = 8;
 
     [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
     internal static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
@@ -19,6 +20,13 @@ internal static class WinSpoolApi
         IntPtr pPrinter,
         int cbBuf,
         out int pcbNeeded);
+
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
+    internal static extern bool SetPrinter(
+        IntPtr hPrinter,
+        int level,
+        IntPtr pPrinter,
+        int command);
 
     [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
     internal static extern int DocumentProperties(

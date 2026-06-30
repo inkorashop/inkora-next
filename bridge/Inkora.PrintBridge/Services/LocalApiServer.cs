@@ -30,6 +30,7 @@ public sealed class LocalApiServer : IDisposable
     private readonly DriverPreferencesService _driverPreferencesService;
     private readonly PdfCatalogService _pdfCatalogService;
     private readonly PrintJobService _printJobService;
+    private readonly DevModeProfileService _devModeProfileService;
     private readonly BridgeLogService _logService;
     private readonly string _pairingToken;
     private readonly Func<Task<IReadOnlyList<PdfRootInfo>>> _addPdfRootFromDialogAsync;
@@ -42,6 +43,7 @@ public sealed class LocalApiServer : IDisposable
         DriverPreferencesService driverPreferencesService,
         PdfCatalogService pdfCatalogService,
         PrintJobService printJobService,
+        DevModeProfileService devModeProfileService,
         BridgeLogService logService,
         string pairingToken,
         Func<Task<IReadOnlyList<PdfRootInfo>>> addPdfRootFromDialogAsync,
@@ -52,6 +54,7 @@ public sealed class LocalApiServer : IDisposable
         _driverPreferencesService = driverPreferencesService;
         _pdfCatalogService = pdfCatalogService;
         _printJobService = printJobService;
+        _devModeProfileService = devModeProfileService;
         _logService = logService;
         _pairingToken = pairingToken;
         _addPdfRootFromDialogAsync = addPdfRootFromDialogAsync;
@@ -450,6 +453,122 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/devmode/profiles":
+                if (method != "GET")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa GET." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                var profilesPrinter = GetQueryParam(target, "printer");
+                await WriteJsonAsync(stream, 200, "OK", new
+                {
+                    ok = true,
+                    printer = profilesPrinter,
+                    profiles = _devModeProfileService.GetProfiles(profilesPrinter),
+                    timestamp = DateTimeOffset.Now
+                }, origin, cancellationToken);
+                break;
+
+            case "/devmode/profiles/save":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var savePrinter = GetQueryValue(target, "printer");
+                    var saveName = GetQueryParam(target, "name");
+                    if (string.IsNullOrWhiteSpace(saveName)) throw new ArgumentException("Falta el parametro 'name'.");
+                    var savedProfile = _devModeProfileService.SaveCurrentAsProfile(savePrinter, saveName);
+                    _logService.Info($"Perfil guardado via API: {savePrinter}/{saveName}.");
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        profile = savedProfile,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception saveEx)
+                {
+                    await WriteJsonAsync(stream, 400, "Bad Request", new { ok = false, error = saveEx.Message, timestamp = DateTimeOffset.Now }, origin, cancellationToken);
+                }
+                break;
+
+            case "/devmode/profiles/apply":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var applyPrinter = GetQueryValue(target, "printer");
+                    var applyName = GetQueryParam(target, "name");
+                    if (string.IsNullOrWhiteSpace(applyName)) throw new ArgumentException("Falta el parametro 'name'.");
+                    _devModeProfileService.ApplyProfile(applyPrinter, applyName);
+                    _logService.Info($"Perfil aplicado via API: {applyPrinter}/{applyName}.");
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        printer = applyPrinter,
+                        name = applyName,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception applyEx)
+                {
+                    await WriteJsonAsync(stream, 400, "Bad Request", new { ok = false, error = applyEx.Message, timestamp = DateTimeOffset.Now }, origin, cancellationToken);
+                }
+                break;
+
+            case "/devmode/profiles/delete":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                var deletePrinter = GetQueryParam(target, "printer");
+                var deleteName = GetQueryParam(target, "name");
+                var deleted = _devModeProfileService.DeleteProfile(deletePrinter, deleteName);
+                await WriteJsonAsync(stream, 200, "OK", new
+                {
+                    ok = true,
+                    deleted,
+                    printer = deletePrinter,
+                    name = deleteName,
+                    timestamp = DateTimeOffset.Now
+                }, origin, cancellationToken);
+                break;
+
             default:
                 await WriteJsonAsync(stream, 404, "Not Found", new { ok = false, error = "Endpoint no encontrado." }, origin, cancellationToken);
                 break;
@@ -469,7 +588,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/design-pdfs/match", "/print", "/print/queue", "/print/cancel" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/design-pdfs/match", "/print", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),
@@ -647,6 +766,22 @@ public sealed class LocalApiServer : IDisposable
         }
 
         return fallback;
+    }
+
+    private static string GetQueryParam(string target, string key)
+    {
+        var queryIndex = target.IndexOf('?');
+        if (queryIndex < 0 || queryIndex == target.Length - 1) return "";
+        var query = target[(queryIndex + 1)..];
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var segments = part.Split('=', 2);
+            if (segments.Length == 2 && string.Equals(WebUtility.UrlDecode(segments[0]), key, StringComparison.OrdinalIgnoreCase))
+            {
+                return WebUtility.UrlDecode(segments[1]);
+            }
+        }
+        return "";
     }
 
     private static async Task WriteOptionsAsync(Stream stream, string? origin, CancellationToken cancellationToken)

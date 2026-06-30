@@ -14,6 +14,7 @@ public sealed class MainForm : Form
     private readonly BridgeConfigService _configService = new();
     private readonly PdfCatalogService _pdfCatalogService;
     private readonly PrintJobService _printJobService;
+    private readonly DevModeProfileService _devModeProfileService;
     private readonly LocalApiServer _localApiServer;
     private readonly string _bridgeToken;
 
@@ -39,12 +40,14 @@ public sealed class MainForm : Form
         _bridgeToken = _configService.GetOrCreatePairingToken();
         _pdfCatalogService = new PdfCatalogService(_configService, _logService);
         _printJobService = new PrintJobService(_pdfCatalogService, _printerService, _logService);
+        _devModeProfileService = new DevModeProfileService(_configService, _devModeService, _logService);
         _localApiServer = new LocalApiServer(
             _printerService,
             _devModeService,
             _driverPreferencesService,
             _pdfCatalogService,
             _printJobService,
+            _devModeProfileService,
             _logService,
             _bridgeToken,
             AddPdfRootFromApiAsync);
