@@ -194,7 +194,7 @@ public sealed class PrintJobService
 
     private void PrintWithSumatra(PrintJob job)
     {
-        var settings = job.Copies > 1 ? $"copies={job.Copies}" : "";
+        var settings = job.Copies > 1 ? $"copies {job.Copies}" : "";
         var args = $"-print-to \"{job.PrinterName}\" -silent";
         if (!string.IsNullOrWhiteSpace(settings))
         {
