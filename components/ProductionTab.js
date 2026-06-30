@@ -1069,11 +1069,12 @@ export default function ProductionTab({
 
   // Auto-match PDFs al seleccionar pedido, al conectar bridge, o al cargar tareas
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim() && selectedOrderTasks.length > 0) {
-      matchSelectedOrderPdfs({ scan: false });
+    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
+      const hasTasks = productionTasks.some(t => t.order_id === selectedProductionOrderId);
+      if (hasTasks) matchSelectedOrderPdfs({ scan: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, selectedOrderTasks.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state, productionTasks.length]);
 
   // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
