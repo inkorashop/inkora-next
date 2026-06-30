@@ -1357,7 +1357,7 @@ export default function ProductionTab({
       )}
 
       {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start', flexShrink: 0 }}>
         {[
           ['produce', 'Producir'],
           ['orders', 'Pedidos'],
@@ -1986,22 +1986,27 @@ export default function ProductionTab({
       )}
 
       {activeSubTab === 'orders' && (
-        renderOrdersPanel ? renderOrdersPanel() : (
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
-            No se pudo cargar la pestaña de pedidos.
-          </div>
-        )
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {renderOrdersPanel ? renderOrdersPanel() : (
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
+              No se pudo cargar la pestaña de pedidos.
+            </div>
+          )}
+        </div>
       )}
 
       {activeSubTab === 'operators' && (
-        renderOperatorsPanel ? renderOperatorsPanel() : (
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
-            No se pudo cargar la pestaña de operarios.
-          </div>
-        )
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {renderOperatorsPanel ? renderOperatorsPanel() : (
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', padding: 18, color: '#8b95b3', fontSize: 13 }}>
+              No se pudo cargar la pestaña de operarios.
+            </div>
+          )}
+        </div>
       )}
 
       {activeSubTab === 'stock' && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <>
           {/* Resumen */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
@@ -2334,10 +2339,12 @@ export default function ProductionTab({
               </div>
           </div>
         </>
+        </div>
       )}
 
       {/* Sub-tab: Historial */}
       {activeSubTab === 'log' && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #dde1ef' }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Historial de movimientos de stock</h2>
@@ -2370,6 +2377,7 @@ export default function ProductionTab({
               </table>
             )}
           </div>
+        </div>
         </div>
       )}
 
