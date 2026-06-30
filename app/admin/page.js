@@ -483,6 +483,7 @@ useEffect(() => {
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
   const autoLaunchTriedRef = useRef(false);
+  const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
   const [draggingLocalityId, setDraggingLocalityId] = useState(null);
   const localityDragSrcIdRef = useRef(null);
@@ -1758,6 +1759,20 @@ useEffect(() => {
     setDesignPdfBusy(false);
     setDesignPdfSummary({ state: 'error', message: 'No respondió en 18 segundos. Abrilo manualmente.', found: 0, missing: 0, pdfCount: 0, roots: [] });
   }
+
+  // Auto-init Bridge en segundo plano cuando hay token guardado y diseños cargados
+  useEffect(() => {
+    if (designPdfBridgeToken && designs.length > 0 && !adminBridgeInitDoneRef.current) {
+      adminBridgeInitDoneRef.current = true;
+      const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+      getBridgeHealth(url).then(() => {
+        refreshDesignPdfLinks({ scan: false });
+      }).catch(() => {
+        launchBridgeAndRetry();
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designPdfBridgeToken, designs]);
 
   // Auto-launch Bridge cuando hay error de conexión (solo una vez por sesión de error)
   useEffect(() => {

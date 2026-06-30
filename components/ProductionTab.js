@@ -453,8 +453,15 @@ export default function ProductionTab({
 
   useEffect(() => {
     const stored = getStoredBridgeConfig();
-    setBridgeUrl(stored.url || DEFAULT_BRIDGE_URL);
-    setBridgeToken(stored.token || '');
+    const url = stored.url || DEFAULT_BRIDGE_URL;
+    const token = stored.token || '';
+    setBridgeUrl(url);
+    setBridgeToken(token);
+    if (token) {
+      // Auto-connect bridge on mount (launch if not running)
+      autoInitBridge(url, token);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleSort(key) {
@@ -473,23 +480,25 @@ export default function ProductionTab({
     });
   }
 
-  async function checkPrintBridge({ includePrinters = true } = {}) {
+  async function checkPrintBridge({ includePrinters = true, overrideUrl, overrideToken } = {}) {
+    const url = overrideUrl !== undefined ? overrideUrl : bridgeUrl;
+    const token = overrideToken !== undefined ? overrideToken : bridgeToken;
     setBridgeBusy(true);
     setBridgeDevMode(null);
     try {
-      saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken });
-      const health = await getBridgeHealth(bridgeUrl);
+      saveStoredBridgeConfig({ url, token });
+      const health = await getBridgeHealth(url);
       let printers = bridgePrinters;
       let message = 'Bridge conectado';
 
       if (includePrinters) {
-        if (!bridgeToken.trim()) {
+        if (!token.trim()) {
           setBridgePrinters([]);
           setBridgeStatus({ state: 'token', message: 'Bridge conectado. Pegue el token para leer impresoras.', health });
           return;
         }
 
-        const printerPayload = await getBridgePrinters(bridgeUrl, bridgeToken.trim());
+        const printerPayload = await getBridgePrinters(url, token.trim());
         printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
         setBridgePrinters(printers);
         const target = printers.find(printer => printer.isTargetL8050);
@@ -508,6 +517,37 @@ export default function ProductionTab({
     } finally {
       setBridgeBusy(false);
     }
+  }
+
+  async function autoInitBridge(url, token) {
+    if (!token) return;
+    try {
+      await getBridgeHealth(url);
+    } catch {
+      // Bridge not running — launch via URI scheme and poll
+      try {
+        const a = document.createElement('a');
+        a.href = 'inkora-bridge://start';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch {}
+      let retries = 0;
+      await new Promise(resolve => {
+        const poll = setInterval(async () => {
+          retries++;
+          try {
+            await getBridgeHealth(url);
+            clearInterval(poll);
+            resolve();
+          } catch {
+            if (retries >= 12) { clearInterval(poll); resolve(); }
+          }
+        }, 1500);
+      });
+    }
+    await checkPrintBridge({ includePrinters: true, overrideUrl: url, overrideToken: token });
   }
 
   async function inspectBridgeDevMode() {
@@ -1022,6 +1062,14 @@ export default function ProductionTab({
     }, 5000);
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
+
+  // Auto-match PDFs al seleccionar pedido o al conectar bridge
+  useEffect(() => {
+    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
+      matchSelectedOrderPdfs({ scan: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProductionOrderId, bridgeStatus.state]);
 
   // Cargar perfiles al detectar impresora (usa bridgePrinters para evitar TDZ)
   useEffect(() => {
