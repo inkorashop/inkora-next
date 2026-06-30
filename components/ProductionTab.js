@@ -1056,6 +1056,16 @@ export default function ProductionTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubTab, selectedProductionOrderId]);
 
+  // Auto-seleccionar primer pedido cuando cargan (evita que selectedProductionOrderId quede vacío
+  // mientras el fallback visual muestra produceOrderRows[0])
+  useEffect(() => {
+    if (!internalSelectedOrderId && !selectedOrderId && orders.length > 0) {
+      const firstRow = produceOrderRows[0];
+      if (firstRow) handleSelectProductionOrder(firstRow.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders.length]);
+
   // Etapa F: auto-refresh de cola cada 5s cuando el bridge está conectado y hay pedido seleccionado
   useEffect(() => {
     if (bridgeStatus.state !== 'connected' || !selectedProductionOrderId || !bridgeToken.trim()) return;
