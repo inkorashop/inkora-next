@@ -482,6 +482,7 @@ useEffect(() => {
   const [designPdfMatches, setDesignPdfMatches] = useState({});
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
+  const [designPdfFilter, setDesignPdfFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
   const autoLaunchTriedRef = useRef(false);
   const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -5908,6 +5909,45 @@ useEffect(() => {
                             ))}
                           </div>
                         )}
+                        {designPdfSummary.state === 'ready' && (() => {
+                          const allCount = designs.filter(d => isDesignPdfLinkEnabled(d.id)).length;
+                          const linkedCount = designs.filter(d => isDesignPdfLinkEnabled(d.id) && designPdfMatches[d.id]?.found).length;
+                          const unlinkedCount = allCount - linkedCount;
+                          const tabs = [
+                            { key: 'all', label: `Todos (${allCount})` },
+                            { key: 'linked', label: `Vinculados (${linkedCount})` },
+                            { key: 'unlinked', label: `Sin vincular (${unlinkedCount})` },
+                          ];
+                          return (
+                            <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4, marginRight: 2 }}>Mostrar</span>
+                              {tabs.map(({ key, label }) => {
+                                const active = designPdfFilter === key;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setDesignPdfFilter(key)}
+                                    style={{
+                                      border: `1.5px solid ${active ? '#2D6BE4' : '#dde1ef'}`,
+                                      borderRadius: 7,
+                                      padding: '4px 10px',
+                                      background: active ? '#f0f5ff' : 'white',
+                                      color: active ? '#2D6BE4' : '#5a6380',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      fontFamily: 'Barlow, sans-serif',
+                                      transition: 'all 0.12s',
+                                    }}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -5931,9 +5971,13 @@ useEffect(() => {
                 };
                 const filtered = designs.filter(d => {
                   const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                  const pdfEnabled = isDesignPdfLinkEnabled(d.id);
                   return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
                     && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
-                    && (!designCatFilter || cats.includes(designCatFilter));
+                    && (!designCatFilter || cats.includes(designCatFilter))
+                    && (designPdfFilter === 'all'
+                        || (pdfEnabled && designPdfFilter === 'linked' && designPdfMatches[d.id]?.found)
+                        || (pdfEnabled && designPdfFilter === 'unlinked' && !designPdfMatches[d.id]?.found));
                 });
                 const sortFn = sortFns[designSortBy];
                 return (sortFn ? [...filtered].sort(sortFn) : filtered).map(d => {

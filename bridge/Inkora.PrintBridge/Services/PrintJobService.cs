@@ -194,6 +194,46 @@ public sealed class PrintJobService
         return Start(job.Id);
     }
 
+    public PrintJob? PrintDirect(string rootName, string relativePath, string printerName, int copies)
+    {
+        var roots = _pdfCatalogService.GetRoots();
+        var root = roots.FirstOrDefault(r => string.Equals(r.Name, rootName, StringComparison.OrdinalIgnoreCase));
+        if (root is null || !root.Exists)
+            throw new InvalidOperationException($"Carpeta '{rootName}' no encontrada o no existe.");
+
+        var fullPath = Path.GetFullPath(Path.Combine(root.Path, relativePath));
+        if (!fullPath.StartsWith(root.Path, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Ruta de PDF fuera de carpeta autorizada.");
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"PDF no encontrado: {fullPath}");
+
+        var actualPrinter = printerName;
+        if (string.IsNullOrWhiteSpace(actualPrinter))
+        {
+            var printers = _printerService.GetInstalledPrinters();
+            actualPrinter = (printers.FirstOrDefault(p => p.IsTargetL8050) ?? printers.FirstOrDefault(p => p.IsDefault))?.Name ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(actualPrinter))
+            throw new InvalidOperationException("No se especifico impresora y no se detecto L8050 ni default.");
+
+        var fileName = Path.GetFileName(relativePath);
+        var job = new PrintJob
+        {
+            DesignName = Path.GetFileNameWithoutExtension(fileName),
+            PrinterName = actualPrinter,
+            Copies = Math.Clamp(copies, 1, 999),
+            PdfFileName = fileName,
+            PdfFullPath = fullPath,
+            Status = "queued"
+        };
+
+        lock (_lock) { _jobs.Add(job); }
+        _logService.Info($"Directo preparado: {job.Id} | {job.DesignName} x{job.Copies} -> {actualPrinter}");
+        return Start(job.Id);
+    }
+
     private void PrintWithSumatra(PrintJob job)
     {
         // Aplicar dmCopies en DEVMODE antes de imprimir (SumatraPDF ignora -print-settings copies)

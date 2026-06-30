@@ -329,6 +329,89 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/pdf-catalog":
+                if (method != "GET")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa GET." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                var catalogPdfs = _pdfCatalogService.GetCachedPdfs();
+                await WriteJsonAsync(stream, 200, "OK", new
+                {
+                    ok = true,
+                    pdfs = catalogPdfs.Select(p => new
+                    {
+                        p.FileName,
+                        p.RootName,
+                        p.RelativePath,
+                        p.SizeBytes,
+                        p.NormalizedName
+                    }).OrderBy(p => p.FileName, StringComparer.OrdinalIgnoreCase).ToArray(),
+                    pdfCount = catalogPdfs.Count,
+                    timestamp = DateTimeOffset.Now
+                }, origin, cancellationToken);
+                break;
+
+            case "/print-direct":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var directRequest = ParseDirectPrintRequest(body);
+                    var directJob = _printJobService.PrintDirect(
+                        directRequest.RootName,
+                        directRequest.RelativePath,
+                        directRequest.PrinterName,
+                        directRequest.Copies);
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        job = directJob is null ? null : new
+                        {
+                            directJob.Id,
+                            directJob.DesignName,
+                            directJob.PrinterName,
+                            directJob.Copies,
+                            directJob.PdfFileName,
+                            directJob.Status,
+                            directJob.Error,
+                            directJob.CreatedAt,
+                            directJob.StartedAt,
+                            directJob.CompletedAt
+                        },
+                        printMethod = _printJobService.PrintMethod,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception directError)
+                {
+                    _logService.Error($"Error en /print-direct: {directError}");
+                    await WriteJsonAsync(stream, 400, "Bad Request", new
+                    {
+                        ok = false,
+                        error = directError.Message,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                break;
+
             case "/design-pdfs/match":
                 if (method != "POST")
                 {
@@ -588,7 +671,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/design-pdfs/match", "/print", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),
@@ -699,6 +782,12 @@ public sealed class LocalApiServer : IDisposable
         }
 
         return JsonSerializer.Deserialize<PrintRequest>(body, JsonOptions) ?? new PrintRequest();
+    }
+
+    private static DirectPrintRequest ParseDirectPrintRequest(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return new DirectPrintRequest();
+        return JsonSerializer.Deserialize<DirectPrintRequest>(body, JsonOptions) ?? new DirectPrintRequest();
     }
 
     private static DesignMatchRequest ParseDesignMatchRequest(string body)
@@ -837,6 +926,14 @@ public sealed class LocalApiServer : IDisposable
     private sealed class DesignMatchRequest
     {
         public List<DesignPdfCandidate> Designs { get; init; } = [];
+    }
+
+    private sealed class DirectPrintRequest
+    {
+        public string RootName { get; init; } = "";
+        public string RelativePath { get; init; } = "";
+        public string PrinterName { get; init; } = "";
+        public int Copies { get; init; } = 1;
     }
 
     private sealed record HttpRequest(string RequestLine, Dictionary<string, string> Headers, string Body);
