@@ -349,17 +349,19 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   useEffect(() => {
     function onKey(e) {
-      if (e.defaultPrevented) return;
       const { editingRow, focusedRow, rows, showPasteArea } = snap.current;
-      const tag = document.activeElement?.tagName;
-      const inTextInput = (tag === 'INPUT' || tag === 'TEXTAREA') && document.activeElement?.type !== 'number';
 
+      // Escape is always intercepted regardless of e.defaultPrevented
       if (e.key === 'Escape') {
-        // Priority: close paste area → exit design edit → close modal
+        e.preventDefault();
         if (showPasteArea) { setShowPasteArea(false); return; }
         if (editingRow !== null) { setEditingRow(null); return; }
         handleClose(); return;
       }
+
+      if (e.defaultPrevented) return;
+      const tag = document.activeElement?.tagName;
+      const inTextInput = (tag === 'INPUT' || tag === 'TEXTAREA') && document.activeElement?.type !== 'number';
 
       if (!inTextInput) {
         if (e.key === 'ArrowDown') {
