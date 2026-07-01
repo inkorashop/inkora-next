@@ -22,7 +22,7 @@ function newRow() {
   return { id: Math.random().toString(36).slice(2), type: 'manual', text: '', design_id: '', name: '', productName: '', qty: 0 };
 }
 
-const QTY_DELTAS = [-10, -2, -1, 1, 2, 10];
+const QTY_DELTAS = [-10, -2, 2, 10];
 
 // ── Row component ────────────────────────────────────────────────────────────
 function DesignRow({ row, index, active, activeCell, rows, designs,
@@ -92,7 +92,7 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
   const linked = row.type === 'linked' && row.design_id;
 
   return (
-    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '14px 1fr 64px 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: selected ? '#e8f0fe' : active ? '#f0f4ff' : 'transparent', borderRadius: 6 }}>
+    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '14px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: selected ? '#e8f0fe' : active ? '#f0f4ff' : 'transparent', borderRadius: 6 }}>
 
       {/* Selection indicator */}
       <div onMouseDown={e => { e.preventDefault(); onSelect(index, e); }}
@@ -111,56 +111,34 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
             fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
       </div>
 
-      {/* Qty cell */}
-      <input ref={qtyRef} type="number" min={0} max={9999}
-        value={row.qty}
-        onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-        onFocus={e => { e.target.select(); onFocus(index, 'qty'); }}
-        onKeyDown={handleQtyKeyDown}
-        style={{ width: '100%', textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 4px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
-      />
+      {/* Qty cell — inline ±buttons always visible */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {[-10, -2].map(d => (
+          <button key={d} type="button"
+            onMouseDown={e => { e.preventDefault(); onChange(index, { qty: Math.max(0, row.qty + d) }); }}
+            style={{ border: '1.5px solid #fecaca', borderRadius: 4, padding: '2px 4px', fontSize: 10, fontWeight: 800, background: '#fff5f5', color: '#b91c1c', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', lineHeight: 1, whiteSpace: 'nowrap' }}>
+            {d}
+          </button>
+        ))}
+        <input ref={qtyRef} type="number" min={0} max={9999}
+          value={row.qty}
+          onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+          onFocus={e => { e.target.select(); onFocus(index, 'qty'); }}
+          onKeyDown={handleQtyKeyDown}
+          style={{ width: 34, textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 2px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
+        />
+        {[2, 10].map(d => (
+          <button key={d} type="button"
+            onMouseDown={e => { e.preventDefault(); onChange(index, { qty: row.qty + d }); }}
+            style={{ border: '1.5px solid #bbf7d0', borderRadius: 4, padding: '2px 4px', fontSize: 10, fontWeight: 800, background: '#f0fdf4', color: '#15803d', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', lineHeight: 1, whiteSpace: 'nowrap' }}>
+            +{d}
+          </button>
+        ))}
+      </div>
 
       {/* Delete */}
       <button type="button" onClick={() => { if (rows.length > 1) { onDelete(index); onKeyNav('prev-row', index); } }}
         style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
-
-      {/* Qty buttons panel — portal */}
-      {isQty && typeof window !== 'undefined' && createPortal(
-        (() => {
-          const rect = qtyRef.current?.getBoundingClientRect();
-          if (!rect) return null;
-          const panelW = 186;
-          const left = Math.max(4, Math.min(rect.right - panelW, window.innerWidth - panelW - 8));
-          return (
-            <div style={{ position: 'fixed', top: rect.bottom + 3, left, zIndex: 9998, background: 'white',
-              border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-              padding: '6px', display: 'flex', flexDirection: 'column', gap: 5, width: panelW }}>
-              <div style={{ display: 'flex', gap: 3 }}>
-                {QTY_DELTAS.map(d => (
-                  <button key={d} type="button"
-                    onMouseDown={e => { e.preventDefault(); onChange(index, { qty: Math.max(0, row.qty + d) }); }}
-                    style={{ flex: 1, border: '1.5px solid', borderColor: d < 0 ? '#fecaca' : '#bbf7d0',
-                      borderRadius: 5, padding: '3px 0', fontSize: 11, fontWeight: 700,
-                      background: d < 0 ? '#fff5f5' : '#f0fdf4', color: d < 0 ? '#b91c1c' : '#15803d',
-                      cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'center' }}>
-                    {d > 0 ? `+${d}` : d}
-                  </button>
-                ))}
-              </div>
-              {index > 0 && prevQty != null && (
-                <button type="button"
-                  onMouseDown={e => { e.preventDefault(); onChange(index, { qty: prevQty }); }}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '3px 8px', fontSize: 11,
-                    fontWeight: 700, background: '#f7f8fc', color: '#5a6380', cursor: 'pointer',
-                    fontFamily: 'Barlow, sans-serif', textAlign: 'center' }}>
-                  = anterior ({prevQty})
-                </button>
-              )}
-            </div>
-          );
-        })(),
-        document.body
-      )}
 
       {/* Design dropdown — portal */}
       {isActive && dropItems.length > 0 && typeof window !== 'undefined' && createPortal(
