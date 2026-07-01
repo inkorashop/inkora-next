@@ -9,6 +9,7 @@ import {
   getBridgePrinters,
   readBridgeDevMode,
   openBridgePrinterPreferences,
+  openBridgePrintQueue,
   addBridgePdfRoot,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
@@ -1458,14 +1459,24 @@ export default function ProductionTab({
                 </select>
               )}
               {!bridgeCardOpen && bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); openBridgePreferences(); }}
-                  disabled={bridgeBusy}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
-                >
-                  Preferencias
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); openBridgePreferences(); }}
+                    disabled={bridgeBusy}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+                  >
+                    Preferencias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); openBridgePrintQueue(bridgeUrl, bridgeToken.trim(), effectivePrinterName).catch(() => {}); }}
+                    disabled={bridgeBusy}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+                  >
+                    Cola
+                  </button>
+                </>
               )}
               <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9aa3bc', flexShrink: 0 }}>{bridgeCardOpen ? '▲' : '▼'}</span>
             </button>

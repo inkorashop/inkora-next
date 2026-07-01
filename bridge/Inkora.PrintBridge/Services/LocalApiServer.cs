@@ -259,6 +259,54 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/print/open-queue":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                var queuePrinter = GetQueryValue(target, "printer");
+                try
+                {
+                    var queueArgs = string.IsNullOrWhiteSpace(queuePrinter)
+                        ? "shell:PrintersFolder"
+                        : $"shell:PrintersFolder";
+                    // Open the specific printer queue window via rundll32
+                    if (!string.IsNullOrWhiteSpace(queuePrinter))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "rundll32.exe",
+                            Arguments = $"printui.dll,PrintUIEntry /o /n \"{queuePrinter}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        });
+                    }
+                    else
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = "shell:PrintersFolder",
+                            UseShellExecute = true,
+                        });
+                    }
+                    _logService.Info($"Cola de impresion abierta para: {queuePrinter}");
+                    await WriteJsonAsync(stream, 200, "OK", new { ok = true, printer = queuePrinter, timestamp = DateTimeOffset.Now }, origin, cancellationToken);
+                }
+                catch (Exception queueEx)
+                {
+                    await WriteJsonAsync(stream, 500, "Internal Server Error", new { ok = false, error = queueEx.Message }, origin, cancellationToken);
+                }
+                break;
+
             case "/pdf-roots":
                 if (method != "GET")
                 {
