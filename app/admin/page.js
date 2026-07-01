@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
+import { DesignsProvider } from '@/contexts/DesignsContext';
+import DesignThumb from '@/components/DesignThumb';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import {
@@ -4630,6 +4632,7 @@ useEffect(() => {
 
   // ── PANEL ──
   return (
+    <DesignsProvider designs={designs}>
     <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
       {adminDarkMode && (
         <style jsx global>{`
@@ -8491,7 +8494,12 @@ useEffect(() => {
 
                     return (
                       <tr key={i}>
-                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>{item.name || item.designName || '—'}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>
+                          <div style={{display:'flex', alignItems:'center', gap:6}}>
+                            <DesignThumb designId={item.design_id} name={item.name || item.designName} size={26} />
+                            <span>{item.name || item.designName || '—'}</span>
+                          </div>
+                        </td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
                           {pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}
@@ -8721,10 +8729,7 @@ function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCar
                   <div style={{padding:'10px 12px', flex:1, overflowY:'auto', minHeight:0, background:'white'}}>
                     {items.map(item => (
                       <div key={item.id || item.design_id || item.name} style={{display:'flex', alignItems:'center', gap:7, padding:7, background:'#f7f8fc', borderRadius:8, marginBottom:6, minWidth:0}}>
-                        {item.image_url && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.image_url} alt="" style={{width:36, height:36, objectFit:'cover', borderRadius:6, border:'1px solid #dde1ef', flexShrink:0}} />
-                        )}
+                        <DesignThumb designId={item.design_id} imageUrl={item.image_url} name={item.name || item.designName} size={36} />
                         <div style={{minWidth:0, flex:1}}>
                           <div style={{fontSize:12, color:'#2d3352', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.name || item.designName || 'Diseño'}</div>
                           <div style={{fontSize:9, color:'#9aa3bc', fontWeight:800, textTransform:'uppercase', letterSpacing:0.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{item.productName || item.product_name || 'Sin producto'}</div>
@@ -10043,6 +10048,7 @@ function ActivityHistory({ supabase }) {
         <AdminActivityHistory supabase={supabase} />
       )}
     </div>
+    </DesignsProvider>
   );
 }
 

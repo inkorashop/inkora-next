@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import DesignThumb from '@/components/DesignThumb';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -1815,7 +1816,10 @@ export default function ProductionTab({
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
                           <td style={{ padding: '4px 5px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
                           <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E' }}>
-                            <div>{task.design_name}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={28} />
+                              <span>{task.design_name}</span>
+                            </div>
                             {orderPdfStatus.state === 'ready' && (
                               <span
                                 title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
@@ -1994,7 +1998,8 @@ export default function ProductionTab({
                     const printing = quickPrintingMap[key] ?? false;
                     const label = (pdf.fileName || pdf.name || '').replace(/\.pdf$/i, '');
                     return (
-                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                      <div key={key} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                        <DesignThumb designId={String(pdf.id || '')} name={pdf.name} size={22} />
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
                         <input
                           type="number" min={1} max={99} value={qty}
