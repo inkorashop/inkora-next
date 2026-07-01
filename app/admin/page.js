@@ -580,6 +580,17 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleOutsideOrderClick);
   }, []);
 
+  useEffect(() => {
+    function handleGlobalKey(e) {
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        setShowCreateOrder(true);
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, []);
+
 
 
   // Price tiers

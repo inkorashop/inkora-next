@@ -11,8 +11,10 @@ function generateAdminCode() {
   return s;
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+function nowStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function newRow() {
@@ -195,7 +197,7 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
 export default function CreateOrderModal({ sellers = [], operators = [], currentAdminSellerId = null, onSave, onClose }) {
   const { designs } = useDesigns();
 
-  const [date,         setDate]         = useState(todayStr());
+  const [date,         setDate]         = useState(nowStr());
   const [deliveryDate, setDeliveryDate] = useState('');
   const [sellerId,     setSellerId]     = useState(currentAdminSellerId || '');
   const [operatorId,   setOperatorId]   = useState(operators[0]?.id || '');
@@ -286,7 +288,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
-      <div style={{ background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', height: '82vh', maxHeight: '82vh', overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1.5px solid #f0f2f8', flexShrink: 0 }}>
@@ -301,7 +303,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha</div>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
                 style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
             </div>
             <div>

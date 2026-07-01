@@ -1709,7 +1709,7 @@ export default function ProductionTab({
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#2d3352' }}>{row.customer_name || 'Sin cliente'}</div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#8b95b3' }}>
                         <span>{formatShortDate(row.created_at)}</span>
-                        {row.delivery_date && <span style={{ color: '#1B2F5E', fontWeight: 700 }}>Entrega: {new Date(row.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}</span>}
+                        <span style={{ color: row.delivery_date ? '#1B2F5E' : '#c0c5d4', fontWeight: row.delivery_date ? 700 : 400 }}>Entrega: {row.delivery_date ? new Date(row.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—'}</span>
                         <span>{row.seller_name || 'Sin vendedor'}</span>
                         {row.operator_name && <span>Operario: {row.operator_name}</span>}
                       </div>
@@ -1819,6 +1819,7 @@ export default function ProductionTab({
                 <div style={{ padding: '5px 10px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 4, flexShrink: 0 }}>
                   {[
                     ['Fecha', formatShortDate(selectedOrderRow.created_at)],
+                    ['Entrega', selectedOrderRow.delivery_date ? new Date(selectedOrderRow.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'],
                     ['Cliente', selectedOrderRow.customer_name || 'Sin cliente'],
                     ['Vendedor', selectedOrderRow.seller_name || 'Sin vendedor'],
                     ['Estado', STATUS_LABEL[selectedOrderRow.productionStatus] || selectedOrderRow.productionStatus],
