@@ -35,7 +35,7 @@ const IMPORT_MATCH_THRESHOLD = 0.68;
 // ── Row component ─────────────────────────────────────────────────────────────
 function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
   onChange, onDelete, onKeyNav, isLast, selected, onSelect,
-  onStartEdit, onEndEdit, onFocusQty, qtyInputRef }) {
+  onStartEdit, onEndEdit, onFocusQty, onFocusRow, qtyInputRef }) {
 
   const [inputVal, setInputVal] = useState(row.type === 'linked' ? row.name : row.text);
   const [dropItems, setDropItems] = useState([]);
@@ -123,17 +123,19 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
   const lineColor = selected ? '#2D6BE4' : suggested ? '#d97706' : '#c0c5d4';
 
   return (
-    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: bg, borderRadius: 6 }}>
+    <div onClick={() => onFocusRow(index)}
+      style={{ position: 'relative', display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: bg, borderRadius: 6, cursor: 'default' }}>
 
       {/* Selection indicator — hamburger lines */}
       <div onMouseDown={e => { e.preventDefault(); onSelect(index, e); }}
+        onClick={e => e.stopPropagation()}
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2.5px', cursor: 'pointer', alignSelf: 'stretch', padding: '0 2px' }}>
         {[0,1,2].map(i => (
           <div key={i} style={{ width: 8, height: 1.5, borderRadius: 1, background: lineColor }} />
         ))}
       </div>
 
-      {/* Design cell */}
+      {/* Design cell — click on empty space focuses row; click on text opens edit */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {linked && <DesignThumb designId={row.design_id} name={row.name} size={22} />}
         {editing ? (
@@ -145,13 +147,15 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
               fontWeight: linked ? 700 : 400, color: linked ? '#1B2F5E' : '#5a6380',
               fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
         ) : (
-          <div onClick={e => { e.stopPropagation(); onStartEdit(index); }}
-            style={{ flex: 1, fontSize: 12, fontWeight: linked ? 700 : 400,
-              color: linked ? '#1B2F5E' : suggested ? '#92400e' : (isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc'),
-              fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif',
-              cursor: 'text', userSelect: 'none', whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px 0', minHeight: 18 }}>
-            {inputVal || (isLast && rows.length === 1 ? 'Clic o Enter para buscar...' : '')}
+          <div style={{ flex: 1, overflow: 'hidden', minHeight: 18, padding: '2px 0', display: 'flex', alignItems: 'center' }}>
+            <span onClick={e => { e.stopPropagation(); onStartEdit(index); }}
+              style={{ fontSize: 12, fontWeight: linked ? 700 : 400,
+                color: linked ? '#1B2F5E' : suggested ? '#92400e' : (isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc'),
+                fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif',
+                cursor: 'text', userSelect: 'none', whiteSpace: 'nowrap',
+                overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+              {inputVal || (isLast && rows.length === 1 ? 'Clic o Enter para buscar...' : '')}
+            </span>
           </div>
         )}
         {/* Subtle "suggestion" badge on unmatched manual rows */}
@@ -160,8 +164,8 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
         )}
       </div>
 
-      {/* Qty cell — inline ±buttons always visible */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* Qty cell — stopPropagation so clicking qty doesn't also fire row focus */}
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         {[-10, -2].map(d => (
           <button key={d} type="button"
             onMouseDown={e => { e.preventDefault(); onChange(index, { qty: Math.max(0, row.qty + d) }); }}
@@ -186,7 +190,7 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
       </div>
 
       {/* Delete */}
-      <button type="button" onClick={() => { if (rows.length > 1) { onDelete(index); onKeyNav('prev-row', index); } }}
+      <button type="button" onClick={e => { e.stopPropagation(); if (rows.length > 1) { onDelete(index); onKeyNav('prev-row', index); } }}
         style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
 
       {/* Design dropdown — portal */}
@@ -589,6 +593,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                   onStartEdit={idx => { setEditingRow(idx); setFocusedRow(idx); }}
                   onEndEdit={() => setEditingRow(null)}
                   onFocusQty={idx => { setFocusedRow(idx); setEditingRow(null); }}
+                  onFocusRow={idx => { setFocusedRow(idx); setEditingRow(null); }}
                   isLast={i === rows.length - 1}
                   prevQty={i > 0 ? rows[i - 1].qty : null}
                   selected={selectedIndices.has(i)}

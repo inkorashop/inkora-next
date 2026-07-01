@@ -1503,7 +1503,7 @@ export default function ProductionTab({
                     disabled={bridgeBusy}
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
                   >
-                    Cola
+                    Cola de impresión
                   </button>
                 </>
               )}
@@ -1763,7 +1763,7 @@ export default function ProductionTab({
                     disabled={!bridgeToken.trim()}
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 900, cursor: !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
                   >
-                    Cola
+                    Cola de impresión
                   </button>
                   <select
                     value={selectedOrderRow.operator_id || ''}

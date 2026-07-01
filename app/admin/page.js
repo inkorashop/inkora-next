@@ -7,6 +7,7 @@ import ProductionTab from '@/components/ProductionTab';
 import { DesignsProvider } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import CreateOrderModal from '@/components/CreateOrderModal';
+import QuickPrintOverlay from '@/components/QuickPrintOverlay';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import {
@@ -550,6 +551,7 @@ useEffect(() => {
   const [, setPresenceTick] = useState(0);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [quickPrintOpen, setQuickPrintOpen] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [orderDrafts, setOrderDrafts] = useState(() => {
@@ -602,6 +604,10 @@ useEffect(() => {
         e.preventDefault();
         setActiveDraftId(null);
         setShowCreateOrder(true);
+      }
+      if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        setQuickPrintOpen(v => !v);
       }
     }
     window.addEventListener('keydown', handleGlobalKey);
@@ -8812,6 +8818,14 @@ useEffect(() => {
           />
         );
       })()}
+
+      {/* QUICK PRINT OVERLAY — Alt+P */}
+      {quickPrintOpen && (
+        <QuickPrintOverlay
+          designPdfMatches={designPdfMatches}
+          onClose={() => setQuickPrintOpen(false)}
+        />
+      )}
 
       {/* IMPERSONATION SELECTOR PANEL */}
       {showImpersonatorPanel && canImpersonate && (() => {
