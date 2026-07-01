@@ -582,7 +582,7 @@ useEffect(() => {
 
   useEffect(() => {
     function handleGlobalKey(e) {
-      if (e.ctrlKey && e.key === 'n') {
+      if (e.altKey && e.key === 'n') {
         e.preventDefault();
         setShowCreateOrder(true);
       }
@@ -8665,7 +8665,7 @@ useEffect(() => {
       {/* FLOATING + BUTTON — create order from any tab */}
       <button
         onClick={() => setShowCreateOrder(true)}
-        title="Crear pedido"
+        title="Crear pedido (Alt+N)"
         style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
       >+</button>
 
