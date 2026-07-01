@@ -237,23 +237,21 @@ public sealed class PrintJobService
 
     private void PrintWithSumatra(PrintJob job)
     {
-        // Aplicar dmCopies en DEVMODE antes de imprimir (SumatraPDF ignora -print-settings copies)
+        // Siempre aplicar dmCopies en DEVMODE: SumatraPDF ignora -print-settings copies
+        // y hereda lo que tenga el DEVMODE guardado del driver (puede ser != 1)
         byte[]? origDevMode = null;
         var devModeModified = false;
-        if (job.Copies > 1)
+        try
         {
-            try
-            {
-                origDevMode = _devModeService.ReadDefaultDevModeBytes(job.PrinterName);
-                var modified = SetDevModeCopies(origDevMode, job.Copies);
-                _devModeService.ApplyDevModeBytes(job.PrinterName, modified);
-                devModeModified = true;
-                _logService.Info($"DEVMODE dmCopies={job.Copies} aplicado para {job.PrinterName}");
-            }
-            catch (Exception ex)
-            {
-                _logService.Info($"No se pudo modificar DEVMODE: {ex.Message}. Se imprimira con copia unica.");
-            }
+            origDevMode = _devModeService.ReadDefaultDevModeBytes(job.PrinterName);
+            var modified = SetDevModeCopies(origDevMode, job.Copies);
+            _devModeService.ApplyDevModeBytes(job.PrinterName, modified);
+            devModeModified = true;
+            _logService.Info($"DEVMODE dmCopies={job.Copies} aplicado para {job.PrinterName}");
+        }
+        catch (Exception ex)
+        {
+            _logService.Info($"No se pudo modificar DEVMODE: {ex.Message}.");
         }
 
         // Snapshot de jobs ANTES de enviar a SumatraPDF para detectar el nuevo job
