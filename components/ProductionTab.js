@@ -1470,7 +1470,7 @@ export default function ProductionTab({
               onClick={() => setBridgeCardOpen(o => !o)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'left', minHeight: 34 }}
             >
-              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion local</div>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion</div>
               <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
                 {bridgeTone.label}
               </span>
@@ -1679,8 +1679,8 @@ export default function ProductionTab({
 
           <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
             <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '6px 10px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
-              <h2 style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>Pedidos para producir</h2>
+            <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+              <h2 style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>Pedidos</h2>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {loadingTasks && produceOrderRows.length === 0 ? (
@@ -1723,123 +1723,78 @@ export default function ProductionTab({
           </div>
 
           <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1.5px solid #dde1ef', display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', flexShrink: 0 }}>
-              <div>
-                <h2 style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E', margin: 0 }}>
-                  {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : 'Detalle de producción'}
-                </h2>
+            <div style={{ padding: '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
+                  <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
+                    {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : '—'}
+                  </h2>
+                  {selectedOrderRow && (
+                    <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, lineHeight: 1.5, overflow: 'hidden' }}>
+                      <span style={{ fontWeight: 700 }}>{selectedOrderRow.customer_name || 'Sin cliente'}</span>
+                      <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                      <span>{formatShortDate(selectedOrderRow.created_at)}</span>
+                      <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                      <span style={{ color: selectedOrderRow.delivery_date ? '#1B2F5E' : '#c0c5d4' }}>
+                        Entrega: {selectedOrderRow.delivery_date ? new Date(selectedOrderRow.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                      </span>
+                      {selectedOrderRow.seller_name && <>
+                        <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                        <span>{selectedOrderRow.seller_name}</span>
+                      </>}
+                      <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                      <span>{STATUS_LABEL[selectedOrderRow.productionStatus] || selectedOrderRow.productionStatus}</span>
+                    </div>
+                  )}
+                  {selectedOrderRow?.itemsSummary && (
+                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1 }}>{selectedOrderRow.itemsSummary}</div>
+                  )}
+                  {selectedOrderRow?.notes && (
+                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic' }}>{selectedOrderRow.notes}</div>
+                  )}
+                </div>
                 {selectedOrderRow && (
-                  <div style={{ fontSize: 12, color: '#8b95b3', marginTop: 3 }}>
-                    {selectedOrderRow.customer_name || 'Sin cliente'} · {formatShortDate(selectedOrderRow.created_at)}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
+                      {orderPdfStatus.message}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => matchSelectedOrderPdfs({ scan: true })}
+                      disabled={orderPdfBusy || !bridgeToken.trim()}
+                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
+                    </button>
+                    {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
+                      <button
+                        type="button"
+                        onClick={printAllOrderTasks}
+                        disabled={Object.values(printingTasks).some(Boolean) || !bridgeToken.trim()}
+                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                      >
+                        Imprimir todo
+                      </button>
+                    )}
+                    <select
+                      value={selectedOrderRow.operator_id || ''}
+                      onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
+                      disabled={Boolean(syncingOrderIds[selectedOrderRow.id])}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 160 }}
+                    >
+                      <option value="">Sin operario</option>
+                      {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
+                    </select>
                   </div>
                 )}
               </div>
-              {selectedOrderRow && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
-                    {orderPdfStatus.message}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => matchSelectedOrderPdfs({ scan: true })}
-                    disabled={orderPdfBusy || !bridgeToken.trim()}
-                    style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                  >
-                    {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
-                  </button>
-                  {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
-                    <button
-                      type="button"
-                      onClick={printAllOrderTasks}
-                      disabled={Object.values(printingTasks).some(Boolean) || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      Imprimir todo
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={loadPrintQueue}
-                    disabled={!bridgeToken.trim()}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 900, cursor: !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                  >
-                    Cola de impresión
-                  </button>
-                  <select
-                    value={selectedOrderRow.operator_id || ''}
-                    onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
-                    disabled={Boolean(syncingOrderIds[selectedOrderRow.id])}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 190 }}
-                  >
-                    <option value="">Sin operario</option>
-                    {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
-                  </select>
-                </div>
-              )}
             </div>
 
             {!selectedOrderRow ? (
               <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
             ) : (
               <>
-                {printQueue && printQueue.jobs && printQueue.jobs.length > 0 && (
-                  <div style={{ padding: '10px 16px', background: '#fbfcff', borderBottom: '1px solid #eef0f6' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, fontWeight: 900, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Cola de impresion</span>
-                      <span style={{ fontSize: 11, color: '#8b95b3' }}>
-                        {printQueue.done || 0} enviados · {printQueue.error || 0} errores · via {printQueue.printMethod || 'shell'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {printQueue.jobs.slice(0, 8).map(job => (
-                        <span
-                          key={job.id}
-                          title={`${job.designName} x${job.copies} -> ${job.printerName}\n${job.pdfFileName}\n${job.error || ''}`}
-                          style={{
-                            border: '1px solid',
-                            borderColor: job.status === 'done' ? '#b7ebcf' : job.status === 'error' ? '#fecaca' : job.status === 'printing' ? '#fed7aa' : '#dde1ef',
-                            borderRadius: 999,
-                            padding: '2px 8px',
-                            fontSize: 10,
-                            fontWeight: 800,
-                            color: job.status === 'done' ? '#15803d' : job.status === 'error' ? '#b91c1c' : job.status === 'printing' ? '#c2410c' : '#5a6380',
-                            background: job.status === 'done' ? '#e8f7ef' : job.status === 'error' ? '#fff5f5' : job.status === 'printing' ? '#fff7ed' : '#f8faff',
-                            maxWidth: 180,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {job.designName} x{job.copies} · {job.status === 'done' ? 'OK' : job.status === 'error' ? 'Error' : job.status}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div style={{ padding: '5px 10px', background: '#fbfcff', borderBottom: '1px solid #eef0f6', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 4, flexShrink: 0 }}>
-                  {[
-                    ['Fecha', formatShortDate(selectedOrderRow.created_at)],
-                    ['Entrega', selectedOrderRow.delivery_date ? new Date(selectedOrderRow.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'],
-                    ['Cliente', selectedOrderRow.customer_name || 'Sin cliente'],
-                    ['Vendedor', selectedOrderRow.seller_name || 'Sin vendedor'],
-                    ['Estado', STATUS_LABEL[selectedOrderRow.productionStatus] || selectedOrderRow.productionStatus],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-                      <div style={{ fontSize: 12, color: '#2d3352', fontWeight: 700, marginTop: 2 }}>{value}</div>
-                    </div>
-                  ))}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Items</div>
-                    <div style={{ fontSize: 12, color: '#5a6380', marginTop: 2 }}>{selectedOrderRow.itemsSummary}</div>
-                  </div>
-                  {selectedOrderRow.notes && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Observaciones</div>
-                      <div style={{ fontSize: 12, color: '#5a6380', marginTop: 2 }}>{selectedOrderRow.notes}</div>
-                    </div>
-                  )}
-                </div>
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -2066,9 +2021,9 @@ export default function ProductionTab({
               : matchedPdfs;
             return (
               <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
-                    Imprimir diseño{matchedPdfs.length > 0 ? ` · ${matchedPdfs.length} PDFs` : ''}
+                <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', letterSpacing: 0.2, marginBottom: 4 }}>
+                    Imprimir{matchedPdfs.length > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', marginLeft: 6 }}>{matchedPdfs.length} PDFs</span> : ''}
                   </div>
                   <input
                     type="text"
