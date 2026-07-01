@@ -8791,6 +8791,7 @@ useEffect(() => {
             currentAdminSellerId={currentAdminRecord?.seller_id || null}
             initialValues={activeDraft}
             recentOrders={recentOrders}
+            pdfEnabledIds={new Set(designPdfEnabledIds().map(String))}
             onDiscard={activeDraftId ? () => { saveDrafts(orderDrafts.filter(d => d.id !== activeDraftId)); setShowCreateOrder(false); setActiveDraftId(null); } : null}
             onClose={(draft) => {
               if (draft) {
