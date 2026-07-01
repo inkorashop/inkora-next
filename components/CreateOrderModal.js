@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDesigns } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
@@ -158,36 +159,43 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
         style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 14, lineHeight: 1, padding: 0 }}
       >×</button>
 
-      {/* Dropdown */}
-      {isActive && dropItems.length > 0 && (
-        <div
-          ref={dropRef}
-          style={{
-            position: 'absolute', top: '100%', left: 8, right: 36, zIndex: 200,
-            background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 220, overflowY: 'auto',
-          }}
-        >
-          {dropItems.map((item, i) => (
+      {/* Dropdown — portal to escape modal overflow clipping */}
+      {isActive && dropItems.length > 0 && typeof window !== 'undefined' && createPortal(
+        (() => {
+          const rect = inputRef.current?.getBoundingClientRect();
+          if (!rect) return null;
+          return (
             <div
-              key={item.design.id}
-              onMouseDown={e => { e.preventDefault(); selectDrop(item); }}
+              ref={dropRef}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                cursor: 'pointer', background: i === dropIdx ? '#f0f4ff' : 'transparent',
-                borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none',
+                position: 'fixed', top: rect.bottom + 2, left: rect.left, width: rect.width + 80,
+                zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxHeight: 260, overflowY: 'auto',
               }}
             >
-              <DesignThumb designId={item.design.id} name={item.design.name} size={20} />
-              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.design.name}</span>
-              <span style={{
-                fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
-                background: item.score >= 0.8 ? '#dcfce7' : item.score >= 0.6 ? '#fef9c3' : '#fee2e2',
-                color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c',
-              }}>{Math.round(item.score * 100)}%</span>
+              {dropItems.map((item, i) => (
+                <div
+                  key={item.design.id}
+                  onMouseDown={e => { e.preventDefault(); selectDrop(item); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                    cursor: 'pointer', background: i === dropIdx ? '#f0f4ff' : 'transparent',
+                    borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none',
+                  }}
+                >
+                  <DesignThumb designId={item.design.id} name={item.design.name} size={20} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.design.name}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
+                    background: item.score >= 0.8 ? '#dcfce7' : item.score >= 0.6 ? '#fef9c3' : '#fee2e2',
+                    color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c',
+                  }}>{Math.round(item.score * 100)}%</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })(),
+        document.body
       )}
     </div>
   );
