@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useDesigns } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
+import { parseOrderText } from '@/lib/order-text-parser';
 
 function generateAdminCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -29,6 +30,7 @@ function newRow() {
 }
 
 const QTY_DELTAS = [-10, -2, 2, 10];
+const IMPORT_MATCH_THRESHOLD = 0.68;
 
 // ── Row component ─────────────────────────────────────────────────────────────
 function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
@@ -41,21 +43,15 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
   const inputRef = useRef(null);
   const dropRef  = useRef(null);
 
-  // Sync display value when row data changes externally
   useEffect(() => {
     const next = row.type === 'linked' ? row.name : row.text;
     setInputVal(next);
   }, [row.type, row.name, row.text]);
 
-  // Focus and select-all when entering edit mode
   useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
+    if (editing) { inputRef.current?.focus(); inputRef.current?.select(); }
   }, [editing]);
 
-  // Compute dropdown when typing (only while editing)
   useEffect(() => {
     if (!editing || !inputVal.trim()) { setDropItems([]); setDropIdx(-1); return; }
     const matches = fuzzyMatchDesigns(inputVal, designs, 8);
@@ -63,7 +59,6 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
     setDropIdx(-1);
   }, [inputVal, editing, designs]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!dropItems.length) return;
     function onOutside(e) {
@@ -75,7 +70,6 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
     return () => document.removeEventListener('mousedown', onOutside);
   }, [dropItems.length]);
 
-  // Per-row: exclude own design_id from dupe set
   const localUsedIds = useMemo(() => {
     const s = new Set(usedDesignIds);
     if (row.type === 'linked' && row.design_id) s.delete(row.design_id);
@@ -121,7 +115,12 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
   }
 
   const linked = row.type === 'linked' && row.design_id;
-  const bg = selected ? '#dbeafe' : focused ? '#f1f5f9' : 'transparent';
+  const suggested = row.suggested;
+
+  // Background priority: selected > focused > suggested > transparent
+  const bg = selected ? '#dbeafe' : focused ? '#f1f5f9' : suggested ? '#fefce8' : 'transparent';
+  // Hamburger lines color
+  const lineColor = selected ? '#2D6BE4' : suggested ? '#d97706' : '#c0c5d4';
 
   return (
     <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: bg, borderRadius: 6 }}>
@@ -130,7 +129,7 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
       <div onMouseDown={e => { e.preventDefault(); onSelect(index, e); }}
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2.5px', cursor: 'pointer', alignSelf: 'stretch', padding: '0 2px' }}>
         {[0,1,2].map(i => (
-          <div key={i} style={{ width: 8, height: 1.5, borderRadius: 1, background: selected ? '#2D6BE4' : '#c0c5d4' }} />
+          <div key={i} style={{ width: 8, height: 1.5, borderRadius: 1, background: lineColor }} />
         ))}
       </div>
 
@@ -148,12 +147,16 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
         ) : (
           <div onClick={e => { e.stopPropagation(); onStartEdit(index); }}
             style={{ flex: 1, fontSize: 12, fontWeight: linked ? 700 : 400,
-              color: linked ? '#1B2F5E' : isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc',
+              color: linked ? '#1B2F5E' : suggested ? '#92400e' : (isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc'),
               fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif',
               cursor: 'text', userSelect: 'none', whiteSpace: 'nowrap',
               overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px 0', minHeight: 18 }}>
             {inputVal || (isLast && rows.length === 1 ? 'Clic o Enter para buscar...' : '')}
           </div>
+        )}
+        {/* Subtle "suggestion" badge on unmatched manual rows */}
+        {suggested && !linked && !editing && (
+          <span style={{ fontSize: 9, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 4, padding: '0px 4px', whiteSpace: 'nowrap', flexShrink: 0 }}>?</span>
         )}
       </div>
 
@@ -171,7 +174,7 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
           onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
           onFocus={e => { e.target.select(); onFocusQty(index); }}
           onKeyDown={handleQtyKeyDown}
-          style={{ width: 34, textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 2px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
+          style={{ width: 34, textAlign: 'center', border: `1.5px solid ${suggested ? '#fde68a' : '#dde1ef'}`, borderRadius: 5, padding: '2px 2px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
         />
         {[2, 10].map(d => (
           <button key={d} type="button"
@@ -246,14 +249,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  // Refs for qty inputs — keyed by row index
+  // Paste area state
+  const [showPasteArea, setShowPasteArea] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const pasteRef = useRef(null);
+
   const qtyRefs = useRef({});
-
-  // Snapshot ref to avoid stale closures in global keydown
   const snap = useRef({});
-  snap.current = { editingRow, focusedRow, rows };
+  snap.current = { editingRow, focusedRow, rows, showPasteArea };
 
-  // Auto-save draft to localStorage on every meaningful change
+  // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -271,12 +276,51 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     return () => clearTimeout(timer);
   }, [rows, customerName, date, deliveryDate, sellerId, operatorId]);
 
-  // All design_ids currently used (for dupe prevention)
   const usedDesignIds = useMemo(() => {
     const s = new Set();
     rows.forEach(r => { if (r.type === 'linked' && r.design_id) s.add(r.design_id); });
     return s;
   }, [rows]);
+
+  // Parse pasted text + fuzzy match — live, cheap because designs are cached
+  const parsedPreview = useMemo(() => {
+    if (!pasteText.trim() || !designs?.length) return [];
+    const items = parseOrderText(pasteText);
+    return items.map(item => {
+      const matches = fuzzyMatchDesigns(item.name, designs, 1);
+      const top = matches[0];
+      return { ...item, match: top && top.score >= IMPORT_MATCH_THRESHOLD ? top : null };
+    });
+  }, [pasteText, designs]);
+
+  const unmatchedCount = parsedPreview.filter(p => !p.match).length;
+
+  function importFromText() {
+    if (!parsedPreview.length) return;
+    const newRows = parsedPreview.map(item => {
+      if (item.match) {
+        const d = item.match.design;
+        return {
+          id: Math.random().toString(36).slice(2),
+          type: 'linked', design_id: d.id, name: d.name,
+          productName: d.products?.name || '', text: '',
+          qty: item.qty, suggested: true,
+        };
+      }
+      return {
+        id: Math.random().toString(36).slice(2),
+        type: 'manual', text: item.name,
+        design_id: '', name: '', productName: '',
+        qty: item.qty, suggested: true,
+      };
+    });
+    setRows(newRows);
+    setShowPasteArea(false);
+    setPasteText('');
+    setFocusedRow(0);
+    setEditingRow(null);
+    setSelectedIndices(new Set());
+  }
 
   function handleSelect(index, e) {
     if (e.ctrlKey || e.metaKey) {
@@ -303,43 +347,38 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     onClose(filled || customerName.trim() ? { customerName, date, deliveryDate, sellerId, operatorId, rows } : null);
   }, [customerName, date, deliveryDate, sellerId, operatorId, rows, onClose]);
 
-  // Global keyboard handler — uses snap ref to avoid stale closures
   useEffect(() => {
     function onKey(e) {
       if (e.defaultPrevented) return;
-      const { editingRow, focusedRow, rows } = snap.current;
+      const { editingRow, focusedRow, rows, showPasteArea } = snap.current;
       const tag = document.activeElement?.tagName;
       const inTextInput = (tag === 'INPUT' || tag === 'TEXTAREA') && document.activeElement?.type !== 'number';
 
       if (e.key === 'Escape') {
+        // Priority: close paste area → exit design edit → close modal
+        if (showPasteArea) { setShowPasteArea(false); return; }
         if (editingRow !== null) { setEditingRow(null); return; }
         handleClose(); return;
       }
 
-      // Arrow navigation — available when not typing in a text field
       if (!inTextInput) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           setFocusedRow(r => Math.min(rows.length - 1, (r ?? -1) + 1));
-          setEditingRow(null);
-          return;
+          setEditingRow(null); return;
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           setFocusedRow(r => Math.max(0, (r ?? rows.length) - 1));
-          setEditingRow(null);
-          return;
+          setEditingRow(null); return;
         }
         if (e.key === 'Enter' && focusedRow !== null && editingRow === null) {
-          e.preventDefault();
-          setEditingRow(focusedRow);
-          return;
+          e.preventDefault(); setEditingRow(focusedRow); return;
         }
-        // Digit → start qty edit for focused row
         if (/^\d$/.test(e.key) && focusedRow !== null && editingRow === null) {
           e.preventDefault();
           const digit = parseInt(e.key, 10);
-          setRows(prev => prev.map((r, i) => i === focusedRow ? { ...r, qty: digit } : r));
+          setRows(prev => prev.map((r, i) => i === focusedRow ? { ...r, qty: digit, suggested: false } : r));
           setTimeout(() => { qtyRefs.current[focusedRow]?.focus(); }, 0);
         }
       }
@@ -348,8 +387,9 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     return () => document.removeEventListener('keydown', onKey);
   }, [handleClose]);
 
+  // Any edit on a row clears its "suggested" flag
   function changeRow(index, patch) {
-    setRows(prev => prev.map((r, i) => i === index ? { ...r, ...patch } : r));
+    setRows(prev => prev.map((r, i) => i === index ? { ...r, ...patch, suggested: false } : r));
   }
 
   function deleteRow(index) {
@@ -360,29 +400,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   function handleKeyNav(action, fromIndex) {
     setRows(prev => {
-      const next = action === 'next-row' || action === 'next-qty'
-        ? (fromIndex === prev.length - 1 ? [...prev, newRow()] : prev)
-        : prev;
-
+      const next = (action === 'next-row' || action === 'next-qty') && fromIndex === prev.length - 1
+        ? [...prev, newRow()] : prev;
       let targetRow = fromIndex;
       if (action === 'next-row' || action === 'next-qty') targetRow = fromIndex + 1;
       else if (action === 'prev-row' || action === 'prev-qty') targetRow = Math.max(0, fromIndex - 1);
-
       setFocusedRow(targetRow);
-
-      if (action === 'qty') {
-        setEditingRow(null);
-        setTimeout(() => { qtyRefs.current[fromIndex]?.focus(); }, 0);
-      } else if (action === 'design') {
-        setEditingRow(fromIndex);
-      } else if (action === 'next-qty' || action === 'prev-qty') {
-        setEditingRow(null);
-        setTimeout(() => { qtyRefs.current[targetRow]?.focus(); }, 0);
-      } else {
-        // next-row / prev-row: leave editing off; row navigated without entering edit mode
-        setEditingRow(null);
-      }
-
+      if (action === 'qty') { setEditingRow(null); setTimeout(() => { qtyRefs.current[fromIndex]?.focus(); }, 0); }
+      else if (action === 'design') { setEditingRow(fromIndex); }
+      else if (action === 'next-qty' || action === 'prev-qty') { setEditingRow(null); setTimeout(() => { qtyRefs.current[targetRow]?.focus(); }, 0); }
+      else { setEditingRow(null); }
       return next;
     });
   }
@@ -400,22 +427,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           : { type: 'manual', text: r.text.trim(), qty: r.qty }
       );
       await onSave({
-        order_code: generateAdminCode(),
-        source: 'admin',
-        status: 'pending',
+        order_code: generateAdminCode(), source: 'admin', status: 'pending',
         customer_name: customerName.trim(),
         created_at: date ? new Date(date).toISOString() : new Date().toISOString(),
         delivery_date: deliveryDate || null,
-        seller_id: sellerId || null,
-        items,
-        _operator_id: operatorId || null,
+        seller_id: sellerId || null, items, _operator_id: operatorId || null,
       });
       onClose(null);
     } catch (e) {
       setError(e.message || 'Error al crear pedido');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
@@ -478,9 +499,48 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseños</div>
-              <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ navegar · Enter editar diseño · dígito = cant</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
+                <button type="button" onClick={() => { setShowPasteArea(v => !v); setTimeout(() => pasteRef.current?.focus(), 50); }}
+                  style={{ border: `1.5px solid ${showPasteArea ? '#d97706' : '#dde1ef'}`, background: showPasteArea ? '#fffbeb' : 'white', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: showPasteArea ? '#92400e' : '#5a6380' }}>
+                  {showPasteArea ? '✕ Cerrar' : '↙ Pegar lista'}
+                </button>
+              </div>
             </div>
+
             <div style={{ border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden' }}>
+
+              {/* ── Paste area ── */}
+              {showPasteArea && (
+                <div style={{ borderBottom: '1.5px solid #fde68a', background: '#fffbeb' }}>
+                  <textarea ref={pasteRef} value={pasteText}
+                    onChange={e => setPasteText(e.target.value)}
+                    placeholder={'Pegá el texto del pedido aquí...\n\nEjemplo:\n24 de cada\nArg 1 2 3\nBoca\nRiver'}
+                    style={{ width: '100%', minHeight: 90, border: 'none', borderBottom: '1px solid #fde68a', background: 'transparent', resize: 'vertical', padding: '8px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', outline: 'none', color: '#1B2F5E', lineHeight: 1.5 }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', flexWrap: 'wrap' }}>
+                    {parsedPreview.length > 0 ? (
+                      <>
+                        <span style={{ fontSize: 11, color: '#92400e', fontWeight: 700 }}>
+                          {parsedPreview.length} diseño{parsedPreview.length !== 1 ? 's' : ''} detectado{parsedPreview.length !== 1 ? 's' : ''}
+                        </span>
+                        {unmatchedCount > 0 && (
+                          <span style={{ fontSize: 11, color: '#b91c1c', background: '#fee2e2', borderRadius: 5, padding: '1px 6px' }}>
+                            {unmatchedCount} sin match
+                          </span>
+                        )}
+                        <button type="button" onClick={importFromText}
+                          style={{ marginLeft: 'auto', border: 'none', background: '#d97706', color: 'white', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                          Cargar {parsedPreview.length}
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#b45309' }}>Pegá un texto para ver la vista previa</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Bulk qty bar */}
               {selectedIndices.size > 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', background: '#e8f0fe', borderBottom: '1px solid #c7d7f8', flexWrap: 'wrap' }}>
@@ -499,6 +559,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                     style={{ border: 'none', background: 'none', color: '#9aa3bc', fontSize: 14, cursor: 'pointer', marginLeft: 'auto', lineHeight: 1, padding: 0 }}>✕</button>
                 </div>
               )}
+
               {/* Column headers */}
               <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, padding: '4px 8px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8' }}>
                 <span />
@@ -506,6 +567,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>Cant.</span>
                 <span />
               </div>
+
               {rows.map((row, i) => (
                 <DesignRow key={row.id} row={row} index={i}
                   focused={focusedRow === i && !selectedIndices.has(i)}
@@ -533,7 +595,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
           {error && <div style={{ fontSize: 12, color: '#b91c1c', background: '#fee2e2', borderRadius: 6, padding: '6px 10px' }}>{error}</div>}
 
-          {/* Recent orders history */}
+          {/* Recent orders */}
           {recentOrders.length > 0 && (
             <div style={{ borderTop: '1.5px solid #f0f2f8', paddingTop: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Mis pedidos recientes</div>
