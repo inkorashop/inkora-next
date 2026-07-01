@@ -1,6 +1,8 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DesignThumb from '@/components/DesignThumb';
+import { useDesigns } from '@/contexts/DesignsContext';
+import { fuzzyMatchDesigns, scoreColor, scoreBg } from '@/lib/fuzzy-match';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -409,6 +411,9 @@ export default function ProductionTab({
     setInternalSelectedOrderId(id);
     onSelectOrder?.(id);
   };
+
+  const { designs: ctxDesigns } = useDesigns();
+  const [manualItemLinks, setManualItemLinks] = useState({}); // { "orderId:idx": { design, score } | null }
 
   // Filtros — FIX: filterDesign separado de filterSearch (cliente)
   const [filterSeller, setFilterSeller] = useState('all');
@@ -1063,6 +1068,28 @@ export default function ProductionTab({
     if (orderId) await syncOrderTasks(orderId);
   }
 
+  async function linkManualItemToDesign(order, manualItem, design) {
+    const key = design.design_key || design.name || String(design.id);
+    const { error } = await supabase.from('production_order_tasks').insert({
+      order_id: order.id,
+      order_code: order.order_code,
+      order_created_at: order.created_at,
+      customer_name: order.customer_name,
+      customer_email: order.customer_email || null,
+      seller_id: order.seller_id || null,
+      design_id: design.id || null,
+      design_key: key,
+      design_name: design.name,
+      product_id: design.product_id || null,
+      product_name: design.productName || design.product_name || 'Sin producto',
+      required_qty: manualItem.qty || 1,
+      produced_qty: 0,
+      waste_qty: 0,
+      note: '',
+    });
+    if (!error) await loadProductionTasks();
+  }
+
   async function assignOrderOperator(orderId, operatorId) {
     if (!orderId) return;
     setErrorMessage('');
@@ -1362,6 +1389,8 @@ export default function ProductionTab({
       order,
       order_code: order.order_code,
       created_at: order.created_at,
+      delivery_date: order.delivery_date || null,
+      source: order.source || 'web',
       customer_name: order.customer_name,
       seller_name: sellers.find(seller => seller.id === order.seller_id)?.name || 'Sin vendedor',
       notes: order.notes || '',
@@ -1680,6 +1709,7 @@ export default function ProductionTab({
                       <div style={{ fontSize: 13, fontWeight: 800, color: '#2d3352' }}>{row.customer_name || 'Sin cliente'}</div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#8b95b3' }}>
                         <span>{formatShortDate(row.created_at)}</span>
+                        {row.delivery_date && <span style={{ color: '#1B2F5E', fontWeight: 700 }}>Entrega: {new Date(row.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}</span>}
                         <span>{row.seller_name || 'Sin vendedor'}</span>
                         {row.operator_name && <span>Operario: {row.operator_name}</span>}
                       </div>
@@ -1954,6 +1984,67 @@ export default function ProductionTab({
                 </div>
               </>
             )}
+
+            {/* MANUAL ITEMS — fuzzy link for admin orders */}
+            {selectedOrder?.source === 'admin' && (() => {
+              const manualItems = (selectedOrder.items || [])
+                .map((item, idx) => ({ item, idx }))
+                .filter(({ item }) => item?.type === 'manual' && item?.text?.trim());
+              if (!manualItems.length) return null;
+              return (
+                <div style={{ margin: '8px 8px 0', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                    Items manuales — vincular a diseño
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {manualItems.map(({ item, idx }) => {
+                      const key = `${selectedOrder.id}:${idx}`;
+                      const alreadyLinked = manualItemLinks[key];
+                      const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
+                      const top = matches[0] || null;
+                      if (alreadyLinked) {
+                        return (
+                          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ fontWeight: 700, color: '#5a6380', flex: 1 }}>&ldquo;{item.text}&rdquo; x{item.qty}</span>
+                            <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                              Vinculado a {alreadyLinked.name}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
+                          <span style={{ fontWeight: 700, color: '#5a6380', minWidth: 100 }}>&ldquo;{item.text}&rdquo; x{item.qty}</span>
+                          {top ? (
+                            <>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ background: scoreBg(top.score), color: scoreColor(top.score), borderRadius: 999, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}>
+                                  {Math.round(top.score * 100)}%
+                                </span>
+                                <DesignThumb designId={String(top.design.id || '')} name={top.design.name} size={18} />
+                                <span style={{ color: '#2d3352', fontWeight: 600 }}>{top.design.name}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await linkManualItemToDesign(selectedOrder, item, top.design);
+                                  setManualItemLinks(prev => ({ ...prev, [key]: { name: top.design.name } }));
+                                }}
+                                style={{ border: `1.5px solid ${scoreColor(top.score)}`, borderRadius: 7, padding: '3px 10px', background: scoreBg(top.score), color: scoreColor(top.score), fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                              >
+                                Vincular
+                              </button>
+                            </>
+                          ) : (
+                            <span style={{ color: '#b91c1c', fontSize: 11, fontWeight: 600 }}>Sin coincidencia</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
             const uniqueMap = {};

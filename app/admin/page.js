@@ -6,6 +6,7 @@ import ModelViewer from '@/components/ModelViewer';
 import ProductionTab from '@/components/ProductionTab';
 import { DesignsProvider } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
+import CreateOrderModal from '@/components/CreateOrderModal';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import {
@@ -544,6 +545,7 @@ useEffect(() => {
   const [, setPresenceTick] = useState(0);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
 
   // Orders
@@ -3710,10 +3712,16 @@ useEffect(() => {
     const byProduct = {};
 
     items.forEach(item => {
+      if (item?.type === 'manual') {
+        const label = item?.text || 'Sin texto';
+        const qty = item?.qty ?? 0;
+        if (!byProduct['Manual']) byProduct['Manual'] = [];
+        byProduct['Manual'].push(`${label} x${qty}`);
+        return;
+      }
       const productName = item?.productName || item?.product_name || 'Sin producto';
       const designName = item?.name || item?.designName || item?.design_name || 'Sin diseño';
       const qty = item?.qty ?? 0;
-
       if (!byProduct[productName]) byProduct[productName] = [];
       byProduct[productName].push(`${designName} x${qty}`);
     });
@@ -4243,8 +4251,32 @@ useEffect(() => {
 
   // ── Admins ──
   async function loadAdmins() {
-    const { data } = await supabase.from('admins').select('email').order('email');
+    const { data } = await supabase.from('admins').select('*').order('email');
     if (data) setAdmins(data);
+  }
+
+  async function updateAdmin(email, patch) {
+    await supabase.from('admins').update(patch).eq('email', email);
+    setAdmins(prev => prev.map(a => a.email === email ? { ...a, ...patch } : a));
+  }
+
+  async function createAdminOrder({ order_code, source, status, created_at, delivery_date, seller_id, items, _operator_id }) {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .insert({ order_code, source, status, created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, notes: '' })
+      .select('*')
+      .single();
+    if (error) throw new Error(error.message);
+    // Sync production tasks for linked items
+    const linkedItems = (items || []).filter(it => it.type === 'linked' && it.design_id);
+    if (linkedItems.length > 0) {
+      await supabase.rpc('admin_sync_order_production_tasks', { p_order_id: order.id });
+    }
+    if (_operator_id) {
+      await supabase.rpc('admin_assign_order_operator', { p_order_id: order.id, p_operator_id: _operator_id });
+    }
+    await loadOrders();
+    return order;
   }
 
   async function loadAdminPresence() {
@@ -4467,6 +4499,7 @@ useEffect(() => {
                 <tr>
                   <th style={s.th}>Código</th>
                   <th style={s.th}>Fecha</th>
+                  <th style={s.th}>Entrega</th>
                   <th style={s.th}>Cliente</th>
                   <th style={s.th}>Items</th>
                   <th style={s.th}>Estado</th>
@@ -4480,6 +4513,7 @@ useEffect(() => {
                     <tr key={o.id}>
                       <td style={s.td}><span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 800, color: '#1B2F5E' }}>{o.order_code}</span></td>
                       <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', whiteSpace: 'nowrap' }}>{o.created_at ? new Date(o.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span></td>
+                      <td style={s.td}><span style={{ fontSize: 12, color: o.delivery_date ? '#1B2F5E' : '#c0c5d4', fontWeight: o.delivery_date ? 700 : 400, whiteSpace: 'nowrap' }}>{o.delivery_date ? new Date(o.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}</span></td>
                       <td style={s.td}><span style={{ fontSize: 13, fontWeight: 700, color: '#2d3352' }}>{o.customer_name || '—'}</span></td>
                       <td style={s.td}><span style={{ fontSize: 12, color: '#5a6380', maxWidth: 240, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summarizeItems(o.items)}</span></td>
                       <td style={s.td}><span style={{ border: `1.5px solid ${sc.color}`, background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 12, fontWeight: 800 }}>{sc.label}</span></td>
@@ -7332,30 +7366,47 @@ useEffect(() => {
                   : status.latest?.tab ? ADMIN_TAB_LABELS[status.latest.tab] || status.latest.tab : 'Sin actividad reciente';
 
                 return (
-                  <div key={a.email} style={s.productRow}>
-                    <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0, flex:1}}>
+                  <div key={a.email} style={{...s.productRow, flexDirection:'column', alignItems:'stretch', gap:6}}>
+                    <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0}}>
                       <span style={{...s.adminStatusDot, background: status.isActive ? '#18a36a' : '#c4c9d9'}} />
-                      <div style={{minWidth:0}}>
+                      <div style={{minWidth:0, flex:1}}>
                         <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
                           <span style={s.productName}>{a.email}</span>
                           {a.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
-                          <span style={{
-                            background: status.isActive ? '#e8f5e9' : '#f0f2f8',
-                            color: status.isActive ? '#15803d' : '#9aa3bc',
-                            borderRadius: 10,
-                            padding: '1px 8px',
-                            fontSize: 11,
-                            fontWeight: 800,
-                          }}>
+                          <span style={{background: status.isActive ? '#e8f5e9' : '#f0f2f8', color: status.isActive ? '#15803d' : '#9aa3bc', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:800}}>
                             {status.isActive ? 'Activo' : 'Inactivo'}
                           </span>
+                          {a.seller_id && <span style={{background:'#fef9c3', color:'#92400e', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>Vendedor</span>}
                         </div>
                         <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>
                           {status.isActive ? `Ahora en: ${tabLabel}` : `Ultima vez: ${timeAgo(status.latest?.updated_at)}${status.latest?.tab ? ` en ${tabLabel}` : ''}`}
                         </div>
                       </div>
+                      <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
                     </div>
-                    <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, paddingLeft:22}}>
+                      <div>
+                        <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Nombre</div>
+                        <input
+                          defaultValue={a.name || ''}
+                          onBlur={e => { const v = e.target.value.trim(); if (v !== (a.name || '')) updateAdmin(a.email, { name: v || null }); }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          placeholder="Sin nombre"
+                          style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
+                        />
+                      </div>
+                      <div>
+                        <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Vendedor asociado</div>
+                        <select
+                          value={a.seller_id || ''}
+                          onChange={e => updateAdmin(a.email, { seller_id: e.target.value || null })}
+                          style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
+                        >
+                          <option value="">— No es vendedor</option>
+                          {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -8461,6 +8512,7 @@ useEffect(() => {
               <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Teléfono</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_phone || '—'}</div></div>
               <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Email</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.customer_email || '—'}</div></div>
               <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Fecha</span><div style={{fontWeight:600, color:'#2d3352'}}>{orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR') : '—'}</div></div>
+              {orderDetail.delivery_date && <div><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Entrega</span><div style={{fontWeight:700, color:'#1B2F5E'}}>{new Date(orderDetail.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div></div>}
               {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
             </div>
             <div>
@@ -8598,6 +8650,27 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* FLOATING + BUTTON — create order from any tab */}
+      <button
+        onClick={() => setShowCreateOrder(true)}
+        title="Crear pedido"
+        style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
+      >+</button>
+
+      {/* CREATE ORDER MODAL */}
+      {showCreateOrder && (() => {
+        const currentAdminRecord = (admins || []).find(a => a.email === currentUser) || null;
+        return (
+          <CreateOrderModal
+            operators={operators}
+            sellers={sellers}
+            currentAdminSellerId={currentAdminRecord?.seller_id || null}
+            onClose={() => setShowCreateOrder(false)}
+            onSave={async (data) => { await createAdminOrder(data); setShowCreateOrder(false); }}
+          />
+        );
+      })()}
 
       {/* MODAL ELIMINAR ADMIN */}
       {deleteConfirmEmail && (
