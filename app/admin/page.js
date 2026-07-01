@@ -333,6 +333,11 @@ export default function Admin() {
   // ── Auth ──
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
+  const [impersonatedIdentity, setImpersonatedIdentity] = useState(() => {
+    try { const s = sessionStorage.getItem('inkora_impersonate'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [showImpersonatorPanel, setShowImpersonatorPanel] = useState(false);
+  const [impSearch, setImpSearch] = useState('');
 const [adminDarkMode, setAdminDarkMode] = useState(() => {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem('inkora_admin_theme') === 'dark';
@@ -1514,6 +1519,17 @@ useEffect(() => {
   }, [products]);
 
   // ── Auth functions ──
+  function startImpersonation(identity) {
+    try { sessionStorage.setItem('inkora_impersonate', JSON.stringify(identity)); } catch {}
+    setImpersonatedIdentity(identity);
+    setShowImpersonatorPanel(false);
+  }
+
+  function stopImpersonation() {
+    try { sessionStorage.removeItem('inkora_impersonate'); } catch {}
+    setImpersonatedIdentity(null);
+  }
+
   async function checkAdmin(email) {
     const panelIsVisible = screenRef.current === 'panel';
     rememberAdminScroll();
@@ -4665,6 +4681,14 @@ useEffect(() => {
     );
   }
 
+  // ── Impersonation derived values ──
+  const realUser = currentUser; // actual Supabase auth, never changes
+  const canImpersonate = realUser === 'inkorashop@gmail.com';
+  const isImpersonating = impersonatedIdentity !== null;
+  const impersonatedIsAdmin = !isImpersonating || impersonatedIdentity.type === 'admin';
+  // effectiveEmail: what currentUser appears to be for display/data-filter purposes
+  const effectiveEmail = isImpersonating ? (impersonatedIdentity.email || null) : realUser;
+
   // ── PANTALLAS AUTH ──
   const sessionBar = currentUser ? (
     <div style={{position:'fixed', top:0, left:0, right:0, zIndex:999, background:'rgba(17,32,64,0.92)', backdropFilter:'blur(6px)', padding:'6px 20px', fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'right'}}>
@@ -4848,9 +4872,43 @@ useEffect(() => {
   </span>
 </button>
 
-<span style={s.headerUser}>{currentUser}</span>
+<span style={s.headerUser}>{isImpersonating ? (impersonatedIdentity.name || impersonatedIdentity.email || 'Simulación') : currentUser}</span>
+        {canImpersonate && (
+          <button onClick={() => setShowImpersonatorPanel(true)}
+            style={{ border: isImpersonating ? '1.5px solid #f59e0b' : '1.5px solid #3b5ea6', background: isImpersonating ? '#78350f' : 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: isImpersonating ? '#fbbf24' : 'rgba(255,255,255,0.7)', fontFamily: 'Barlow, sans-serif', marginRight: 4 }}>
+            {isImpersonating ? `🎭 ${impersonatedIdentity.name || impersonatedIdentity.email || 'Simulando'}` : '🎭 Simular'}
+          </button>
+        )}
         <button style={s.btnLogout} onClick={handleSignOut}>Cerrar sesión</button>
       </header>
+
+      {/* Impersonation banner */}
+      {isImpersonating && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 280, background: '#92400e', color: '#fef3c7', padding: '6px 18px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', borderBottom: '2px solid #f59e0b' }}>
+          <span>🎭 Simulando como:</span>
+          <span style={{ background: '#78350f', borderRadius: 6, padding: '2px 10px', border: '1.5px solid #f59e0b' }}>{impersonatedIdentity.name || impersonatedIdentity.email || '?'}</span>
+          <span style={{ fontWeight: 400, opacity: 0.8 }}>({impersonatedIdentity.type === 'admin' ? 'Admin' : impersonatedIdentity.type === 'operator' ? 'Operario' : 'Usuario'})</span>
+          {!impersonatedIsAdmin && <span style={{ background: '#7f1d1d', color: '#fca5a5', borderRadius: 6, padding: '2px 8px', fontSize: 11 }}>Sin acceso a admin</span>}
+          <button onClick={stopImpersonation} style={{ marginLeft: 'auto', border: '1.5px solid #f59e0b', background: 'transparent', color: '#fef3c7', borderRadius: 6, padding: '3px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>Salir de simulación</button>
+        </div>
+      )}
+
+      {/* Simulated denied screen for non-admin impersonation */}
+      {isImpersonating && !impersonatedIsAdmin && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9100, background: 'rgba(17,32,64,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: '36px 40px', maxWidth: 400, textAlign: 'center', boxShadow: '0 16px 60px rgba(0,0,0,0.3)', border: '2px solid #f59e0b' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1B2F5E', marginBottom: 8 }}>Acceso denegado</div>
+            <div style={{ fontSize: 13, color: '#5a6380', marginBottom: 6 }}>
+              <strong>{impersonatedIdentity.name || impersonatedIdentity.email || 'Este usuario'}</strong> no tiene permisos de administrador.
+            </div>
+            <div style={{ fontSize: 12, color: '#9aa3bc', marginBottom: 20 }}>
+              {impersonatedIdentity.type === 'operator' ? 'Los operarios acceden al portal de producción (/operarios).' : 'Los usuarios regulares acceden al catálogo (/catalogo).'}
+            </div>
+            <button onClick={stopImpersonation} style={{ border: 'none', background: '#1B2F5E', color: 'white', borderRadius: 8, padding: '10px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 13, fontFamily: 'Barlow, sans-serif' }}>Salir de simulación</button>
+          </div>
+        </div>
+      )}
 
       <div style={s.tabBar}>
         <div style={s.tabBarInner}>
@@ -8723,9 +8781,9 @@ useEffect(() => {
 
       {/* CREATE ORDER MODAL */}
       {showCreateOrder && (() => {
-        const currentAdminRecord = (admins || []).find(a => a.email === currentUser) || null;
+        const currentAdminRecord = (admins || []).find(a => a.email === (effectiveEmail || currentUser)) || null;
         const activeDraft = activeDraftId ? orderDrafts.find(d => d.id === activeDraftId) || null : null;
-        const recentOrders = (orders || []).filter(o => o.source === 'admin' && o.created_by === currentUser).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
+        const recentOrders = (orders || []).filter(o => o.source === 'admin' && o.created_by === (effectiveEmail || currentUser)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
         return (
           <CreateOrderModal
             operators={operators}
@@ -8751,6 +8809,94 @@ useEffect(() => {
               setActiveDraftId(null);
             }}
           />
+        );
+      })()}
+
+      {/* IMPERSONATION SELECTOR PANEL */}
+      {showImpersonatorPanel && canImpersonate && (() => {
+        const q = impSearch.toLowerCase().trim();
+        const filteredAdmins = admins.filter(a => !q || a.email?.toLowerCase().includes(q));
+        const filteredOps = operators.filter(o => !q || o.name?.toLowerCase().includes(q));
+        const filteredUsers = users.filter(u => !q || u.email?.toLowerCase().includes(q) || u.name?.toLowerCase().includes(q));
+        return (
+          <div onClick={e => { if (e.target === e.currentTarget) setShowImpersonatorPanel(false); }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9200, background: 'rgba(17,32,64,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div style={{ background: 'white', borderRadius: 14, width: '100%', maxWidth: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 60px rgba(0,0,0,0.25)', border: '2px solid #f59e0b', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 18px 10px', borderBottom: '1.5px solid #f0f2f8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#1B2F5E' }}>🎭 Simular usuario</div>
+                <button onClick={() => setShowImpersonatorPanel(false)} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9aa3bc', lineHeight: 1, padding: 0 }}>×</button>
+              </div>
+              <div style={{ padding: '10px 18px', borderBottom: '1px solid #f0f2f8', flexShrink: 0 }}>
+                <input autoFocus value={impSearch} onChange={e => setImpSearch(e.target.value)}
+                  placeholder="Buscar por email o nombre..."
+                  style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '7px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
+              </div>
+              {isImpersonating && (
+                <div style={{ padding: '8px 18px', background: '#fffbeb', borderBottom: '1px solid #fde68a', flexShrink: 0 }}>
+                  <button onClick={stopImpersonation} style={{ border: '1.5px solid #f59e0b', background: 'transparent', color: '#92400e', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                    Salir de simulación actual ({impersonatedIdentity.name || impersonatedIdentity.email})
+                  </button>
+                </div>
+              )}
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {filteredAdmins.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 18px 4px', fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, background: '#f7f8fc' }}>Admins</div>
+                    {filteredAdmins.filter(a => a.email !== realUser).map(a => (
+                      <div key={a.email} onClick={() => startImpersonation({ type: 'admin', email: a.email, name: a.name || a.email })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', cursor: 'pointer', borderBottom: '1px solid #f0f2f8', background: impersonatedIdentity?.email === a.email ? '#e8f0fe' : 'transparent' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f7f8fc'}
+                        onMouseLeave={e => e.currentTarget.style.background = impersonatedIdentity?.email === a.email ? '#e8f0fe' : 'transparent'}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#1d4ed8', flexShrink: 0 }}>{(a.name || a.email || '?')[0].toUpperCase()}</div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{a.name || a.email}</div>
+                          {a.name && <div style={{ fontSize: 11, color: '#9aa3bc' }}>{a.email}</div>}
+                        </div>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#9aa3bc', background: '#f0f4ff', borderRadius: 5, padding: '1px 6px' }}>admin</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {filteredOps.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 18px 4px', fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, background: '#f7f8fc' }}>Operarios</div>
+                    {filteredOps.map(op => (
+                      <div key={op.id} onClick={() => startImpersonation({ type: 'operator', id: op.id, email: null, name: op.name })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', cursor: 'pointer', borderBottom: '1px solid #f0f2f8', background: impersonatedIdentity?.id === op.id && impersonatedIdentity?.type === 'operator' ? '#e8f0fe' : 'transparent' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f7f8fc'}
+                        onMouseLeave={e => e.currentTarget.style.background = impersonatedIdentity?.id === op.id && impersonatedIdentity?.type === 'operator' ? '#e8f0fe' : 'transparent'}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#15803d', flexShrink: 0 }}>{(op.name || '?')[0].toUpperCase()}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{op.name}</div>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#9aa3bc', background: '#f0fdf4', borderRadius: 5, padding: '1px 6px' }}>operario</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {filteredUsers.length > 0 && (
+                  <div>
+                    <div style={{ padding: '8px 18px 4px', fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, background: '#f7f8fc' }}>Usuarios</div>
+                    {filteredUsers.slice(0, 50).map(u => (
+                      <div key={u.id} onClick={() => startImpersonation({ type: 'user', id: u.id, email: u.email, name: u.name || u.email })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', cursor: 'pointer', borderBottom: '1px solid #f0f2f8', background: impersonatedIdentity?.id === u.id && impersonatedIdentity?.type === 'user' ? '#e8f0fe' : 'transparent' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f7f8fc'}
+                        onMouseLeave={e => e.currentTarget.style.background = impersonatedIdentity?.id === u.id && impersonatedIdentity?.type === 'user' ? '#e8f0fe' : 'transparent'}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fae8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#7e22ce', flexShrink: 0 }}>{((u.name || u.email || '?')[0]).toUpperCase()}</div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E' }}>{u.name || u.email}</div>
+                          {u.name && u.email && <div style={{ fontSize: 11, color: '#9aa3bc' }}>{u.email}</div>}
+                        </div>
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#9aa3bc', background: '#fae8ff', borderRadius: 5, padding: '1px 6px' }}>usuario</span>
+                      </div>
+                    ))}
+                    {filteredUsers.length > 50 && <div style={{ padding: '6px 18px', fontSize: 11, color: '#9aa3bc' }}>...y {filteredUsers.length - 50} más. Usá el buscador para filtrar.</div>}
+                  </div>
+                )}
+                {!filteredAdmins.filter(a => a.email !== realUser).length && !filteredOps.length && !filteredUsers.length && (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>No se encontraron usuarios.</div>
+                )}
+              </div>
+            </div>
+          </div>
         );
       })()}
 
