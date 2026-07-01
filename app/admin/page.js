@@ -8613,6 +8613,7 @@ useEffect(() => {
         </div>
       )}
     </div>
+    </DesignsProvider>
   );
 }
 
@@ -10048,7 +10049,6 @@ function ActivityHistory({ supabase }) {
         <AdminActivityHistory supabase={supabase} />
       )}
     </div>
-    </DesignsProvider>
   );
 }
 
