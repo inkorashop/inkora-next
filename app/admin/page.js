@@ -546,9 +546,16 @@ useEffect(() => {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [draftMode, setDraftMode] = useState(false); // true = modal opened from draft card
-  const [orderDraft, setOrderDraft] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('inkora_order_draft')) || null; } catch { return null; }
+  const [activeDraftId, setActiveDraftId] = useState(null);
+  const [orderDrafts, setOrderDrafts] = useState(() => {
+    try {
+      const arr = JSON.parse(localStorage.getItem('inkora_order_drafts'));
+      if (Array.isArray(arr)) return arr;
+      // migrate old single draft
+      const old = JSON.parse(localStorage.getItem('inkora_order_draft'));
+      if (old) { const m = [{ ...old, id: `draft_${Date.now()}` }]; localStorage.setItem('inkora_order_drafts', JSON.stringify(m)); localStorage.removeItem('inkora_order_draft'); return m; }
+      return [];
+    } catch { return []; }
   });
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
 
@@ -588,7 +595,7 @@ useEffect(() => {
     function handleGlobalKey(e) {
       if (e.altKey && e.key === 'n') {
         e.preventDefault();
-        setDraftMode(false);
+        setActiveDraftId(null);
         setShowCreateOrder(true);
       }
     }
@@ -4271,10 +4278,9 @@ useEffect(() => {
     if (data) setAdmins(data);
   }
 
-  function saveDraft(draft) {
-    setOrderDraft(draft);
-    if (draft) localStorage.setItem('inkora_order_draft', JSON.stringify(draft));
-    else localStorage.removeItem('inkora_order_draft');
+  function saveDrafts(drafts) {
+    setOrderDrafts(drafts);
+    localStorage.setItem('inkora_order_drafts', JSON.stringify(drafts));
   }
 
   async function updateAdmin(email, patch) {
@@ -4282,10 +4288,10 @@ useEffect(() => {
     setAdmins(prev => prev.map(a => a.email === email ? { ...a, ...patch } : a));
   }
 
-  async function createAdminOrder({ order_code, source, status, created_at, delivery_date, seller_id, items, _operator_id }) {
+  async function createAdminOrder({ order_code, source, status, customer_name, created_at, delivery_date, seller_id, items, _operator_id }) {
     const { data: order, error } = await supabase
       .from('orders')
-      .insert({ order_code, source, status, created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, notes: '' })
+      .insert({ order_code, source, status, customer_name: customer_name || '', created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, notes: '', created_by: currentUser || null })
       .select('*')
       .single();
     if (error) throw new Error(error.message);
@@ -8673,29 +8679,32 @@ useEffect(() => {
         </div>
       )}
 
-      {/* DRAFT CARD — shown above + button when a draft exists */}
-      {orderDraft && !showCreateOrder && (
-        <div style={{position:'fixed', bottom:90, right:28, zIndex:289, background:'white', border:'1.5px solid #fde68a', borderRadius:12, boxShadow:'0 4px 16px rgba(0,0,0,0.13)', padding:'10px 14px', width:210, display:'flex', flexDirection:'column', gap:7}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:6}}>
-            <span style={{fontSize:12, fontWeight:800, color:'#92400e'}}>Pedido sin confirmar</span>
-            <button onClick={() => saveDraft(null)} style={{border:'none', background:'none', cursor:'pointer', color:'#c0c5d4', fontSize:17, lineHeight:1, padding:0}} title="Borrar borrador">×</button>
-          </div>
-          {(() => {
-            const filledRows = (orderDraft.rows || []).filter(r => r.design_id || r.text?.trim());
-            if (!filledRows.length) return null;
-            const summary = filledRows.map(r => r.name || r.text).join(', ');
-            return <div style={{fontSize:11, color:'#5a6380', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={summary}>{summary}</div>;
-          })()}
-          <button
-            onClick={() => { setDraftMode(true); setShowCreateOrder(true); }}
-            style={{background:'#1B2F5E', color:'white', border:'none', borderRadius:7, padding:'6px 0', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', textAlign:'center'}}
-          >Continuar</button>
+      {/* DRAFT CARDS — compact stack above + button */}
+      {orderDrafts.length > 0 && !showCreateOrder && (
+        <div style={{position:'fixed', bottom:90, right:28, zIndex:289, display:'flex', flexDirection:'column-reverse', gap:5, maxWidth:190}}>
+          {orderDrafts.map(draft => {
+            const filledRows = (draft.rows || []).filter(r => r.design_id || r.text?.trim());
+            const summary = filledRows.map(r => r.name || r.text).slice(0, 3).join(', ');
+            return (
+              <div key={draft.id} style={{background:'white', border:'1.5px solid #fde68a', borderRadius:9, boxShadow:'0 2px 10px rgba(0,0,0,0.1)', padding:'6px 8px', display:'flex', flexDirection:'column', gap:4}}>
+                <div style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{fontSize:11, fontWeight:700, color:'#92400e', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{draft.customerName || 'Sin cliente'}</span>
+                  <button onClick={() => saveDrafts(orderDrafts.filter(d => d.id !== draft.id))} style={{border:'none', background:'none', cursor:'pointer', color:'#c0c5d4', fontSize:14, lineHeight:1, padding:0}} title="Borrar">×</button>
+                </div>
+                {summary && <div style={{fontSize:10, color:'#9aa3bc', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={summary}>{summary}</div>}
+                <button onClick={() => { setActiveDraftId(draft.id); setShowCreateOrder(true); }}
+                  style={{background:'#fef3c7', color:'#92400e', border:'1px solid #fde68a', borderRadius:6, padding:'3px 0', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}>
+                  Continuar
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* FLOATING + BUTTON — create order from any tab */}
+      {/* FLOATING + BUTTON */}
       <button
-        onClick={() => { setDraftMode(false); setShowCreateOrder(true); }}
+        onClick={() => { setActiveDraftId(null); setShowCreateOrder(true); }}
         title="Crear pedido (Alt+N)"
         style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
       >+</button>
@@ -8703,18 +8712,32 @@ useEffect(() => {
       {/* CREATE ORDER MODAL */}
       {showCreateOrder && (() => {
         const currentAdminRecord = (admins || []).find(a => a.email === currentUser) || null;
+        const activeDraft = activeDraftId ? orderDrafts.find(d => d.id === activeDraftId) || null : null;
+        const recentOrders = (orders || []).filter(o => o.source === 'admin' && o.created_by === currentUser).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
         return (
           <CreateOrderModal
             operators={operators}
             sellers={sellers}
             currentAdminSellerId={currentAdminRecord?.seller_id || null}
-            initialValues={draftMode ? orderDraft : null}
+            initialValues={activeDraft}
+            recentOrders={recentOrders}
+            onDiscard={activeDraftId ? () => { saveDrafts(orderDrafts.filter(d => d.id !== activeDraftId)); setShowCreateOrder(false); setActiveDraftId(null); } : null}
             onClose={(draft) => {
-              if (draftMode || draft !== null) saveDraft(draft);
+              if (draft) {
+                if (activeDraftId) saveDrafts(orderDrafts.map(d => d.id === activeDraftId ? { ...draft, id: activeDraftId } : d));
+                else saveDrafts([...orderDrafts, { ...draft, id: `draft_${Date.now()}` }]);
+              } else if (activeDraftId) {
+                saveDrafts(orderDrafts.filter(d => d.id !== activeDraftId));
+              }
               setShowCreateOrder(false);
-              setDraftMode(false);
+              setActiveDraftId(null);
             }}
-            onSave={async (data) => { await createAdminOrder(data); saveDraft(null); setShowCreateOrder(false); }}
+            onSave={async (data) => {
+              await createAdminOrder(data);
+              if (activeDraftId) saveDrafts(orderDrafts.filter(d => d.id !== activeDraftId));
+              setShowCreateOrder(false);
+              setActiveDraftId(null);
+            }}
           />
         );
       })()}
