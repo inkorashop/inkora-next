@@ -19,12 +19,14 @@ function nowStr() {
 }
 
 function newRow() {
-  return { id: Math.random().toString(36).slice(2), type: 'manual', text: '', design_id: '', name: '', productName: '', qty: 1 };
+  return { id: Math.random().toString(36).slice(2), type: 'manual', text: '', design_id: '', name: '', productName: '', qty: 0 };
 }
+
+const QTY_DELTAS = [-10, -2, -1, 1, 2, 10];
 
 // ── Row component ────────────────────────────────────────────────────────────
 function DesignRow({ row, index, active, activeCell, rows, designs,
-  onChange, onDelete, onFocus, onKeyNav, isLast }) {
+  onChange, onDelete, onFocus, onKeyNav, isLast, prevQty, selected, onSelect }) {
 
   const [inputVal, setInputVal] = useState(row.type === 'linked' ? row.name : row.text);
   const [dropItems, setDropItems] = useState([]);
@@ -36,19 +38,16 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
   const isActive = active && activeCell === 'design';
   const isQty    = active && activeCell === 'qty';
 
-  // Sync inputVal when row changes externally
   useEffect(() => {
     const next = row.type === 'linked' ? row.name : row.text;
     setInputVal(next);
   }, [row.type, row.name, row.text]);
 
-  // Focus management
   useEffect(() => {
     if (isActive && inputRef.current) inputRef.current.focus();
     if (isQty   && qtyRef.current)   qtyRef.current.focus();
   }, [isActive, isQty]);
 
-  // Live fuzzy dropdown
   useEffect(() => {
     if (!isActive || !inputVal.trim()) { setDropItems([]); setDropIdx(-1); return; }
     const matches = fuzzyMatchDesigns(inputVal, designs, 8);
@@ -73,41 +72,14 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
 
   function handleInputKeyDown(e) {
     if (dropItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setDropIdx(i => Math.min(i + 1, dropItems.length - 1));
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setDropIdx(i => Math.max(i - 1, -1));
-        return;
-      }
-      if (e.key === 'Enter' && dropIdx >= 0) {
-        e.preventDefault();
-        selectDrop(dropItems[dropIdx]);
-        return;
-      }
-      if (e.key === 'Escape') {
-        setDropItems([]);
-        setDropIdx(-1);
-        return;
-      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setDropIdx(i => Math.min(i + 1, dropItems.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setDropIdx(i => Math.max(i - 1, -1)); return; }
+      if (e.key === 'Enter' && dropIdx >= 0) { e.preventDefault(); selectDrop(dropItems[dropIdx]); return; }
+      if (e.key === 'Escape') { setDropItems([]); setDropIdx(-1); return; }
     }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      onKeyNav('next-row', index);
-      return;
-    }
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      onKeyNav('qty', index);
-    }
-    if (e.key === 'Backspace' && !inputVal && rows.length > 1) {
-      e.preventDefault();
-      onDelete(index);
-      onKeyNav('prev-row', index);
-    }
+    if (e.key === 'Enter') { e.preventDefault(); onKeyNav('next-row', index); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); onKeyNav('qty', index); }
+    if (e.key === 'Backspace' && !inputVal && rows.length > 1) { e.preventDefault(); onDelete(index); onKeyNav('prev-row', index); }
   }
 
   function handleQtyKeyDown(e) {
@@ -120,76 +92,97 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
   const linked = row.type === 'linked' && row.design_id;
 
   return (
-    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 64px 28px', gap: 4, alignItems: 'center', padding: '3px 8px', background: active ? '#f0f4ff' : 'transparent', borderRadius: 6 }}>
+    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '14px 1fr 64px 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: selected ? '#e8f0fe' : active ? '#f0f4ff' : 'transparent', borderRadius: 6 }}>
+
+      {/* Selection indicator */}
+      <div onMouseDown={e => { e.preventDefault(); onSelect(index, e); }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', alignSelf: 'stretch' }}>
+        <div style={{ width: 9, height: 9, borderRadius: 2, border: `1.5px solid ${selected ? '#2D6BE4' : '#c0c5d4'}`, background: selected ? '#2D6BE4' : 'transparent', flexShrink: 0 }} />
+      </div>
+
       {/* Design cell */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {linked && <DesignThumb designId={row.design_id} name={row.name} size={22} />}
-        <input
-          ref={inputRef}
-          value={inputVal}
-          onChange={handleInputChange}
-          onFocus={() => onFocus(index, 'design')}
-          onKeyDown={handleInputKeyDown}
+        <input ref={inputRef} value={inputVal} onChange={handleInputChange}
+          onFocus={() => onFocus(index, 'design')} onKeyDown={handleInputKeyDown}
           placeholder={isLast && rows.length === 1 ? 'Buscar o escribir diseño...' : ''}
-          style={{
-            flex: 1, border: 'none', outline: 'none', background: 'transparent',
-            fontSize: 12, fontWeight: linked ? 700 : 400,
-            color: linked ? '#1B2F5E' : '#5a6380',
-            fontStyle: linked ? 'normal' : 'italic',
-            fontFamily: 'Barlow, sans-serif',
-            minWidth: 0,
-          }}
-        />
+          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 12,
+            fontWeight: linked ? 700 : 400, color: linked ? '#1B2F5E' : '#5a6380',
+            fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
       </div>
 
       {/* Qty cell */}
-      <input
-        ref={qtyRef}
-        type="number" min={1} max={9999}
+      <input ref={qtyRef} type="number" min={0} max={9999}
         value={row.qty}
-        onChange={e => onChange(index, { qty: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-        onFocus={() => onFocus(index, 'qty')}
+        onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+        onFocus={e => { e.target.select(); onFocus(index, 'qty'); }}
         onKeyDown={handleQtyKeyDown}
         style={{ width: '100%', textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 4px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
       />
 
       {/* Delete */}
-      <button
-        type="button" onClick={() => { if (rows.length > 1) { onDelete(index); onKeyNav('prev-row', index); } }}
-        style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 14, lineHeight: 1, padding: 0 }}
-      >×</button>
+      <button type="button" onClick={() => { if (rows.length > 1) { onDelete(index); onKeyNav('prev-row', index); } }}
+        style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
 
-      {/* Dropdown — portal to escape modal overflow clipping */}
+      {/* Qty buttons panel — portal */}
+      {isQty && typeof window !== 'undefined' && createPortal(
+        (() => {
+          const rect = qtyRef.current?.getBoundingClientRect();
+          if (!rect) return null;
+          const panelW = 186;
+          const left = Math.max(4, Math.min(rect.right - panelW, window.innerWidth - panelW - 8));
+          return (
+            <div style={{ position: 'fixed', top: rect.bottom + 3, left, zIndex: 9998, background: 'white',
+              border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              padding: '6px', display: 'flex', flexDirection: 'column', gap: 5, width: panelW }}>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {QTY_DELTAS.map(d => (
+                  <button key={d} type="button"
+                    onMouseDown={e => { e.preventDefault(); onChange(index, { qty: Math.max(0, row.qty + d) }); }}
+                    style={{ flex: 1, border: '1.5px solid', borderColor: d < 0 ? '#fecaca' : '#bbf7d0',
+                      borderRadius: 5, padding: '3px 0', fontSize: 11, fontWeight: 700,
+                      background: d < 0 ? '#fff5f5' : '#f0fdf4', color: d < 0 ? '#b91c1c' : '#15803d',
+                      cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'center' }}>
+                    {d > 0 ? `+${d}` : d}
+                  </button>
+                ))}
+              </div>
+              {index > 0 && prevQty != null && (
+                <button type="button"
+                  onMouseDown={e => { e.preventDefault(); onChange(index, { qty: prevQty }); }}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 5, padding: '3px 8px', fontSize: 11,
+                    fontWeight: 700, background: '#f7f8fc', color: '#5a6380', cursor: 'pointer',
+                    fontFamily: 'Barlow, sans-serif', textAlign: 'center' }}>
+                  = anterior ({prevQty})
+                </button>
+              )}
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
+      {/* Design dropdown — portal */}
       {isActive && dropItems.length > 0 && typeof window !== 'undefined' && createPortal(
         (() => {
           const rect = inputRef.current?.getBoundingClientRect();
           if (!rect) return null;
           return (
-            <div
-              ref={dropRef}
-              style={{
-                position: 'fixed', top: rect.bottom + 2, left: rect.left, width: rect.width + 80,
-                zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxHeight: 260, overflowY: 'auto',
-              }}
-            >
+            <div ref={dropRef} style={{ position: 'fixed', top: rect.bottom + 2, left: rect.left, width: rect.width + 80,
+              zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxHeight: 260, overflowY: 'auto' }}>
               {dropItems.map((item, i) => (
-                <div
-                  key={item.design.id}
-                  onMouseDown={e => { e.preventDefault(); selectDrop(item); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                    cursor: 'pointer', background: i === dropIdx ? '#f0f4ff' : 'transparent',
-                    borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none',
-                  }}
-                >
+                <div key={item.design.id} onMouseDown={e => { e.preventDefault(); selectDrop(item); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer',
+                    background: i === dropIdx ? '#f0f4ff' : 'transparent',
+                    borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none' }}>
                   <DesignThumb designId={item.design.id} name={item.design.name} size={20} />
                   <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.design.name}</span>
-                  <span style={{
-                    fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
                     background: item.score >= 0.8 ? '#dcfce7' : item.score >= 0.6 ? '#fef9c3' : '#fee2e2',
-                    color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c',
-                  }}>{Math.round(item.score * 100)}%</span>
+                    color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c' }}>
+                    {Math.round(item.score * 100)}%
+                  </span>
                 </div>
               ))}
             </div>
@@ -211,10 +204,31 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const [sellerId,     setSellerId]     = useState(initialValues?.sellerId     ?? (currentAdminSellerId || ''));
   const [operatorId,   setOperatorId]   = useState(initialValues?.operatorId   ?? (operators[0]?.id || ''));
   const [rows,         setRows]         = useState(initialValues?.rows         ?? [newRow()]);
-  const [activeRow,    setActiveRow]    = useState(0);
-  const [activeCell,   setActiveCell]   = useState('design');
-  const [saving,       setSaving]       = useState(false);
-  const [error,        setError]        = useState('');
+  const [activeRow,      setActiveRow]      = useState(0);
+  const [activeCell,     setActiveCell]     = useState('design');
+  const [selectedIndices, setSelectedIndices] = useState(new Set());
+  const lastSelectedRef = useRef(null);
+  const [saving,         setSaving]         = useState(false);
+  const [error,          setError]          = useState('');
+
+  function handleSelect(index, e) {
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedIndices(prev => { const n = new Set(prev); n.has(index) ? n.delete(index) : n.add(index); return n; });
+    } else if (e.shiftKey && lastSelectedRef.current != null) {
+      const lo = Math.min(lastSelectedRef.current, index), hi = Math.max(lastSelectedRef.current, index);
+      setSelectedIndices(new Set(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)));
+    } else {
+      setSelectedIndices(prev => (prev.size === 1 && prev.has(index)) ? new Set() : new Set([index]));
+    }
+    lastSelectedRef.current = index;
+  }
+
+  function applyBulkDelta(delta) {
+    setRows(prev => prev.map((r, i) => selectedIndices.has(i) ? { ...r, qty: Math.max(0, r.qty + delta) } : r));
+  }
+  function applyBulkSet(value) {
+    setRows(prev => prev.map((r, i) => selectedIndices.has(i) ? { ...r, qty: value } : r));
+  }
 
   const hasContent = rows.some(r => (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim()));
 
@@ -362,7 +376,27 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
               <div style={{ fontSize: 10, color: '#9aa3bc' }}>Enter = siguiente · → = cant · ↓ = lista</div>
             </div>
             <div style={{ border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 28px', gap: 4, padding: '4px 8px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8' }}>
+              {/* Bulk qty bar */}
+              {selectedIndices.size > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', background: '#e8f0fe', borderBottom: '1px solid #c7d7f8', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#2D6BE4', marginRight: 2 }}>{selectedIndices.size} sel.</span>
+                  {QTY_DELTAS.map(d => (
+                    <button key={d} type="button" onClick={() => applyBulkDelta(d)}
+                      style={{ border: '1.5px solid', borderColor: d < 0 ? '#fecaca' : '#bbf7d0', borderRadius: 5, padding: '2px 5px', fontSize: 11, fontWeight: 700,
+                        background: d < 0 ? '#fff5f5' : '#f0fdf4', color: d < 0 ? '#b91c1c' : '#15803d', cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                      {d > 0 ? `+${d}` : d}
+                    </button>
+                  ))}
+                  <input type="number" min={0} placeholder="= cant"
+                    onChange={e => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 0) applyBulkSet(v); }}
+                    style={{ width: 58, border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 4px', fontSize: 11, textAlign: 'center', fontFamily: 'Barlow, sans-serif' }} />
+                  <button type="button" onClick={() => setSelectedIndices(new Set())}
+                    style={{ border: 'none', background: 'none', color: '#9aa3bc', fontSize: 14, cursor: 'pointer', marginLeft: 'auto', lineHeight: 1, padding: 0 }}>✕</button>
+                </div>
+              )}
+              {/* Column headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 64px 22px', gap: 4, padding: '4px 8px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8' }}>
+                <span />
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseño</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>Cant.</span>
                 <span />
@@ -371,7 +405,10 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                 <DesignRow key={row.id} row={row} index={i} active={activeRow === i} activeCell={activeCell}
                   rows={rows} designs={designs} onChange={changeRow} onDelete={deleteRow}
                   onFocus={(ri, cell) => { setActiveRow(ri); setActiveCell(cell); }}
-                  onKeyNav={handleKeyNav} isLast={i === rows.length - 1} />
+                  onKeyNav={handleKeyNav} isLast={i === rows.length - 1}
+                  prevQty={i > 0 ? rows[i - 1].qty : null}
+                  selected={selectedIndices.has(i)}
+                  onSelect={handleSelect} />
               ))}
               <button type="button"
                 onClick={() => { setRows(p => [...p, newRow()]); setActiveRow(rows.length); setActiveCell('design'); }}
