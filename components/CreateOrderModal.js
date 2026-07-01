@@ -202,25 +202,30 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
 }
 
 // ── Main modal ───────────────────────────────────────────────────────────────
-export default function CreateOrderModal({ sellers = [], operators = [], currentAdminSellerId = null, onSave, onClose }) {
+export default function CreateOrderModal({ sellers = [], operators = [], currentAdminSellerId = null, initialValues = null, onSave, onClose }) {
   const { designs } = useDesigns();
 
-  const [date,         setDate]         = useState(nowStr());
-  const [deliveryDate, setDeliveryDate] = useState('');
-  const [sellerId,     setSellerId]     = useState(currentAdminSellerId || '');
-  const [operatorId,   setOperatorId]   = useState(operators[0]?.id || '');
-  const [rows,         setRows]         = useState([newRow()]);
+  const [date,         setDate]         = useState(initialValues?.date         ?? nowStr());
+  const [deliveryDate, setDeliveryDate] = useState(initialValues?.deliveryDate ?? '');
+  const [sellerId,     setSellerId]     = useState(initialValues?.sellerId     ?? (currentAdminSellerId || ''));
+  const [operatorId,   setOperatorId]   = useState(initialValues?.operatorId   ?? (operators[0]?.id || ''));
+  const [rows,         setRows]         = useState(initialValues?.rows         ?? [newRow()]);
   const [activeRow,    setActiveRow]    = useState(0);
   const [activeCell,   setActiveCell]   = useState('design');
   const [saving,       setSaving]       = useState(false);
   const [error,        setError]        = useState('');
 
-  // Escape to close
+  // Close without saving: pass draft state to parent so it can persist it
+  const handleClose = useCallback(() => {
+    const hasContent = rows.some(r => (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim()));
+    onClose(hasContent ? { date, deliveryDate, sellerId, operatorId, rows } : null);
+  }, [date, deliveryDate, sellerId, operatorId, rows, onClose]);
+
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') onClose(); };
+    const h = e => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
+  }, [handleClose]);
 
   function changeRow(index, patch) {
     setRows(prev => prev.map((r, i) => i === index ? { ...r, ...patch } : r));
@@ -279,9 +284,9 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         delivery_date: deliveryDate || null,
         seller_id: sellerId || null,
         items,
-        _operator_id: operatorId || null, // handled separately by caller
+        _operator_id: operatorId || null,
       });
-      onClose();
+      onClose(null); // clear draft after successful save
     } catch (e) {
       setError(e.message || 'Error al crear pedido');
     } finally {
@@ -293,7 +298,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
     >
       <div style={{ background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', height: '82vh', maxHeight: '82vh', overflow: 'hidden' }}>
@@ -301,7 +306,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1.5px solid #f0f2f8', flexShrink: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: '#1B2F5E' }}>Nuevo pedido</div>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: '#9aa3bc', lineHeight: 1, padding: 0 }}>×</button>
+          <button onClick={handleClose} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: '#9aa3bc', lineHeight: 1, padding: 0 }}>×</button>
         </div>
 
         {/* Body */}
@@ -384,7 +389,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
         {/* Footer */}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '12px 18px', borderTop: '1.5px solid #f0f2f8', flexShrink: 0 }}>
-          <button onClick={onClose} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380' }}>Cancelar</button>
+          <button onClick={handleClose} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380' }}>Cancelar</button>
           <button onClick={handleSave} disabled={saving}
             style={{ border: 'none', background: '#1B2F5E', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', color: 'white', opacity: saving ? 0.7 : 1 }}>
             {saving ? 'Creando...' : 'Crear pedido'}

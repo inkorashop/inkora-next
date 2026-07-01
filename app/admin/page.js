@@ -546,6 +546,10 @@ useEffect(() => {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
+  const [draftMode, setDraftMode] = useState(false); // true = modal opened from draft card
+  const [orderDraft, setOrderDraft] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('inkora_order_draft')) || null; } catch { return null; }
+  });
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState(null);
 
   // Orders
@@ -584,6 +588,7 @@ useEffect(() => {
     function handleGlobalKey(e) {
       if (e.altKey && e.key === 'n') {
         e.preventDefault();
+        setDraftMode(false);
         setShowCreateOrder(true);
       }
     }
@@ -4264,6 +4269,12 @@ useEffect(() => {
   async function loadAdmins() {
     const { data } = await supabase.from('admins').select('*').order('email');
     if (data) setAdmins(data);
+  }
+
+  function saveDraft(draft) {
+    setOrderDraft(draft);
+    if (draft) localStorage.setItem('inkora_order_draft', JSON.stringify(draft));
+    else localStorage.removeItem('inkora_order_draft');
   }
 
   async function updateAdmin(email, patch) {
@@ -8662,9 +8673,29 @@ useEffect(() => {
         </div>
       )}
 
+      {/* DRAFT CARD — shown above + button when a draft exists */}
+      {orderDraft && !showCreateOrder && (
+        <div style={{position:'fixed', bottom:90, right:28, zIndex:289, background:'white', border:'1.5px solid #fde68a', borderRadius:12, boxShadow:'0 4px 16px rgba(0,0,0,0.13)', padding:'10px 14px', width:210, display:'flex', flexDirection:'column', gap:7}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:6}}>
+            <span style={{fontSize:12, fontWeight:800, color:'#92400e'}}>Pedido sin confirmar</span>
+            <button onClick={() => saveDraft(null)} style={{border:'none', background:'none', cursor:'pointer', color:'#c0c5d4', fontSize:17, lineHeight:1, padding:0}} title="Borrar borrador">×</button>
+          </div>
+          {(() => {
+            const filledRows = (orderDraft.rows || []).filter(r => r.design_id || r.text?.trim());
+            if (!filledRows.length) return null;
+            const summary = filledRows.map(r => r.name || r.text).join(', ');
+            return <div style={{fontSize:11, color:'#5a6380', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={summary}>{summary}</div>;
+          })()}
+          <button
+            onClick={() => { setDraftMode(true); setShowCreateOrder(true); }}
+            style={{background:'#1B2F5E', color:'white', border:'none', borderRadius:7, padding:'6px 0', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif', textAlign:'center'}}
+          >Continuar</button>
+        </div>
+      )}
+
       {/* FLOATING + BUTTON — create order from any tab */}
       <button
-        onClick={() => setShowCreateOrder(true)}
+        onClick={() => { setDraftMode(false); setShowCreateOrder(true); }}
         title="Crear pedido (Alt+N)"
         style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
       >+</button>
@@ -8677,8 +8708,13 @@ useEffect(() => {
             operators={operators}
             sellers={sellers}
             currentAdminSellerId={currentAdminRecord?.seller_id || null}
-            onClose={() => setShowCreateOrder(false)}
-            onSave={async (data) => { await createAdminOrder(data); setShowCreateOrder(false); }}
+            initialValues={draftMode ? orderDraft : null}
+            onClose={(draft) => {
+              if (draftMode || draft !== null) saveDraft(draft);
+              setShowCreateOrder(false);
+              setDraftMode(false);
+            }}
+            onSave={async (data) => { await createAdminOrder(data); saveDraft(null); setShowCreateOrder(false); }}
           />
         );
       })()}
