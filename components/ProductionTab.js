@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DesignThumb from '@/components/DesignThumb';
 import { useDesigns } from '@/contexts/DesignsContext';
 import { fuzzyMatchDesigns, scoreColor, scoreBg } from '@/lib/fuzzy-match';
+import PrintQueueOverlay from '@/components/PrintQueueOverlay';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -19,6 +20,7 @@ import {
 
   printBridgeDirect,
   getBridgePrintQueue,
+  cancelBridgePrintJob,
   getDevModeProfiles,
   saveDevModeProfile,
   applyDevModeProfile,
@@ -445,7 +447,7 @@ export default function ProductionTab({
   const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
   const [printingTasks, setPrintingTasks] = useState({});
   const [printQtyOverrides, setPrintQtyOverrides] = useState({});
-  const [bridgeCardOpen, setBridgeCardOpen] = useState(false);
+  const [printQueueOpen, setPrintQueueOpen] = useState(false);
   const [selectedPrinterOverride, setSelectedPrinterOverride] = useState('');
   const [printFeedback, setPrintFeedback] = useState({});
   const [printQueue, setPrintQueue] = useState(null);
@@ -1464,34 +1466,32 @@ export default function ProductionTab({
           </div>
 
           <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            {/* Header colapsable */}
-            <button
-              type="button"
-              onClick={() => setBridgeCardOpen(o => !o)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', textAlign: 'left', minHeight: 34 }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', minHeight: 36 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion</div>
-              <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
-                {bridgeTone.label}
-              </span>
-              {!bridgeCardOpen && bridgePrinters.length > 0 && (
-                <select
-                  value={selectedPrinterOverride || bridgeTargetPrinter?.name || ''}
-                  onChange={e => setSelectedPrinterOverride(e.target.value)}
-                  onClick={e => e.stopPropagation()}
-                  disabled={bridgeBusy || bridgeStatus.state !== 'connected'}
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', cursor: bridgeStatus.state === 'connected' ? 'pointer' : 'default' }}
-                >
-                  {bridgePrinters.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
-                  ))}
-                </select>
+              {bridgePrinters.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: bridgeTone.color }} />
+                  <select
+                    value={selectedPrinterOverride || bridgeTargetPrinter?.name || ''}
+                    onChange={e => setSelectedPrinterOverride(e.target.value)}
+                    disabled={bridgeStatus.state !== 'connected'}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', minWidth: 0, flex: 1, maxWidth: 240, cursor: bridgeStatus.state === 'connected' ? 'pointer' : 'default' }}
+                  >
+                    {bridgePrinters.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900 }}>
+                  {bridgeTone.label}
+                </span>
               )}
-              {!bridgeCardOpen && bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
+              {bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
                 <>
                   <button
                     type="button"
-                    onClick={e => { e.stopPropagation(); openBridgePreferences(); }}
+                    onClick={() => openBridgePreferences()}
                     disabled={bridgeBusy}
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
                   >
@@ -1499,7 +1499,7 @@ export default function ProductionTab({
                   </button>
                   <button
                     type="button"
-                    onClick={e => { e.stopPropagation(); openBridgePrintQueue(bridgeUrl, bridgeToken.trim(), effectivePrinterName).catch(() => {}); }}
+                    onClick={() => setPrintQueueOpen(true)}
                     disabled={bridgeBusy}
                     style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
                   >
@@ -1507,174 +1507,7 @@ export default function ProductionTab({
                   </button>
                 </>
               )}
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9aa3bc', flexShrink: 0 }}>{bridgeCardOpen ? '▲' : '▼'}</span>
-            </button>
-
-            {bridgeCardOpen && (
-              <div style={{ padding: '0 14px 12px', display: 'grid', gap: 10, borderTop: '1px solid #f0f2f7' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', paddingTop: 10 }}>
-                  <div style={{ minWidth: 220 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 900 }}>
-                        {bridgeTone.label}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{effectivePrinterName || 'INKORA Print Bridge'}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#5a6380', marginTop: 5 }}>{bridgeStatus.message}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      onClick={() => checkPrintBridge({ includePrinters: true })}
-                      disabled={bridgeBusy}
-                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: bridgeBusy ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      {bridgeBusy ? 'Verificando...' : 'Detectar Bridge'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={inspectBridgeDevMode}
-                      disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      Leer DEVMODE
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openBridgePreferences}
-                      disabled={bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeTargetPrinter || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      Preferencias driver
-                    </button>
-                    <button
-                      type="button"
-                      onClick={addPdfRootFromProduction}
-                      disabled={bridgeBusy || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #1B2F5E', borderRadius: 8, padding: '7px 12px', background: 'white', color: '#1B2F5E', fontSize: 12, fontWeight: 900, cursor: bridgeBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      Agregar carpeta PDFs
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr)', gap: 10 }}>
-                  <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                    URL local
-                    <input
-                      value={bridgeUrl}
-                      onChange={e => setBridgeUrl(e.target.value)}
-                      onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
-                    />
-                  </label>
-                  <label style={{ display: 'grid', gap: 4, fontSize: 11, fontWeight: 800, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                    Token Bridge
-                    <input
-                      value={bridgeToken}
-                      onChange={e => setBridgeToken(e.target.value)}
-                      onBlur={() => saveStoredBridgeConfig({ url: bridgeUrl, token: bridgeToken })}
-                      placeholder="Pegar token copiado desde el Bridge"
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#1B2F5E', fontWeight: 700, fontFamily: 'Barlow, sans-serif', textTransform: 'none', letterSpacing: 0 }}
-                    />
-                  </label>
-                </div>
-                {bridgePrinters.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {bridgePrinters.slice(0, 5).map(printer => (
-                      <span key={printer.name} style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: printer.isTargetL8050 ? '#15803d' : '#5a6380', background: printer.isTargetL8050 ? '#e8f7ef' : '#f8faff' }}>
-                        {printer.name}{printer.isDefault ? ' · default' : ''}
-                      </span>
-                    ))}
-                    {bridgePrinters.length > 5 && (
-                      <span style={{ border: '1px solid #dde1ef', borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#5a6380', background: '#f8faff' }}>
-                        +{bridgePrinters.length - 5}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {orderPdfStatus.roots?.length > 0 && (
-                  <div style={{ display: 'grid', gap: 5 }}>
-                    {orderPdfStatus.roots.map(root => (
-                      <div key={root.path || root.name} title={root.path} style={{ border: '1px solid #dde1ef', borderRadius: 8, padding: '5px 8px', fontSize: 11, fontWeight: 800, color: root.exists ? '#15803d' : '#b91c1c', background: root.exists ? '#e8f7ef' : '#fff5f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {root.exists ? 'Carpeta PDF' : 'Carpeta no encontrada'}: {root.path || root.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {bridgeDevMode && (
-                  <div style={{ background: '#fbfcff', border: '1px solid #eef0f6', borderRadius: 8, padding: '8px 10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
-                    {[
-                      ['Printer', bridgeDevMode.printerName],
-                      ['Size', bridgeDevMode.querySize],
-                      ['Extra', bridgeDevMode.driverExtra],
-                      ['Driver', bridgeDevMode.driverVersion],
-                      ['Fields', bridgeDevMode.fieldsHex],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(value ?? DASH)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {bridgeTargetPrinter && bridgeStatus.state === 'connected' && (
-                  <div style={{ background: '#f8faff', border: '1px solid #dde1ef', borderRadius: 8, padding: '10px 12px', display: 'grid', gap: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 900, color: '#8b95b3', textTransform: 'uppercase', letterSpacing: 0.5 }}>Perfiles DEVMODE</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <input
-                        value={profileNameInput}
-                    onChange={e => setProfileNameInput(e.target.value)}
-                    placeholder="Nombre del perfil..."
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '5px 9px', fontSize: 12, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 150, flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={saveCurrentAsProfile}
-                    disabled={profileBusy || !profileNameInput.trim()}
-                    style={{ border: '1.5px solid #2D6BE4', borderRadius: 7, padding: '5px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: profileBusy || !profileNameInput.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
-                  >
-                    Guardar actual
-                  </button>
-                </div>
-                {devModeProfiles.length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <select
-                      value={selectedProfileName}
-                      onChange={e => setSelectedProfileName(e.target.value)}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '5px 9px', fontSize: 12, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', flex: 1, minWidth: 150 }}
-                    >
-                      <option value="">Seleccionar perfil...</option>
-                      {devModeProfiles.map(p => (
-                        <option key={p.name} value={p.name}>{p.name} ({p.sizeBytes}b)</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={applySelectedProfile}
-                      disabled={profileBusy || !selectedProfileName}
-                      style={{ border: '1.5px solid #18a36a', borderRadius: 7, padding: '5px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: profileBusy || !selectedProfileName ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
-                    >
-                      Aplicar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={deleteSelectedProfile}
-                      disabled={profileBusy || !selectedProfileName}
-                      style={{ border: '1.5px solid #fecaca', borderRadius: 7, padding: '5px 10px', background: '#fff5f5', color: '#b91c1c', fontSize: 12, fontWeight: 900, cursor: profileBusy || !selectedProfileName ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                )}
-                {profileFeedback && (
-                  <div style={{ fontSize: 12, fontWeight: 700, color: profileFeedback.toLowerCase().includes('error') || profileFeedback.toLowerCase().includes('error') ? '#b91c1c' : '#15803d' }}>
-                    {profileFeedback}
-                  </div>
-                )}
-                </div>
-                )}
-              </div>
-            )}
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
@@ -2541,6 +2374,14 @@ export default function ProductionTab({
         </div>
       )}
 
+      {printQueueOpen && (
+        <PrintQueueOverlay
+          bridgeUrl={bridgeUrl}
+          bridgeToken={bridgeToken.trim()}
+          printerName={effectivePrinterName}
+          onClose={() => setPrintQueueOpen(false)}
+        />
+      )}
     </div>
   );
 }

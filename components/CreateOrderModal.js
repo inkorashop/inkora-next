@@ -242,7 +242,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   const [customerName, setCustomerName] = useState(initialValues?.customerName ?? '');
   const [date,         setDate]         = useState(initialValues?.date         ?? nowStr());
-  const [deliveryDate, setDeliveryDate] = useState(initialValues?.deliveryDate ?? todayStr());
+  const [deliveryDate, setDeliveryDate] = useState(initialValues?.deliveryDate ?? '');
   const [sellerId,     setSellerId]     = useState(initialValues?.sellerId     ?? (currentAdminSellerId || ''));
   const [operatorId,   setOperatorId]   = useState(initialValues?.operatorId   ?? (operators[0]?.id || ''));
   const [rows,         setRows]         = useState(initialValues?.rows         ?? [newRow()]);
@@ -254,13 +254,12 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const [error,  setError]  = useState('');
 
   // Paste area state
-  const [showPasteArea, setShowPasteArea] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const pasteRef = useRef(null);
 
   const qtyRefs = useRef({});
   const snap = useRef({});
-  snap.current = { editingRow, focusedRow, rows, showPasteArea };
+  snap.current = { editingRow, focusedRow, rows };
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -327,7 +326,6 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       }
     }
     setRows(newRows);
-    setShowPasteArea(false);
     setPasteText('');
     setFocusedRow(0);
     setEditingRow(null);
@@ -361,12 +359,11 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   useEffect(() => {
     function onKey(e) {
-      const { editingRow, focusedRow, rows, showPasteArea } = snap.current;
+      const { editingRow, focusedRow, rows } = snap.current;
 
       // Escape is always intercepted regardless of e.defaultPrevented
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (showPasteArea) { setShowPasteArea(false); return; }
         if (editingRow !== null) { setEditingRow(null); return; }
         handleClose(); return;
       }
@@ -429,6 +426,41 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     });
   }
 
+  function handlePasteImport(e) {
+    const text = e.clipboardData.getData('text/plain');
+    if (!text.trim()) return;
+    const pdfSet = pdfEnabledIds instanceof Set ? pdfEnabledIds
+      : Array.isArray(pdfEnabledIds) ? new Set(pdfEnabledIds.map(String)) : null;
+    const matchableDesigns = pdfSet ? designs.filter(d => pdfSet.has(String(d.id))) : designs;
+    const items = parseOrderText(text);
+    if (!items.length) return;
+    const preview = items.map(item => {
+      const matches = fuzzyMatchDesigns(item.name, matchableDesigns, 1);
+      const top = matches[0];
+      return { ...item, match: top && top.score >= IMPORT_MATCH_THRESHOLD ? top : null };
+    });
+    const seenDesignIds = new Set();
+    const newRows = [];
+    for (const item of preview) {
+      if (item.match) {
+        const d = item.match.design;
+        if (seenDesignIds.has(d.id)) continue;
+        seenDesignIds.add(d.id);
+        newRows.push({ id: Math.random().toString(36).slice(2), type: 'linked', design_id: d.id, name: d.name, productName: d.products?.name || '', text: '', qty: item.qty, suggested: true });
+      } else {
+        newRows.push({ id: Math.random().toString(36).slice(2), type: 'manual', text: item.name, design_id: '', name: '', productName: '', qty: item.qty, suggested: true });
+      }
+    }
+    if (newRows.length > 0) {
+      setRows(newRows);
+      setPasteText('');
+      setFocusedRow(0);
+      setEditingRow(null);
+      setSelectedIndices(new Set());
+      e.preventDefault();
+    }
+  }
+
   async function handleSave() {
     if (!customerName.trim()) { setError('El nombre del cliente es obligatorio.'); return; }
     const validRows = rows.filter(r =>
@@ -445,7 +477,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         order_code: generateAdminCode(), source: 'admin', status: 'pending',
         customer_name: customerName.trim(),
         created_at: date ? new Date(date).toISOString() : new Date().toISOString(),
-        delivery_date: deliveryDate || null,
+        delivery_date: deliveryDate ? new Date(deliveryDate).toISOString() : null,
         seller_id: sellerId || null, items, _operator_id: operatorId || null,
       });
       onClose(null);
@@ -485,7 +517,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha entrega</div>
-              <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
+              <input type="datetime-local" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
                 style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
             </div>
           </div>
@@ -514,26 +546,21 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseños</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
-                <button type="button" onClick={() => { setShowPasteArea(v => !v); setTimeout(() => pasteRef.current?.focus(), 50); }}
-                  style={{ border: `1.5px solid ${showPasteArea ? '#d97706' : '#dde1ef'}`, background: showPasteArea ? '#fffbeb' : 'white', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: showPasteArea ? '#92400e' : '#5a6380' }}>
-                  {showPasteArea ? '✕ Cerrar' : '↙ Pegar lista'}
-                </button>
-              </div>
+              <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
             </div>
 
             <div style={{ border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden' }}>
 
-              {/* ── Paste area ── */}
-              {showPasteArea && (
-                <div style={{ borderBottom: '1.5px solid #fde68a', background: '#fffbeb' }}>
-                  <textarea ref={pasteRef} value={pasteText}
-                    onChange={e => setPasteText(e.target.value)}
-                    placeholder={'Pegá el texto del pedido aquí...\n\nEjemplo:\n24 de cada\nArg 1 2 3\nBoca\nRiver'}
-                    style={{ width: '100%', minHeight: 90, border: 'none', borderBottom: '1px solid #fde68a', background: 'transparent', resize: 'vertical', padding: '8px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', outline: 'none', color: '#1B2F5E', lineHeight: 1.5 }}
-                  />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', flexWrap: 'wrap' }}>
+              {/* ── Paste area — always visible ── */}
+              <div style={{ borderBottom: `1px solid ${pasteText.trim() ? '#fde68a' : '#f0f2f8'}`, background: pasteText.trim() ? '#fffbeb' : 'transparent' }}>
+                <textarea ref={pasteRef} value={pasteText}
+                  onChange={e => setPasteText(e.target.value)}
+                  onPaste={handlePasteImport}
+                  placeholder="Pegá una lista de diseños para importar..."
+                  style={{ width: '100%', minHeight: 52, border: 'none', background: 'transparent', resize: 'vertical', padding: '7px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', outline: 'none', color: '#1B2F5E', lineHeight: 1.5 }}
+                />
+                {pasteText.trim() && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', flexWrap: 'wrap' }}>
                     {parsedPreview.length > 0 ? (
                       <>
                         <span style={{ fontSize: 11, color: '#92400e', fontWeight: 700 }}>
@@ -545,16 +572,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                           </span>
                         )}
                         <button type="button" onClick={importFromText}
-                          style={{ marginLeft: 'auto', border: 'none', background: '#d97706', color: 'white', borderRadius: 6, padding: '5px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                          style={{ marginLeft: 'auto', border: 'none', background: '#d97706', color: 'white', borderRadius: 6, padding: '3px 12px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
                           Cargar {parsedPreview.length}
                         </button>
                       </>
                     ) : (
-                      <span style={{ fontSize: 11, color: '#b45309' }}>Pegá un texto para ver la vista previa</span>
+                      <span style={{ fontSize: 11, color: '#b45309' }}>Sin coincidencias</span>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Bulk qty bar */}
               {selectedIndices.size > 1 && (
