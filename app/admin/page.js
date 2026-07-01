@@ -928,6 +928,8 @@ useEffect(() => {
     setInviteLinksModal(null);
     setOrderDetail(null);
     setVersionSnapshotViewer(prev => prev.open ? { open: false, snapshot: null, data: null, loading: false, error: '' } : prev);
+    setShowCreateOrder(false);
+    setActiveDraftId(null);
   }
 
   function buildAdminUrlFromState() {
@@ -987,6 +989,9 @@ useEffect(() => {
       setTab('users');
       params.set('modal', 'links-invitacion');
       params.set('usuario', inviteLinksModal.id);
+    } else if (showCreateOrder) {
+      params.set('modal', 'nuevo-pedido');
+      if (activeDraftId) params.set('borrador', activeDraftId);
     } else if (orderDetail?.id) {
       setTab('orders');
       params.set('modal', 'pedido');
@@ -1185,6 +1190,11 @@ useEffect(() => {
           setOrderDetail(null);
         }
       }
+    } else if (modal === 'nuevo-pedido') {
+      resetUrlModalState();
+      const draftId = params.get('borrador') || null;
+      setActiveDraftId(draftId);
+      setShowCreateOrder(true);
     } else if (modal === 'version') {
       const snapshot = findVersionSnapshotFromAdminUrl(params.get('version'));
       if (!snapshot && !adminDataReadyForSnapshots) {
@@ -1260,6 +1270,8 @@ useEffect(() => {
     orderDetail,
     versionSnapshotViewer.open,
     versionSnapshotViewer.snapshot?.id,
+    showCreateOrder,
+    activeDraftId,
   ]);
 
   useEffect(() => {

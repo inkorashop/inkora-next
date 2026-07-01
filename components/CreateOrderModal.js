@@ -18,42 +18,69 @@ function nowStr() {
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+function todayStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
 function newRow() {
   return { id: Math.random().toString(36).slice(2), type: 'manual', text: '', design_id: '', name: '', productName: '', qty: 0 };
 }
 
 const QTY_DELTAS = [-10, -2, 2, 10];
 
-// ── Row component ────────────────────────────────────────────────────────────
-function DesignRow({ row, index, active, activeCell, rows, designs,
-  onChange, onDelete, onFocus, onKeyNav, isLast, prevQty, selected, onSelect }) {
+// ── Row component ─────────────────────────────────────────────────────────────
+function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
+  onChange, onDelete, onKeyNav, isLast, selected, onSelect,
+  onStartEdit, onEndEdit, onFocusQty, qtyInputRef }) {
 
   const [inputVal, setInputVal] = useState(row.type === 'linked' ? row.name : row.text);
   const [dropItems, setDropItems] = useState([]);
-  const [dropIdx, setDropIdx]   = useState(-1);
+  const [dropIdx, setDropIdx] = useState(-1);
   const inputRef = useRef(null);
-  const qtyRef   = useRef(null);
   const dropRef  = useRef(null);
 
-  const isActive = active && activeCell === 'design';
-  const isQty    = active && activeCell === 'qty';
-
+  // Sync display value when row data changes externally
   useEffect(() => {
     const next = row.type === 'linked' ? row.name : row.text;
     setInputVal(next);
   }, [row.type, row.name, row.text]);
 
+  // Focus and select-all when entering edit mode
   useEffect(() => {
-    if (isActive && inputRef.current) inputRef.current.focus();
-    if (isQty   && qtyRef.current)   qtyRef.current.focus();
-  }, [isActive, isQty]);
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
 
+  // Compute dropdown when typing (only while editing)
   useEffect(() => {
-    if (!isActive || !inputVal.trim()) { setDropItems([]); setDropIdx(-1); return; }
+    if (!editing || !inputVal.trim()) { setDropItems([]); setDropIdx(-1); return; }
     const matches = fuzzyMatchDesigns(inputVal, designs, 8);
     setDropItems(matches);
     setDropIdx(-1);
-  }, [inputVal, isActive, designs]);
+  }, [inputVal, editing, designs]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropItems.length) return;
+    function onOutside(e) {
+      if (!inputRef.current?.contains(e.target) && !dropRef.current?.contains(e.target)) {
+        setDropItems([]); setDropIdx(-1);
+      }
+    }
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [dropItems.length]);
+
+  // Per-row: exclude own design_id from dupe set
+  const localUsedIds = useMemo(() => {
+    const s = new Set(usedDesignIds);
+    if (row.type === 'linked' && row.design_id) s.delete(row.design_id);
+    return s;
+  }, [usedDesignIds, row.type, row.design_id]);
 
   function handleInputChange(e) {
     const val = e.target.value;
@@ -62,11 +89,12 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
   }
 
   function selectDrop(item) {
+    if (localUsedIds.has(item.design.id)) return;
     const d = item.design;
     onChange(index, { type: 'linked', design_id: d.id, name: d.name, productName: d.products?.name || '', text: '' });
     setInputVal(d.name);
-    setDropItems([]);
-    setDropIdx(-1);
+    setDropItems([]); setDropIdx(-1);
+    onEndEdit();
     onKeyNav('next-row', index);
   }
 
@@ -75,40 +103,58 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
       if (e.key === 'ArrowDown') { e.preventDefault(); setDropIdx(i => Math.min(i + 1, dropItems.length - 1)); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setDropIdx(i => Math.max(i - 1, -1)); return; }
       if (e.key === 'Enter' && dropIdx >= 0) { e.preventDefault(); selectDrop(dropItems[dropIdx]); return; }
-      if (e.key === 'Escape') { setDropItems([]); setDropIdx(-1); return; }
+      if (e.key === 'Escape')    { e.preventDefault(); setDropItems([]); setDropIdx(-1); onEndEdit(); return; }
     }
-    if (e.key === 'Enter') { e.preventDefault(); onKeyNav('next-row', index); return; }
-    if (e.key === 'ArrowRight') { e.preventDefault(); onKeyNav('qty', index); }
+    if (e.key === 'Escape')    { e.preventDefault(); onEndEdit(); return; }
+    if (e.key === 'Enter')     { e.preventDefault(); onEndEdit(); onKeyNav('next-row', index); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); onEndEdit(); onKeyNav('next-row', index); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); onEndEdit(); onKeyNav('prev-row', index); return; }
+    if (e.key === 'ArrowRight'){ e.preventDefault(); onEndEdit(); onKeyNav('qty', index); return; }
     if (e.key === 'Backspace' && !inputVal && rows.length > 1) { e.preventDefault(); onDelete(index); onKeyNav('prev-row', index); }
   }
 
   function handleQtyKeyDown(e) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); onKeyNav('design', index); }
-    if (e.key === 'Enter')     { e.preventDefault(); onKeyNav('next-row', index); }
+    if (e.key === 'Enter')     { e.preventDefault(); onKeyNav('next-qty', index); }
     if (e.key === 'ArrowDown') { e.preventDefault(); onKeyNav('next-qty', index); }
     if (e.key === 'ArrowUp')   { e.preventDefault(); onKeyNav('prev-qty', index); }
   }
 
   const linked = row.type === 'linked' && row.design_id;
+  const bg = selected ? '#dbeafe' : focused ? '#f1f5f9' : 'transparent';
 
   return (
-    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '14px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: selected ? '#e8f0fe' : active ? '#f0f4ff' : 'transparent', borderRadius: 6 }}>
+    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, alignItems: 'center', padding: '3px 8px', background: bg, borderRadius: 6 }}>
 
-      {/* Selection indicator */}
+      {/* Selection indicator — hamburger lines */}
       <div onMouseDown={e => { e.preventDefault(); onSelect(index, e); }}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', alignSelf: 'stretch' }}>
-        <div style={{ width: 9, height: 9, borderRadius: 2, border: `1.5px solid ${selected ? '#2D6BE4' : '#c0c5d4'}`, background: selected ? '#2D6BE4' : 'transparent', flexShrink: 0 }} />
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2.5px', cursor: 'pointer', alignSelf: 'stretch', padding: '0 2px' }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width: 8, height: 1.5, borderRadius: 1, background: selected ? '#2D6BE4' : '#c0c5d4' }} />
+        ))}
       </div>
 
       {/* Design cell */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {linked && <DesignThumb designId={row.design_id} name={row.name} size={22} />}
-        <input ref={inputRef} value={inputVal} onChange={handleInputChange}
-          onFocus={() => onFocus(index, 'design')} onKeyDown={handleInputKeyDown}
-          placeholder={isLast && rows.length === 1 ? 'Buscar o escribir diseño...' : ''}
-          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 12,
-            fontWeight: linked ? 700 : 400, color: linked ? '#1B2F5E' : '#5a6380',
-            fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
+        {editing ? (
+          <input ref={inputRef} value={inputVal} onChange={handleInputChange}
+            onBlur={() => { if (!dropItems.length) onEndEdit(); }}
+            onKeyDown={handleInputKeyDown}
+            placeholder={isLast && rows.length === 1 ? 'Buscar o escribir diseño...' : ''}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 12,
+              fontWeight: linked ? 700 : 400, color: linked ? '#1B2F5E' : '#5a6380',
+              fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
+        ) : (
+          <div onClick={e => { e.stopPropagation(); onStartEdit(index); }}
+            style={{ flex: 1, fontSize: 12, fontWeight: linked ? 700 : 400,
+              color: linked ? '#1B2F5E' : isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc',
+              fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif',
+              cursor: 'text', userSelect: 'none', whiteSpace: 'nowrap',
+              overflow: 'hidden', textOverflow: 'ellipsis', padding: '2px 0', minHeight: 18 }}>
+            {inputVal || (isLast && rows.length === 1 ? 'Clic o Enter para buscar...' : '')}
+          </div>
+        )}
       </div>
 
       {/* Qty cell — inline ±buttons always visible */}
@@ -120,10 +166,10 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
             {d}
           </button>
         ))}
-        <input ref={qtyRef} type="number" min={0} max={9999}
+        <input ref={qtyInputRef} type="number" min={0} max={9999}
           value={row.qty}
           onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-          onFocus={e => { e.target.select(); onFocus(index, 'qty'); }}
+          onFocus={e => { e.target.select(); onFocusQty(index); }}
           onKeyDown={handleQtyKeyDown}
           style={{ width: 34, textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 5, padding: '2px 2px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}
         />
@@ -141,7 +187,7 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
         style={{ border: 'none', background: 'none', cursor: rows.length > 1 ? 'pointer' : 'default', color: '#c0c5d4', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
 
       {/* Design dropdown — portal */}
-      {isActive && dropItems.length > 0 && typeof window !== 'undefined' && createPortal(
+      {editing && dropItems.length > 0 && typeof window !== 'undefined' && createPortal(
         (() => {
           const rect = inputRef.current?.getBoundingClientRect();
           if (!rect) return null;
@@ -149,20 +195,31 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
             <div ref={dropRef} style={{ position: 'fixed', top: rect.bottom + 2, left: rect.left, width: rect.width + 80,
               zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8,
               boxShadow: '0 4px 20px rgba(0,0,0,0.15)', maxHeight: 260, overflowY: 'auto' }}>
-              {dropItems.map((item, i) => (
-                <div key={item.design.id} onMouseDown={e => { e.preventDefault(); selectDrop(item); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer',
-                    background: i === dropIdx ? '#f0f4ff' : 'transparent',
-                    borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none' }}>
-                  <DesignThumb designId={item.design.id} name={item.design.name} size={20} />
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.design.name}</span>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
-                    background: item.score >= 0.8 ? '#dcfce7' : item.score >= 0.6 ? '#fef9c3' : '#fee2e2',
-                    color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c' }}>
-                    {Math.round(item.score * 100)}%
-                  </span>
-                </div>
-              ))}
+              {dropItems.map((item, i) => {
+                const isDupe = localUsedIds.has(item.design.id);
+                return (
+                  <div key={item.design.id}
+                    onMouseDown={e => { e.preventDefault(); if (!isDupe) selectDrop(item); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                      cursor: isDupe ? 'not-allowed' : 'pointer',
+                      background: i === dropIdx ? '#f0f4ff' : 'transparent',
+                      opacity: isDupe ? 0.45 : 1,
+                      borderBottom: i < dropItems.length - 1 ? '1px solid #f0f2f8' : 'none' }}>
+                    <DesignThumb designId={item.design.id} name={item.design.name} size={20} />
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1B2F5E', overflow: 'hidden',
+                      textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      textDecoration: isDupe ? 'line-through' : 'none' }}>{item.design.name}</span>
+                    {isDupe
+                      ? <span style={{ fontSize: 9, color: '#9aa3bc', whiteSpace: 'nowrap' }}>ya agregado</span>
+                      : <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
+                          background: item.score >= 0.8 ? '#dcfce7' : item.score >= 0.6 ? '#fef9c3' : '#fee2e2',
+                          color:      item.score >= 0.8 ? '#15803d' : item.score >= 0.6 ? '#92400e' : '#b91c1c' }}>
+                          {Math.round(item.score * 100)}%
+                        </span>
+                    }
+                  </div>
+                );
+              })}
             </div>
           );
         })(),
@@ -172,22 +229,54 @@ function DesignRow({ row, index, active, activeCell, rows, designs,
   );
 }
 
-// ── Main modal ───────────────────────────────────────────────────────────────
+// ── Main modal ────────────────────────────────────────────────────────────────
 export default function CreateOrderModal({ sellers = [], operators = [], currentAdminSellerId = null, initialValues = null, recentOrders = [], onSave, onClose, onDiscard }) {
   const { designs } = useDesigns();
 
   const [customerName, setCustomerName] = useState(initialValues?.customerName ?? '');
   const [date,         setDate]         = useState(initialValues?.date         ?? nowStr());
-  const [deliveryDate, setDeliveryDate] = useState(initialValues?.deliveryDate ?? '');
+  const [deliveryDate, setDeliveryDate] = useState(initialValues?.deliveryDate ?? todayStr());
   const [sellerId,     setSellerId]     = useState(initialValues?.sellerId     ?? (currentAdminSellerId || ''));
   const [operatorId,   setOperatorId]   = useState(initialValues?.operatorId   ?? (operators[0]?.id || ''));
   const [rows,         setRows]         = useState(initialValues?.rows         ?? [newRow()]);
-  const [activeRow,      setActiveRow]      = useState(0);
-  const [activeCell,     setActiveCell]     = useState('design');
+  const [focusedRow,   setFocusedRow]   = useState(null);
+  const [editingRow,   setEditingRow]   = useState(null);
   const [selectedIndices, setSelectedIndices] = useState(new Set());
   const lastSelectedRef = useRef(null);
-  const [saving,         setSaving]         = useState(false);
-  const [error,          setError]          = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+
+  // Refs for qty inputs — keyed by row index
+  const qtyRefs = useRef({});
+
+  // Snapshot ref to avoid stale closures in global keydown
+  const snap = useRef({});
+  snap.current = { editingRow, focusedRow, rows };
+
+  // Auto-save draft to localStorage on every meaningful change
+  const draftIdRef = useRef(initialValues?.id || null);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const hasContent = rows.some(r => r.name || r.text) || customerName.trim();
+      if (!hasContent) return;
+      if (!draftIdRef.current) draftIdRef.current = `draft_${Date.now()}`;
+      const draft = { id: draftIdRef.current, customerName, date, deliveryDate, sellerId, operatorId, rows };
+      try {
+        const stored = JSON.parse(localStorage.getItem('inkora_order_drafts') || '[]');
+        const idx = stored.findIndex(d => d.id === draft.id);
+        if (idx >= 0) stored[idx] = draft; else stored.push(draft);
+        localStorage.setItem('inkora_order_drafts', JSON.stringify(stored));
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [rows, customerName, date, deliveryDate, sellerId, operatorId]);
+
+  // All design_ids currently used (for dupe prevention)
+  const usedDesignIds = useMemo(() => {
+    const s = new Set();
+    rows.forEach(r => { if (r.type === 'linked' && r.design_id) s.add(r.design_id); });
+    return s;
+  }, [rows]);
 
   function handleSelect(index, e) {
     if (e.ctrlKey || e.metaKey) {
@@ -199,6 +288,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       setSelectedIndices(prev => (prev.size === 1 && prev.has(index)) ? new Set() : new Set([index]));
     }
     lastSelectedRef.current = index;
+    setFocusedRow(index);
   }
 
   function applyBulkDelta(delta) {
@@ -208,18 +298,54 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     setRows(prev => prev.map((r, i) => selectedIndices.has(i) ? { ...r, qty: value } : r));
   }
 
-  const hasContent = rows.some(r => (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim()));
-
-  // Close without saving: pass draft state to parent
   const handleClose = useCallback(() => {
     const filled = rows.some(r => (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim()));
     onClose(filled || customerName.trim() ? { customerName, date, deliveryDate, sellerId, operatorId, rows } : null);
   }, [customerName, date, deliveryDate, sellerId, operatorId, rows, onClose]);
 
+  // Global keyboard handler — uses snap ref to avoid stale closures
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') handleClose(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
+    function onKey(e) {
+      if (e.defaultPrevented) return;
+      const { editingRow, focusedRow, rows } = snap.current;
+      const tag = document.activeElement?.tagName;
+      const inTextInput = (tag === 'INPUT' || tag === 'TEXTAREA') && document.activeElement?.type !== 'number';
+
+      if (e.key === 'Escape') {
+        if (editingRow !== null) { setEditingRow(null); return; }
+        handleClose(); return;
+      }
+
+      // Arrow navigation — available when not typing in a text field
+      if (!inTextInput) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setFocusedRow(r => Math.min(rows.length - 1, (r ?? -1) + 1));
+          setEditingRow(null);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setFocusedRow(r => Math.max(0, (r ?? rows.length) - 1));
+          setEditingRow(null);
+          return;
+        }
+        if (e.key === 'Enter' && focusedRow !== null && editingRow === null) {
+          e.preventDefault();
+          setEditingRow(focusedRow);
+          return;
+        }
+        // Digit → start qty edit for focused row
+        if (/^\d$/.test(e.key) && focusedRow !== null && editingRow === null) {
+          e.preventDefault();
+          const digit = parseInt(e.key, 10);
+          setRows(prev => prev.map((r, i) => i === focusedRow ? { ...r, qty: digit } : r));
+          setTimeout(() => { qtyRefs.current[focusedRow]?.focus(); }, 0);
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [handleClose]);
 
   function changeRow(index, patch) {
@@ -228,31 +354,35 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
   function deleteRow(index) {
     setRows(prev => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+    if (focusedRow === index) setFocusedRow(Math.max(0, index - 1));
+    if (editingRow === index) setEditingRow(null);
   }
 
   function handleKeyNav(action, fromIndex) {
     setRows(prev => {
-      let next = [...prev];
-      let nextRow = fromIndex, nextCell = 'design';
-      if (action === 'next-row') {
-        if (fromIndex === prev.length - 1) next = [...prev, newRow()];
-        nextRow = fromIndex + 1;
-        nextCell = 'design';
-      } else if (action === 'prev-row') {
-        nextRow = Math.max(0, fromIndex - 1);
-        nextCell = 'design';
-      } else if (action === 'qty') {
-        nextRow = fromIndex; nextCell = 'qty';
+      const next = action === 'next-row' || action === 'next-qty'
+        ? (fromIndex === prev.length - 1 ? [...prev, newRow()] : prev)
+        : prev;
+
+      let targetRow = fromIndex;
+      if (action === 'next-row' || action === 'next-qty') targetRow = fromIndex + 1;
+      else if (action === 'prev-row' || action === 'prev-qty') targetRow = Math.max(0, fromIndex - 1);
+
+      setFocusedRow(targetRow);
+
+      if (action === 'qty') {
+        setEditingRow(null);
+        setTimeout(() => { qtyRefs.current[fromIndex]?.focus(); }, 0);
       } else if (action === 'design') {
-        nextRow = fromIndex; nextCell = 'design';
-      } else if (action === 'next-qty') {
-        if (fromIndex === prev.length - 1) next = [...prev, newRow()];
-        nextRow = fromIndex + 1; nextCell = 'qty';
-      } else if (action === 'prev-qty') {
-        nextRow = Math.max(0, fromIndex - 1); nextCell = 'qty';
+        setEditingRow(fromIndex);
+      } else if (action === 'next-qty' || action === 'prev-qty') {
+        setEditingRow(null);
+        setTimeout(() => { qtyRefs.current[targetRow]?.focus(); }, 0);
+      } else {
+        // next-row / prev-row: leave editing off; row navigated without entering edit mode
+        setEditingRow(null);
       }
-      setActiveRow(nextRow);
-      setActiveCell(nextCell);
+
       return next;
     });
   }
@@ -262,8 +392,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     const validRows = rows.filter(r =>
       (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim())
     );
-    setSaving(true);
-    setError('');
+    setSaving(true); setError('');
     try {
       const items = validRows.map(r =>
         r.type === 'linked'
@@ -290,10 +419,8 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   return (
-    <div
-      onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
-      style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-    >
+    <div onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ background: 'white', borderRadius: 14, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', height: '82vh', maxHeight: '82vh', overflow: 'hidden' }}>
 
         {/* Header */}
@@ -316,12 +443,12 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           {/* Dates */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha pedido</div>
               <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
                 style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
             </div>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Entrega</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha entrega</div>
               <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)}
                 style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
             </div>
@@ -351,7 +478,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseños</div>
-              <div style={{ fontSize: 10, color: '#9aa3bc' }}>Enter = siguiente · → = cant · ↓ = lista</div>
+              <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ navegar · Enter editar diseño · dígito = cant</div>
             </div>
             <div style={{ border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden' }}>
               {/* Bulk qty bar */}
@@ -373,25 +500,34 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                 </div>
               )}
               {/* Column headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 64px 22px', gap: 4, padding: '4px 8px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr auto 22px', gap: 4, padding: '4px 8px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8' }}>
                 <span />
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseño</span>
                 <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' }}>Cant.</span>
                 <span />
               </div>
               {rows.map((row, i) => (
-                <DesignRow key={row.id} row={row} index={i} active={activeRow === i} activeCell={activeCell}
-                  rows={rows} designs={designs} onChange={changeRow} onDelete={deleteRow}
-                  onFocus={(ri, cell) => { setActiveRow(ri); setActiveCell(cell); }}
-                  onKeyNav={handleKeyNav} isLast={i === rows.length - 1}
+                <DesignRow key={row.id} row={row} index={i}
+                  focused={focusedRow === i && !selectedIndices.has(i)}
+                  editing={editingRow === i}
+                  rows={rows} designs={designs} usedDesignIds={usedDesignIds}
+                  onChange={changeRow} onDelete={deleteRow}
+                  onKeyNav={handleKeyNav}
+                  onStartEdit={idx => { setEditingRow(idx); setFocusedRow(idx); }}
+                  onEndEdit={() => setEditingRow(null)}
+                  onFocusQty={idx => { setFocusedRow(idx); setEditingRow(null); }}
+                  isLast={i === rows.length - 1}
                   prevQty={i > 0 ? rows[i - 1].qty : null}
                   selected={selectedIndices.has(i)}
-                  onSelect={handleSelect} />
+                  onSelect={handleSelect}
+                  qtyInputRef={el => { qtyRefs.current[i] = el; }}
+                />
               ))}
               <button type="button"
-                onClick={() => { setRows(p => [...p, newRow()]); setActiveRow(rows.length); setActiveCell('design'); }}
-                style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: '5px 8px', fontSize: 11, color: '#9aa3bc', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }}
-              >+ Agregar línea</button>
+                onClick={() => { const idx = rows.length; setRows(p => [...p, newRow()]); setFocusedRow(idx); setEditingRow(idx); }}
+                style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', padding: '5px 8px', fontSize: 11, color: '#9aa3bc', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }}>
+                + Agregar línea
+              </button>
             </div>
           </div>
 
@@ -420,7 +556,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '12px 18px', borderTop: '1.5px solid #f0f2f8', flexShrink: 0, alignItems: 'center' }}>
           {onDiscard && (
             <button onClick={onDiscard} style={{ border: '1.5px solid #fecaca', background: '#fff5f5', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#b91c1c', marginRight: 'auto' }}>
-              Borrar borrador
+              Borrar
             </button>
           )}
           <button onClick={handleClose} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380' }}>Cancelar</button>
