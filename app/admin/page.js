@@ -4739,7 +4739,7 @@ useEffect(() => {
     <DesignsProvider designs={designs}>
     <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
       {adminDarkMode && (
-        <style jsx global>{`
+        <style dangerouslySetInnerHTML={{__html: `
           [data-admin-theme="dark"] input,
           [data-admin-theme="dark"] select,
           [data-admin-theme="dark"] textarea {
@@ -4854,9 +4854,9 @@ useEffect(() => {
             background: rgba(45,107,228,0.45);
             color: white;
           }
-        `}</style>
+        `}} />
       )}
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{__html: `
         .adm-tabs { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .adm-tabs::-webkit-scrollbar { display: none; }
         @media (max-width: 700px) {
@@ -4870,7 +4870,7 @@ useEffect(() => {
           .adm-header-user { display: none !important; }
           .adm-content { padding: 0 4px !important; margin-top: 6px !important; }
         }
-      `}</style>
+      `}} />
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
