@@ -1188,16 +1188,16 @@ export default function ProductionTab({
 
   // Auto-match PDFs al seleccionar pedido, conectar bridge, cargar orders o cargar tareas.
   // orders.length: bridge suele conectar antes que lleguen las orders.
-  // selectedOrderTasks.length: tareas pueden llegar después del bridge; sin esta dep el match
-  // sale temprano (selectedOrderTasks vacío) y nunca reintenta.
+  // productionTasks.length: tareas pueden llegar después del bridge; re-dispara el match
+  // cuando cargaron (selectedOrderTasks se computa después del efecto, no se puede usar en deps).
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim() && selectedOrderTasks.length > 0) {
+    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
       const scan = !hasScannedOnBridgeConnectRef.current;
       hasScannedOnBridgeConnectRef.current = true;
       matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, selectedOrderTasks.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, productionTasks.length]);
 
   // Auto-escanear PDFs al conectar bridge (mantiene índice sincronizado con Diseños)
   useEffect(() => {
