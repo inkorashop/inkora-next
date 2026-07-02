@@ -38,7 +38,9 @@ import {
   getBridgePdfRoots,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
+  getBridgePdfCatalog,
 } from '@/lib/print-bridge-client';
+import { similarity } from '@/lib/fuzzy-match';
 
 const DESIGN_FORMAT_OPTIONS = [
   { value: 'jpg', label: '.jpg', accept: 'image/jpeg,.jpg,.jpeg' },
@@ -1730,6 +1732,36 @@ useEffect(() => {
       (payload.matches || []).forEach(match => {
         nextMatches[match.id] = match;
       });
+
+      // Fuzzy-match unmatched designs against full PDF catalog
+      const unmatched = candidates.filter(c => !nextMatches[c.id]?.found);
+      if (unmatched.length > 0) {
+        try {
+          const catalog = await getBridgePdfCatalog(url, token);
+          const allPdfs = catalog?.pdfs ?? [];
+          if (allPdfs.length > 0) {
+            for (const candidate of unmatched) {
+              let bestScore = 0;
+              let bestPdf = null;
+              for (const pdf of allPdfs) {
+                const sc = similarity(candidate.name, pdf.rootName || pdf.fileName || '');
+                if (sc > bestScore) { bestScore = sc; bestPdf = pdf; }
+              }
+              if (bestScore >= 0.35 && bestPdf) {
+                nextMatches[candidate.id] = {
+                  id: candidate.id,
+                  found: false,
+                  fuzzyMatch: true,
+                  score: Math.round(bestScore * 100),
+                  fileName: bestPdf.fileName,
+                  rootName: bestPdf.rootName,
+                  relativePath: bestPdf.relativePath,
+                };
+              }
+            }
+          }
+        } catch {}
+      }
 
       setDesignPdfMatches(prev => ({ ...prev, ...nextMatches }));
       setDesignPdfSummary({
@@ -6256,18 +6288,48 @@ useEffect(() => {
                           border:'1px solid #b7ebcf',
                           borderRadius:5,
                           padding:'3px 6px',
-                          maxWidth:120,
+                          maxWidth:130,
                           overflow:'hidden',
                           textOverflow:'ellipsis',
                           whiteSpace:'nowrap',
                           lineHeight:1.3,
                           cursor:'default',
+                          display:'inline-flex',
+                          alignItems:'center',
+                          gap:4,
                         }}
                       >
-                        {pdfMatch.fileName}
+                        <span style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pdfMatch.fileName}</span>
+                        {pdfMatch.score != null && <span style={{flexShrink:0, opacity:0.7}}>{pdfMatch.score}%</span>}
                       </span>
                     )}
-                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && !pdfMatch?.found && (
+                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && !pdfMatch?.found && pdfMatch?.fuzzyMatch && (
+                      <span
+                        title={`Posible coincidencia (${pdfMatch.score}%): ${pdfMatch.rootName}\\${pdfMatch.relativePath}`}
+                        style={{
+                          fontSize:10,
+                          fontWeight:800,
+                          color:'#92400e',
+                          background:'#fef9c3',
+                          border:'1px solid #fde68a',
+                          borderRadius:5,
+                          padding:'3px 6px',
+                          maxWidth:130,
+                          overflow:'hidden',
+                          textOverflow:'ellipsis',
+                          whiteSpace:'nowrap',
+                          lineHeight:1.3,
+                          cursor:'default',
+                          display:'inline-flex',
+                          alignItems:'center',
+                          gap:4,
+                        }}
+                      >
+                        <span style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{pdfMatch.fileName}</span>
+                        <span style={{flexShrink:0, opacity:0.8}}>{pdfMatch.score}%?</span>
+                      </span>
+                    )}
+                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && !pdfMatch?.found && !pdfMatch?.fuzzyMatch && (
                       <span
                         title="No se encontró PDF local para este diseño"
                         style={{border:'1px solid #fecaca', background:'#fff5f5', color:'#b91c1c', borderRadius:5, padding:'3px 5px', fontSize:10, fontWeight:900, lineHeight:1, display:'inline-flex', alignItems:'center'}}
