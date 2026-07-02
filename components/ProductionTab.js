@@ -1654,12 +1654,9 @@ export default function ProductionTab({
                       <span>{STATUS_LABEL[selectedOrderRow.productionStatus] || selectedOrderRow.productionStatus}</span>
                     </div>
                   )}
-                  {selectedOrderRow?.itemsSummary && (
-                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedOrderRow.itemsSummary}>{selectedOrderRow.itemsSummary}</div>
-                  )}
-                  {selectedOrderRow?.notes && (
-                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic' }}>{selectedOrderRow.notes}</div>
-                  )}
+                  {/* Always render both lines so header height is constant across orders */}
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.itemsSummary || ''}>{selectedOrderRow?.itemsSummary || ''}</div>
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.notes || ''}>{selectedOrderRow?.notes || ''}</div>
                 </div>
                 {selectedOrderRow && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
@@ -1703,19 +1700,24 @@ export default function ProductionTab({
             ) : (
               <>
                 {/* Summary totals */}
-                <div style={{ display: 'flex', gap: 6, padding: '6px 8px 3px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 6, padding: '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
                   {[
-                    { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7' },
-                    { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac' },
-                    { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047' },
-                    { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' },
-                  ].map(({ label, value, color, bg, border }) => {
+                    { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
+                    { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
+                    { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047', showBar: true },
+                    { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5', showBar: true },
+                  ].map(({ label, value, color, bg, border, showBar }) => {
                     const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
                     return (
-                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', opacity: 0.75 }}>{label}</span>
-                        <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
-                        {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.55 }}>{pct}%</span>}
+                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', opacity: 0.75 }}>{label}</span>
+                          <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
+                          {showBar && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.55 }}>{pct}%</span>}
+                        </div>
+                        <div style={{ marginTop: 4, height: 3, borderRadius: 999, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: showBar ? `${Math.min(100, pct)}%` : '100%', background: color, borderRadius: 999, transition: 'width 0.3s', opacity: showBar ? 1 : 0.25 }} />
+                        </div>
                       </div>
                     );
                   })}
