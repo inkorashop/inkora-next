@@ -207,12 +207,13 @@ function NoteCell({ row, onSave }) {
 // FIX: StockCell ahora recibe qty_produced como prop separada para evitar que el re-render
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
-function StockCell({ qtyProduced, onSave, step = 1 }) {
+function StockCell({ qtyProduced, onSave, onChange, step = 1 }) {
   const [val, setVal] = useState(stockInputValue(qtyProduced));
   const editingRef = useRef(false);
   const saveTimerRef = useRef(null);
   const latestQtyRef = useRef(qtyProduced);
   const onSaveRef = useRef(onSave);
+  const onChangeRef = useRef(onChange);
   const savingRef = useRef(false);
   const queuedQtyRef = useRef(null);
 
@@ -223,9 +224,8 @@ function StockCell({ qtyProduced, onSave, step = 1 }) {
     }
   }, [qtyProduced]);
 
-  useEffect(() => {
-    onSaveRef.current = onSave;
-  }, [onSave]);
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -291,6 +291,7 @@ function StockCell({ qtyProduced, onSave, step = 1 }) {
     if (nextQty === baseQty) return;
     editingRef.current = true;
     setVal(stockInputValue(nextQty));
+    onChangeRef.current?.(nextQty);
     scheduleSave(nextQty);
   };
 
@@ -915,11 +916,18 @@ export default function ProductionTab({
       setLoadingTasks(false);
       return;
     }
-    setProductionTasks((data || []).map(task => ({
-      ...task,
-      id: task.id || task.task_id,
-      note: task.note ?? task.task_note ?? '',
-    })));
+    setProductionTasks(prev => {
+      const prevMap = Object.fromEntries(prev.map(t => [t.id, t]));
+      return (data || []).map(task => {
+        const existing = prevMap[task.id || task.task_id];
+        return {
+          ...task,
+          id: task.id || task.task_id,
+          note: task.note ?? task.task_note ?? '',
+          printed_qty: task.printed_qty ?? existing?.printed_qty ?? 0,
+        };
+      });
+    });
     setLoadingTasks(false);
   }, [supabase]);
 
@@ -1711,6 +1719,7 @@ export default function ProductionTab({
                               <StockCell
                                 qtyProduced={task.printed_qty || 0}
                                 onSave={qty => saveProductionTask(task, { printed_qty: qty })}
+                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
                                 step={2}
                               />
                               <button
@@ -1728,6 +1737,7 @@ export default function ProductionTab({
                               <StockCell
                                 qtyProduced={task.produced_qty || 0}
                                 onSave={qty => saveProductionTask(task, { produced_qty: qty })}
+                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
                               />
                               <button
                                 type="button"
@@ -1743,6 +1753,7 @@ export default function ProductionTab({
                             <StockCell
                               qtyProduced={task.waste_qty || 0}
                               onSave={qty => saveProductionTask(task, { waste_qty: qty })}
+                              onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, waste_qty: qty } : t))}
                             />
                           </td>
                           <td style={{ padding: '4px 5px' }}>
