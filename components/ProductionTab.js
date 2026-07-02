@@ -420,7 +420,10 @@ export default function ProductionTab({
   };
 
   const { designs: ctxDesigns } = useDesigns();
-  const [manualItemLinks, setManualItemLinks] = useState({}); // { "orderId:idx": { design, score } | null }
+  // Persist linked items across tab switches (component unmounts/remounts)
+  const [manualItemLinks, setManualItemLinks] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('inkora_manual_links') || '{}'); } catch { return {}; }
+  });
 
   // Filtros — FIX: filterDesign separado de filterSearch (cliente)
   const [filterSeller, setFilterSeller] = useState('all');
@@ -467,8 +470,9 @@ export default function ProductionTab({
   const [prodStatus, setProdStatus] = useState([]);
   const [stockLog, setStockLog] = useState([]);
   const [productionTasks, setProductionTasks] = useState([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(true); // true on mount so panel doesn't flash before data loads
   const [savingTaskIds, setSavingTaskIds] = useState({});
+  const taskSaveStateRef = useRef({}); // { [taskId]: { saving: boolean, queued: values|null } }
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
   const [printHistory, setPrintHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
@@ -919,10 +923,17 @@ export default function ProductionTab({
     setProductionTasks(prev => {
       const prevMap = Object.fromEntries(prev.map(t => [t.id, t]));
       return (data || []).map(task => {
-        const existing = prevMap[task.id || task.task_id];
+        const taskId = task.id || task.task_id;
+        const existing = prevMap[taskId];
+        // If this task has an in-progress or queued save, keep the current optimistic state
+        // so that a realtime event from a stale DB read doesn't overwrite it.
+        const taskState = taskSaveStateRef.current[taskId];
+        if (taskState?.saving || taskState?.queued) {
+          return existing || { ...task, id: taskId, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
+        }
         return {
           ...task,
-          id: task.id || task.task_id,
+          id: taskId,
           note: task.note ?? task.task_note ?? '',
           printed_qty: task.printed_qty ?? existing?.printed_qty ?? 0,
         };
@@ -1130,7 +1141,7 @@ export default function ProductionTab({
     }
     const taskId = task.id;
 
-    // Read current state via functional updater so stale closures never overwrite other fields
+    // Read current values from latest state via functional updater (avoids stale closures)
     let nextProduced, nextWaste, nextPrinted, nextNote;
     setProductionTasks(prev => {
       const cur = prev.find(t => t.id === taskId) || task;
@@ -1147,43 +1158,61 @@ export default function ProductionTab({
       } : row);
     });
 
+    // Per-task queue: if a save is already running for this task, queue latest values and return.
+    // The running save's while-loop will pick them up after it finishes the current RPC.
+    if (!taskSaveStateRef.current[taskId]) {
+      taskSaveStateRef.current[taskId] = { saving: false, queued: null };
+    }
+    const taskState = taskSaveStateRef.current[taskId];
+    if (taskState.saving) {
+      taskState.queued = { nextProduced, nextWaste, nextPrinted, nextNote };
+      return;
+    }
+
+    taskState.saving = true;
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
     setErrorMessage('');
 
+    let toSave = { nextProduced, nextWaste, nextPrinted, nextNote };
     try {
-      const baseParams = {
-        p_task_id: taskId,
-        p_produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
-        p_waste_qty:    Math.max(0, Number.isFinite(nextWaste)    ? nextWaste    : 0),
-        p_note: String(nextNote || ''),
-      };
-      let result = await supabase.rpc('update_production_task_progress', {
-        ...baseParams,
-        p_printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
-      });
-      if (result.error && (result.error.code === 'PGRST202' || result.error.code === '42883' || /printed_qty/i.test(result.error.message || ''))) {
-        result = await supabase.rpc('update_production_task_progress', baseParams);
-      }
-      if (result.error) throw result.error;
-      // Use the RPC's returned row to update state — avoids reload race against realtime subscription
-      const updated = result.data;
-      if (updated) {
-        setProductionTasks(prev => prev.map(t => t.id === taskId ? {
-          ...t, ...updated,
-          id: taskId,
-          note: updated.note ?? nextNote,
-          // If fallback RPC was used (no printed_qty saved), keep our optimistic value
-          printed_qty: updated.printed_qty !== undefined && updated.printed_qty !== null
-            ? updated.printed_qty
-            : Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
-        } : t));
+      while (toSave !== null) {
+        const { nextProduced: p, nextWaste: w, nextPrinted: pr, nextNote: n } = toSave;
+        const baseParams = {
+          p_task_id: taskId,
+          p_produced_qty: Math.max(0, Number.isFinite(p)  ? p  : 0),
+          p_waste_qty:    Math.max(0, Number.isFinite(w)  ? w  : 0),
+          p_note: String(n || ''),
+        };
+        let result = await supabase.rpc('update_production_task_progress', {
+          ...baseParams,
+          p_printed_qty: Math.max(0, Number.isFinite(pr) ? pr : 0),
+        });
+        if (result.error && (result.error.code === 'PGRST202' || result.error.code === '42883' || /printed_qty/i.test(result.error.message || ''))) {
+          result = await supabase.rpc('update_production_task_progress', baseParams);
+        }
+        if (result.error) throw result.error;
+
+        // Update state from RPC return value — no reload race
+        const updated = result.data;
+        if (updated) {
+          setProductionTasks(prev => prev.map(t => t.id === taskId ? {
+            ...t, ...updated, id: taskId,
+            note: updated.note ?? n,
+            printed_qty: (updated.printed_qty != null) ? updated.printed_qty : Math.max(0, Number.isFinite(pr) ? pr : 0),
+          } : t));
+        }
+
+        toSave = taskState.queued;
+        taskState.queued = null;
       }
       await Promise.all([loadStock(), loadStockLog()]);
     } catch (error) {
+      taskState.queued = null;
       console.error('Error saving production task', error);
       await loadProductionTasks();
       setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
     } finally {
+      taskState.saving = false;
       setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
     }
   }
@@ -1934,7 +1963,11 @@ export default function ProductionTab({
                                 type="button"
                                 onClick={async () => {
                                   await linkManualItemToDesign(selectedOrder, item, top.design);
-                                  setManualItemLinks(prev => ({ ...prev, [key]: { name: top.design.name } }));
+                                  setManualItemLinks(prev => {
+                                    const next = { ...prev, [key]: { name: top.design.name } };
+                                    try { sessionStorage.setItem('inkora_manual_links', JSON.stringify(next)); } catch {}
+                                    return next;
+                                  });
                                 }}
                                 style={{ border: `1.5px solid ${scoreColor(top.score)}`, borderRadius: 7, padding: '3px 10px', background: scoreBg(top.score), color: scoreColor(top.score), fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}
                               >
