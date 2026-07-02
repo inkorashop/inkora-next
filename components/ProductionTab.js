@@ -1724,7 +1724,21 @@ export default function ProductionTab({
                 </div>
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                    <colgroup>
+                      {/* Producto */}<col style={{ width: 95 }} />
+                      {/* Diseño  */}<col />
+                      {/* A prod  */}<col style={{ width: 46 }} />
+                      {/* Impreso: StockCell(90) + gap(3) + =N button(38) + padding(10) = 141 */}
+                      <col style={{ width: 145 }} />
+                      {/* Troquelado: same */}
+                      <col style={{ width: 145 }} />
+                      {/* Desperdicio: StockCell(90) + padding(10) = 100 */}
+                      <col style={{ width: 100 }} />
+                      {/* Observaciones */}<col style={{ width: 105 }} />
+                      {/* Imprimir: input(38) + gap(3) + button(~60) + padding(10) = 111 */}
+                      <col style={{ width: 115 }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
@@ -1739,8 +1753,8 @@ export default function ProductionTab({
                         const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                         return (
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                          <td style={{ padding: '4px 5px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
-                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E' }}>
+                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
                               <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
@@ -1804,7 +1818,7 @@ export default function ProductionTab({
                               onBlur={e => saveProductionTask(task, { note: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                               placeholder="Agregar observación..."
-                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', minWidth: 85, color: '#2d3352' }}
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }}
                             />
                           </td>
                           <td style={{ padding: '4px 5px', position: 'sticky', right: 0, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' }}>
