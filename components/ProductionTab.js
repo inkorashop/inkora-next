@@ -1165,10 +1165,23 @@ export default function ProductionTab({
         result = await supabase.rpc('update_production_task_progress', baseParams);
       }
       if (result.error) throw result.error;
-      await Promise.all([loadProductionTasks(), loadStock(), loadStockLog()]);
+      // Use the RPC's returned row to update state — avoids reload race against realtime subscription
+      const updated = result.data;
+      if (updated) {
+        setProductionTasks(prev => prev.map(t => t.id === taskId ? {
+          ...t, ...updated,
+          id: taskId,
+          note: updated.note ?? nextNote,
+          // If fallback RPC was used (no printed_qty saved), keep our optimistic value
+          printed_qty: updated.printed_qty !== undefined && updated.printed_qty !== null
+            ? updated.printed_qty
+            : Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
+        } : t));
+      }
+      await Promise.all([loadStock(), loadStockLog()]);
     } catch (error) {
       console.error('Error saving production task', error);
-      await loadProductionTasks(); // reload actual DB state; don't rollback to stale snapshot
+      await loadProductionTasks();
       setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
     } finally {
       setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
@@ -1863,7 +1876,7 @@ export default function ProductionTab({
             )}
 
             {/* MANUAL ITEMS — fuzzy link for admin orders */}
-            {selectedOrder?.source === 'admin' && (() => {
+            {selectedOrder?.source === 'admin' && !loadingTasks && ctxDesigns.length > 0 && (() => {
               const tasks = tasksByOrder[selectedOrder.id] || [];
               const manualItems = (selectedOrder.items || [])
                 .map((item, idx) => ({ item, idx }))
@@ -1875,11 +1888,14 @@ export default function ProductionTab({
                 const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
                 const top = matches[0] || null;
                 const localLinked = manualItemLinks[key];
-                const dbLinked = top && tasks.some(t =>
-                  (top.design.id && t.design_id === String(top.design.id)) ||
-                  ((top.design.name || '').toLowerCase() === (t.design_name || '').toLowerCase())
+                // Check DB: task exists with matching design name OR id (covers page refresh / tab switch)
+                const dbLinked = tasks.some(t =>
+                  (top?.design?.id && t.design_id === String(top.design.id)) ||
+                  (top?.design?.name && (t.design_name || '').toLowerCase() === top.design.name.toLowerCase()) ||
+                  // Also check by item text similarity against any task design name
+                  (t.design_name && (t.design_name || '').toLowerCase().includes((item.text || '').toLowerCase()))
                 );
-                return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: top.design.name } : null) };
+                return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: (top?.design?.name || tasks.find(t => t.design_name)?.design_name || 'diseño') } : null) };
               });
 
               // Once every manual item is linked, hide the entire panel
