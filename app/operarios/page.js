@@ -158,6 +158,8 @@ export default function OperariosPage() {
   const [printQtyOverrides, setPrintQtyOverrides] = useState({});
   const [printFeedback, setPrintFeedback] = useState({});
   const [hasScannedRef] = useState({ current: false });
+  const [allPdfMatches, setAllPdfMatches] = useState({});
+  const [quickPrintSearch, setQuickPrintSearch] = useState('');
 
   // Derived bridge values
   const bridgeTargetPrinter = bridgePrinters.find(p => p.isTargetL8050) || bridgePrinters.find(p => p.isDefault) || bridgePrinters[0] || null;
@@ -369,6 +371,7 @@ export default function OperariosPage() {
       const nextMatches = {};
       (payload.matches || []).forEach(match => { nextMatches[match.id] = match; });
       setOrderPdfMatches(nextMatches);
+      setAllPdfMatches(prev => ({ ...prev, ...nextMatches }));
       setOrderPdfStatus({ state: 'ready', message: `PDFs del pedido: ${payload.found || 0}/${candidates.length}`, roots: payload.roots || [] });
     } catch (error) {
       setOrderPdfStatus({
@@ -807,21 +810,35 @@ export default function OperariosPage() {
 
         {/* ── Columna 3: Quick print (cuando bridge conectado) ── */}
         {bridgeConnected && (() => {
-          const matchedPdfs = Object.values(orderPdfMatches)
-            .filter(m => m.found && m.relativePath)
-            .sort((a, b) => {
-              const numA = parseInt(a.fileName || '', 10);
-              const numB = parseInt(b.fileName || '', 10);
-              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-              return (a.fileName || '').localeCompare(b.fileName || '', 'es', { sensitivity: 'base' });
-            });
+          const uniqueMap = {};
+          Object.values(allPdfMatches).forEach(m => {
+            if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
+          });
+          const allMatchedPdfs = Object.values(uniqueMap).sort((a, b) => {
+            const numA = parseInt(a.fileName || '', 10);
+            const numB = parseInt(b.fileName || '', 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return (a.fileName || '').localeCompare(b.fileName || '', 'es', { sensitivity: 'base' });
+          });
+          const search = quickPrintSearch.toLowerCase();
+          const matchedPdfs = allMatchedPdfs.length > 0 && search
+            ? allMatchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
+            : allMatchedPdfs;
           return (
             <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', letterSpacing: 0.2, marginBottom: 4 }}>
-                  Imprimir{matchedPdfs.length > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', marginLeft: 6 }}>{matchedPdfs.length} PDFs</span> : ''}
+                  Imprimir{allMatchedPdfs.length > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', marginLeft: 6 }}>{allMatchedPdfs.length} PDFs</span> : ''}
                 </div>
-                {matchedPdfs.length > 0 && (
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={quickPrintSearch}
+                  onChange={e => setQuickPrintSearch(e.target.value)}
+                  disabled={allMatchedPdfs.length === 0}
+                  style={{ width: '100%', padding: '4px 7px', fontSize: 11, border: '1.5px solid #dde1ef', borderRadius: 7, fontFamily: 'Barlow, sans-serif', outline: 'none', boxSizing: 'border-box', opacity: allMatchedPdfs.length === 0 ? 0.5 : 1 }}
+                />
+                {allMatchedPdfs.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 50px', gap: 3, marginTop: 4, padding: '0 2px' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
                     <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
@@ -830,10 +847,12 @@ export default function OperariosPage() {
                 )}
               </div>
               <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-                {matchedPdfs.length === 0 ? (
+                {allMatchedPdfs.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '18px 8px', lineHeight: 1.5 }}>
                     Sin PDFs vinculados.<br />Hacé clic en «PDFs del pedido».
                   </p>
+                ) : matchedPdfs.length === 0 ? (
+                  <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '14px 8px' }}>Sin resultados</p>
                 ) : matchedPdfs.map(pdf => {
                   const key = pdf.relativePath;
                   const label = (pdf.fileName || pdf.name || '').replace(/\.pdf$/i, '');
