@@ -474,6 +474,7 @@ export default function ProductionTab({
   const [savingTaskIds, setSavingTaskIds] = useState({});
   const taskSaveStateRef = useRef({}); // { [taskId]: { saving: boolean, queued: values|null } }
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
+  const [assigningOperatorIds, setAssigningOperatorIds] = useState({});
   const [printHistory, setPrintHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
   });
@@ -1118,7 +1119,7 @@ export default function ProductionTab({
   async function assignOrderOperator(orderId, operatorId) {
     if (!orderId) return;
     setErrorMessage('');
-    setSyncingOrderIds(prev => ({ ...prev, [orderId]: true }));
+    setAssigningOperatorIds(prev => ({ ...prev, [orderId]: true }));
     try {
       const { error } = await supabase.rpc('admin_assign_order_operator', {
         p_order_id: orderId,
@@ -1130,7 +1131,7 @@ export default function ProductionTab({
       console.error('Error assigning operator', error);
       setErrorMessage(formatProductionError(error, 'No se pudo asignar el operario.'));
     } finally {
-      setSyncingOrderIds(prev => ({ ...prev, [orderId]: false }));
+      setAssigningOperatorIds(prev => ({ ...prev, [orderId]: false }));
     }
   }
 
@@ -1684,7 +1685,7 @@ export default function ProductionTab({
                     <select
                       value={selectedOrderRow.operator_id || ''}
                       onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
-                      disabled={Boolean(syncingOrderIds[selectedOrderRow.id])}
+                      disabled={Boolean(assigningOperatorIds[selectedOrderRow.id])}
                       style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: 160, minWidth: 160 }}
                     >
                       <option value="">Sin operario</option>
