@@ -1083,7 +1083,7 @@ export default function ProductionTab({
       design_key: key,
       design_name: design.name,
       product_id: design.product_id || null,
-      product_name: design.productName || design.product_name || 'Sin producto',
+      product_name: design.productName || design.product_name || design.products?.name || 'Sin producto',
       required_qty: manualItem.qty || 1,
       produced_qty: 0,
       waste_qty: 0,
