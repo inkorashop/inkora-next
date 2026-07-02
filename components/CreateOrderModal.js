@@ -274,7 +274,6 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const voiceTranscriptRef = useRef('');
   const recognitionRef     = useRef(null);
   const designsRef         = useRef(designs);
-  const lastFinalRef       = useRef({ text: '', time: 0 }); // dedup across restarts
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -301,6 +300,8 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
     }
     return () => {
+      // Set idle first so onend (fired by abort) does not restart recognition.
+      voiceStateRef.current = 'idle';
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
     };
   }, []);
@@ -538,12 +539,6 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function processVoiceFinal(text) {
-    // Skip duplicates caused by mic buffer replay across session restarts
-    const now = Date.now();
-    const clean = text.trim();
-    if (clean && clean === lastFinalRef.current.text && now - lastFinalRef.current.time < 3000) return;
-    lastFinalRef.current = { text: clean, time: now };
-
     const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
     voiceTranscriptRef.current = transcript;
     setVoiceTranscript(transcript);
@@ -573,19 +568,21 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     if (!SR) return null;
     const rec = new SR();
     rec.lang = 'es-AR';
-    rec.continuous = true;
+    // continuous:false avoids Chrome's resultIndex=0 bug that causes duplicates.
+    // Each session captures one utterance; onend restarts for the next one.
+    rec.continuous = false;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
-    const sessionStart = Date.now();
-    let gotResult = false;
     rec.onresult = (event) => {
-      gotResult = true;
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) processVoiceFinal(event.results[i][0].transcript);
-        else interim += event.results[i][0].transcript;
+      // With continuous:false there is exactly one result slot per session.
+      const result = event.results[0];
+      if (!result) return;
+      if (result.isFinal) {
+        setVoiceInterim('');
+        processVoiceFinal(result[0].transcript);
+      } else {
+        setVoiceInterim(result[0].transcript);
       }
-      setVoiceInterim(interim);
     };
     rec.onerror = (e) => {
       if (e.error === 'no-speech' || e.error === 'aborted') return;
@@ -593,15 +590,13 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     };
     rec.onend = () => {
       if (voiceStateRef.current !== 'recording') return;
-      // If the session ended very quickly (< 400ms) without any result, the mic buffer
-      // may replay the same audio — wait longer before restarting to let it flush.
-      const duration = Date.now() - sessionStart;
-      const delay = (!gotResult && duration < 400) ? 2000 : 800;
+      // Restart after each utterance (or after no-speech timeout).
+      // Small delay lets the audio pipeline reset cleanly.
       setTimeout(() => {
         if (voiceStateRef.current !== 'recording') return;
         const newRec = createRecognition();
         if (newRec) { recognitionRef.current = newRec; try { newRec.start(); } catch {} }
-      }, delay);
+      }, 150);
     };
     return rec;
   }
