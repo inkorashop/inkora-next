@@ -33,7 +33,7 @@ function toQty(value) {
   return Number.isFinite(qty) && qty > 0 ? qty : 0;
 }
 
-function formatDate(iso) {
+function formatShortDate(iso) {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -64,8 +64,8 @@ function normalizeTask(task) {
   return { ...task, id: task.id || task.task_id, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
 }
 
-// StockCell-like control matching admin production tab style
-function QtyCell({ value, disabled, onSave }) {
+// Matches StockCell style from admin production tab
+function QtyCell({ value, disabled, onSave, step }) {
   const [val, setVal] = useState(String(Number(value) || 0));
   const [saving, setSaving] = useState(false);
   const latestRef = useRef(value);
@@ -90,16 +90,17 @@ function QtyCell({ value, disabled, onSave }) {
   }
 
   const num = parseInt(val, 10) || 0;
+  const inc = step || 1;
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, width: 90 }}>
-      <button type="button" disabled={disabled || saving || num <= 0} onClick={() => adjust(-1)}
+      <button type="button" disabled={disabled || saving || num <= 0} onClick={() => adjust(-inc)}
         style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: num <= 0 || disabled || saving ? '#f7f8fc' : '#fef2f2', color: num <= 0 || disabled || saving ? '#c4c9d9' : '#e53e3e', fontWeight: 900, cursor: num <= 0 || disabled || saving ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>-</button>
       <input type="number" min="0" value={val} disabled={disabled || saving}
         onChange={e => setVal(e.target.value)}
         onBlur={() => commit(val)}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
         style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: disabled || saving ? '#f4f5f8' : 'white' }} />
-      <button type="button" disabled={disabled || saving} onClick={() => adjust(1)}
+      <button type="button" disabled={disabled || saving} onClick={() => adjust(inc)}
         style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: disabled || saving ? '#f7f8fc' : '#f0fdf4', color: disabled || saving ? '#c4c9d9' : '#18a36a', fontWeight: 900, cursor: disabled || saving ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>+</button>
     </div>
   );
@@ -126,6 +127,7 @@ export default function OperariosPage() {
   const [tasksError, setTasksError] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [savingTaskIds, setSavingTaskIds] = useState({});
+  const taskSaveStateRef = useRef({});
 
   useEffect(() => {
     let mounted = true;
@@ -161,7 +163,15 @@ export default function OperariosPage() {
       setTasksError(missing ? 'Falta aplicar el SQL de producción y operarios.' : 'No tenés pedidos asignados o tu usuario no está habilitado como operario.');
       setTasks([]);
     } else {
-      setTasks((data || []).map(normalizeTask));
+      setTasks(prev => {
+        const prevMap = Object.fromEntries(prev.map(t => [t.id, t]));
+        return (data || []).map(task => {
+          const normalized = normalizeTask(task);
+          const taskState = taskSaveStateRef.current[normalized.id];
+          if (taskState?.saving || taskState?.queued) return prevMap[normalized.id] || normalized;
+          return normalized;
+        });
+      });
     }
     setLoadingTasks(false);
   }, [session]);
@@ -190,12 +200,12 @@ export default function OperariosPage() {
         created_at: first.order_created_at,
         customer_name: first.customer_name,
         seller_name: first.seller_name,
-        order_notes: first.order_notes || '',
+        notes: first.order_notes || '',
         tasks: orderTasks.sort((a, b) =>
           String(a.product_name || '').localeCompare(String(b.product_name || ''), 'es') ||
           String(a.design_name || '').localeCompare(String(b.design_name || ''), 'es')),
         productionStatus: getProductionStatus(orderTasks),
-        summary: summarizeProducts(orderTasks),
+        itemsSummary: summarizeProducts(orderTasks),
       };
     }).sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   }, [tasks]);
@@ -242,30 +252,57 @@ export default function OperariosPage() {
 
   async function saveTask(task, patch) {
     const taskId = task.id;
-    const cur = tasks.find(t => t.id === taskId) || task;
-    const nextProduced = patch.produced_qty !== undefined ? patch.produced_qty : toQty(cur.produced_qty);
-    const nextWaste    = patch.waste_qty    !== undefined ? patch.waste_qty    : toQty(cur.waste_qty);
-    const nextPrinted  = patch.printed_qty  !== undefined ? patch.printed_qty  : toQty(cur.printed_qty);
-    const nextNote     = patch.note         !== undefined ? patch.note         : (cur.note || '');
+    let nextProduced, nextWaste, nextPrinted, nextNote;
 
-    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
-    setTasks(prev => prev.map(r => r.id === taskId ? { ...r, ...patch } : r));
-
-    let result = await supabase.rpc('update_production_task_progress', {
-      p_task_id: taskId,
-      p_produced_qty: Math.max(0, nextProduced),
-      p_waste_qty:    Math.max(0, nextWaste),
-      p_note:         String(nextNote || ''),
-      p_printed_qty:  Math.max(0, nextPrinted),
+    setTasks(prev => {
+      const cur = prev.find(t => t.id === taskId) || task;
+      nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : toQty(cur.produced_qty);
+      nextWaste    = patch.waste_qty    !== undefined ? Number(patch.waste_qty)    : toQty(cur.waste_qty);
+      nextPrinted  = patch.printed_qty  !== undefined ? Number(patch.printed_qty)  : toQty(cur.printed_qty);
+      nextNote     = patch.note         !== undefined ? patch.note                 : (cur.note || '');
+      return prev.map(r => r.id === taskId ? { ...r, produced_qty: nextProduced, waste_qty: nextWaste, printed_qty: nextPrinted, note: nextNote } : r);
     });
-    if (result.error && (result.error.code === 'PGRST202' || /printed_qty/i.test(result.error.message || ''))) {
-      result = await supabase.rpc('update_production_task_progress', {
-        p_task_id: taskId, p_produced_qty: Math.max(0, nextProduced),
-        p_waste_qty: Math.max(0, nextWaste), p_note: String(nextNote || ''),
-      });
+
+    if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = { saving: false, queued: null };
+    const taskState = taskSaveStateRef.current[taskId];
+    if (taskState.saving) { taskState.queued = { nextProduced, nextWaste, nextPrinted, nextNote }; return; }
+
+    taskState.saving = true;
+    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
+    let toSave = { nextProduced, nextWaste, nextPrinted, nextNote };
+
+    try {
+      while (toSave !== null) {
+        const { nextProduced: p, nextWaste: w, nextPrinted: pr, nextNote: n } = toSave;
+        let result = await supabase.rpc('update_production_task_progress', {
+          p_task_id: taskId,
+          p_produced_qty: Math.max(0, p),
+          p_waste_qty:    Math.max(0, w),
+          p_note:         String(n || ''),
+          p_printed_qty:  Math.max(0, pr),
+        });
+        if (result.error && (result.error.code === 'PGRST202' || /printed_qty/i.test(result.error.message || ''))) {
+          result = await supabase.rpc('update_production_task_progress', {
+            p_task_id: taskId, p_produced_qty: Math.max(0, p),
+            p_waste_qty: Math.max(0, w), p_note: String(n || ''),
+          });
+        }
+        if (result.error) throw result.error;
+        if (result.data) {
+          const updated = result.data;
+          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated, id: taskId, note: updated.note ?? t.note ?? '', printed_qty: updated.printed_qty ?? t.printed_qty ?? 0 } : t));
+        }
+        toSave = taskState.queued;
+        taskState.queued = null;
+      }
+    } catch {
+      taskState.queued = null;
+      await loadTasks();
+      setTasksError('No se pudo guardar el avance.');
+    } finally {
+      taskState.saving = false;
+      setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
     }
-    if (result.error) { setTasksError('No se pudo guardar el avance.'); await loadTasks(); }
-    setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
   }
 
   if (checkingSession) return <div style={{ minHeight: '100vh', background: '#f7f8fc' }} />;
@@ -287,8 +324,6 @@ export default function OperariosPage() {
     );
   }
 
-  const tone = STATUS_TONE[selectedOrder?.productionStatus] || STATUS_TONE.pending;
-
   return (
     <main style={{ minHeight: '100vh', background: '#f7f8fc', fontFamily: 'Barlow, sans-serif', color: '#2d3352', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <header style={{ height: 48, background: '#1B2F5E', color: 'white', display: 'flex', alignItems: 'center', gap: 14, padding: '0 18px', flexShrink: 0 }}>
@@ -299,32 +334,36 @@ export default function OperariosPage() {
         <button type="button" onClick={signOut} style={{ border: '1.5px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.08)', color: 'white', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Salir</button>
       </header>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(260px, 0.7fr) 1fr', gap: 12, padding: 12, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, padding: 10, minHeight: 0, overflow: 'hidden', alignItems: 'stretch' }}>
 
         {/* ── Columna 1: Pedidos ── */}
-        <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1.5px solid #dde1ef', flexShrink: 0 }}>
-            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: '#1B2F5E' }}>Pedidos</h2>
+        <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>Pedidos</h2>
           </div>
           {tasksError && <div style={{ margin: '10px 12px', background: '#fff7ed', border: '1.5px solid #fed7aa', color: '#c2410c', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{tasksError}</div>}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {loadingTasks && orderRows.length === 0 ? (
-              <p style={{ textAlign: 'center', color: '#9aa3bc', padding: '42px 14px', fontSize: 13 }}>Cargando pedidos...</p>
+              <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>Cargando pedidos...</p>
             ) : orderRows.length === 0 ? (
-              <p style={{ textAlign: 'center', color: '#9aa3bc', padding: '42px 14px', fontSize: 13 }}>No hay pedidos asignados.</p>
+              <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>No hay pedidos asignados.</p>
             ) : orderRows.map(order => {
               const selected = selectedOrderId === order.id;
-              const t = STATUS_TONE[order.productionStatus] || STATUS_TONE.pending;
+              const tone = STATUS_TONE[order.productionStatus] || STATUS_TONE.pending;
               return (
                 <button key={order.id} type="button" onClick={() => setSelectedOrderId(order.id)}
-                  style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#eef4ff' : 'white', padding: '10px 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                     <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: '#1B2F5E' }}>{order.order_code || order.id}</span>
-                    <span style={{ background: t.bg, color: t.color, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>{STATUS_LABEL[order.productionStatus]}</span>
+                    <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800 }}>{STATUS_LABEL[order.productionStatus]}</span>
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 800, color: '#2d3352' }}>{order.customer_name || 'Sin cliente'}</div>
-                  <div style={{ fontSize: 11, color: '#8b95b3' }}>{formatDate(order.created_at)}{order.seller_name ? ` · ${order.seller_name}` : ''}</div>
-                  <div style={{ fontSize: 11, color: '#5a6380', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.summary}</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: '#8b95b3' }}>
+                    <span>{formatShortDate(order.created_at)}</span>
+                    {order.seller_name && <span>{order.seller_name}</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#5a6380', lineHeight: 1.35 }}>{order.itemsSummary}</div>
+                  {order.notes && <div style={{ fontSize: 11, color: '#8b95b3', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Nota: {order.notes}</div>}
                 </button>
               );
             })}
@@ -332,32 +371,37 @@ export default function OperariosPage() {
         </div>
 
         {/* ── Columna 2: Detalle ── */}
-        <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {!selectedOrder ? (
-            <p style={{ textAlign: 'center', color: '#9aa3bc', padding: '58px 14px', fontSize: 13 }}>Elegí un pedido para trabajar.</p>
+            <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
           ) : (
             <>
               {/* Header */}
-              <div style={{ padding: '8px 14px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Detalle</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0 }}>{selectedOrder.order_code || 'Pedido'}</h2>
-                    <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2 }}>
-                      <span style={{ fontWeight: 700 }}>{selectedOrder.customer_name || 'Sin cliente'}</span>
+              <div style={{ padding: '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
+                  <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
+                    {selectedOrder.order_code || 'Pedido seleccionado'}
+                  </h2>
+                  <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, lineHeight: 1.5, overflow: 'hidden' }}>
+                    <span style={{ fontWeight: 700 }}>{selectedOrder.customer_name || 'Sin cliente'}</span>
+                    <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                    <span>{formatShortDate(selectedOrder.created_at)}</span>
+                    {selectedOrder.seller_name && <>
                       <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
-                      <span>{formatDate(selectedOrder.created_at)}</span>
-                      {selectedOrder.seller_name && <><span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span><span>{selectedOrder.seller_name}</span></>}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedOrder.summary}</div>
-                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }}>{selectedOrder.order_notes || ''}</div>
+                      <span>{selectedOrder.seller_name}</span>
+                    </>}
+                    <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                    <span>{STATUS_LABEL[selectedOrder.productionStatus] || selectedOrder.productionStatus}</span>
                   </div>
-                  <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{STATUS_LABEL[selectedOrder.productionStatus]}</span>
+                  {/* Always render both lines so header height is constant across orders */}
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.itemsSummary || ''}>{selectedOrder?.itemsSummary || ''}</div>
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.notes || ''}>{selectedOrder?.notes || ''}</div>
                 </div>
               </div>
 
               {/* Summary cards */}
-              <div style={{ display: 'flex', gap: 6, padding: '6px 10px 4px', flexShrink: 0, alignItems: 'stretch' }}>
+              <div style={{ display: 'flex', gap: 6, padding: '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
                 {[
                   { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
                   { label: 'Impreso',    value: summaryTotals.printed,  color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
@@ -381,53 +425,82 @@ export default function OperariosPage() {
               </div>
 
               {/* Table */}
-              <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', scrollbarGutter: 'stable' }}>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: 80 }} />
-                    <col />
-                    <col style={{ width: 46 }} />
+                    {/* Producto */}<col style={{ width: 95 }} />
+                    {/* Diseño  */}<col />
+                    {/* A prod  */}<col style={{ width: 46 }} />
+                    {/* Impreso: QtyCell(90) + gap(3) + =N button(38) + padding(10) = 141 */}
+                    <col style={{ width: 145 }} />
+                    {/* Troquelado: same */}
+                    <col style={{ width: 145 }} />
+                    {/* Desperdicio: QtyCell(90) + padding(10) = 100 */}
                     <col style={{ width: 100 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 130 }} />
+                    {/* Observaciones */}<col style={{ width: 105 }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      {['Producto', 'Diseño', 'A prod.', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones'].map((h, i) => (
-                        <th key={h} style={{ textAlign: 'left', padding: '4px 6px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                      {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedOrder.tasks.map(task => (
-                      <tr key={task.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                        <td style={{ padding: '4px 6px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
-                        <td style={{ padding: '4px 6px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
-                            <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name || 'Sin diseño'}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '4px 6px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
-                        <td style={{ padding: '4px 6px' }}>
-                          <QtyCell value={task.printed_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { printed_qty: qty })} />
-                        </td>
-                        <td style={{ padding: '4px 6px' }}>
-                          <QtyCell value={task.produced_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { produced_qty: qty })} />
-                        </td>
-                        <td style={{ padding: '4px 6px' }}>
-                          <QtyCell value={task.waste_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { waste_qty: qty })} />
-                        </td>
-                        <td style={{ padding: '4px 6px' }}>
-                          <input defaultValue={task.note || ''} disabled={savingTaskIds[task.id]}
-                            onBlur={e => saveTask(task, { note: e.target.value })}
-                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                            placeholder="Observación..."
-                            style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }} />
-                        </td>
-                      </tr>
-                    ))}
+                    {selectedOrder.tasks.map(task => {
+                      const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
+                      return (
+                        <tr key={task.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
+                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name || 'Sin diseño'}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <QtyCell value={task.printed_qty || 0} disabled={savingTaskIds[task.id]} step={2} onSave={qty => saveTask(task, { printed_qty: qty })} />
+                              <button
+                                type="button"
+                                title={`Marcar ${printedEven} impreso`}
+                                onClick={() => saveTask(task, { printed_qty: printedEven })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
+                              >
+                                ={printedEven}
+                              </button>
+                            </div>
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <QtyCell value={task.produced_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { produced_qty: qty })} />
+                              <button
+                                type="button"
+                                title={`Marcar ${task.required_qty} troquelado`}
+                                onClick={() => saveTask(task, { produced_qty: task.required_qty })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
+                              >
+                                ={task.required_qty}
+                              </button>
+                            </div>
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <QtyCell value={task.waste_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { waste_qty: qty })} />
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <input
+                              defaultValue={task.note || ''}
+                              disabled={savingTaskIds[task.id]}
+                              onBlur={e => saveTask(task, { note: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                              placeholder="Agregar observación..."
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
