@@ -207,7 +207,7 @@ function NoteCell({ row, onSave }) {
 // FIX: StockCell ahora recibe qty_produced como prop separada para evitar que el re-render
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
-function StockCell({ qtyProduced, onSave }) {
+function StockCell({ qtyProduced, onSave, step = 1 }) {
   const [val, setVal] = useState(stockInputValue(qtyProduced));
   const editingRef = useRef(false);
   const saveTimerRef = useRef(null);
@@ -267,13 +267,16 @@ function StockCell({ qtyProduced, onSave }) {
     }, 300);
   };
 
+  const snapToStep = (qty) => step > 1 ? Math.ceil(qty / step) * step : qty;
+
   const handleSave = () => {
     editingRef.current = false;
-    const qty = val === '' ? 0 : Number(val);
-    if (!Number.isInteger(qty) || qty < 0) {
+    const raw = val === '' ? 0 : Number(val);
+    if (!Number.isInteger(raw) || raw < 0) {
       setVal(stockInputValue(latestQtyRef.current));
       return;
     }
+    const qty = snapToStep(raw);
     setVal(stockInputValue(qty));
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
@@ -283,7 +286,8 @@ function StockCell({ qtyProduced, onSave }) {
   const adjust = (delta) => {
     const currentQty = val === '' ? 0 : Number(val);
     const baseQty = Number.isInteger(currentQty) && currentQty >= 0 ? currentQty : latestQtyRef.current;
-    const nextQty = Math.max(0, baseQty + delta);
+    const snapped = step > 1 ? Math.ceil(baseQty / step) * step : baseQty;
+    const nextQty = Math.max(0, snapped + delta);
     if (nextQty === baseQty) return;
     editingRef.current = false;
     setVal(stockInputValue(nextQty));
@@ -300,9 +304,9 @@ function StockCell({ qtyProduced, onSave }) {
     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, width: 90 }}>
       <button
         type="button"
-        onClick={() => adjust(-1)}
+        onClick={() => adjust(-step)}
         disabled={(val === '' ? 0 : Number(val)) <= 0}
-        title="Restar 1"
+        title={`Restar ${step}`}
         style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: (val === '' ? 0 : Number(val)) <= 0 ? '#f7f8fc' : '#fef2f2', color: (val === '' ? 0 : Number(val)) <= 0 ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: (val === '' ? 0 : Number(val)) <= 0 ? 'not-allowed' : 'pointer' }}
       >
         -
@@ -310,7 +314,7 @@ function StockCell({ qtyProduced, onSave }) {
       <input
         type="number"
         min="0"
-        step="1"
+        step={step}
         value={val}
         placeholder="0"
         onFocus={handleFocus}
@@ -325,8 +329,8 @@ function StockCell({ qtyProduced, onSave }) {
       />
       <button
         type="button"
-        onClick={() => adjust(1)}
-        title="Sumar 1"
+        onClick={() => adjust(step)}
+        title={`Sumar ${step}`}
         style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: 'pointer' }}
       >
         +
@@ -1631,6 +1635,41 @@ export default function ProductionTab({
               <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
             ) : (
               <>
+                {/* Summary totals */}
+                {(() => {
+                  const tasks = selectedOrderTasks;
+                  const totalRequired = tasks.reduce((s, t) => s + (t.required_qty || 0), 0);
+                  const totalPrinted = tasks.reduce((s, t) => s + (t.printed_qty || 0), 0);
+                  const totalProduced = tasks.reduce((s, t) => s + (t.produced_qty || 0), 0);
+                  const totalWaste = tasks.reduce((s, t) => s + (t.waste_qty || 0), 0);
+                  const cols = [
+                    { label: 'A producir', value: totalRequired, total: totalRequired, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7' },
+                    { label: 'Impreso', value: totalPrinted, total: totalRequired, color: '#15803d', bg: '#dcfce7', border: '#86efac' },
+                    { label: 'Troquelado', value: totalProduced, total: totalRequired, color: '#b45309', bg: '#fef9c3', border: '#fde047' },
+                    { label: 'Desperdicio', value: totalWaste, total: totalRequired, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' },
+                  ];
+                  return (
+                    <div style={{ display: 'flex', gap: 8, padding: '8px 8px 4px', flexShrink: 0 }}>
+                      {cols.map(({ label, value, total, color, bg, border }) => {
+                        const pct = total > 0 ? Math.round(value / total * 100) : 0;
+                        return (
+                          <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: '7px 10px', minWidth: 0 }}>
+                            <div style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{label}</div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                              <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
+                              {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.6 }}>{pct}%</span>}
+                            </div>
+                            {label !== 'A producir' && total > 0 && (
+                              <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color, borderRadius: 999, transition: 'width 0.3s' }} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -1668,15 +1707,18 @@ export default function ProductionTab({
                               <StockCell
                                 qtyProduced={task.printed_qty || 0}
                                 onSave={qty => saveProductionTask(task, { printed_qty: qty })}
+                                step={2}
                               />
-                              <button
-                                type="button"
-                                title={`Marcar ${task.required_qty} impreso`}
-                                onClick={() => saveProductionTask(task, { printed_qty: task.required_qty })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
-                              >
-                                ={task.required_qty}
-                              </button>
+                              {(() => { const even = Math.ceil((task.required_qty || 0) / 2) * 2; return (
+                                <button
+                                  type="button"
+                                  title={`Marcar ${even} impreso`}
+                                  onClick={() => saveProductionTask(task, { printed_qty: even })}
+                                  style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                                >
+                                  ={even}
+                                </button>
+                              ); })()}
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px' }}>
