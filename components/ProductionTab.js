@@ -216,10 +216,9 @@ function StockCell({ qtyProduced, onSave, step = 1 }) {
   const savingRef = useRef(false);
   const queuedQtyRef = useRef(null);
 
-  // FIX: Solo sincronizar el valor desde afuera cuando NO estamos editando
   useEffect(() => {
     latestQtyRef.current = qtyProduced;
-    if (!editingRef.current) {
+    if (!editingRef.current && !savingRef.current && !saveTimerRef.current) {
       setVal(stockInputValue(qtyProduced));
     }
   }, [qtyProduced]);
@@ -263,6 +262,7 @@ function StockCell({ qtyProduced, onSave, step = 1 }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
+      editingRef.current = false;
       saveQty(qty);
     }, 300);
   };
@@ -289,7 +289,7 @@ function StockCell({ qtyProduced, onSave, step = 1 }) {
     const snapped = step > 1 ? Math.ceil(baseQty / step) * step : baseQty;
     const nextQty = Math.max(0, snapped + delta);
     if (nextQty === baseQty) return;
-    editingRef.current = false;
+    editingRef.current = true;
     setVal(stockInputValue(nextQty));
     scheduleSave(nextQty);
   };
