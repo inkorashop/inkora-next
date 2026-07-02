@@ -1129,34 +1129,38 @@ export default function ProductionTab({
       return;
     }
     const taskId = task.id;
-    const nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : Number(task.produced_qty || 0);
-    const nextWaste = patch.waste_qty !== undefined ? Number(patch.waste_qty) : Number(task.waste_qty || 0);
-    const nextPrinted = patch.printed_qty !== undefined ? Number(patch.printed_qty) : Number(task.printed_qty || 0);
-    const nextNote = patch.note !== undefined ? patch.note : (task.note || '');
+
+    // Read current state via functional updater so stale closures never overwrite other fields
+    let nextProduced, nextWaste, nextPrinted, nextNote;
+    setProductionTasks(prev => {
+      const cur = prev.find(t => t.id === taskId) || task;
+      nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : Number(cur.produced_qty || 0);
+      nextWaste    = patch.waste_qty    !== undefined ? Number(patch.waste_qty)    : Number(cur.waste_qty    || 0);
+      nextPrinted  = patch.printed_qty  !== undefined ? Number(patch.printed_qty)  : Number(cur.printed_qty  || 0);
+      nextNote     = patch.note         !== undefined ? patch.note                 : (cur.note || '');
+      return prev.map(row => row.id === taskId ? {
+        ...row,
+        produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
+        waste_qty:    Math.max(0, Number.isFinite(nextWaste)    ? nextWaste    : 0),
+        printed_qty:  Math.max(0, Number.isFinite(nextPrinted)  ? nextPrinted  : 0),
+        note: String(nextNote || ''),
+      } : row);
+    });
+
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
     setErrorMessage('');
-
-    const previousTasks = productionTasks;
-    setProductionTasks(prev => prev.map(row => row.id === taskId ? {
-      ...row,
-      produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
-      waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
-      printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
-      note: String(nextNote || ''),
-    } : row));
 
     try {
       const baseParams = {
         p_task_id: taskId,
         p_produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
-        p_waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
+        p_waste_qty:    Math.max(0, Number.isFinite(nextWaste)    ? nextWaste    : 0),
         p_note: String(nextNote || ''),
       };
       let result = await supabase.rpc('update_production_task_progress', {
         ...baseParams,
         p_printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
       });
-      // Fallback for DBs where printed_qty column/param doesn't exist yet
       if (result.error && (result.error.code === 'PGRST202' || result.error.code === '42883' || /printed_qty/i.test(result.error.message || ''))) {
         result = await supabase.rpc('update_production_task_progress', baseParams);
       }
@@ -1164,7 +1168,7 @@ export default function ProductionTab({
       await Promise.all([loadProductionTasks(), loadStock(), loadStockLog()]);
     } catch (error) {
       console.error('Error saving production task', error);
-      setProductionTasks(previousTasks);
+      await loadProductionTasks(); // reload actual DB state; don't rollback to stale snapshot
       setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
     } finally {
       setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
@@ -1860,21 +1864,34 @@ export default function ProductionTab({
 
             {/* MANUAL ITEMS — fuzzy link for admin orders */}
             {selectedOrder?.source === 'admin' && (() => {
+              const tasks = tasksByOrder[selectedOrder.id] || [];
               const manualItems = (selectedOrder.items || [])
                 .map((item, idx) => ({ item, idx }))
                 .filter(({ item }) => item?.type === 'manual' && item?.text?.trim());
               if (!manualItems.length) return null;
+
+              const enriched = manualItems.map(({ item, idx }) => {
+                const key = `${selectedOrder.id}:${idx}`;
+                const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
+                const top = matches[0] || null;
+                const localLinked = manualItemLinks[key];
+                const dbLinked = top && tasks.some(t =>
+                  (top.design.id && t.design_id === String(top.design.id)) ||
+                  ((top.design.name || '').toLowerCase() === (t.design_name || '').toLowerCase())
+                );
+                return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: top.design.name } : null) };
+              });
+
+              // Once every manual item is linked, hide the entire panel
+              if (enriched.every(x => x.alreadyLinked)) return null;
+
               return (
                 <div style={{ margin: '8px 8px 0', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
                   <div style={{ fontSize: 10, fontWeight: 900, color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
                     Items manuales — vincular a diseño
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {manualItems.map(({ item, idx }) => {
-                      const key = `${selectedOrder.id}:${idx}`;
-                      const alreadyLinked = manualItemLinks[key];
-                      const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
-                      const top = matches[0] || null;
+                    {enriched.map(({ item, key, top, alreadyLinked }) => {
                       if (alreadyLinked) {
                         return (
                           <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
