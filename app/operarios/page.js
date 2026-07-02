@@ -2,8 +2,20 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  DEFAULT_BRIDGE_URL,
+  getStoredBridgeConfig,
+  saveStoredBridgeConfig,
+  getBridgeHealth,
+  getBridgePrinters,
+  matchBridgeDesignPdfs,
+  scanBridgePdfs,
+  printBridgeJob,
+  getBridgePrintQueue,
+  openBridgePrinterPreferences,
+  openBridgePrintQueue,
+} from '@/lib/print-bridge-client';
 
-// Lightweight thumbnail — no DesignsContext needed on this standalone page
 function DesignThumb({ designId, name, size = 24 }) {
   const [src, setSrc] = useState(null);
   useEffect(() => {
@@ -15,7 +27,6 @@ function DesignThumb({ designId, name, size = 24 }) {
         if (url) setSrc(url);
       });
   }, [designId]);
-
   if (!src) return <div style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, background: '#e8eaf4', border: '1px solid #dde1ef', display: 'inline-block' }} />;
   return <img src={src} alt={name || ''} title={name || ''} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} />;
 }
@@ -64,7 +75,6 @@ function normalizeTask(task) {
   return { ...task, id: task.id || task.task_id, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
 }
 
-// Matches StockCell style from admin production tab
 function QtyCell({ value, disabled, onSave, step }) {
   const [val, setVal] = useState(String(Number(value) || 0));
   const [saving, setSaving] = useState(false);
@@ -118,10 +128,13 @@ function GoogleIcon() {
 }
 
 export default function OperariosPage() {
+  // Auth
   const [session, setSession] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+
+  // Tasks
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState('');
@@ -129,6 +142,35 @@ export default function OperariosPage() {
   const [savingTaskIds, setSavingTaskIds] = useState({});
   const taskSaveStateRef = useRef({});
 
+  // Bridge
+  const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
+  const [bridgeToken, setBridgeToken] = useState('');
+  const [bridgeStatus, setBridgeStatus] = useState({ state: 'idle', message: 'Sin verificar', health: null });
+  const [bridgePrinters, setBridgePrinters] = useState([]);
+  const [bridgeBusy, setBridgeBusy] = useState(false);
+  const [selectedPrinterOverride, setSelectedPrinterOverride] = useState('');
+
+  // Print
+  const [orderPdfMatches, setOrderPdfMatches] = useState({});
+  const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
+  const [orderPdfBusy, setOrderPdfBusy] = useState(false);
+  const [printingTasks, setPrintingTasks] = useState({});
+  const [printQtyOverrides, setPrintQtyOverrides] = useState({});
+  const [printFeedback, setPrintFeedback] = useState({});
+  const [hasScannedRef] = useState({ current: false });
+
+  // Derived bridge values
+  const bridgeTargetPrinter = bridgePrinters.find(p => p.isTargetL8050) || bridgePrinters.find(p => p.isDefault) || bridgePrinters[0] || null;
+  const effectivePrinterName = selectedPrinterOverride || bridgeTargetPrinter?.name || '';
+  const bridgeTone = bridgeStatus.state === 'connected'
+    ? { bg: '#e8f7ef', border: '#b7ebcf', color: '#15803d', label: 'Conectado' }
+    : bridgeStatus.state === 'token'
+      ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
+      : bridgeStatus.state === 'offline'
+        ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
+        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+
+  // Auth
   useEffect(() => {
     let mounted = true;
     supabase.auth.getSession().then(({ data }) => {
@@ -143,6 +185,18 @@ export default function OperariosPage() {
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
+  // Bridge init from localStorage
+  useEffect(() => {
+    const stored = getStoredBridgeConfig();
+    const url = stored.url || DEFAULT_BRIDGE_URL;
+    const token = stored.token || '';
+    setBridgeUrl(url);
+    setBridgeToken(token);
+    if (token) autoInitBridge(url, token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tasks
   const loadTasks = useCallback(async () => {
     if (!session) return;
     setLoadingTasks(true);
@@ -185,6 +239,16 @@ export default function OperariosPage() {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, loadTasks]);
+
+  // Auto-match PDFs when bridge connects or order changes
+  useEffect(() => {
+    if (bridgeStatus.state === 'connected' && selectedOrderId && bridgeToken.trim()) {
+      const scan = !hasScannedRef.current;
+      hasScannedRef.current = true;
+      matchSelectedOrderPdfs({ scan });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridgeStatus.state, selectedOrderId, bridgeToken]);
 
   const orderRows = useMemo(() => {
     const grouped = tasks.reduce((acc, task) => {
@@ -229,6 +293,127 @@ export default function OperariosPage() {
     };
   }, [selectedOrder]);
 
+  // Bridge functions
+  async function checkPrintBridge({ includePrinters = true, overrideUrl, overrideToken } = {}) {
+    const url = overrideUrl !== undefined ? overrideUrl : bridgeUrl;
+    const token = overrideToken !== undefined ? overrideToken : bridgeToken;
+    setBridgeBusy(true);
+    try {
+      saveStoredBridgeConfig({ url, token });
+      await getBridgeHealth(url);
+      if (!token.trim()) {
+        setBridgePrinters([]);
+        setBridgeStatus({ state: 'token', message: 'Bridge conectado. Pegue el token para leer impresoras.', health: null });
+        return;
+      }
+      if (includePrinters) {
+        const printerPayload = await getBridgePrinters(url, token.trim());
+        const printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
+        setBridgePrinters(printers);
+        const target = printers.find(p => p.isTargetL8050);
+        setBridgeStatus({ state: 'connected', message: target ? `Bridge conectado: ${target.name}` : 'Bridge conectado.', health: null });
+      } else {
+        setBridgeStatus({ state: 'connected', message: 'Bridge conectado.', health: null });
+      }
+    } catch (error) {
+      setBridgePrinters([]);
+      setBridgeStatus({
+        state: error?.status === 401 ? 'token' : 'offline',
+        message: error?.status === 401 ? 'Token Bridge incorrecto o faltante.' : `No se pudo conectar al Bridge: ${error.message || error}`,
+        health: null,
+      });
+    } finally {
+      setBridgeBusy(false);
+    }
+  }
+
+  async function autoInitBridge(url, token) {
+    if (!token) return;
+    try {
+      await getBridgeHealth(url);
+    } catch {
+      try {
+        const a = document.createElement('a');
+        a.href = 'inkora-bridge://start';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch {}
+      let retries = 0;
+      await new Promise(resolve => {
+        const poll = setInterval(async () => {
+          retries++;
+          try { await getBridgeHealth(url); clearInterval(poll); resolve(); }
+          catch { if (retries >= 12) { clearInterval(poll); resolve(); } }
+        }, 1500);
+      });
+    }
+    await checkPrintBridge({ overrideUrl: url, overrideToken: token });
+  }
+
+  async function matchSelectedOrderPdfs({ scan = false } = {}) {
+    if (!selectedOrder || !selectedOrder.tasks.length) return;
+    const token = bridgeToken.trim();
+    if (!token) return;
+    const candidates = selectedOrder.tasks.map(task => ({
+      id: String(task.design_id || task.design_key || task.design_name || ''),
+      name: task.design_name || '',
+      productName: task.product_name || '',
+    }));
+    setOrderPdfBusy(true);
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      if (scan) await scanBridgePdfs(bridgeUrl, token);
+      const payload = await matchBridgeDesignPdfs(bridgeUrl, token, candidates);
+      const nextMatches = {};
+      (payload.matches || []).forEach(match => { nextMatches[match.id] = match; });
+      setOrderPdfMatches(nextMatches);
+      setOrderPdfStatus({ state: 'ready', message: `PDFs del pedido: ${payload.found || 0}/${candidates.length}`, roots: payload.roots || [] });
+    } catch (error) {
+      setOrderPdfStatus({
+        state: error?.status === 401 ? 'token' : 'error',
+        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudieron consultar PDFs: ${error.message || error}`,
+        roots: [],
+      });
+    } finally {
+      setOrderPdfBusy(false);
+    }
+  }
+
+  async function printSingleTask(task, customSheets = null) {
+    const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
+    const pdfMatch = orderPdfMatches[pdfKey];
+    if (!pdfMatch?.found) return;
+    const token = bridgeToken.trim();
+    if (!token) return;
+    const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
+    const sheets = customSheets ?? Math.ceil(remaining / 2);
+    const taskId = task.id || pdfKey;
+    setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
+    setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      const result = await printBridgeJob(bridgeUrl, token, {
+        designId: String(task.design_id || task.design_key || ''),
+        designName: task.design_name || '',
+        productName: task.product_name || '',
+        printerName: effectivePrinterName,
+        copies: sheets,
+        orderId: selectedOrder?.id || '',
+        orderCode: selectedOrder?.order_code || '',
+      });
+      const status = result?.job?.status || 'done';
+      setPrintFeedback(prev => ({ ...prev, [taskId]: status === 'done' ? 'Enviado' : status === 'error' ? (result?.job?.error || 'Error') : status }));
+      setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 3000);
+    } catch (error) {
+      setPrintFeedback(prev => ({ ...prev, [taskId]: error?.message || 'Error' }));
+      setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 4000);
+    } finally {
+      setPrintingTasks(prev => ({ ...prev, [taskId]: false }));
+    }
+  }
+
   async function signInWithGoogle() {
     setSigningIn(true);
     setAuthError('');
@@ -253,7 +438,6 @@ export default function OperariosPage() {
   async function saveTask(task, patch) {
     const taskId = task.id;
     let nextProduced, nextWaste, nextPrinted, nextNote;
-
     setTasks(prev => {
       const cur = prev.find(t => t.id === taskId) || task;
       nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : toQty(cur.produced_qty);
@@ -262,30 +446,18 @@ export default function OperariosPage() {
       nextNote     = patch.note         !== undefined ? patch.note                 : (cur.note || '');
       return prev.map(r => r.id === taskId ? { ...r, produced_qty: nextProduced, waste_qty: nextWaste, printed_qty: nextPrinted, note: nextNote } : r);
     });
-
     if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = { saving: false, queued: null };
     const taskState = taskSaveStateRef.current[taskId];
     if (taskState.saving) { taskState.queued = { nextProduced, nextWaste, nextPrinted, nextNote }; return; }
-
     taskState.saving = true;
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
     let toSave = { nextProduced, nextWaste, nextPrinted, nextNote };
-
     try {
       while (toSave !== null) {
         const { nextProduced: p, nextWaste: w, nextPrinted: pr, nextNote: n } = toSave;
-        let result = await supabase.rpc('update_production_task_progress', {
-          p_task_id: taskId,
-          p_produced_qty: Math.max(0, p),
-          p_waste_qty:    Math.max(0, w),
-          p_note:         String(n || ''),
-          p_printed_qty:  Math.max(0, pr),
-        });
+        let result = await supabase.rpc('update_production_task_progress', { p_task_id: taskId, p_produced_qty: Math.max(0, p), p_waste_qty: Math.max(0, w), p_note: String(n || ''), p_printed_qty: Math.max(0, pr) });
         if (result.error && (result.error.code === 'PGRST202' || /printed_qty/i.test(result.error.message || ''))) {
-          result = await supabase.rpc('update_production_task_progress', {
-            p_task_id: taskId, p_produced_qty: Math.max(0, p),
-            p_waste_qty: Math.max(0, w), p_note: String(n || ''),
-          });
+          result = await supabase.rpc('update_production_task_progress', { p_task_id: taskId, p_produced_qty: Math.max(0, p), p_waste_qty: Math.max(0, w), p_note: String(n || '') });
         }
         if (result.error) throw result.error;
         if (result.data) {
@@ -324,6 +496,8 @@ export default function OperariosPage() {
     );
   }
 
+  const bridgeConnected = bridgeStatus.state === 'connected' && bridgeToken.trim();
+
   return (
     <main style={{ minHeight: '100vh', background: '#f7f8fc', fontFamily: 'Barlow, sans-serif', color: '#2d3352', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <header style={{ height: 48, background: '#1B2F5E', color: 'white', display: 'flex', alignItems: 'center', gap: 14, padding: '0 18px', flexShrink: 0 }}>
@@ -334,7 +508,68 @@ export default function OperariosPage() {
         <button type="button" onClick={signOut} style={{ border: '1.5px solid rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.08)', color: 'white', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>Salir</button>
       </header>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, padding: 10, minHeight: 0, overflow: 'hidden', alignItems: 'stretch' }}>
+      {/* Bridge bar */}
+      <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, margin: '8px 10px 0', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresión</div>
+        {bridgePrinters.length > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: bridgeTone.color }} />
+            <select
+              value={selectedPrinterOverride || bridgeTargetPrinter?.name || ''}
+              onChange={e => setSelectedPrinterOverride(e.target.value)}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', minWidth: 0, flex: 1, maxWidth: 240 }}
+            >
+              {bridgePrinters.map(p => <option key={p.name} value={p.name}>{p.name}{p.isDefault ? ' (default)' : ''}</option>)}
+            </select>
+          </div>
+        ) : (
+          <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900 }}>
+            {bridgeTone.label}
+          </span>
+        )}
+        {!bridgeConnected && (
+          <>
+            <input
+              type="password"
+              placeholder="Token Bridge..."
+              value={bridgeToken}
+              onChange={e => setBridgeToken(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') checkPrintBridge(); }}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: 160, outline: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => checkPrintBridge()}
+              disabled={bridgeBusy}
+              style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '4px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+            >
+              {bridgeBusy ? 'Conectando...' : 'Conectar'}
+            </button>
+          </>
+        )}
+        {bridgeConnected && bridgeTargetPrinter && (
+          <>
+            <button
+              type="button"
+              onClick={async () => { try { await openBridgePrinterPreferences(bridgeUrl, bridgeToken.trim(), effectivePrinterName); } catch {} }}
+              disabled={bridgeBusy}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+            >
+              Preferencias
+            </button>
+            <button
+              type="button"
+              onClick={async () => { try { await openBridgePrintQueue(bridgeUrl, bridgeToken.trim(), effectivePrinterName); } catch {} }}
+              disabled={bridgeBusy}
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+            >
+              Cola de impresión
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: bridgeConnected ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, padding: '8px 10px 10px', minHeight: 0, overflow: 'hidden', alignItems: 'stretch' }}>
 
         {/* ── Columna 1: Pedidos ── */}
         <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -378,25 +613,55 @@ export default function OperariosPage() {
             <>
               {/* Header */}
               <div style={{ padding: '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
-                  <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
-                    {selectedOrder.order_code || 'Pedido seleccionado'}
-                  </h2>
-                  <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, lineHeight: 1.5, overflow: 'hidden' }}>
-                    <span style={{ fontWeight: 700 }}>{selectedOrder.customer_name || 'Sin cliente'}</span>
-                    <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
-                    <span>{formatShortDate(selectedOrder.created_at)}</span>
-                    {selectedOrder.seller_name && <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
+                    <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
+                      {selectedOrder.order_code || 'Pedido seleccionado'}
+                    </h2>
+                    <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, lineHeight: 1.5, overflow: 'hidden' }}>
+                      <span style={{ fontWeight: 700 }}>{selectedOrder.customer_name || 'Sin cliente'}</span>
                       <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
-                      <span>{selectedOrder.seller_name}</span>
-                    </>}
-                    <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
-                    <span>{STATUS_LABEL[selectedOrder.productionStatus] || selectedOrder.productionStatus}</span>
+                      <span>{formatShortDate(selectedOrder.created_at)}</span>
+                      {selectedOrder.seller_name && <>
+                        <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                        <span>{selectedOrder.seller_name}</span>
+                      </>}
+                      <span style={{ color: '#c0c5d4', margin: '0 4px' }}>·</span>
+                      <span>{STATUS_LABEL[selectedOrder.productionStatus] || selectedOrder.productionStatus}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.itemsSummary || ''}>{selectedOrder?.itemsSummary || ''}</div>
+                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.notes || ''}>{selectedOrder?.notes || ''}</div>
                   </div>
-                  {/* Always render both lines so header height is constant across orders */}
-                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.itemsSummary || ''}>{selectedOrder?.itemsSummary || ''}</div>
-                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrder?.notes || ''}>{selectedOrder?.notes || ''}</div>
+                  {bridgeConnected && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
+                        {orderPdfStatus.message}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => matchSelectedOrderPdfs({ scan: true })}
+                        disabled={orderPdfBusy}
+                        style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                      >
+                        {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
+                      </button>
+                      {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            for (const task of selectedOrder.tasks) {
+                              await printSingleTask(task);
+                            }
+                          }}
+                          disabled={Object.values(printingTasks).some(Boolean)}
+                          style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                        >
+                          Imprimir todo
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -428,27 +693,35 @@ export default function OperariosPage() {
               <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                   <colgroup>
-                    {/* Producto */}<col style={{ width: 95 }} />
-                    {/* Diseño  */}<col />
-                    {/* A prod  */}<col style={{ width: 46 }} />
-                    {/* Impreso: QtyCell(90) + gap(3) + =N button(38) + padding(10) = 141 */}
+                    <col style={{ width: 95 }} />
+                    <col />
+                    <col style={{ width: 46 }} />
                     <col style={{ width: 145 }} />
-                    {/* Troquelado: same */}
                     <col style={{ width: 145 }} />
-                    {/* Desperdicio: QtyCell(90) + padding(10) = 100 */}
                     <col style={{ width: 100 }} />
-                    {/* Observaciones */}<col style={{ width: 105 }} />
+                    <col style={{ width: 105 }} />
+                    <col style={{ width: 115 }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones'].map(h => (
-                        <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap' }}>{h}</th>
+                      {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
+                        <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {selectedOrder.tasks.map(task => {
+                      const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
+                      const pdfMatch = orderPdfMatches[pdfKey];
                       const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
+                      const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
+                      const defaultSheets = Math.ceil(Math.max(1, remaining) / 2);
+                      const taskId = task.id || pdfKey;
+                      const sheets = printQtyOverrides[taskId] ?? defaultSheets;
+                      const isPrinting = printingTasks[taskId];
+                      const feedback = printFeedback[taskId];
+                      const hasPdf = pdfMatch?.found;
+                      const printDisabled = !hasPdf || isPrinting || !bridgeConnected;
                       return (
                         <tr key={task.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
                           <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
@@ -456,18 +729,22 @@ export default function OperariosPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
                               <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name || 'Sin diseño'}</span>
+                              {orderPdfStatus.state === 'ready' && (
+                                <span
+                                  title={hasPdf ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
+                                  style={{ flexShrink: 0, border: '1px solid', borderColor: hasPdf ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: hasPdf ? '#e8f7ef' : '#fff5f5', color: hasPdf ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                >
+                                  {hasPdf ? pdfMatch.fileName : '—'}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
                           <td style={{ padding: '4px 5px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               <QtyCell value={task.printed_qty || 0} disabled={savingTaskIds[task.id]} step={2} onSave={qty => saveTask(task, { printed_qty: qty })} />
-                              <button
-                                type="button"
-                                title={`Marcar ${printedEven} impreso`}
-                                onClick={() => saveTask(task, { printed_qty: printedEven })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
-                              >
+                              <button type="button" title={`Marcar ${printedEven} impreso`} onClick={() => saveTask(task, { printed_qty: printedEven })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}>
                                 ={printedEven}
                               </button>
                             </div>
@@ -475,12 +752,8 @@ export default function OperariosPage() {
                           <td style={{ padding: '4px 5px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               <QtyCell value={task.produced_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { produced_qty: qty })} />
-                              <button
-                                type="button"
-                                title={`Marcar ${task.required_qty} troquelado`}
-                                onClick={() => saveTask(task, { produced_qty: task.required_qty })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
-                              >
+                              <button type="button" title={`Marcar ${task.required_qty} troquelado`} onClick={() => saveTask(task, { produced_qty: task.required_qty })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}>
                                 ={task.required_qty}
                               </button>
                             </div>
@@ -489,14 +762,38 @@ export default function OperariosPage() {
                             <QtyCell value={task.waste_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { waste_qty: qty })} />
                           </td>
                           <td style={{ padding: '4px 5px' }}>
-                            <input
-                              defaultValue={task.note || ''}
-                              disabled={savingTaskIds[task.id]}
+                            <input defaultValue={task.note || ''} disabled={savingTaskIds[task.id]}
                               onBlur={e => saveTask(task, { note: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                               placeholder="Agregar observación..."
-                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }}
-                            />
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }} />
+                          </td>
+                          <td style={{ padding: '4px 5px', position: 'sticky', right: 0, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' }}>
+                            {feedback ? (
+                              <span style={{ fontSize: 11, fontWeight: 900, color: feedback === 'Enviado' ? '#15803d' : '#b91c1c' }}>{feedback}</span>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <input type="number" min={1} max={99} value={sheets}
+                                  onChange={e => { const v = Math.max(1, parseInt(e.target.value, 10) || 1); setPrintQtyOverrides(prev => ({ ...prev, [taskId]: v })); }}
+                                  onFocus={e => e.target.select()}
+                                  onKeyDown={e => { if (e.key === 'Enter') printSingleTask(task, sheets); }}
+                                  disabled={printDisabled}
+                                  title={`Hojas a imprimir (${remaining} piezas, 2 por hoja = ${defaultSheets} auto)`}
+                                  style={{ width: 32, border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`, borderRadius: 6, padding: '4px 3px', fontSize: 12, fontWeight: 900, textAlign: 'center', fontFamily: 'Barlow, sans-serif', color: hasPdf ? '#15803d' : '#c4c9d9', background: hasPdf ? '#f0fdf7' : '#f7f8fc' }} />
+                                <button type="button" onClick={() => printSingleTask(task, sheets)} disabled={printDisabled}
+                                  title={!hasPdf ? 'Sin PDF vinculado' : `Imprimir ${sheets} hoja${sheets !== 1 ? 's' : ''}`}
+                                  style={{ border: `1.5px solid ${hasPdf ? '#18a36a' : '#dde1ef'}`, borderRadius: 8, padding: '5px 8px', background: hasPdf ? '#e8f7ef' : '#f7f8fc', color: hasPdf ? '#15803d' : '#c4c9d9', fontSize: 11, fontWeight: 900, cursor: printDisabled ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {isPrinting ? '...' : (
+                                    <>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                                        <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+                                      </svg>
+                                      Impr.
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -507,6 +804,81 @@ export default function OperariosPage() {
             </>
           )}
         </div>
+
+        {/* ── Columna 3: Quick print (cuando bridge conectado) ── */}
+        {bridgeConnected && (() => {
+          const matchedPdfs = Object.values(orderPdfMatches)
+            .filter(m => m.found && m.relativePath)
+            .sort((a, b) => {
+              const numA = parseInt(a.fileName || '', 10);
+              const numB = parseInt(b.fileName || '', 10);
+              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+              return (a.fileName || '').localeCompare(b.fileName || '', 'es', { sensitivity: 'base' });
+            });
+          return (
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', letterSpacing: 0.2, marginBottom: 4 }}>
+                  Imprimir{matchedPdfs.length > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', marginLeft: 6 }}>{matchedPdfs.length} PDFs</span> : ''}
+                </div>
+                {matchedPdfs.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 50px', gap: 3, marginTop: 4, padding: '0 2px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase' }}>Diseño</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#9aa3bc', textTransform: 'uppercase', textAlign: 'center' }}>x</span>
+                    <span />
+                  </div>
+                )}
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                {matchedPdfs.length === 0 ? (
+                  <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '18px 8px', lineHeight: 1.5 }}>
+                    Sin PDFs vinculados.<br />Hacé clic en «PDFs del pedido».
+                  </p>
+                ) : matchedPdfs.map(pdf => {
+                  const key = pdf.relativePath;
+                  const label = (pdf.fileName || pdf.name || '').replace(/\.pdf$/i, '');
+                  const qty = printQtyOverrides[`q_${key}`] ?? 1;
+                  const printing = printingTasks[`q_${key}`] ?? false;
+                  return (
+                    <div key={key} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
+                      <DesignThumb designId={String(pdf.id || '')} name={pdf.name} size={22} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
+                      <input type="number" min={1} max={99} value={qty}
+                        onChange={e => setPrintQtyOverrides(prev => ({ ...prev, [`q_${key}`]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                        onFocus={e => e.target.select()}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter') {
+                            setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: true }));
+                            try {
+                              await printBridgeJob(bridgeUrl, bridgeToken.trim(), { designId: pdf.id || '', designName: pdf.name || '', productName: '', printerName: effectivePrinterName, copies: qty, orderId: selectedOrder?.id || '', orderCode: selectedOrder?.order_code || '' });
+                            } catch {} finally { setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: false })); }
+                          }
+                        }}
+                        style={{ width: '100%', textAlign: 'center', padding: '3px 1px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
+                      <button type="button" disabled={printing}
+                        onClick={async () => {
+                          setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: true }));
+                          try {
+                            await printBridgeJob(bridgeUrl, bridgeToken.trim(), { designId: pdf.id || '', designName: pdf.name || '', productName: '', printerName: effectivePrinterName, copies: qty, orderId: selectedOrder?.id || '', orderCode: selectedOrder?.order_code || '' });
+                          } catch {} finally { setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: false })); }
+                        }}
+                        style={{ border: 'none', borderRadius: 6, padding: '4px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                        {printing ? '...' : (
+                          <>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
+                            </svg>
+                            Impr.
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </main>
   );
