@@ -1540,6 +1540,19 @@ export default function ProductionTab({
             </button>
           </div>
 
+          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Print Bridge</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Windows · impresión local</div>
+            </div>
+            <a
+              href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.0/Inkora.PrintBridge.zip"
+              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
+            >
+              Descargar
+            </a>
+          </div>
+
           <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', minHeight: 36 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion</div>
