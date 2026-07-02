@@ -274,6 +274,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const voiceTranscriptRef = useRef('');
   const recognitionRef     = useRef(null);
   const designsRef         = useRef(designs);
+  const lastFinalRef       = useRef({ text: '', time: 0 }); // dedup across restarts
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -537,6 +538,12 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function processVoiceFinal(text) {
+    // Skip duplicates caused by mic buffer replay across session restarts
+    const now = Date.now();
+    const clean = text.trim();
+    if (clean && clean === lastFinalRef.current.text && now - lastFinalRef.current.time < 3000) return;
+    lastFinalRef.current = { text: clean, time: now };
+
     const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
     voiceTranscriptRef.current = transcript;
     setVoiceTranscript(transcript);
@@ -569,7 +576,10 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
+    const sessionStart = Date.now();
+    let gotResult = false;
     rec.onresult = (event) => {
+      gotResult = true;
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) processVoiceFinal(event.results[i][0].transcript);
@@ -582,13 +592,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceInterim('');
     };
     rec.onend = () => {
-      // Chrome auto-ends on silence — restart if we're still supposed to be recording
       if (voiceStateRef.current !== 'recording') return;
+      // If the session ended very quickly (< 400ms) without any result, the mic buffer
+      // may replay the same audio — wait longer before restarting to let it flush.
+      const duration = Date.now() - sessionStart;
+      const delay = (!gotResult && duration < 400) ? 2000 : 800;
       setTimeout(() => {
         if (voiceStateRef.current !== 'recording') return;
         const newRec = createRecognition();
         if (newRec) { recognitionRef.current = newRec; try { newRec.start(); } catch {} }
-      }, 150);
+      }, delay);
     };
     return rec;
   }
@@ -654,7 +667,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           </div>
 
           {/* Dates */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, flexShrink: 0 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Fecha pedido</div>
               <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)}
@@ -668,7 +681,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           </div>
 
           {/* Seller + Operator */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, flexShrink: 0 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Vendedor</div>
               <select value={sellerId} onChange={e => setSellerId(e.target.value)}
@@ -694,8 +707,9 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {voiceSupported && voiceState === 'idle' && (
                   <button type="button" onClick={startVoice}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white' }}>
-                    Dictado
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    Carga por voz
                   </button>
                 )}
                 {voiceSupported && voiceState !== 'idle' && (

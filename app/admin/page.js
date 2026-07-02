@@ -4451,7 +4451,7 @@ useEffect(() => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={s.card}>
           <h2 style={s.sectionTitle}>Crear operario</h2>
-          <form onSubmit={createOperator} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(160px, 1fr) minmax(190px, 1.2fr) auto', gap: 10, alignItems: 'end' }}>
+          <form onSubmit={createOperator} className="adm-grid-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(160px, 1fr) minmax(190px, 1.2fr) auto', gap: 10, alignItems: 'end' }}>
             <div style={{ ...s.formGroup, marginBottom: 0 }}>
               <label style={s.label}>Nombre</label>
               <input style={s.input} value={operatorForm.name} onChange={e => setOperatorForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre completo" />
@@ -4856,10 +4856,25 @@ useEffect(() => {
           }
         `}</style>
       )}
+      <style jsx global>{`
+        .adm-tabs { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .adm-tabs::-webkit-scrollbar { display: none; }
+        @media (max-width: 700px) {
+          .adm-tab { flex: none !important; padding: 10px 10px !important; font-size: 11px !important; }
+          .adm-content { padding: 0 6px !important; width: 100% !important; box-sizing: border-box; }
+          .adm-grid-form { grid-template-columns: 1fr !important; }
+          .adm-grid-2col { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          .adm-header-title { display: none !important; }
+          .adm-header-user { display: none !important; }
+          .adm-content { padding: 0 4px !important; margin-top: 6px !important; }
+        }
+      `}</style>
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
-        <span style={s.headerTitle}>Panel de Administración</span>
+        <span style={s.headerTitle} className="adm-header-title">Panel de Administración</span>
         <button
   type="button"
   onClick={() => setAdminDarkMode(v => !v)}
@@ -4878,7 +4893,7 @@ useEffect(() => {
   </span>
 </button>
 
-<span style={s.headerUser}>{isImpersonating ? (impersonatedIdentity.name || impersonatedIdentity.email || 'Simulación') : currentUser}</span>
+<span style={s.headerUser} className="adm-header-user">{isImpersonating ? (impersonatedIdentity.name || impersonatedIdentity.email || 'Simulación') : currentUser}</span>
         {canImpersonate && (
           <button onClick={() => setShowImpersonatorPanel(true)}
             style={{ border: isImpersonating ? '1.5px solid #f59e0b' : '1.5px solid #3b5ea6', background: isImpersonating ? '#78350f' : 'rgba(255,255,255,0.08)', borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: isImpersonating ? '#fbbf24' : 'rgba(255,255,255,0.7)', fontFamily: 'Barlow, sans-serif', marginRight: 4 }}>
@@ -4917,7 +4932,7 @@ useEffect(() => {
       )}
 
       <div style={s.tabBar}>
-        <div style={s.tabBarInner}>
+        <div style={s.tabBarInner} className="adm-tabs">
           {(() => {
             const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
@@ -4928,6 +4943,7 @@ useEffect(() => {
                 onDragOver={undefined}
                 onDragEnd={undefined}
                 onClick={() => setActiveTab(id)}
+                className="adm-tab"
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
                 {ALL_TABS[id]}
@@ -4943,7 +4959,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <div style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}}>
+      <div style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}} className="adm-content">
 
         {/* == PRODUCTOS == */}
         {activeTab === 'products' && (
@@ -10764,7 +10780,7 @@ function HeatmapTab({ supabase, products }) {
 
 const styles = {
   loginWrap: { minHeight: '100vh', background: '#f7f8fc', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  loginBox: { background: 'white', borderRadius: 16, padding: 40, width: 360, boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
+  loginBox: { background: 'white', borderRadius: 16, padding: 40, maxWidth: 360, width: '100%', boxSizing: 'border-box', boxShadow: '0 4px 24px rgba(27,47,94,0.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
   loginTitle: { fontSize: 20, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
   btnGoogle: { display: 'flex', alignItems: 'center', gap: 10, background: 'white', color: '#2d3352', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
   wrap: { minHeight: '100vh', background: '#f7f8fc', fontFamily: "'Barlow', sans-serif" },
@@ -10772,8 +10788,8 @@ const styles = {
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef', position: 'sticky', top: 0, zIndex: 120, boxShadow: '0 5px 16px rgba(27,47,94,0.08)' },
-  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 3 },
-  tab: { background: 'none', border: 'none', padding: '10px 7px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'1 1 0', minWidth:0, whiteSpace:'nowrap' },
+  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 3, overflowX: 'auto', scrollbarWidth: 'none' },
+  tab: { background: 'none', border: 'none', padding: '10px 8px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'none', whiteSpace:'nowrap' },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
   content: { width: '90%', maxWidth: '100%', margin: '16px auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 },
