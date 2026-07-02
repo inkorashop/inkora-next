@@ -2,7 +2,23 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import DesignThumb from '@/components/DesignThumb';
+
+// Lightweight thumbnail — no DesignsContext needed on this standalone page
+function DesignThumb({ designId, name, size = 24 }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    if (!designId) return;
+    supabase.from('designs').select('image_url, model_url').eq('id', designId).single()
+      .then(({ data }) => {
+        if (!data) return;
+        const url = data.image_url || (!/\.(glb|gltf|usdz)$/i.test(data.model_url || '') ? data.model_url : null);
+        if (url) setSrc(url);
+      });
+  }, [designId]);
+
+  if (!src) return <div style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, background: '#e8eaf4', border: '1px solid #dde1ef', display: 'inline-block' }} />;
+  return <img src={src} alt={name || ''} title={name || ''} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} />;
+}
 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En proceso', done: 'Terminado' };
