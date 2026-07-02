@@ -242,15 +242,15 @@ export default function OperariosPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadTasks]);
 
-  // Auto-match ALL PDFs when bridge connects or tasks load
+  // Auto-match ALL PDFs when bridge connects
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && tasks.length > 0 && bridgeToken.trim()) {
+    if (bridgeStatus.state === 'connected' && bridgeToken.trim()) {
       const scan = !hasScannedRef.current;
       hasScannedRef.current = true;
       matchAllPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridgeStatus.state, tasks.length, bridgeToken]);
+  }, [bridgeStatus.state, bridgeToken]);
 
   // Per-order match when selected order changes (updates badge/status in detail header)
   useEffect(() => {
@@ -364,18 +364,12 @@ export default function OperariosPage() {
 
   async function matchAllPdfs({ scan = false } = {}) {
     const token = bridgeToken.trim();
-    if (!token || tasks.length === 0) return;
-    const seen = new Set();
-    const candidates = [];
-    tasks.forEach(task => {
-      const key = String(task.design_id || task.design_key || task.design_name || '');
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        candidates.push({ id: key, name: task.design_name || '', productName: task.product_name || '' });
-      }
-    });
-    if (candidates.length === 0) return;
+    if (!token) return;
     try {
+      // Fetch ALL designs from Supabase (same as admin does via getDesignPdfCandidates)
+      const { data: allDesigns } = await supabase.from('designs').select('id, name').limit(1500);
+      const candidates = (allDesigns || []).map(d => ({ id: String(d.id), name: d.name || '', productName: '' }));
+      if (candidates.length === 0) return;
       saveStoredBridgeConfig({ url: bridgeUrl, token });
       if (scan) await scanBridgePdfs(bridgeUrl, token);
       const payload = await matchBridgeDesignPdfs(bridgeUrl, token, candidates);
