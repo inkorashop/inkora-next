@@ -1138,14 +1138,21 @@ export default function ProductionTab({
     } : row));
 
     try {
-      const { error } = await supabase.rpc('update_production_task_progress', {
+      const baseParams = {
         p_task_id: taskId,
         p_produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
         p_waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
-        p_printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
         p_note: String(nextNote || ''),
+      };
+      let result = await supabase.rpc('update_production_task_progress', {
+        ...baseParams,
+        p_printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
       });
-      if (error) throw error;
+      // Fallback for DBs where printed_qty column/param doesn't exist yet
+      if (result.error && (result.error.code === 'PGRST202' || result.error.code === '42883' || /printed_qty/i.test(result.error.message || ''))) {
+        result = await supabase.rpc('update_production_task_progress', baseParams);
+      }
+      if (result.error) throw result.error;
       await Promise.all([loadProductionTasks(), loadStock(), loadStockLog()]);
     } catch (error) {
       console.error('Error saving production task', error);
