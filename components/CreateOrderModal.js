@@ -463,7 +463,6 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   async function handleSave() {
-    if (!customerName.trim()) { setError('El nombre del cliente es obligatorio.'); return; }
     const validRows = rows.filter(r =>
       (r.type === 'linked' && r.design_id) || (r.type === 'manual' && r.text.trim())
     );
@@ -507,7 +506,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
             <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Cliente</div>
             <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)}
               placeholder="Nombre del cliente..."
-              style={{ width: '100%', border: `1.5px solid ${!customerName.trim() && error ? '#b91c1c' : '#dde1ef'}`, borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
+              style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box' }} />
           </div>
 
           {/* Dates */}
