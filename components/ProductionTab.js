@@ -1119,6 +1119,7 @@ export default function ProductionTab({
     const taskId = task.id;
     const nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : Number(task.produced_qty || 0);
     const nextWaste = patch.waste_qty !== undefined ? Number(patch.waste_qty) : Number(task.waste_qty || 0);
+    const nextPrinted = patch.printed_qty !== undefined ? Number(patch.printed_qty) : Number(task.printed_qty || 0);
     const nextNote = patch.note !== undefined ? patch.note : (task.note || '');
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
     setErrorMessage('');
@@ -1128,6 +1129,7 @@ export default function ProductionTab({
       ...row,
       produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
       waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
+      printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
       note: String(nextNote || ''),
     } : row));
 
@@ -1136,6 +1138,7 @@ export default function ProductionTab({
         p_task_id: taskId,
         p_produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
         p_waste_qty: Math.max(0, Number.isFinite(nextWaste) ? nextWaste : 0),
+        p_printed_qty: Math.max(0, Number.isFinite(nextPrinted) ? nextPrinted : 0),
         p_note: String(nextNote || ''),
       });
       if (error) throw error;
@@ -1633,8 +1636,8 @@ export default function ProductionTab({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr>
-                        {['Producto', 'Diseño', 'A producir', 'Producido', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
-                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 6 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
+                        {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
+                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1660,6 +1663,12 @@ export default function ProductionTab({
                             )}
                           </td>
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <StockCell
+                              qtyProduced={task.printed_qty || 0}
+                              onSave={qty => saveProductionTask(task, { printed_qty: qty })}
+                            />
+                          </td>
                           <td style={{ padding: '4px 5px' }}>
                             <StockCell
                               qtyProduced={task.produced_qty || 0}

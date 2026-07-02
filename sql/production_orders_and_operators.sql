@@ -321,7 +321,8 @@ CREATE OR REPLACE FUNCTION public.update_production_task_progress(
   p_task_id uuid,
   p_produced_qty integer,
   p_waste_qty integer,
-  p_note text DEFAULT NULL
+  p_note text DEFAULT NULL,
+  p_printed_qty integer DEFAULT NULL
 )
 RETURNS public.production_order_tasks
 LANGUAGE plpgsql
@@ -332,6 +333,7 @@ DECLARE
   v_task public.production_order_tasks%ROWTYPE;
   v_next_produced integer := GREATEST(COALESCE(p_produced_qty, 0), 0);
   v_next_waste integer := GREATEST(COALESCE(p_waste_qty, 0), 0);
+  v_next_printed integer;
   v_delta integer;
   v_stock_id uuid;
   v_stock_qty integer;
@@ -363,11 +365,13 @@ BEGIN
     RAISE EXCEPTION 'No autorizado';
   END IF;
 
+  v_next_printed := GREATEST(COALESCE(p_printed_qty, COALESCE(v_task.printed_qty, 0)), 0);
   v_delta := v_next_produced - COALESCE(v_task.produced_qty, 0);
 
   UPDATE public.production_order_tasks
   SET produced_qty = v_next_produced,
       waste_qty = v_next_waste,
+      printed_qty = v_next_printed,
       note = v_note,
       updated_at = now()
   WHERE id = p_task_id
@@ -402,7 +406,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.update_production_task_progress(uuid, integer, integer, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_production_task_progress(uuid, integer, integer, text, integer) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.get_operator_production_tasks()
 RETURNS TABLE (
@@ -422,6 +426,7 @@ RETURNS TABLE (
   product_id text,
   product_name text,
   required_qty integer,
+  printed_qty integer,
   produced_qty integer,
   waste_qty integer,
   note text,
@@ -452,6 +457,7 @@ AS $$
     t.product_id,
     t.product_name,
     t.required_qty,
+    t.printed_qty,
     t.produced_qty,
     t.waste_qty,
     t.note,
@@ -476,6 +482,10 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_operator_production_tasks() TO authenticated;
+
+-- Migration: add printed_qty column
+ALTER TABLE public.production_order_tasks
+  ADD COLUMN IF NOT EXISTS printed_qty integer NOT NULL DEFAULT 0 CHECK (printed_qty >= 0);
 
 DO $$
 BEGIN
