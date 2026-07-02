@@ -408,6 +408,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.update_production_task_progress(uuid, integer, integer, text, integer) TO authenticated;
 
+DROP FUNCTION IF EXISTS public.get_operator_production_tasks();
 CREATE OR REPLACE FUNCTION public.get_operator_production_tasks()
 RETURNS TABLE (
   id uuid,
