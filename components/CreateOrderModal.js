@@ -270,6 +270,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const [voiceBuffer,     setVoiceBuffer]     = useState(''); // text pending "siguiente"
   const [voiceSupported,  setVoiceSupported]  = useState(false);
   const [voiceConfirmClear, setVoiceConfirmClear] = useState(false);
+  const [voiceError,        setVoiceError]        = useState('');
   const voiceStateRef         = useRef('idle');
   const voiceBufferRef        = useRef('');
   const voiceTranscriptRef    = useRef('');
@@ -277,6 +278,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const designsRef            = useRef(designs);
   const voiceLastDateFieldRef = useRef('deliveryDate');
   const knownCustomerNamesRef = useRef([]);
+  const voiceRestartCountRef  = useRef(0); // consecutive fast restarts without speech
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -687,14 +689,39 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         setVoiceInterim(result[0].transcript);
       }
     };
+    const startedAt = Date.now();
     rec.onerror = (e) => {
       if (e.error === 'no-speech' || e.error === 'aborted') return;
-      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceInterim('');
+      const msgs = {
+        'not-allowed':       'Permiso de micrófono denegado. Habilitá el mic en Chrome.',
+        'audio-capture':     'No se pudo acceder al micrófono. ¿Otra app lo está usando?',
+        'service-not-allowed': 'El servicio de voz no está disponible en este contexto.',
+        'network':           'Error de red al acceder al servicio de voz.',
+      };
+      const msg = msgs[e.error] || `Error de micrófono: ${e.error}`;
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+      setVoiceInterim('');
+      setVoiceError(msg);
     };
     rec.onend = () => {
       if (voiceStateRef.current !== 'recording') return;
-      // Restart after each utterance (or after no-speech timeout).
-      // Small delay lets the audio pipeline reset cleanly.
+      // If the session ended in < 300ms without any result, count as fast restart.
+      // After 5 consecutive fast restarts, stop and warn the user.
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 300) {
+        voiceRestartCountRef.current += 1;
+        if (voiceRestartCountRef.current >= 5) {
+          voiceRestartCountRef.current = 0;
+          voiceStateRef.current = 'idle';
+          setVoiceState('idle');
+          setVoiceInterim('');
+          setVoiceError('El micrófono se cierra solo. Probá: cerrar otras apps que usen el mic, o recargar la página.');
+          return;
+        }
+      } else {
+        voiceRestartCountRef.current = 0;
+      }
       setTimeout(() => {
         if (voiceStateRef.current !== 'recording') return;
         const newRec = createRecognition();
@@ -707,6 +734,8 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   function startVoice() {
     voiceStateRef.current = 'recording';
     setVoiceState('recording');
+    setVoiceError('');
+    voiceRestartCountRef.current = 0;
     const rec = createRecognition();
     if (!rec) { voiceStateRef.current = 'idle'; setVoiceState('idle'); return; }
     recognitionRef.current = rec;
@@ -822,6 +851,12 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                   </>
                 )}
               </div>
+              {voiceError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 7, padding: '6px 10px', marginTop: 6 }}>
+                  <span style={{ fontSize: 11, color: '#92400e', flex: 1 }}>{voiceError}</span>
+                  <button type="button" onClick={() => setVoiceError('')} style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                </div>
+              )}
               {voiceConfirmClear && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fee2e2', border: '1.5px solid #fecaca', borderRadius: 8, padding: '8px 12px', marginTop: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', flex: 1, minWidth: 0 }}>¿Borrar todo el pedido?</span>
