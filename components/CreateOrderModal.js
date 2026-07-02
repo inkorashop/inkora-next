@@ -5,7 +5,7 @@ import { useDesigns } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 import { parseOrderText } from '@/lib/order-text-parser';
-import { splitVoiceText, parseVoiceSegment } from '@/lib/voice-order-parser';
+import { parseVoiceFull, parseVoiceSegment, parseDateTimeValue } from '@/lib/voice-order-parser';
 
 function generateAdminCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -269,11 +269,14 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const [voiceInterim,    setVoiceInterim]    = useState(''); // live unsaved text
   const [voiceBuffer,     setVoiceBuffer]     = useState(''); // text pending "siguiente"
   const [voiceSupported,  setVoiceSupported]  = useState(false);
-  const voiceStateRef      = useRef('idle');
-  const voiceBufferRef     = useRef('');
-  const voiceTranscriptRef = useRef('');
-  const recognitionRef     = useRef(null);
-  const designsRef         = useRef(designs);
+  const [voiceConfirmClear, setVoiceConfirmClear] = useState(false);
+  const voiceStateRef         = useRef('idle');
+  const voiceBufferRef        = useRef('');
+  const voiceTranscriptRef    = useRef('');
+  const recognitionRef        = useRef(null);
+  const designsRef            = useRef(designs);
+  const voiceLastDateFieldRef = useRef('deliveryDate');
+  const knownCustomerNamesRef = useRef([]);
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -294,6 +297,11 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }, [rows, customerName, date, deliveryDate, sellerId, operatorId, notes]);
 
   useEffect(() => { designsRef.current = designs; }, [designs]);
+
+  const knownCustomerNames = useMemo(() => (
+    [...new Set((recentOrders || []).map(o => o.customer_name).filter(Boolean))]
+  ), [recentOrders]);
+  useEffect(() => { knownCustomerNamesRef.current = knownCustomerNames; }, [knownCustomerNames]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -538,28 +546,123 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     });
   }
 
+  // ── Voice field helpers ────────────────────────────────────────────────────────
+
+  function normFuzzy(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function fuzzyMatchPerson(query, list) {
+    if (!query?.trim() || !list?.length) return null;
+    const q = normFuzzy(query);
+    let best = null, bestScore = 0;
+    for (const p of list) {
+      const n = normFuzzy(p.name);
+      if (!n) continue;
+      const qw = q.split(' '), nw = n.split(' ');
+      let m = 0;
+      for (const w of qw) { if (nw.some(v => v === w || v.startsWith(w) || w.startsWith(v))) m++; }
+      const score = m / Math.max(qw.length, nw.length, 1);
+      if (score > bestScore) { bestScore = score; best = p; }
+    }
+    return bestScore >= 0.3 ? best : null;
+  }
+
+  function fuzzyMatchCustomerName(query, names) {
+    if (!query?.trim() || !names?.length) return null;
+    const q = normFuzzy(query);
+    let best = null, bestScore = 0;
+    for (const name of names) {
+      const n = normFuzzy(name);
+      if (!n) continue;
+      const qw = q.split(' '), nw = n.split(' ');
+      let m = 0;
+      for (const w of qw) { if (nw.some(v => v === w || v.startsWith(w) || w.startsWith(v))) m++; }
+      const score = m / Math.max(qw.length, nw.length, 1);
+      if (score > bestScore) { bestScore = score; best = name; }
+    }
+    return bestScore >= 0.4 ? best : null;
+  }
+
+  function applyCustomerField(value) {
+    if (!value?.trim()) return;
+    const matched = fuzzyMatchCustomerName(value, knownCustomerNamesRef.current);
+    setCustomerName(matched || value);
+  }
+
+  function applyDateField(value) {
+    setDate(prev => parseDateTimeValue(value, prev) ?? prev);
+    voiceLastDateFieldRef.current = 'date';
+  }
+
+  function applyDeliveryDateField(value) {
+    setDeliveryDate(prev => parseDateTimeValue(value, prev) ?? prev);
+    voiceLastDateFieldRef.current = 'deliveryDate';
+  }
+
+  function applyTimeField(value) {
+    const target = voiceLastDateFieldRef.current || 'deliveryDate';
+    if (target === 'date') setDate(prev => parseDateTimeValue(value, prev) ?? prev);
+    else setDeliveryDate(prev => parseDateTimeValue(value, prev) ?? prev);
+  }
+
+  function processItem(item) {
+    switch (item.type) {
+      case 'design':       addVoiceRow(item.text); break;
+      case 'customer':     applyCustomerField(item.value); break;
+      case 'date':         applyDateField(item.value); break;
+      case 'deliveryDate': applyDeliveryDateField(item.value); break;
+      case 'time':         applyTimeField(item.value); break;
+      case 'seller':       { const m = fuzzyMatchPerson(item.value, sellers);   if (m) setSellerId(m.id);   break; }
+      case 'operator':     { const m = fuzzyMatchPerson(item.value, operators); if (m) setOperatorId(m.id); break; }
+      case 'notes':        if (item.value?.trim()) setNotes(item.value); break;
+    }
+  }
+
+  function processBufferFlush(bufferText) {
+    if (!bufferText?.trim()) return;
+    const { items } = parseVoiceFull(bufferText, '');
+    for (const item of items) processItem(item);
+  }
+
   function processVoiceFinal(text) {
     const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
     voiceTranscriptRef.current = transcript;
     setVoiceTranscript(transcript);
 
-    const combined = (voiceBufferRef.current ? voiceBufferRef.current + ' ' : '') + text;
-    const { segments, remaining, shouldStop } = splitVoiceText(combined);
+    const { items, remaining } = parseVoiceFull(text, voiceBufferRef.current);
 
-    for (const seg of segments) addVoiceRow(seg);
+    let pendingStop = false, pendingOrderSave = false, pendingOrderCancel = false, pendingOrderClear = false;
+    for (const item of items) {
+      switch (item.type) {
+        case 'cmd:mic-stop':     pendingStop = true;         break;
+        case 'cmd:order-save':   pendingOrderSave = true;   break;
+        case 'cmd:order-cancel': pendingOrderCancel = true; break;
+        case 'cmd:order-clear':  pendingOrderClear = true;  break;
+        default: processItem(item);
+      }
+    }
 
-    if (shouldStop) {
-      if (remaining.trim()) addVoiceRow(remaining);
-      voiceBufferRef.current = '';
-      setVoiceBuffer('');
-      setVoiceInterim('');
+    voiceBufferRef.current = remaining;
+    setVoiceBuffer(remaining);
+    setVoiceInterim('');
+
+    if (pendingStop || pendingOrderSave) {
+      if (remaining.trim()) { processBufferFlush(remaining); voiceBufferRef.current = ''; setVoiceBuffer(''); }
       stopRecognition();
       voiceStateRef.current = 'idle';
       setVoiceState('idle');
-    } else {
-      voiceBufferRef.current = remaining;
-      setVoiceBuffer(remaining);
-      setVoiceInterim('');
+      if (pendingOrderSave) setTimeout(handleSave, 50);
+    } else if (pendingOrderCancel) {
+      stopRecognition();
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+      handleClose();
+    } else if (pendingOrderClear) {
+      stopRecognition();
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+      setVoiceConfirmClear(true);
     }
   }
 
@@ -627,9 +730,8 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function stopVoice() {
-    // Process any text pending "siguiente" before stopping
     if (voiceBufferRef.current.trim()) {
-      addVoiceRow(voiceBufferRef.current);
+      processBufferFlush(voiceBufferRef.current);
       voiceBufferRef.current = '';
       setVoiceBuffer('');
     }
@@ -637,6 +739,29 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     voiceStateRef.current = 'idle';
     setVoiceState('idle');
     setVoiceInterim('');
+  }
+
+  function clearVoice() {
+    voiceStateRef.current = 'idle';
+    stopRecognition();
+    setVoiceState('idle');
+    voiceBufferRef.current = '';
+    voiceTranscriptRef.current = '';
+    setVoiceBuffer('');
+    setVoiceTranscript('');
+    setVoiceInterim('');
+    setVoiceConfirmClear(false);
+  }
+
+  function executeClear() {
+    setCustomerName('');
+    setDate(nowStr());
+    setDeliveryDate('');
+    setSellerId(currentAdminSellerId || '');
+    setOperatorId(operators[0]?.id || '');
+    setRows([newRow()]);
+    setNotes('');
+    clearVoice();
   }
 
   return (
@@ -652,6 +777,66 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
         {/* Body — no outer scroll; design rows scroll internally */}
         <div style={{ flex: 1, minHeight: 0, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+
+          {/* ── Voice bar — always at top ──────────────────────────────────── */}
+          {voiceSupported && (
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {voiceState === 'idle' ? (
+                  <button type="button" onClick={startVoice} title="Carga por voz"
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#5a6380', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                  </button>
+                ) : (
+                  <>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: voiceState === 'recording' ? '#15803d' : '#d97706', display: 'inline-block', flexShrink: 0 }} />
+                    {voiceState === 'recording' ? (
+                      <button type="button" onClick={pauseVoice} title="Pausar"
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#5a6380', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+                      </button>
+                    ) : (
+                      <button type="button" onClick={resumeVoice} title="Reanudar"
+                        style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '5px 7px', background: '#f0f4ff', color: '#2D6BE4', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                      </button>
+                    )}
+                    <button type="button" onClick={stopVoice} title="Detener micrófono"
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#5a6380', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                    </button>
+                    <button type="button" onClick={clearVoice} title="Cancelar dictado"
+                      style={{ border: '1.5px solid #fecaca', borderRadius: 6, padding: '5px 7px', background: '#fff5f5', color: '#b91c1c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2"/></svg>
+                    </button>
+                    {voiceBuffer.trim() && (
+                      <span style={{ fontSize: 11, background: '#fef9c3', color: '#92400e', borderRadius: 4, padding: '2px 7px', border: '1px solid #fde68a', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {voiceBuffer}
+                      </span>
+                    )}
+                    {voiceInterim.trim() && (
+                      <span style={{ fontSize: 11, color: '#9aa3bc', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                        {voiceInterim}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+              {voiceConfirmClear && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fee2e2', border: '1.5px solid #fecaca', borderRadius: 8, padding: '8px 12px', marginTop: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', flex: 1, minWidth: 0 }}>¿Borrar todo el pedido?</span>
+                  <button type="button" onClick={executeClear}
+                    style={{ border: 'none', background: '#b91c1c', color: 'white', borderRadius: 6, padding: '4px 12px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                    Confirmar
+                  </button>
+                  <button type="button" onClick={() => setVoiceConfirmClear(false)}
+                    style={{ border: '1.5px solid #fecaca', background: 'white', color: '#b91c1c', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Customer name */}
           <div style={{ flexShrink: 0 }}>
@@ -699,21 +884,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexShrink: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseños</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {voiceSupported && voiceState === 'idle' && (
-                  <button type="button" onClick={startVoice}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                    Carga por voz
-                  </button>
-                )}
-                {voiceSupported && voiceState !== 'idle' && (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: voiceState === 'recording' ? '#15803d' : '#d97706' }}>
-                    {voiceState === 'recording' ? '● Grabando' : '|| Pausado'}
-                  </span>
-                )}
-                <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
-              </div>
+              <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
             </div>
 
             <div style={{ flex: 1, minHeight: 0, border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -750,53 +921,12 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                 )}
               </div>
 
-              {/* ── Voice panel ── */}
-              {(voiceState !== 'idle' || voiceTranscript.trim()) && (
-                <div style={{ borderBottom: '1px solid #f0f2f8', background: voiceState === 'recording' ? '#f0fdf4' : '#f8faff', padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {/* Status + buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: voiceState === 'recording' ? '#15803d' : voiceState === 'paused' ? '#d97706' : '#9aa3bc' }}>
-                      {voiceState === 'recording' ? '● Escuchando...' : voiceState === 'paused' ? '|| Pausado' : 'Dictado guardado'}
-                    </span>
-                    {voiceState === 'recording' && (
-                      <button type="button" onClick={pauseVoice}
-                        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white' }}>
-                        Pausar
-                      </button>
-                    )}
-                    {voiceState === 'paused' && (
-                      <button type="button" onClick={resumeVoice}
-                        style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#2D6BE4', background: '#f0f4ff' }}>
-                        Reanudar
-                      </button>
-                    )}
-                    {voiceState !== 'idle' && (
-                      <button type="button" onClick={stopVoice}
-                        style={{ border: '1.5px solid #bbf7d0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#15803d', background: '#f0fdf4' }}>
-                        Guardar voz
-                      </button>
-                    )}
-                  </div>
-                  {/* Live interim text */}
-                  {voiceInterim.trim() && (
-                    <div style={{ fontSize: 11, color: '#9aa3bc', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {voiceInterim}
-                    </div>
-                  )}
-                  {/* Pending buffer (not yet "siguiente") */}
-                  {voiceBuffer.trim() && (
-                    <div style={{ fontSize: 11, color: '#92400e', background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 5, padding: '2px 7px', display: 'inline-block', alignSelf: 'flex-start' }}>
-                      {voiceBuffer}
-                    </div>
-                  )}
-                  {/* Full transcript log */}
-                  {voiceTranscript.trim() && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Dictado completo</div>
-                      <textarea readOnly value={voiceTranscript} rows={2}
-                        style={{ width: '100%', border: '1px solid #e8eaf4', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', resize: 'none', background: '#f7f8fc', color: '#5a6380', lineHeight: 1.4, outline: 'none' }} />
-                    </div>
-                  )}
+              {/* ── Voice transcript log (read-only history) ── */}
+              {voiceTranscript.trim() && (
+                <div style={{ borderBottom: '1px solid #f0f2f8', background: '#f8faff', padding: '6px 10px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Dictado</div>
+                  <textarea readOnly value={voiceTranscript} rows={2}
+                    style={{ width: '100%', border: '1px solid #e8eaf4', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', resize: 'none', background: '#f7f8fc', color: '#5a6380', lineHeight: 1.4, outline: 'none' }} />
                 </div>
               )}
 
