@@ -1095,24 +1095,27 @@ export default function ProductionTab({
   }
 
   async function linkManualItemToDesign(order, manualItem, design) {
-    const key = design.design_key || design.name || String(design.id);
-    const { error } = await supabase.from('production_order_tasks').insert({
-      order_id: order.id,
-      order_code: order.order_code,
+    // Use the item's own id as design_key — this matches what admin_sync_order_production_tasks
+    // creates for manual items, so the sync will never delete or overwrite this task.
+    const itemDesignKey = String(manualItem.id || '');
+    const { error } = await supabase.from('production_order_tasks').upsert({
+      order_id:         order.id,
+      order_code:       order.order_code,
       order_created_at: order.created_at,
-      customer_name: order.customer_name,
-      customer_email: order.customer_email || null,
-      seller_id: order.seller_id || null,
-      design_id: design.id || null,
-      design_key: key,
-      design_name: design.name,
-      product_id: design.product_id || null,
-      product_name: design.productName || design.product_name || design.products?.name || 'Sin producto',
-      required_qty: manualItem.qty || 1,
-      produced_qty: 0,
-      waste_qty: 0,
-      note: '',
-    });
+      customer_name:    order.customer_name,
+      customer_email:   order.customer_email || null,
+      seller_id:        order.seller_id || null,
+      design_key:       itemDesignKey,
+      design_id:        String(design.id || ''),
+      design_name:      design.name,
+      product_id:       String(design.product_id || design.products?.id || ''),
+      product_name:     design.productName || design.product_name || design.products?.name || 'Sin producto',
+      required_qty:     manualItem.qty || 1,
+      produced_qty:     0,
+      waste_qty:        0,
+      note:             '',
+      is_manual_link:   true,
+    }, { onConflict: 'order_id,design_key' });
     if (!error) await loadProductionTasks();
   }
 
@@ -1940,14 +1943,16 @@ export default function ProductionTab({
                 const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
                 const top = matches[0] || null;
                 const localLinked = manualItemLinks[key];
-                // Check DB: task exists with matching design name OR id (covers page refresh / tab switch)
-                const dbLinked = tasks.some(t =>
+                // Primary check: task was manually linked for this specific item (is_manual_link=true,
+                // design_key = item.id — the approach used after the persistence fix).
+                const manualTask = tasks.find(t => t.is_manual_link && String(t.design_key) === String(item.id));
+                // Fallback: matched by design_id or design_name (covers older links / other scenarios).
+                const dbLinked = manualTask != null || tasks.some(t =>
                   (top?.design?.id && t.design_id === String(top.design.id)) ||
-                  (top?.design?.name && (t.design_name || '').toLowerCase() === top.design.name.toLowerCase()) ||
-                  // Also check by item text similarity against any task design name
-                  (t.design_name && (t.design_name || '').toLowerCase().includes((item.text || '').toLowerCase()))
+                  (top?.design?.name && (t.design_name || '').toLowerCase() === top.design.name.toLowerCase())
                 );
-                return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: (top?.design?.name || tasks.find(t => t.design_name)?.design_name || 'diseño') } : null) };
+                const linkedName = manualTask?.design_name || top?.design?.name || 'diseño';
+                return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: linkedName } : null) };
               });
 
               // Once every manual item is linked, hide the entire panel
