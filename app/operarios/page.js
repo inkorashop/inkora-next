@@ -242,15 +242,23 @@ export default function OperariosPage() {
     return () => supabase.removeChannel(channel);
   }, [session, loadTasks]);
 
-  // Auto-match PDFs when bridge connects or order changes
+  // Auto-match ALL PDFs when bridge connects or tasks load
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && selectedOrderId && bridgeToken.trim()) {
+    if (bridgeStatus.state === 'connected' && tasks.length > 0 && bridgeToken.trim()) {
       const scan = !hasScannedRef.current;
       hasScannedRef.current = true;
-      matchSelectedOrderPdfs({ scan });
+      matchAllPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridgeStatus.state, selectedOrderId, bridgeToken]);
+  }, [bridgeStatus.state, tasks.length, bridgeToken]);
+
+  // Per-order match when selected order changes (updates badge/status in detail header)
+  useEffect(() => {
+    if (bridgeStatus.state === 'connected' && selectedOrderId && bridgeToken.trim()) {
+      matchSelectedOrderPdfs({ scan: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrderId]);
 
   const orderRows = useMemo(() => {
     const grouped = tasks.reduce((acc, task) => {
@@ -352,6 +360,29 @@ export default function OperariosPage() {
       });
     }
     await checkPrintBridge({ overrideUrl: url, overrideToken: token });
+  }
+
+  async function matchAllPdfs({ scan = false } = {}) {
+    const token = bridgeToken.trim();
+    if (!token || tasks.length === 0) return;
+    const seen = new Set();
+    const candidates = [];
+    tasks.forEach(task => {
+      const key = String(task.design_id || task.design_key || task.design_name || '');
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        candidates.push({ id: key, name: task.design_name || '', productName: task.product_name || '' });
+      }
+    });
+    if (candidates.length === 0) return;
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      if (scan) await scanBridgePdfs(bridgeUrl, token);
+      const payload = await matchBridgeDesignPdfs(bridgeUrl, token, candidates);
+      const nextMatches = {};
+      (payload.matches || []).forEach(match => { nextMatches[match.id] = match; });
+      setAllPdfMatches(prev => ({ ...prev, ...nextMatches }));
+    } catch {}
   }
 
   async function matchSelectedOrderPdfs({ scan = false } = {}) {
