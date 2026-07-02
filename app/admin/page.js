@@ -4325,7 +4325,7 @@ useEffect(() => {
   async function createAdminOrder({ order_code, source, status, customer_name, created_at, delivery_date, seller_id, items, _operator_id, notes }) {
     const { data: order, error } = await supabase
       .from('orders')
-      .insert({ order_code, source, status, customer_name: customer_name || '', created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, notes: notes || '', created_by: currentUser || null })
+      .insert({ order_code, source, status, customer_name: customer_name || '', created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, notes: notes || '' })
       .select('*')
       .single();
     if (error) throw new Error(error.message);
