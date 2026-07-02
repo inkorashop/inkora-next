@@ -1418,6 +1418,12 @@ export default function ProductionTab({
   const selectedOrderTasks = selectedOrder
     ? (tasksByOrder[selectedOrder.id] && tasksByOrder[selectedOrder.id].length > 0 ? tasksByOrder[selectedOrder.id] : getOrderProductionItems(selectedOrder))
     : [];
+  const summaryTotals = {
+    required: selectedOrderTasks.reduce((s, t) => s + (t.required_qty || 0), 0),
+    printed: selectedOrderTasks.reduce((s, t) => s + (t.printed_qty || 0), 0),
+    produced: selectedOrderTasks.reduce((s, t) => s + (t.produced_qty || 0), 0),
+    waste: selectedOrderTasks.reduce((s, t) => s + (t.waste_qty || 0), 0),
+  };
   const activeOperators = operators.filter(op => op.active !== false);
   const bridgeTargetPrinter = bridgePrinters.find(printer => printer.isTargetL8050)
     || bridgePrinters.find(printer => printer.isDefault)
@@ -1636,40 +1642,30 @@ export default function ProductionTab({
             ) : (
               <>
                 {/* Summary totals */}
-                {(() => {
-                  const tasks = selectedOrderTasks;
-                  const totalRequired = tasks.reduce((s, t) => s + (t.required_qty || 0), 0);
-                  const totalPrinted = tasks.reduce((s, t) => s + (t.printed_qty || 0), 0);
-                  const totalProduced = tasks.reduce((s, t) => s + (t.produced_qty || 0), 0);
-                  const totalWaste = tasks.reduce((s, t) => s + (t.waste_qty || 0), 0);
-                  const cols = [
-                    { label: 'A producir', value: totalRequired, total: totalRequired, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7' },
-                    { label: 'Impreso', value: totalPrinted, total: totalRequired, color: '#15803d', bg: '#dcfce7', border: '#86efac' },
-                    { label: 'Troquelado', value: totalProduced, total: totalRequired, color: '#b45309', bg: '#fef9c3', border: '#fde047' },
-                    { label: 'Desperdicio', value: totalWaste, total: totalRequired, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' },
-                  ];
-                  return (
-                    <div style={{ display: 'flex', gap: 8, padding: '8px 8px 4px', flexShrink: 0 }}>
-                      {cols.map(({ label, value, total, color, bg, border }) => {
-                        const pct = total > 0 ? Math.round(value / total * 100) : 0;
-                        return (
-                          <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: '7px 10px', minWidth: 0 }}>
-                            <div style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{label}</div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                              <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
-                              {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.6 }}>{pct}%</span>}
-                            </div>
-                            {label !== 'A producir' && total > 0 && (
-                              <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color, borderRadius: 999, transition: 'width 0.3s' }} />
-                              </div>
-                            )}
+                <div style={{ display: 'flex', gap: 8, padding: '8px 8px 4px', flexShrink: 0 }}>
+                  {[
+                    { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7' },
+                    { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac' },
+                    { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047' },
+                    { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5' },
+                  ].map(({ label, value, color, bg, border }) => {
+                    const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
+                    return (
+                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: '7px 10px', minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{label}</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                          <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
+                          {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.6 }}>{pct}%</span>}
+                        </div>
+                        {label !== 'A producir' && summaryTotals.required > 0 && (
+                          <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color, borderRadius: 999, transition: 'width 0.3s' }} />
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -1684,6 +1680,7 @@ export default function ProductionTab({
                       {selectedOrderTasks.map(task => {
                         const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
                         const pdfMatch = orderPdfMatches[pdfKey];
+                        const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                         return (
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
                           <td style={{ padding: '4px 5px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
@@ -1709,16 +1706,14 @@ export default function ProductionTab({
                                 onSave={qty => saveProductionTask(task, { printed_qty: qty })}
                                 step={2}
                               />
-                              {(() => { const even = Math.ceil((task.required_qty || 0) / 2) * 2; return (
-                                <button
-                                  type="button"
-                                  title={`Marcar ${even} impreso`}
-                                  onClick={() => saveProductionTask(task, { printed_qty: even })}
-                                  style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
-                                >
-                                  ={even}
-                                </button>
-                              ); })()}
+                              <button
+                                type="button"
+                                title={`Marcar ${printedEven} impreso`}
+                                onClick={() => saveProductionTask(task, { printed_qty: printedEven })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                              >
+                                ={printedEven}
+                              </button>
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px' }}>
