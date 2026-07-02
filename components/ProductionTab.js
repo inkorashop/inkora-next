@@ -1685,7 +1685,7 @@ export default function ProductionTab({
                       value={selectedOrderRow.operator_id || ''}
                       onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
                       disabled={Boolean(syncingOrderIds[selectedOrderRow.id])}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', minWidth: 160 }}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: 160, minWidth: 160 }}
                     >
                       <option value="">Sin operario</option>
                       {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
@@ -1723,12 +1723,22 @@ export default function ProductionTab({
                   })}
                 </div>
 
-                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 90 }} />
+                      <col />
+                      <col style={{ width: 50 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 78 }} />
+                      <col style={{ width: 105 }} />
+                      <col style={{ width: 82 }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
-                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
+                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1754,7 +1764,7 @@ export default function ProductionTab({
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
+                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352', overflow: 'hidden' }}>{task.required_qty || 0}</td>
                           <td style={{ padding: '4px 5px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                               <StockCell
@@ -1767,7 +1777,7 @@ export default function ProductionTab({
                                 type="button"
                                 title={`Marcar ${printedEven} impreso`}
                                 onClick={() => saveProductionTask(task, { printed_qty: printedEven })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
                               >
                                 ={printedEven}
                               </button>
@@ -1784,7 +1794,7 @@ export default function ProductionTab({
                                 type="button"
                                 title={`Marcar ${task.required_qty} troquelado`}
                                 onClick={() => saveProductionTask(task, { produced_qty: task.required_qty })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
                                 >
                                   ={task.required_qty}
                                 </button>
