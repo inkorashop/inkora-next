@@ -1182,18 +1182,18 @@ export default function ProductionTab({
     return () => clearInterval(interval);
   }, [bridgeStatus.state, selectedProductionOrderId, bridgeToken, bridgeUrl]);
 
-  // Auto-match PDFs al seleccionar pedido, conectar bridge, o cargar orders.
-  // orders.length como dep porque el bridge suele conectar antes que lleguen las orders;
-  // sin esa dep, selectedOrderRow es null (produceOrderRows vacío) y el match sale temprano.
-  // Escanea el directorio la primera vez (cache vacía al arrancar).
+  // Auto-match PDFs al seleccionar pedido, conectar bridge, cargar orders o cargar tareas.
+  // orders.length: bridge suele conectar antes que lleguen las orders.
+  // selectedOrderTasks.length: tareas pueden llegar después del bridge; sin esta dep el match
+  // sale temprano (selectedOrderTasks vacío) y nunca reintenta.
   useEffect(() => {
-    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim()) {
+    if (bridgeStatus.state === 'connected' && selectedProductionOrderId && bridgeToken.trim() && selectedOrderTasks.length > 0) {
       const scan = !hasScannedOnBridgeConnectRef.current;
       hasScannedOnBridgeConnectRef.current = true;
       matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, orders.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, selectedOrderTasks.length]);
 
   // Auto-escanear PDFs al conectar bridge (mantiene índice sincronizado con Diseños)
   useEffect(() => {
@@ -1669,16 +1669,14 @@ export default function ProductionTab({
                                 qtyProduced={task.printed_qty || 0}
                                 onSave={qty => saveProductionTask(task, { printed_qty: qty })}
                               />
-                              {(task.printed_qty || 0) < (task.required_qty || 0) && (
-                                <button
-                                  type="button"
-                                  title={`Marcar ${task.required_qty} impreso`}
-                                  onClick={() => saveProductionTask(task, { printed_qty: task.required_qty })}
-                                  style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
-                                >
-                                  ={task.required_qty}
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                title={`Marcar ${task.required_qty} impreso`}
+                                onClick={() => saveProductionTask(task, { printed_qty: task.required_qty })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                              >
+                                ={task.required_qty}
+                              </button>
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px' }}>
@@ -1687,16 +1685,14 @@ export default function ProductionTab({
                                 qtyProduced={task.produced_qty || 0}
                                 onSave={qty => saveProductionTask(task, { produced_qty: qty })}
                               />
-                              {(task.produced_qty || 0) < (task.required_qty || 0) && (
-                                <button
-                                  type="button"
-                                  title={`Marcar ${task.required_qty} troquelado`}
-                                  onClick={() => saveProductionTask(task, { produced_qty: task.required_qty })}
-                                  style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
+                              <button
+                                type="button"
+                                title={`Marcar ${task.required_qty} troquelado`}
+                                onClick={() => saveProductionTask(task, { produced_qty: task.required_qty })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 6px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0 }}
                                 >
                                   ={task.required_qty}
                                 </button>
-                              )}
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px' }}>
