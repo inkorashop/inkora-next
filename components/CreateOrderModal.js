@@ -5,6 +5,7 @@ import { useDesigns } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 import { parseOrderText } from '@/lib/order-text-parser';
+import { splitVoiceText, parseVoiceSegment } from '@/lib/voice-order-parser';
 
 function generateAdminCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -262,6 +263,18 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const snap = useRef({});
   snap.current = { editingRow, focusedRow, rows };
 
+  // ── Voice dictation state ────────────────────────────────────────────────────
+  const [voiceState,      setVoiceState]      = useState('idle'); // 'idle'|'recording'|'paused'
+  const [voiceTranscript, setVoiceTranscript] = useState(''); // full dictated log
+  const [voiceInterim,    setVoiceInterim]    = useState(''); // live unsaved text
+  const [voiceBuffer,     setVoiceBuffer]     = useState(''); // text pending "siguiente"
+  const [voiceSupported,  setVoiceSupported]  = useState(false);
+  const voiceStateRef      = useRef('idle');
+  const voiceBufferRef     = useRef('');
+  const voiceTranscriptRef = useRef('');
+  const recognitionRef     = useRef(null);
+  const designsRef         = useRef(designs);
+
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
   useEffect(() => {
@@ -279,6 +292,17 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     }, 400);
     return () => clearTimeout(timer);
   }, [rows, customerName, date, deliveryDate, sellerId, operatorId, notes]);
+
+  useEffect(() => { designsRef.current = designs; }, [designs]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
+    }
+    return () => {
+      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
+    };
+  }, []);
 
   const usedDesignIds = useMemo(() => {
     const s = new Set();
@@ -487,6 +511,126 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     } finally { setSaving(false); }
   }
 
+  // ── Voice helpers ─────────────────────────────────────────────────────────────
+
+  function stopRecognition() {
+    if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
+  }
+
+  function addVoiceRow(segText) {
+    const parsed = parseVoiceSegment(segText);
+    if (!parsed?.name) return;
+    const allDesigns = designsRef.current || [];
+    const pdfSet = pdfEnabledIds instanceof Set ? pdfEnabledIds
+      : Array.isArray(pdfEnabledIds) ? new Set(pdfEnabledIds.map(String)) : null;
+    const matchable = pdfSet ? allDesigns.filter(d => pdfSet.has(String(d.id))) : allDesigns;
+    const matches = fuzzyMatchDesigns(parsed.name, matchable, 1);
+    const top = matches[0];
+    const row = (top && top.score >= IMPORT_MATCH_THRESHOLD)
+      ? { id: Math.random().toString(36).slice(2), type: 'linked', design_id: top.design.id, name: top.design.name, productName: top.design.products?.name || '', text: '', qty: parsed.qty, suggested: true }
+      : { id: Math.random().toString(36).slice(2), type: 'manual', text: parsed.name, design_id: '', name: '', productName: '', qty: parsed.qty, suggested: true };
+    setRows(prev => {
+      const last = prev[prev.length - 1];
+      const isEmpty = last && last.type === 'manual' && !last.text && !last.name && last.qty === 0;
+      return isEmpty ? [...prev.slice(0, -1), row] : [...prev, row];
+    });
+  }
+
+  function processVoiceFinal(text) {
+    const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
+    voiceTranscriptRef.current = transcript;
+    setVoiceTranscript(transcript);
+
+    const combined = (voiceBufferRef.current ? voiceBufferRef.current + ' ' : '') + text;
+    const { segments, remaining, shouldStop } = splitVoiceText(combined);
+
+    for (const seg of segments) addVoiceRow(seg);
+
+    if (shouldStop) {
+      if (remaining.trim()) addVoiceRow(remaining);
+      voiceBufferRef.current = '';
+      setVoiceBuffer('');
+      setVoiceInterim('');
+      stopRecognition();
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+    } else {
+      voiceBufferRef.current = remaining;
+      setVoiceBuffer(remaining);
+      setVoiceInterim('');
+    }
+  }
+
+  function createRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const rec = new SR();
+    rec.lang = 'es-AR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) processVoiceFinal(event.results[i][0].transcript);
+        else interim += event.results[i][0].transcript;
+      }
+      setVoiceInterim(interim);
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceInterim('');
+    };
+    rec.onend = () => {
+      // Chrome auto-ends on silence — restart if we're still supposed to be recording
+      if (voiceStateRef.current !== 'recording') return;
+      setTimeout(() => {
+        if (voiceStateRef.current !== 'recording') return;
+        const newRec = createRecognition();
+        if (newRec) { recognitionRef.current = newRec; try { newRec.start(); } catch {} }
+      }, 150);
+    };
+    return rec;
+  }
+
+  function startVoice() {
+    voiceStateRef.current = 'recording';
+    setVoiceState('recording');
+    const rec = createRecognition();
+    if (!rec) { voiceStateRef.current = 'idle'; setVoiceState('idle'); return; }
+    recognitionRef.current = rec;
+    try { rec.start(); } catch {}
+  }
+
+  function pauseVoice() {
+    voiceStateRef.current = 'paused';
+    setVoiceState('paused');
+    stopRecognition();
+    setVoiceInterim('');
+  }
+
+  function resumeVoice() {
+    voiceStateRef.current = 'recording';
+    setVoiceState('recording');
+    const rec = createRecognition();
+    if (!rec) { voiceStateRef.current = 'paused'; setVoiceState('paused'); return; }
+    recognitionRef.current = rec;
+    try { rec.start(); } catch {}
+  }
+
+  function stopVoice() {
+    // Process any text pending "siguiente" before stopping
+    if (voiceBufferRef.current.trim()) {
+      addVoiceRow(voiceBufferRef.current);
+      voiceBufferRef.current = '';
+      setVoiceBuffer('');
+    }
+    stopRecognition();
+    voiceStateRef.current = 'idle';
+    setVoiceState('idle');
+    setVoiceInterim('');
+  }
+
   return (
     <div onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -547,7 +691,20 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexShrink: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5 }}>Diseños</div>
-              <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {voiceSupported && voiceState === 'idle' && (
+                  <button type="button" onClick={startVoice}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white' }}>
+                    Dictado
+                  </button>
+                )}
+                {voiceSupported && voiceState !== 'idle' && (
+                  <span style={{ fontSize: 11, fontWeight: 800, color: voiceState === 'recording' ? '#15803d' : '#d97706' }}>
+                    {voiceState === 'recording' ? '● Grabando' : '|| Pausado'}
+                  </span>
+                )}
+                <div style={{ fontSize: 10, color: '#9aa3bc' }}>↑↓ · Enter editar · dígito = cant</div>
+              </div>
             </div>
 
             <div style={{ flex: 1, minHeight: 0, border: '1.5px solid #dde1ef', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -583,6 +740,56 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                   </div>
                 )}
               </div>
+
+              {/* ── Voice panel ── */}
+              {(voiceState !== 'idle' || voiceTranscript.trim()) && (
+                <div style={{ borderBottom: '1px solid #f0f2f8', background: voiceState === 'recording' ? '#f0fdf4' : '#f8faff', padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {/* Status + buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: voiceState === 'recording' ? '#15803d' : voiceState === 'paused' ? '#d97706' : '#9aa3bc' }}>
+                      {voiceState === 'recording' ? '● Escuchando...' : voiceState === 'paused' ? '|| Pausado' : 'Dictado guardado'}
+                    </span>
+                    {voiceState === 'recording' && (
+                      <button type="button" onClick={pauseVoice}
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white' }}>
+                        Pausar
+                      </button>
+                    )}
+                    {voiceState === 'paused' && (
+                      <button type="button" onClick={resumeVoice}
+                        style={{ border: '1.5px solid #2D6BE4', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#2D6BE4', background: '#f0f4ff' }}>
+                        Reanudar
+                      </button>
+                    )}
+                    {voiceState !== 'idle' && (
+                      <button type="button" onClick={stopVoice}
+                        style={{ border: '1.5px solid #bbf7d0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#15803d', background: '#f0fdf4' }}>
+                        Guardar voz
+                      </button>
+                    )}
+                  </div>
+                  {/* Live interim text */}
+                  {voiceInterim.trim() && (
+                    <div style={{ fontSize: 11, color: '#9aa3bc', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {voiceInterim}
+                    </div>
+                  )}
+                  {/* Pending buffer (not yet "siguiente") */}
+                  {voiceBuffer.trim() && (
+                    <div style={{ fontSize: 11, color: '#92400e', background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 5, padding: '2px 7px', display: 'inline-block', alignSelf: 'flex-start' }}>
+                      {voiceBuffer}
+                    </div>
+                  )}
+                  {/* Full transcript log */}
+                  {voiceTranscript.trim() && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Dictado completo</div>
+                      <textarea readOnly value={voiceTranscript} rows={2}
+                        style={{ width: '100%', border: '1px solid #e8eaf4', borderRadius: 5, padding: '4px 7px', fontSize: 11, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', resize: 'none', background: '#f7f8fc', color: '#5a6380', lineHeight: 1.4, outline: 'none' }} />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Bulk qty bar */}
               {selectedIndices.size > 1 && (
