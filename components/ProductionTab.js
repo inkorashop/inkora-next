@@ -1655,7 +1655,7 @@ export default function ProductionTab({
                     </div>
                   )}
                   {selectedOrderRow?.itemsSummary && (
-                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1 }}>{selectedOrderRow.itemsSummary}</div>
+                    <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedOrderRow.itemsSummary}>{selectedOrderRow.itemsSummary}</div>
                   )}
                   {selectedOrderRow?.notes && (
                     <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic' }}>{selectedOrderRow.notes}</div>
@@ -1703,7 +1703,7 @@ export default function ProductionTab({
             ) : (
               <>
                 {/* Summary totals */}
-                <div style={{ display: 'flex', gap: 8, padding: '8px 8px 4px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 6, padding: '6px 8px 3px', flexShrink: 0 }}>
                   {[
                     { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7' },
                     { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac' },
@@ -1712,17 +1712,10 @@ export default function ProductionTab({
                   ].map(({ label, value, color, bg, border }) => {
                     const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
                     return (
-                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: '7px 10px', minWidth: 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{label}</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                          <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
-                          {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.6 }}>{pct}%</span>}
-                        </div>
-                        {label !== 'A producir' && summaryTotals.required > 0 && (
-                          <div style={{ marginTop: 5, height: 4, borderRadius: 999, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color, borderRadius: 999, transition: 'width 0.3s' }} />
-                          </div>
-                        )}
+                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', opacity: 0.75 }}>{label}</span>
+                        <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
+                        {label !== 'A producir' && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.55 }}>{pct}%</span>}
                       </div>
                     );
                   })}
@@ -1746,18 +1739,18 @@ export default function ProductionTab({
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
                           <td style={{ padding: '4px 5px', color: '#5a6380' }}>{task.product_name || 'Sin producto'}</td>
                           <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={28} />
-                              <span>{task.design_name}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
+                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
+                              {orderPdfStatus.state === 'ready' && (
+                                <span
+                                  title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
+                                  style={{ flexShrink: 0, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                >
+                                  {pdfMatch?.found ? pdfMatch.fileName : '—'}
+                                </span>
+                              )}
                             </div>
-                            {orderPdfStatus.state === 'ready' && (
-                              <span
-                                title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
-                                style={{ display: 'inline-flex', marginTop: 3, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 7px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 10, fontWeight: 900, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                              >
-                                {pdfMatch?.found ? `PDF · ${pdfMatch.fileName}` : 'PDF sin vínculo'}
-                              </span>
-                            )}
                           </td>
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
                           <td style={{ padding: '4px 5px' }}>
