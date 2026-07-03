@@ -1569,74 +1569,74 @@ export default function ProductionTab({
             </button>
           </div>
 
-          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 0, marginRight: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Print Bridge</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Windows · impresión local</div>
-            </div>
-            <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
-              {bridgeTone.label}
-            </span>
-            {bridgeStatus.health?.version && (
-              <span style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
-                v{bridgeStatus.health.version.replace(/\.0+$/, '')}
-              </span>
-            )}
-            {bridgeStatus.state === 'connected' && bridgeToken && (
-              <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
-                🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
-              </span>
-            )}
-            <a
-              href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4.1/Inkora.PrintBridge.zip"
-              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block', marginLeft: 'auto' }}
-            >
-              Descargar
-            </a>
-          </div>
-
-          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', minHeight: 36 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresion</div>
-              {bridgePrinters.length > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+          {/* ── Impresora (izq) + Bridge (der) ── */}
+          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Left: Impresora */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresora</div>
+              {bridgeStatus.state === 'connected' && bridgePrinters.length > 0 ? (
+                <>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: bridgeTone.color }} />
                   <select
                     value={selectedPrinterOverride || bridgeTargetPrinter?.name || ''}
                     onChange={e => setSelectedPrinterOverride(e.target.value)}
-                    disabled={bridgeStatus.state !== 'connected'}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', minWidth: 0, flex: 1, maxWidth: 240, cursor: bridgeStatus.state === 'connected' ? 'pointer' : 'default' }}
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 800, fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', minWidth: 0, maxWidth: 240 }}
                   >
                     {bridgePrinters.map(p => (
                       <option key={p.name} value={p.name}>{p.name}{p.isDefault ? ' (default)' : ''}</option>
                     ))}
                   </select>
-                </div>
+                  {bridgeTargetPrinter && bridgeToken.trim() && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openBridgePreferences()}
+                        disabled={bridgeBusy}
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+                      >
+                        Preferencias
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrintQueueOpen(true)}
+                        disabled={bridgeBusy}
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
+                      >
+                        Cola de impresión
+                      </button>
+                    </>
+                  )}
+                </>
               ) : (
-                <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900 }}>
-                  {bridgeTone.label}
+                <span style={{ fontSize: 11, color: '#c4c9d9' }}>Sin impresoras</span>
+              )}
+            </div>
+
+            {/* Divider */}
+            <span style={{ width: 1, height: 18, background: '#dde1ef', flexShrink: 0, margin: '0 2px' }} />
+
+            {/* Right: Bridge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Bridge</div>
+              <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+                {bridgeTone.label}
+              </span>
+              {bridgeStatus.health?.version && (
+                <span style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                  v{bridgeStatus.health.version.replace(/\.0+$/, '')}
                 </span>
               )}
-              {bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => openBridgePreferences()}
-                    disabled={bridgeBusy}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
-                  >
-                    Preferencias
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrintQueueOpen(true)}
-                    disabled={bridgeBusy}
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#1B2F5E', background: 'white', flexShrink: 0 }}
-                  >
-                    Cola de impresión
-                  </button>
-                </>
+              {bridgeStatus.state === 'connected' && bridgeToken && (
+                <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                  🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
+                </span>
               )}
+              <a
+                href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4.1/Inkora.PrintBridge.zip"
+                style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
+              >
+                Descargar
+              </a>
             </div>
           </div>
 
