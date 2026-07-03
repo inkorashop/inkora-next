@@ -1,0 +1,40 @@
+name: Release Print Bridge
+
+on:
+  push:
+    tags:
+      - "bridge-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build Bridge package
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}".Replace("bridge-v", "")
+          ./bridge/build-release.ps1 -Version $version
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${env:GITHUB_REF_NAME}"
+          $version = $tag.Replace("bridge-v", "")
+          gh release create $tag `
+            "bridge/Inkora.PrintBridge/bin/Inkora.PrintBridge.zip" `
+            --title "Bridge v$version" `
+            --notes "INKORA Print Bridge v$version. Incluye SumatraPDF.exe para copias multiples confiables y auto-update con paquete completo."

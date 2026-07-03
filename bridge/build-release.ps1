@@ -1,4 +1,4 @@
-param([string]$Version = "1.6.2")
+param([string]$Version = "1.6.3")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
@@ -25,7 +25,7 @@ Write-Host "==> Publicando (single-file, self-contained, win-x64)..."
 
 if (-not $?) { Write-Error "dotnet publish fallo"; exit 1 }
 
-# Copy exe + SumatraPDF to output folder (skip debug/temp files)
+# Copy exe to output folder (skip debug/temp files)
 Write-Host "==> Copiando archivos al paquete..."
 $skip = @("*.pdb", "createdump.exe", "*.deps.json")
 Get-ChildItem "$stageDir\publish" | Where-Object {
@@ -33,6 +33,26 @@ Get-ChildItem "$stageDir\publish" | Where-Object {
     -not ($skip | Where-Object { $name -like $_ })
 } | ForEach-Object {
     Copy-Item $_.FullName "$outDir\" -Recurse
+}
+
+# Ensure SumatraPDF is bundled. Multiple copies must be a single reliable print job,
+# not N shell-printto jobs.
+$sumatraDst = Join-Path $outDir "SumatraPDF.exe"
+$sumatraCandidates = @(
+    (Join-Path $projDir "tools\SumatraPDF.exe"),
+    (Join-Path $projDir "bin\Published\SumatraPDF.exe"),
+    "C:\Program Files\SumatraPDF\SumatraPDF.exe",
+    "C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe"
+)
+$sumatraSrc = $sumatraCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($sumatraSrc) {
+    Copy-Item $sumatraSrc $sumatraDst -Force
+    Write-Host "==> SumatraPDF incluido desde: $sumatraSrc"
+} else {
+    Write-Host "==> SumatraPDF no encontrado localmente. Descargando portable..."
+    $sumatraUrl = "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.exe"
+    Invoke-WebRequest -Uri $sumatraUrl -OutFile $sumatraDst -UseBasicParsing -TimeoutSec 90
+    Write-Host "==> SumatraPDF descargado e incluido."
 }
 
 # Show what ended up in the package

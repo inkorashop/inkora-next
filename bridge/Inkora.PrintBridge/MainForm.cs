@@ -10,6 +10,12 @@ namespace Inkora.PrintBridge;
 
 public sealed class MainForm : Form
 {
+    private static readonly Color InkoraBlue = ColorTranslator.FromHtml("#1B2F5E");
+    private static readonly Color InkoraBlueDark = ColorTranslator.FromHtml("#10244A");
+    private static readonly Color InkoraBlueSoft = ColorTranslator.FromHtml("#EAF1FF");
+    private static readonly Color InkoraBorder = ColorTranslator.FromHtml("#DDE6F7");
+    private static readonly Color InkoraBg = ColorTranslator.FromHtml("#F6F8FC");
+
     private readonly PrinterService _printerService = new();
     private readonly DevModeService _devModeService = new();
     private readonly DriverPreferencesService _driverPreferencesService = new();
@@ -20,6 +26,7 @@ public sealed class MainForm : Form
     private readonly DevModeProfileService _devModeProfileService;
     private readonly LocalApiServer _localApiServer;
     private readonly string _bridgeToken;
+    private readonly bool _startedAfterUpdate;
 
     private readonly DataGridView _printersGrid = new();
     private readonly TextBox _tokenTextBox = new();
@@ -49,6 +56,8 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
+        _startedAfterUpdate = Environment.GetCommandLineArgs()
+            .Any(arg => string.Equals(arg, "--updated", StringComparison.OrdinalIgnoreCase));
         _bridgeToken = _configService.GetOrCreatePairingToken();
         _pdfCatalogService = new PdfCatalogService(_configService, _logService);
         _printJobService = new PrintJobService(_pdfCatalogService, _printerService, _devModeService, _logService);
@@ -67,10 +76,11 @@ public sealed class MainForm : Form
             GetUpdatePhase);
 
         Text = "INKORA Print Bridge";
-        Width = 860;
-        Height = 580;
-        MinimumSize = new Size(680, 460);
+        Width = 920;
+        Height = 620;
+        MinimumSize = new Size(760, 520);
         StartPosition = FormStartPosition.CenterScreen;
+        BackColor = InkoraBg;
 
         BuildLayout();
         Load += (_, _) =>
@@ -78,7 +88,16 @@ public sealed class MainForm : Form
             StartLocalApi();
             RefreshPrinters();
             InitTrayIcon();
-            HideToTray();
+            if (_startedAfterUpdate)
+            {
+                ShowForm();
+                _statusLabel.Text = "Bridge actualizado correctamente.";
+                AppendDiagnostic("Actualizacion completada. El Bridge reinicio con la nueva version.");
+            }
+            else
+            {
+                HideToTray();
+            }
         };
         FormClosing += (s, e) =>
         {
@@ -149,31 +168,32 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 5,
-            Padding = new Padding(12)
+            Padding = new Padding(16),
+            BackColor = InkoraBg
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var header = new Panel { Dock = DockStyle.Fill, BackColor = ColorTranslator.FromHtml("#1B2F5E") };
+        var header = new Panel { Dock = DockStyle.Fill, BackColor = InkoraBlue, Padding = new Padding(18, 10, 18, 10) };
         var headerTitle = new Label
         {
             Text = "INKORA Print Bridge",
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            Font = new Font("Segoe UI", 16, FontStyle.Bold),
             AutoSize = true,
-            Location = new Point(14, 8)
+            Location = new Point(18, 10)
         };
         var versionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "dev";
         var headerVersion = new Label
         {
-            Text = $"v{versionStr}",
-            ForeColor = Color.FromArgb(170, 200, 225),
-            Font = new Font("Segoe UI", 9),
+            Text = $"v{versionStr} - API local segura - Copias via SumatraPDF",
+            ForeColor = Color.FromArgb(204, 222, 250),
+            Font = new Font("Segoe UI", 9, FontStyle.Regular),
             AutoSize = true,
-            Location = new Point(14, 32)
+            Location = new Point(20, 42)
         };
         header.Controls.AddRange([headerTitle, headerVersion]);
 
@@ -185,6 +205,7 @@ public sealed class MainForm : Form
             ColumnCount = 4,
             RowCount = 1,
             Padding = new Padding(0, 4, 0, 8),
+            BackColor = InkoraBg,
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
         };
         tokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -196,6 +217,7 @@ public sealed class MainForm : Form
         {
             Text = text, AutoSize = true,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = InkoraBlueDark,
             Padding = new Padding(0, 5, 8, 0)
         };
 
@@ -203,7 +225,8 @@ public sealed class MainForm : Form
         {
             Text = text, ReadOnly = true, Width = width, Height = 28,
             Font = new Font(FontFamily.GenericMonospace, 10),
-            BackColor = Color.WhiteSmoke
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle
         };
 
         _tokenTextBox.Text = _bridgeToken;
@@ -211,7 +234,8 @@ public sealed class MainForm : Form
         _tokenTextBox.Font = new Font(FontFamily.GenericMonospace, 10);
         _tokenTextBox.Width = 440;
         _tokenTextBox.Height = 28;
-        _tokenTextBox.BackColor = Color.WhiteSmoke;
+        _tokenTextBox.BackColor = Color.White;
+        _tokenTextBox.BorderStyle = BorderStyle.FixedSingle;
         _tokenTextBox.Click += (_, _) => _tokenTextBox.SelectAll();
 
         // Network URL box — filled after Start()
@@ -232,7 +256,8 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            WrapContents = true
+            WrapContents = true,
+            BackColor = InkoraBg
         };
 
         ConfigureButton(_refreshButton, "Actualizar", (_, _) => RefreshPrinters());
@@ -251,7 +276,7 @@ public sealed class MainForm : Form
             Height = 34,
             AutoSize = true,
             Margin = new Padding(24, 0, 8, 8),
-            BackColor = ColorTranslator.FromHtml("#fff1f2"),
+            BackColor = ColorTranslator.FromHtml("#FFF5F5"),
             ForeColor = ColorTranslator.FromHtml("#b91c1c"),
             FlatStyle = FlatStyle.Flat,
         };
@@ -273,17 +298,22 @@ public sealed class MainForm : Form
 
         _statusLabel.AutoSize = true;
         _statusLabel.Padding = new Padding(0, 8, 0, 0);
+        _statusLabel.ForeColor = InkoraBlueDark;
+        _statusLabel.Font = new Font("Segoe UI", 9, FontStyle.Bold);
         _apiLabel.AutoSize = true;
         _apiLabel.Padding = new Padding(0, 2, 0, 0);
+        _apiLabel.ForeColor = ColorTranslator.FromHtml("#4D5F82");
         _pdfLabel.AutoSize = true;
         _pdfLabel.Padding = new Padding(0, 2, 0, 0);
+        _pdfLabel.ForeColor = ColorTranslator.FromHtml("#4D5F82");
 
         var footer = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
-            AutoSize = true
+            AutoSize = true,
+            BackColor = InkoraBg
         };
         footer.Controls.Add(actions, 0, 0);
         footer.Controls.Add(_statusLabel, 0, 1);
@@ -311,6 +341,18 @@ public sealed class MainForm : Form
         _printersGrid.MultiSelect = false;
         _printersGrid.RowHeadersVisible = false;
         _printersGrid.BackgroundColor = Color.White;
+        _printersGrid.BorderStyle = BorderStyle.None;
+        _printersGrid.GridColor = InkoraBorder;
+        _printersGrid.EnableHeadersVisualStyles = false;
+        _printersGrid.ColumnHeadersDefaultCellStyle.BackColor = InkoraBlue;
+        _printersGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _printersGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        _printersGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = InkoraBlue;
+        _printersGrid.DefaultCellStyle.BackColor = Color.White;
+        _printersGrid.DefaultCellStyle.ForeColor = InkoraBlueDark;
+        _printersGrid.DefaultCellStyle.SelectionBackColor = InkoraBlueSoft;
+        _printersGrid.DefaultCellStyle.SelectionForeColor = InkoraBlueDark;
+        _printersGrid.AlternatingRowsDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#FAFCFF");
         _printersGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
         _printersGrid.Columns.Add(new DataGridViewTextBoxColumn
@@ -365,6 +407,9 @@ public sealed class MainForm : Form
         _diagnosticTextBox.ScrollBars = ScrollBars.Both;
         _diagnosticTextBox.WordWrap = false;
         _diagnosticTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
+        _diagnosticTextBox.BackColor = ColorTranslator.FromHtml("#FDFEFF");
+        _diagnosticTextBox.ForeColor = InkoraBlueDark;
+        _diagnosticTextBox.BorderStyle = BorderStyle.FixedSingle;
     }
 
     private static void ConfigureButton(Button button, string text, EventHandler clickHandler)
@@ -373,6 +418,12 @@ public sealed class MainForm : Form
         button.AutoSize = true;
         button.Height = 34;
         button.Margin = new Padding(0, 0, 8, 8);
+        button.FlatStyle = FlatStyle.Flat;
+        button.BackColor = Color.White;
+        button.ForeColor = InkoraBlue;
+        button.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        button.FlatAppearance.BorderColor = InkoraBorder;
+        button.FlatAppearance.MouseOverBackColor = InkoraBlueSoft;
         button.Click += clickHandler;
     }
 
@@ -483,8 +534,11 @@ public sealed class MainForm : Form
             var status = target is null
                 ? "No se detecto Epson L8050 por nombre. Selecciona una impresora manualmente."
                 : $"Detectada Epson candidata: {target.Name}";
+            var printEngine = _printJobService.SumatraPdfPath is not null
+                ? "Motor PDF: SumatraPDF"
+                : "Motor PDF: fallback solo 1 copia";
 
-            _statusLabel.Text = $"{status} | Default: {defaultPrinter?.Name ?? "sin default"} | Log: {_logService.LogFilePath}";
+            _statusLabel.Text = $"{status} | {printEngine} | Default: {defaultPrinter?.Name ?? "sin default"} | Log: {_logService.LogFilePath}";
 
             AppendDiagnostic(BuildPrinterSummary(printers));
             _logService.Info($"Impresoras actualizadas. Total={printers.Count}. Target={target?.Name ?? "no detectada"}.");
@@ -662,16 +716,38 @@ public sealed class MainForm : Form
 
     private string GetUpdatePhase() => _updatePhase;
 
+    private void ReportUpdateStatus(string message)
+    {
+        _logService.Info($"[UPDATE] {message}");
+        try
+        {
+            if (!IsHandleCreated) return;
+            BeginInvoke((Action)(() =>
+            {
+                ShowForm();
+                _statusLabel.Text = message;
+                AppendDiagnostic($"[UPDATE] {message}");
+            }));
+        }
+        catch
+        {
+            // UI feedback is best-effort; logs still carry the update trail.
+        }
+    }
+
     private async Task PerformUpdateAsync(string downloadUrl)
     {
         _logService.Info($"[UPDATE] Iniciado desde: {downloadUrl}");
         try
         {
             _updatePhase = "downloading";
+            ReportUpdateStatus("Descargando actualizacion del Bridge...");
 
             var tempDir = Path.Combine(Path.GetTempPath(), $"inkora_bridge_upd_{Environment.ProcessId}");
             if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
             Directory.CreateDirectory(tempDir);
+            var payloadDir = Path.Combine(tempDir, "payload");
+            Directory.CreateDirectory(payloadDir);
 
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(8) };
             var bytes = await http.GetByteArrayAsync(downloadUrl);
@@ -679,36 +755,77 @@ public sealed class MainForm : Form
             await File.WriteAllBytesAsync(zipPath, bytes);
 
             _updatePhase = "extracting";
+            ReportUpdateStatus("Extrayendo paquete de actualizacion...");
 
             using (var zip = ZipFile.OpenRead(zipPath))
             {
-                var entry = zip.Entries.FirstOrDefault(e =>
-                    e.Name.Equals("Inkora.PrintBridge.exe", StringComparison.OrdinalIgnoreCase))
-                    ?? throw new Exception("No se encontro Inkora.PrintBridge.exe en el ZIP.");
-                entry.ExtractToFile(Path.Combine(tempDir, "Inkora.PrintBridge.exe"), overwrite: true);
+                foreach (var entry in zip.Entries)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Name)) continue;
+
+                    var cleanName = entry.FullName.Replace('\\', '/');
+                    var parts = cleanName.Split('/', StringSplitOptions.RemoveEmptyEntries).ToList();
+                    if (parts.Count > 1 && string.Equals(parts[0], "Inkora PrintBridge", StringComparison.OrdinalIgnoreCase))
+                    {
+                        parts.RemoveAt(0);
+                    }
+
+                    if (parts.Count == 0 || parts.Any(part => part == ".." || part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
+                    {
+                        continue;
+                    }
+
+                    var destination = Path.Combine(payloadDir, Path.Combine(parts.ToArray()));
+                    var destinationRoot = Path.GetFullPath(payloadDir);
+                    var destinationFull = Path.GetFullPath(destination);
+                    if (!destinationFull.StartsWith(destinationRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationFull)!);
+                    entry.ExtractToFile(destinationFull, overwrite: true);
+                }
             }
 
             _updatePhase = "replacing";
+            ReportUpdateStatus("Preparando reemplazo de archivos...");
 
             var currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
                 ?? throw new Exception("No se pudo determinar la ruta del ejecutable actual.");
-            var newExe = Path.Combine(tempDir, "Inkora.PrintBridge.exe");
+            var installDir = Path.GetDirectoryName(currentExe)
+                ?? throw new Exception("No se pudo determinar la carpeta instalada.");
+            var newExe = Directory.GetFiles(payloadDir, "Inkora.PrintBridge.exe", SearchOption.AllDirectories).FirstOrDefault()
+                ?? throw new Exception("No se encontro Inkora.PrintBridge.exe en el ZIP.");
+            var payloadRoot = Path.GetDirectoryName(newExe)
+                ?? throw new Exception("No se pudo preparar el paquete de actualizacion.");
+
+            if (!File.Exists(Path.Combine(payloadRoot, "SumatraPDF.exe")))
+            {
+                ReportUpdateStatus("Advertencia: el paquete no incluye SumatraPDF.exe; las copias multiples no seran confiables.");
+            }
+
             var batPath = Path.Combine(tempDir, "do_update.bat");
             var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
 
-            // Wait for THIS process (by PID) to fully exit before copying the locked exe.
+            // Wait for THIS process (by PID) to fully exit before copying locked files.
             await File.WriteAllTextAsync(batPath,
                 "@echo off\r\n" +
+                "setlocal\r\n" +
+                $"set \"PAYLOAD={payloadRoot}\"\r\n" +
+                $"set \"TARGET={installDir}\"\r\n" +
                 $":waitpid\r\n" +
                 $"tasklist /fi \"pid eq {pid}\" 2>NUL | find /I \"Inkora\" >NUL\r\n" +
                 $"if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto waitpid)\r\n" +
-                $"copy /y \"{newExe}\" \"{currentExe}\"\r\n" +
-                $"if errorlevel 1 exit /b 1\r\n" +
-                $"start \"\" \"{currentExe}\"\r\n" +
+                "robocopy \"%PAYLOAD%\" \"%TARGET%\" /E /NFL /NDL /NJH /NJS /NC /NS /NP\r\n" +
+                "set \"RC=%ERRORLEVEL%\"\r\n" +
+                "if %RC% GEQ 8 exit /b %RC%\r\n" +
+                $"start \"\" \"{currentExe}\" --updated\r\n" +
                 $"del \"%~f0\"\r\n",
                 Encoding.ASCII);
 
             _logService.Info($"[UPDATE] Script listo (PID={pid}). Cerrando...");
+            ReportUpdateStatus("Instalando actualizacion y reiniciando Bridge...");
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {

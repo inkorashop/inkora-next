@@ -29,7 +29,7 @@ import {
   getBridgeUpdateStatus,
 } from '../lib/print-bridge-client';
 
-const LATEST_BRIDGE_VERSION = '1.6.2';
+const LATEST_BRIDGE_VERSION = '1.6.3';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -545,7 +545,9 @@ export default function ProductionTab({
       saveStoredBridgeConfig({ url, token });
       const health = await getBridgeHealth(url);
       let printers = bridgePrinters;
-      let message = 'Bridge conectado';
+      let message = health?.sumatraPdf === false
+        ? 'Bridge conectado. Falta SumatraPDF: copias multiples no confiables.'
+        : 'Bridge conectado';
 
       if (includePrinters) {
         if (!token.trim()) {
@@ -558,7 +560,10 @@ export default function ProductionTab({
         printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
         setBridgePrinters(printers);
         const target = printers.find(printer => printer.isTargetL8050);
-        message = target ? `Bridge conectado: ${target.name}` : 'Bridge conectado. No detecto L8050 por nombre.';
+        const printerMessage = target ? `Bridge conectado: ${target.name}` : 'Bridge conectado. No detecto L8050 por nombre.';
+        message = health?.sumatraPdf === false
+          ? `${printerMessage} Falta SumatraPDF para copias multiples.`
+          : printerMessage;
       }
 
       setBridgeStatus({ state: 'connected', message, health });

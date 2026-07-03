@@ -819,6 +819,7 @@ public sealed class LocalApiServer : IDisposable
             endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
+            sumatraPdfPath = _printJobService.SumatraPdfPath ?? "",
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),
             timestamp = DateTimeOffset.Now
         };

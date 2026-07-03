@@ -21,7 +21,7 @@ public sealed class PrintJobService
     private readonly List<PrintJob> _jobs = [];
 
     public string? SumatraPdfPath { get; private set; }
-    public string PrintMethod => SumatraPdfPath is not null ? "SumatraPDF" : "shell-printto";
+    public string PrintMethod => SumatraPdfPath is not null ? "SumatraPDF" : "shell-printto-single-copy";
 
     public PrintJobService(PdfCatalogService pdfCatalogService, PrinterService printerService, DevModeService devModeService, BridgeLogService logService)
     {
@@ -171,6 +171,11 @@ public sealed class PrintJobService
             }
             else
             {
+                if (job.Copies > 1)
+                {
+                    throw new InvalidOperationException(
+                        $"SumatraPDF no esta disponible. Para respetar {job.Copies} copias como un unico trabajo confiable, instala o empaqueta SumatraPDF.exe junto al Bridge.");
+                }
                 PrintWithShellVerb(job);
             }
 
@@ -237,8 +242,8 @@ public sealed class PrintJobService
 
     private void PrintWithSumatra(PrintJob job)
     {
-        // Siempre aplicar dmCopies en DEVMODE: SumatraPDF ignora -print-settings copies
-        // y hereda lo que tenga el DEVMODE guardado del driver (puede ser != 1)
+        // Copias tiene prioridad sobre presets del driver. Se aplica por Sumatra
+        // y tambien en DEVMODE para drivers que leen la cantidad desde ahi.
         byte[]? origDevMode = null;
         var devModeModified = false;
         try
@@ -259,7 +264,8 @@ public sealed class PrintJobService
 
         try
         {
-            var args = $"-print-to \"{job.PrinterName}\" -silent \"{job.PdfFullPath}\"";
+            var printSettings = $"{Math.Clamp(job.Copies, 1, 999)}x";
+            var args = $"-print-to \"{job.PrinterName}\" -print-settings \"{printSettings}\" -silent \"{job.PdfFullPath}\"";
             var psi = new ProcessStartInfo
             {
                 FileName = SumatraPdfPath!,

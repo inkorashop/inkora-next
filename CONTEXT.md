@@ -1,5 +1,24 @@
 # INKORA - Contexto del proyecto
 
+## Protocolo para IAs
+El archivo de entrada unico para iniciar trabajo con una IA es `AGENTS.md`.
+
+Si una IA abre primero este archivo por deteccion automatica, debe volver a `AGENTS.md` y seguir el protocolo completo antes de modificar cualquier cosa.
+
+Resumen del arranque obligatorio definido en `AGENTS.md`:
+
+1. Leer `AGENTS.md`.
+2. Leer este `CONTEXT.md`.
+3. Leer `AI_RUN_LOG.md`.
+4. Revisar `git status --short`.
+5. Auditar la ultima entrada relevante de `AI_RUN_LOG.md`.
+6. Trabajar en la tarea pedida.
+7. Actualizar `AI_RUN_LOG.md` al terminar el turno de trabajo.
+
+Prompt corto recomendado para el usuario:
+
+`Lee AGENTS.md y segui el protocolo del proyecto. Tarea: ...`
+
 ## Stack
 - Next.js 14 (App Router)
 - Supabase (DB + Auth + Storage)
@@ -26,6 +45,11 @@
 - Vercel detecta los push a GitHub y despliega automáticamente.
 - Antes de pushear cambios importantes, ejecutar: CI=true npm run build
 - Flujo sugerido: git status, git add ., git commit -m "mensaje", git push
+- Regla operativa del proyecto: despues de terminar modificaciones de codigo, hacer deploy a produccion salvo que se indique explicitamente lo contrario.
+- Deploy manual desde PowerShell:
+  - npm.cmd run build
+  - vercel.cmd deploy --prod --yes
+- Si el cambio incluye SQL, ejecutar primero o coordinar la ejecucion del script correspondiente en Supabase SQL Editor; el deploy de Vercel no aplica migraciones SQL.
 
 ## Tablas principales Supabase
 - products
@@ -119,3 +143,4 @@
 - Hacer commit claro.
 - Pushear a GitHub.
 - Verificar deploy en Vercel.
+- Si los cambios ya fueron validados y no se depende solo del deploy automatico, ejecutar deploy manual a produccion: vercel.cmd deploy --prod --yes.
