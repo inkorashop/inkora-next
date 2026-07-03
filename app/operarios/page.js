@@ -327,10 +327,10 @@ export default function OperariosPage() {
     setBridgeBusy(true);
     try {
       saveStoredBridgeConfig({ url, token });
-      await getBridgeHealth(url);
+      const health = await getBridgeHealth(url);
       if (!token.trim()) {
         setBridgePrinters([]);
-        setBridgeStatus({ state: 'token', message: 'Bridge conectado. Pegue el token para leer impresoras.', health: null });
+        setBridgeStatus({ state: 'token', message: 'Bridge conectado. Pegue el token para leer impresoras.', health });
         return;
       }
       if (includePrinters) {
@@ -338,9 +338,9 @@ export default function OperariosPage() {
         const printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
         setBridgePrinters(printers);
         const target = printers.find(p => p.isTargetL8050);
-        setBridgeStatus({ state: 'connected', message: target ? `Bridge conectado: ${target.name}` : 'Bridge conectado.', health: null });
+        setBridgeStatus({ state: 'connected', message: target ? `Bridge conectado: ${target.name}` : 'Bridge conectado.', health });
       } else {
-        setBridgeStatus({ state: 'connected', message: 'Bridge conectado.', health: null });
+        setBridgeStatus({ state: 'connected', message: 'Bridge conectado.', health });
       }
       // Persist URL + token to Supabase so other devices can auto-load them
       if (token.trim()) {
@@ -604,6 +604,20 @@ export default function OperariosPage() {
             </button>
           </>
         )}
+        {bridgeConnected && (
+          <>
+            {bridgeStatus.health?.version && (
+              <span style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                v{bridgeStatus.health.version.replace(/\.0$/, '')}
+              </span>
+            )}
+            {bridgeToken && (
+              <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
+              </span>
+            )}
+          </>
+        )}
         {bridgeConnected && bridgeTargetPrinter && (
           <>
             <button
@@ -626,7 +640,7 @@ export default function OperariosPage() {
         )}
         <div style={{ marginLeft: 'auto' }}>
           <a
-            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4/Inkora.PrintBridge.zip"
+            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4.1/Inkora.PrintBridge.zip"
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
             ↓ Instalar Bridge
