@@ -10,6 +10,7 @@ import {
   getBridgePrinters,
   matchBridgeDesignPdfs,
   scanBridgePdfs,
+  addBridgePdfRoot,
   printBridgeJob,
   getBridgePrintQueue,
   openBridgePrinterPreferences,
@@ -154,6 +155,7 @@ export default function OperariosPage() {
   const [orderPdfMatches, setOrderPdfMatches] = useState({});
   const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
   const [orderPdfBusy, setOrderPdfBusy] = useState(false);
+  const [pdfRootBusy, setPdfRootBusy] = useState(false);
   const [printingTasks, setPrintingTasks] = useState({});
   const [printQtyOverrides, setPrintQtyOverrides] = useState({});
   const [printFeedback, setPrintFeedback] = useState({});
@@ -406,6 +408,22 @@ export default function OperariosPage() {
       (payload.matches || []).forEach(match => { nextMatches[match.id] = match; });
       setAllPdfMatches(prev => ({ ...prev, ...nextMatches }));
     } catch {}
+  }
+
+  async function addPdfRoot() {
+    const token = bridgeToken.trim();
+    if (!token) return;
+    setPdfRootBusy(true);
+    try {
+      const payload = await addBridgePdfRoot(bridgeUrl, token);
+      const roots = payload.roots || [];
+      setOrderPdfStatus(prev => ({ ...prev, roots, message: `Carpetas: ${roots.length}` }));
+      if (roots.length > 0) await matchAllPdfs({ scan: true });
+    } catch (error) {
+      setOrderPdfStatus(prev => ({ ...prev, state: 'error', message: error?.message || 'Error al agregar carpeta' }));
+    } finally {
+      setPdfRootBusy(false);
+    }
   }
 
   async function matchSelectedOrderPdfs({ scan = false } = {}) {
@@ -726,6 +744,15 @@ export default function OperariosPage() {
                       </span>
                       <button
                         type="button"
+                        onClick={addPdfRoot}
+                        disabled={pdfRootBusy || orderPdfBusy}
+                        title="Agregar carpeta donde están los PDFs"
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 900, cursor: pdfRootBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                      >
+                        {pdfRootBusy ? 'Abriendo...' : '📁 Carpeta PDF'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => matchSelectedOrderPdfs({ scan: true })}
                         disabled={orderPdfBusy}
                         style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
@@ -931,9 +958,19 @@ export default function OperariosPage() {
               </div>
               <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
                 {allMatchedPdfs.length === 0 ? (
-                  <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '18px 8px', lineHeight: 1.5 }}>
-                    Sin PDFs vinculados.<br />Hacé clic en «PDFs del pedido».
-                  </p>
+                  <div style={{ padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+                      Sin PDFs.<br />Primero indicá la carpeta donde están los archivos.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addPdfRoot}
+                      disabled={pdfRootBusy}
+                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 11, fontWeight: 900, cursor: pdfRootBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                    >
+                      {pdfRootBusy ? 'Abriendo...' : '📁 Agregar carpeta PDF'}
+                    </button>
+                  </div>
                 ) : matchedPdfs.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '14px 8px' }}>Sin resultados</p>
                 ) : matchedPdfs.map(pdf => {
