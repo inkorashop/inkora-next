@@ -28,7 +28,7 @@ import {
   applyBridgeUpdate,
 } from '../lib/print-bridge-client';
 
-const LATEST_BRIDGE_VERSION = '1.6.0';
+const LATEST_BRIDGE_VERSION = '1.6.1';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -722,19 +722,33 @@ export default function ProductionTab({
   async function handleBridgeUpdate() {
     if (bridgeUpdating || !bridgeToken.trim()) return;
     setBridgeUpdating(true);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const normVer = v => (v || '').split('+')[0].split('.').slice(0, 3).join('.');
     try {
       await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
-      const deadline = Date.now() + 3 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, 5000));
+      // Fase 1: esperar que el bridge se desconecte (descarga + salida, puede tardar 1-3 min)
+      let wentOffline = false;
+      const phase1End = Date.now() + 4 * 60 * 1000;
+      while (!wentOffline && Date.now() < phase1End) {
+        await sleep(3000);
+        try { await getBridgeHealth(bridgeUrl); }
+        catch { wentOffline = true; }
+      }
+      // Fase 2: esperar que el nuevo bridge arranque con version correcta
+      const phase2End = Date.now() + 90 * 1000;
+      while (Date.now() < phase2End) {
+        await sleep(2000);
         try {
           const health = await getBridgeHealth(bridgeUrl);
-          const ver = (health?.version || '').split('.').slice(0, 3).join('.');
-          if (ver === LATEST_BRIDGE_VERSION) { await checkPrintBridge(); break; }
+          if (normVer(health?.version) === LATEST_BRIDGE_VERSION) {
+            await checkPrintBridge();
+            return;
+          }
         } catch {}
       }
+      try { await checkPrintBridge(); } catch {}
     } catch {
-      await new Promise(r => setTimeout(r, 8000));
+      await sleep(10000);
       try { await checkPrintBridge(); } catch {}
     } finally {
       setBridgeUpdating(false);

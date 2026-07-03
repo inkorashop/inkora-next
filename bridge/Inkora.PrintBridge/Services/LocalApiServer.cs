@@ -781,7 +781,12 @@ public sealed class LocalApiServer : IDisposable
 
     private object BuildHealthPayload()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "dev";
+        var informational = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+        var version = informational?.Split('+')[0]
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)
+            ?? "dev";
 
         return new
         {
