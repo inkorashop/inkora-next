@@ -628,7 +628,7 @@ export default function OperariosPage() {
         )}
         <div style={{ marginLeft: 'auto' }}>
           <a
-            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.0/Inkora.PrintBridge.zip"
+            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.1/Inkora.PrintBridge.zip"
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
             ↓ Instalar Bridge

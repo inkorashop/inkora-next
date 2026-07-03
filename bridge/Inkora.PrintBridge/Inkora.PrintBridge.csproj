@@ -6,8 +6,11 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <ApplicationIcon />
+    <ApplicationIcon>inkora.ico</ApplicationIcon>
     <AssemblyName>Inkora.PrintBridge</AssemblyName>
     <RootNamespace>Inkora.PrintBridge</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="inkora.ico" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using System.Text;
 using Inkora.PrintBridge.Models;
 using Inkora.PrintBridge.Services;
@@ -83,8 +84,23 @@ public sealed class MainForm : Form
         };
     }
 
+    private static Icon LoadInkoraIcon()
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var stream = asm.GetManifestResourceStream("Inkora.PrintBridge.inkora.ico");
+            if (stream is not null) return new Icon(stream);
+        }
+        catch { }
+        return SystemIcons.Application;
+    }
+
     private void InitTrayIcon()
     {
+        var appIcon = LoadInkoraIcon();
+        Icon = appIcon;
+
         var menu = new ContextMenuStrip();
         var showItem = (ToolStripMenuItem)menu.Items.Add("Mostrar panel");
         showItem.Click += (_, _) => ShowForm();
@@ -92,7 +108,7 @@ public sealed class MainForm : Form
         var exitItem = (ToolStripMenuItem)menu.Items.Add("Salir");
         exitItem.Click += (_, _) => { _allowClose = true; Close(); };
 
-        _notifyIcon.Icon = SystemIcons.Application;
+        _notifyIcon.Icon = appIcon;
         _notifyIcon.Text = "INKORA Print Bridge";
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.DoubleClick += (_, _) => ShowForm();
