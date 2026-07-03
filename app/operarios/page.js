@@ -187,14 +187,33 @@ export default function OperariosPage() {
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  // Bridge init from localStorage
+  // Bridge init from localStorage; if no token, try fetching from Supabase
   useEffect(() => {
     const stored = getStoredBridgeConfig();
     const url = stored.url || DEFAULT_BRIDGE_URL;
     const token = stored.token || '';
     setBridgeUrl(url);
     setBridgeToken(token);
-    if (token) autoInitBridge(url, token);
+    if (token) {
+      autoInitBridge(url, token);
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        const accessToken = data?.session?.access_token;
+        if (!accessToken) return;
+        fetch('/api/bridge-config', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(json => {
+            const remoteToken = json?.token;
+            if (!remoteToken) return;
+            setBridgeToken(remoteToken);
+            saveStoredBridgeConfig({ url, token: remoteToken });
+            autoInitBridge(url, remoteToken);
+          })
+          .catch(() => {});
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -324,6 +343,18 @@ export default function OperariosPage() {
         setBridgeStatus({ state: 'connected', message: target ? `Bridge conectado: ${target.name}` : 'Bridge conectado.', health: null });
       } else {
         setBridgeStatus({ state: 'connected', message: 'Bridge conectado.', health: null });
+      }
+      // Persist token to Supabase so other devices can auto-load it
+      if (token.trim()) {
+        supabase.auth.getSession().then(({ data }) => {
+          const accessToken = data?.session?.access_token;
+          if (!accessToken) return;
+          fetch('/api/bridge-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ token: token.trim() }),
+          }).catch(() => {});
+        });
       }
     } catch (error) {
       setBridgePrinters([]);
