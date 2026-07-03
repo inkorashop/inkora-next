@@ -190,6 +190,9 @@ public sealed class LocalApiServer : IDisposable
         }
 
         var path = GetPath(target);
+        var remoteEndpoint = client.Client.RemoteEndPoint as IPEndPoint;
+        var isLocalRequest = remoteEndpoint is not null && IPAddress.IsLoopback(remoteEndpoint.Address);
+
         switch (path)
         {
             case "/health":
@@ -200,6 +203,23 @@ public sealed class LocalApiServer : IDisposable
                 }
 
                 await WriteJsonAsync(stream, 200, "OK", BuildHealthPayload(), origin, cancellationToken);
+                break;
+
+            case "/token":
+                // Only localhost can request the token (browser on same machine).
+                if (!isLocalRequest)
+                {
+                    await WriteJsonAsync(stream, 403, "Forbidden", new { ok = false, error = "Solo loopback." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (method != "GET")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa GET." }, origin, cancellationToken);
+                    return;
+                }
+
+                await WriteJsonAsync(stream, 200, "OK", new { ok = true, token = _pairingToken }, origin, cancellationToken);
                 break;
 
             case "/printers":

@@ -187,7 +187,7 @@ export default function OperariosPage() {
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  // Bridge init: localStorage first, then Supabase for missing pieces
+  // Bridge init: localStorage → /token endpoint on local bridge → connect
   useEffect(() => {
     const stored = getStoredBridgeConfig();
     const localUrl = stored.url || DEFAULT_BRIDGE_URL;
@@ -195,30 +195,23 @@ export default function OperariosPage() {
     setBridgeUrl(localUrl);
     setBridgeToken(localToken);
 
-    // Always try Supabase to fill in any missing piece (token or url)
-    supabase.auth.getSession().then(({ data }) => {
-      const accessToken = data?.session?.access_token;
-      if (!accessToken) {
-        if (localToken) autoInitBridge(localUrl, localToken);
-        return;
-      }
-      fetch('/api/bridge-config', { headers: { Authorization: `Bearer ${accessToken}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(json => {
-          const remoteToken = json?.token || localToken;
-          const remoteUrl = json?.url || localUrl;
-          const finalUrl = localUrl !== DEFAULT_BRIDGE_URL ? localUrl : (remoteUrl || DEFAULT_BRIDGE_URL);
-          const finalToken = localToken || remoteToken;
-          if (finalToken !== localToken || finalUrl !== localUrl) {
-            setBridgeToken(finalToken);
-            setBridgeUrl(finalUrl);
-            saveStoredBridgeConfig({ url: finalUrl, token: finalToken });
-          }
-          if (finalToken) autoInitBridge(finalUrl, finalToken);
-          else if (localToken) autoInitBridge(localUrl, localToken);
-        })
-        .catch(() => { if (localToken) autoInitBridge(localUrl, localToken); });
-    });
+    if (localToken) {
+      // Already have a token — connect right away
+      autoInitBridge(localUrl, localToken);
+      return;
+    }
+
+    // No stored token: try fetching it from the local bridge (same PC only)
+    fetch(`${localUrl}/token`, { signal: AbortSignal.timeout(2000) })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const bridgeToken = json?.token;
+        if (!bridgeToken) return;
+        setBridgeToken(bridgeToken);
+        saveStoredBridgeConfig({ url: localUrl, token: bridgeToken });
+        autoInitBridge(localUrl, bridgeToken);
+      })
+      .catch(() => {}); // bridge not running yet — user can connect manually
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -633,7 +626,7 @@ export default function OperariosPage() {
         )}
         <div style={{ marginLeft: 'auto' }}>
           <a
-            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.3/Inkora.PrintBridge.zip"
+            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4/Inkora.PrintBridge.zip"
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
             ↓ Instalar Bridge
