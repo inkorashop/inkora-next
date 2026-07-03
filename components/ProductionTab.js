@@ -1632,7 +1632,7 @@ export default function ProductionTab({
                 </span>
               )}
               <a
-                href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4.1/Inkora.PrintBridge.zip"
+                href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.5.0/Inkora.PrintBridge.zip"
                 style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
               >
                 Descargar
