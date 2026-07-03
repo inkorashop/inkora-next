@@ -1,4 +1,4 @@
-param([string]$Version = "1.5.0")
+param([string]$Version = "1.6.0")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force $outDir | Out-Null
 
 # Publish single-file self-contained win-x64
 Write-Host "==> Publicando (single-file, self-contained, win-x64)..."
-dotnet publish "$projDir\Inkora.PrintBridge.csproj" `
+& "C:\Program Files\dotnet\dotnet.exe" publish "$projDir\Inkora.PrintBridge.csproj" `
     -c Release -r win-x64 --self-contained `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `

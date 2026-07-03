@@ -15,7 +15,11 @@ import {
   getBridgePrintQueue,
   openBridgePrinterPreferences,
   openBridgePrintQueue,
+  applyBridgeUpdate,
 } from '@/lib/print-bridge-client';
+
+const LATEST_BRIDGE_VERSION = '1.6.0';
+const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 function DesignThumb({ designId, name, size = 24 }) {
   const [src, setSrc] = useState(null);
@@ -156,6 +160,7 @@ export default function OperariosPage() {
   const [orderPdfStatus, setOrderPdfStatus] = useState({ state: 'idle', message: 'PDFs sin verificar', roots: [] });
   const [orderPdfBusy, setOrderPdfBusy] = useState(false);
   const [pdfRootBusy, setPdfRootBusy] = useState(false);
+  const [bridgeUpdating, setBridgeUpdating] = useState(false);
   const [printingTasks, setPrintingTasks] = useState({});
   const [printQtyOverrides, setPrintQtyOverrides] = useState({});
   const [printFeedback, setPrintFeedback] = useState({});
@@ -426,6 +431,28 @@ export default function OperariosPage() {
     }
   }
 
+  async function handleBridgeUpdate() {
+    if (bridgeUpdating || !bridgeToken.trim()) return;
+    setBridgeUpdating(true);
+    try {
+      await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 5000));
+        try {
+          const health = await getBridgeHealth(bridgeUrl);
+          const ver = (health?.version || '').split('.').slice(0, 3).join('.');
+          if (ver === LATEST_BRIDGE_VERSION) { await checkPrintBridge(); break; }
+        } catch {}
+      }
+    } catch {
+      await new Promise(r => setTimeout(r, 8000));
+      try { await checkPrintBridge(); } catch {}
+    } finally {
+      setBridgeUpdating(false);
+    }
+  }
+
   async function matchSelectedOrderPdfs({ scan = false } = {}) {
     if (!selectedOrder || !selectedOrder.tasks.length) return;
     const token = bridgeToken.trim();
@@ -623,6 +650,17 @@ export default function OperariosPage() {
           ) : (
             <span style={{ fontSize: 11, color: '#c4c9d9' }}>Sin impresoras</span>
           )}
+          {bridgeConnected && (
+            <button
+              type="button"
+              onClick={addPdfRoot}
+              disabled={pdfRootBusy || orderPdfBusy}
+              title="Agregar carpeta donde están los PDFs"
+              style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: pdfRootBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', flexShrink: 0 }}
+            >
+              {pdfRootBusy ? 'Abriendo...' : '📁 Carpeta PDF'}
+            </button>
+          )}
         </div>
 
         {/* Divider */}
@@ -643,6 +681,16 @@ export default function OperariosPage() {
             <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
               🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
             </span>
+          )}
+          {bridgeConnected && bridgeStatus.health?.version && bridgeStatus.health.version.split('.').slice(0, 3).join('.') !== LATEST_BRIDGE_VERSION && (
+            <button
+              type="button"
+              onClick={handleBridgeUpdate}
+              disabled={bridgeUpdating}
+              style={{ border: '1.5px solid #f59e0b', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeUpdating ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#d97706', background: '#fffbeb', flexShrink: 0 }}
+            >
+              {bridgeUpdating ? 'Actualizando...' : '↑ Actualizar'}
+            </button>
           )}
           {!bridgeConnected && (
             <>
@@ -665,7 +713,7 @@ export default function OperariosPage() {
             </>
           )}
           <a
-            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.5.0/Inkora.PrintBridge.zip"
+            href={LATEST_BRIDGE_DOWNLOAD_URL}
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
             ↓ Instalar Bridge
@@ -742,15 +790,6 @@ export default function OperariosPage() {
                       <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
                         {orderPdfStatus.message}
                       </span>
-                      <button
-                        type="button"
-                        onClick={addPdfRoot}
-                        disabled={pdfRootBusy || orderPdfBusy}
-                        title="Agregar carpeta donde están los PDFs"
-                        style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', background: 'white', color: '#5a6380', fontSize: 12, fontWeight: 900, cursor: pdfRootBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                      >
-                        {pdfRootBusy ? 'Abriendo...' : '📁 Carpeta PDF'}
-                      </button>
                       <button
                         type="button"
                         onClick={() => matchSelectedOrderPdfs({ scan: true })}
@@ -958,19 +997,9 @@ export default function OperariosPage() {
               </div>
               <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
                 {allMatchedPdfs.length === 0 ? (
-                  <div style={{ padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                    <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
-                      Sin PDFs.<br />Primero indicá la carpeta donde están los archivos.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={addPdfRoot}
-                      disabled={pdfRootBusy}
-                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 11, fontWeight: 900, cursor: pdfRootBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
-                    >
-                      {pdfRootBusy ? 'Abriendo...' : '📁 Agregar carpeta PDF'}
-                    </button>
-                  </div>
+                  <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '14px 8px', margin: 0 }}>
+                    Sin PDFs. Usá el botón 📁 en la barra para configurar la carpeta.
+                  </p>
                 ) : matchedPdfs.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 11, textAlign: 'center', padding: '14px 8px' }}>Sin resultados</p>
                 ) : matchedPdfs.map(pdf => {

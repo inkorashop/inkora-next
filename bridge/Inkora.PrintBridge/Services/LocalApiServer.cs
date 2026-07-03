@@ -34,6 +34,7 @@ public sealed class LocalApiServer : IDisposable
     private readonly BridgeLogService _logService;
     private readonly string _pairingToken;
     private readonly Func<Task<IReadOnlyList<PdfRootInfo>>> _addPdfRootFromDialogAsync;
+    private readonly Func<string, Task> _onUpdateApply;
     private TcpListener? _listener;
     private CancellationTokenSource? _cancellation;
 
@@ -47,6 +48,7 @@ public sealed class LocalApiServer : IDisposable
         BridgeLogService logService,
         string pairingToken,
         Func<Task<IReadOnlyList<PdfRootInfo>>> addPdfRootFromDialogAsync,
+        Func<string, Task> onUpdateApply,
         int port = 17389)
     {
         _printerService = printerService;
@@ -58,6 +60,7 @@ public sealed class LocalApiServer : IDisposable
         _logService = logService;
         _pairingToken = pairingToken;
         _addPdfRootFromDialogAsync = addPdfRootFromDialogAsync;
+        _onUpdateApply = onUpdateApply;
         Port = port;
     }
 
@@ -732,6 +735,44 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/update/apply":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    string? updateDownloadUrl = null;
+                    if (!string.IsNullOrWhiteSpace(body))
+                    {
+                        using var updateDoc = JsonDocument.Parse(body);
+                        if (updateDoc.RootElement.TryGetProperty("downloadUrl", out var urlElem))
+                            updateDownloadUrl = urlElem.GetString();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(updateDownloadUrl))
+                    {
+                        await WriteJsonAsync(stream, 400, "Bad Request", new { ok = false, error = "downloadUrl requerida." }, origin, cancellationToken);
+                        break;
+                    }
+
+                    await WriteJsonAsync(stream, 200, "OK", new { ok = true, message = "Actualizacion iniciada." }, origin, cancellationToken);
+                    _ = Task.Run(() => _onUpdateApply(updateDownloadUrl));
+                }
+                catch (Exception updateEx)
+                {
+                    await WriteJsonAsync(stream, 500, "Internal Server Error", new { ok = false, error = updateEx.Message }, origin, cancellationToken);
+                }
+                break;
+
             default:
                 await WriteJsonAsync(stream, 404, "Not Found", new { ok = false, error = "Endpoint no encontrado." }, origin, cancellationToken);
                 break;
@@ -751,7 +792,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/apply" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),

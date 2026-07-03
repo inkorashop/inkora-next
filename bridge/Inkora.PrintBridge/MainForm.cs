@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.IO.Compression;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using Inkora.PrintBridge.Models;
 using Inkora.PrintBridge.Services;
@@ -40,6 +42,10 @@ public sealed class MainForm : Form
     private NotifyIcon _notifyIcon = new();
     private bool _allowClose;
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     public MainForm()
     {
         _bridgeToken = _configService.GetOrCreatePairingToken();
@@ -55,12 +61,13 @@ public sealed class MainForm : Form
             _devModeProfileService,
             _logService,
             _bridgeToken,
-            AddPdfRootFromApiAsync);
+            AddPdfRootFromApiAsync,
+            PerformUpdateAsync);
 
-        Text = "INKORA Print Bridge - Diagnostico";
-        Width = 1120;
-        Height = 760;
-        MinimumSize = new Size(920, 620);
+        Text = "INKORA Print Bridge";
+        Width = 860;
+        Height = 580;
+        MinimumSize = new Size(680, 460);
         StartPosition = FormStartPosition.CenterScreen;
 
         BuildLayout();
@@ -113,7 +120,7 @@ public sealed class MainForm : Form
         _notifyIcon.Icon = appIcon;
         _notifyIcon.Text = "INKORA Print Bridge";
         _notifyIcon.ContextMenuStrip = menu;
-        _notifyIcon.DoubleClick += (_, _) => ShowForm();
+        _notifyIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowForm(); };
         _notifyIcon.Visible = true;
     }
 
@@ -124,6 +131,7 @@ public sealed class MainForm : Form
         WindowState = FormWindowState.Normal;
         Activate();
         BringToFront();
+        if (IsHandleCreated) SetForegroundWindow(Handle);
     }
 
     private void HideToTray()
@@ -141,19 +149,31 @@ public sealed class MainForm : Form
             RowCount = 5,
             Padding = new Padding(12)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var title = new Label
+        var header = new Panel { Dock = DockStyle.Fill, BackColor = ColorTranslator.FromHtml("#1B2F5E") };
+        var headerTitle = new Label
         {
-            Text = "INKORA Print Bridge - Prototipo diagnostico local",
-            Dock = DockStyle.Fill,
-            Font = new Font(Font.FontFamily, 14, FontStyle.Bold),
-            Height = 34
+            Text = "INKORA Print Bridge",
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(14, 8)
         };
+        var versionStr = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "dev";
+        var headerVersion = new Label
+        {
+            Text = $"v{versionStr}",
+            ForeColor = Color.FromArgb(170, 200, 225),
+            Font = new Font("Segoe UI", 9),
+            AutoSize = true,
+            Location = new Point(14, 32)
+        };
+        header.Controls.AddRange([headerTitle, headerVersion]);
 
         // Token + URL display row
         var tokenPanel = new TableLayoutPanel
@@ -223,6 +243,19 @@ public sealed class MainForm : Form
         ConfigureButton(_addPdfRootButton, "Agregar carpeta PDFs", (_, _) => AddPdfRoot());
         ConfigureButton(_scanPdfsButton, "Escanear PDFs", (_, _) => ScanPdfs());
 
+        var detenerButton = new Button
+        {
+            Text = "Detener Bridge",
+            Height = 34,
+            AutoSize = true,
+            Margin = new Padding(24, 0, 8, 8),
+            BackColor = ColorTranslator.FromHtml("#fff1f2"),
+            ForeColor = ColorTranslator.FromHtml("#b91c1c"),
+            FlatStyle = FlatStyle.Flat,
+        };
+        detenerButton.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#fca5a5");
+        detenerButton.Click += (_, _) => { _allowClose = true; Close(); };
+
         actions.Controls.AddRange([
             _refreshButton,
             _openPreferencesButton,
@@ -232,7 +265,8 @@ public sealed class MainForm : Form
             _copyTokenButton,
             _openHealthButton,
             _addPdfRootButton,
-            _scanPdfsButton
+            _scanPdfsButton,
+            detenerButton
         ]);
 
         _statusLabel.AutoSize = true;
@@ -254,7 +288,7 @@ public sealed class MainForm : Form
         footer.Controls.Add(_apiLabel, 0, 2);
         footer.Controls.Add(_pdfLabel, 0, 3);
 
-        root.Controls.Add(title, 0, 0);
+        root.Controls.Add(header, 0, 0);
         root.Controls.Add(tokenPanel, 0, 1);
         root.Controls.Add(_printersGrid, 0, 2);
         root.Controls.Add(_diagnosticTextBox, 0, 3);
@@ -382,7 +416,11 @@ public sealed class MainForm : Form
             var wasVisible = Visible;
             try
             {
-                if (!wasVisible) ShowForm();
+                if (!wasVisible)
+                {
+                    ShowForm();
+                    Application.DoEvents();
+                }
                 var rootCount = _pdfCatalogService.AddRootFromDialog(this);
                 var roots = _pdfCatalogService.GetRoots();
                 _pdfLabel.Text = $"Carpetas PDF autorizadas: {rootCount}. Ejecuta Escanear PDFs para actualizar.";
@@ -618,6 +656,71 @@ public sealed class MainForm : Form
         builder.AppendLine($"  HeaderHex: {diagnostic.HeaderHex}");
 
         return builder.ToString().TrimEnd();
+    }
+
+    private async Task PerformUpdateAsync(string downloadUrl)
+    {
+        _logService.Info($"[UPDATE] Iniciado desde: {downloadUrl}");
+        try
+        {
+            this.Invoke((Action)(() =>
+            {
+                ShowForm();
+                AppendDiagnostic($"[UPDATE] Descargando desde {downloadUrl}...");
+            }));
+
+            var tempDir = Path.Combine(Path.GetTempPath(), $"inkora_bridge_upd_{Environment.ProcessId}");
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            Directory.CreateDirectory(tempDir);
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            var bytes = await http.GetByteArrayAsync(downloadUrl);
+            var zipPath = Path.Combine(tempDir, "update.zip");
+            await File.WriteAllBytesAsync(zipPath, bytes);
+
+            this.Invoke((Action)(() => AppendDiagnostic("[UPDATE] Extrayendo nueva version...")));
+
+            using (var zip = ZipFile.OpenRead(zipPath))
+            {
+                var entry = zip.Entries.FirstOrDefault(e =>
+                    e.Name.Equals("Inkora.PrintBridge.exe", StringComparison.OrdinalIgnoreCase))
+                    ?? throw new Exception("No se encontro Inkora.PrintBridge.exe en el ZIP.");
+                entry.ExtractToFile(Path.Combine(tempDir, "Inkora.PrintBridge.exe"), overwrite: true);
+            }
+
+            var currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
+                ?? throw new Exception("No se pudo determinar la ruta del ejecutable actual.");
+            var newExe = Path.Combine(tempDir, "Inkora.PrintBridge.exe");
+            var batPath = Path.Combine(tempDir, "do_update.bat");
+
+            await File.WriteAllTextAsync(batPath,
+                "@echo off\r\n" +
+                "timeout /t 3 /nobreak > nul\r\n" +
+                $"copy /y \"{newExe}\" \"{currentExe}\"\r\n" +
+                "if errorlevel 1 exit /b 1\r\n" +
+                $"start \"\" \"{currentExe}\"\r\n" +
+                "del \"%~f0\"\r\n",
+                Encoding.ASCII);
+
+            _logService.Info($"[UPDATE] Script listo. Reiniciando...");
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{batPath}\"",
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                CreateNoWindow = true,
+                UseShellExecute = true,
+            });
+
+            this.Invoke((Action)(() => { _allowClose = true; Application.Exit(); }));
+        }
+        catch (Exception ex)
+        {
+            _logService.Error($"[UPDATE] Error: {ex}");
+            try { this.Invoke((Action)(() => AppendDiagnostic($"[UPDATE ERROR] {ex.Message}"))); }
+            catch { }
+        }
     }
 
     private static string BuildPdfSummary(IReadOnlyList<PdfRootInfo> roots, IReadOnlyList<PdfFileInfo> pdfs)

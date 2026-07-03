@@ -25,7 +25,11 @@ import {
   saveDevModeProfile,
   applyDevModeProfile,
   deleteDevModeProfile,
+  applyBridgeUpdate,
 } from '../lib/print-bridge-client';
+
+const LATEST_BRIDGE_VERSION = '1.6.0';
+const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En proceso', done: 'Terminado' };
@@ -449,6 +453,7 @@ export default function ProductionTab({
   const [quickPrintingMap, setQuickPrintingMap] = useState({});
   const [bridgePrinters, setBridgePrinters] = useState([]);
   const [bridgeBusy, setBridgeBusy] = useState(false);
+  const [bridgeUpdating, setBridgeUpdating] = useState(false);
   const [bridgeDevMode, setBridgeDevMode] = useState(null);
   const [orderPdfBusy, setOrderPdfBusy] = useState(false);
   const [orderPdfMatches, setOrderPdfMatches] = useState({});
@@ -711,6 +716,28 @@ export default function ProductionTab({
       });
     } finally {
       setBridgeBusy(false);
+    }
+  }
+
+  async function handleBridgeUpdate() {
+    if (bridgeUpdating || !bridgeToken.trim()) return;
+    setBridgeUpdating(true);
+    try {
+      await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 5000));
+        try {
+          const health = await getBridgeHealth(bridgeUrl);
+          const ver = (health?.version || '').split('.').slice(0, 3).join('.');
+          if (ver === LATEST_BRIDGE_VERSION) { await checkPrintBridge(); break; }
+        } catch {}
+      }
+    } catch {
+      await new Promise(r => setTimeout(r, 8000));
+      try { await checkPrintBridge(); } catch {}
+    } finally {
+      setBridgeUpdating(false);
     }
   }
 
@@ -1610,6 +1637,17 @@ export default function ProductionTab({
               ) : (
                 <span style={{ fontSize: 11, color: '#c4c9d9' }}>Sin impresoras</span>
               )}
+              {bridgeStatus.state === 'connected' && bridgeToken.trim() && (
+                <button
+                  type="button"
+                  onClick={addPdfRootFromProduction}
+                  disabled={bridgeBusy || orderPdfBusy}
+                  title="Agregar carpeta donde están los PDFs"
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', flexShrink: 0 }}
+                >
+                  📁 Carpeta PDF
+                </button>
+              )}
             </div>
 
             {/* Divider */}
@@ -1631,8 +1669,18 @@ export default function ProductionTab({
                   🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
                 </span>
               )}
+              {bridgeStatus.state === 'connected' && bridgeStatus.health?.version && bridgeStatus.health.version.split('.').slice(0, 3).join('.') !== LATEST_BRIDGE_VERSION && (
+                <button
+                  type="button"
+                  onClick={handleBridgeUpdate}
+                  disabled={bridgeUpdating}
+                  style={{ border: '1.5px solid #f59e0b', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeUpdating ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#d97706', background: '#fffbeb', flexShrink: 0 }}
+                >
+                  {bridgeUpdating ? 'Actualizando...' : '↑ Actualizar'}
+                </button>
+              )}
               <a
-                href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.5.0/Inkora.PrintBridge.zip"
+                href={LATEST_BRIDGE_DOWNLOAD_URL}
                 style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
               >
                 Descargar
