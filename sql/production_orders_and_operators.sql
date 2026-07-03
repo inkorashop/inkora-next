@@ -319,8 +319,8 @@ GRANT EXECUTE ON FUNCTION public.admin_assign_order_operator(uuid, uuid) TO auth
 
 CREATE OR REPLACE FUNCTION public.update_production_task_progress(
   p_task_id uuid,
-  p_produced_qty integer,
-  p_waste_qty integer,
+  p_produced_qty integer DEFAULT NULL,
+  p_waste_qty integer DEFAULT NULL,
   p_note text DEFAULT NULL,
   p_printed_qty integer DEFAULT NULL
 )
@@ -331,15 +331,15 @@ SET search_path = public
 AS $$
 DECLARE
   v_task public.production_order_tasks%ROWTYPE;
-  v_next_produced integer := GREATEST(COALESCE(p_produced_qty, 0), 0);
-  v_next_waste integer := GREATEST(COALESCE(p_waste_qty, 0), 0);
+  v_next_produced integer;
+  v_next_waste integer;
   v_next_printed integer;
   v_delta integer;
   v_stock_id uuid;
   v_stock_qty integer;
   v_is_admin boolean;
   v_allowed_operator boolean;
-  v_note text := COALESCE(p_note, '');
+  v_note text;
 BEGIN
   SELECT *
   INTO v_task
@@ -365,7 +365,12 @@ BEGIN
     RAISE EXCEPTION 'No autorizado';
   END IF;
 
+  -- NULL means "do not touch this field". This prevents two live clients
+  -- editing different counters from overwriting each other with stale values.
+  v_next_produced := GREATEST(COALESCE(p_produced_qty, COALESCE(v_task.produced_qty, 0)), 0);
+  v_next_waste := GREATEST(COALESCE(p_waste_qty, COALESCE(v_task.waste_qty, 0)), 0);
   v_next_printed := GREATEST(COALESCE(p_printed_qty, COALESCE(v_task.printed_qty, 0)), 0);
+  v_note := COALESCE(p_note, COALESCE(v_task.note, ''));
   v_delta := v_next_produced - COALESCE(v_task.produced_qty, 0);
 
   UPDATE public.production_order_tasks

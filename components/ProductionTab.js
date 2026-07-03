@@ -96,6 +96,34 @@ function stockInputValue(qty) {
   return qty === 0 ? '' : String(qty);
 }
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function clampProgressQty(value) {
+  const qty = Number(value);
+  return Math.max(0, Number.isFinite(qty) ? qty : 0);
+}
+
+function normalizeTaskProgressPatch(patch) {
+  const next = {};
+  if (hasOwn(patch, 'produced_qty')) next.produced_qty = clampProgressQty(patch.produced_qty);
+  if (hasOwn(patch, 'waste_qty')) next.waste_qty = clampProgressQty(patch.waste_qty);
+  if (hasOwn(patch, 'printed_qty')) next.printed_qty = clampProgressQty(patch.printed_qty);
+  if (hasOwn(patch, 'note')) next.note = String(patch.note || '');
+  return next;
+}
+
+function buildTaskProgressRpcParams(taskId, patch, current = {}) {
+  return {
+    p_task_id: taskId,
+    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : clampProgressQty(current.produced_qty),
+    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : clampProgressQty(current.waste_qty),
+    p_note: hasOwn(patch, 'note') ? patch.note : String(current.note || ''),
+    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : clampProgressQty(current.printed_qty),
+  };
+}
+
 function getItemDesignKey(item) {
   return String(item?.design_id || item?.designId || item?.id || item?.name || '').trim();
 }
@@ -1274,21 +1302,15 @@ export default function ProductionTab({
       return;
     }
     const taskId = task.id;
+    const normalizedPatch = normalizeTaskProgressPatch(patch);
+    if (Object.keys(normalizedPatch).length === 0) return;
 
-    // Read current values from latest state via functional updater (avoids stale closures)
-    let nextProduced, nextWaste, nextPrinted, nextNote;
+    // Optimistic partial update: only touched fields change locally.
+    // Untouched columns keep tracking the latest realtime/database value.
     setProductionTasks(prev => {
-      const cur = prev.find(t => t.id === taskId) || task;
-      nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : Number(cur.produced_qty || 0);
-      nextWaste    = patch.waste_qty    !== undefined ? Number(patch.waste_qty)    : Number(cur.waste_qty    || 0);
-      nextPrinted  = patch.printed_qty  !== undefined ? Number(patch.printed_qty)  : Number(cur.printed_qty  || 0);
-      nextNote     = patch.note         !== undefined ? patch.note                 : (cur.note || '');
       return prev.map(row => row.id === taskId ? {
         ...row,
-        produced_qty: Math.max(0, Number.isFinite(nextProduced) ? nextProduced : 0),
-        waste_qty:    Math.max(0, Number.isFinite(nextWaste)    ? nextWaste    : 0),
-        printed_qty:  Math.max(0, Number.isFinite(nextPrinted)  ? nextPrinted  : 0),
-        note: String(nextNote || ''),
+        ...normalizedPatch,
       } : row);
     });
 
@@ -1299,7 +1321,7 @@ export default function ProductionTab({
     }
     const taskState = taskSaveStateRef.current[taskId];
     if (taskState.saving) {
-      taskState.queued = { nextProduced, nextWaste, nextPrinted, nextNote };
+      taskState.queued = { ...(taskState.queued || {}), ...normalizedPatch };
       return;
     }
 
@@ -1307,23 +1329,17 @@ export default function ProductionTab({
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
     setErrorMessage('');
 
-    let toSave = { nextProduced, nextWaste, nextPrinted, nextNote };
+    let toSave = normalizedPatch;
     try {
       while (toSave !== null) {
-        const { nextProduced: p, nextWaste: w, nextPrinted: pr, nextNote: n } = toSave;
-        const baseParams = {
-          p_task_id: taskId,
-          p_produced_qty: Math.max(0, Number.isFinite(p)  ? p  : 0),
-          p_waste_qty:    Math.max(0, Number.isFinite(w)  ? w  : 0),
-          p_note: String(n || ''),
-        };
-        let result = await supabase.rpc('update_production_task_progress', {
-          ...baseParams,
-          p_printed_qty: Math.max(0, Number.isFinite(pr) ? pr : 0),
-        });
-        if (result.error && (result.error.code === 'PGRST202' || result.error.code === '42883' || /printed_qty/i.test(result.error.message || ''))) {
-          result = await supabase.rpc('update_production_task_progress', baseParams);
-        }
+        const { data: currentTask, error: currentTaskError } = await supabase
+          .from('production_order_tasks')
+          .select('produced_qty,waste_qty,printed_qty,note')
+          .eq('id', taskId)
+          .single();
+        if (currentTaskError) throw currentTaskError;
+
+        const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, toSave, currentTask));
         if (result.error) throw result.error;
 
         // Update state from RPC return value — no reload race
@@ -1331,8 +1347,8 @@ export default function ProductionTab({
         if (updated) {
           setProductionTasks(prev => prev.map(t => t.id === taskId ? {
             ...t, ...updated, id: taskId,
-            note: updated.note ?? n,
-            printed_qty: (updated.printed_qty != null) ? updated.printed_qty : Math.max(0, Number.isFinite(pr) ? pr : 0),
+            note: updated.note ?? t.note ?? '',
+            printed_qty: updated.printed_qty ?? t.printed_qty ?? 0,
           } : t));
         }
 

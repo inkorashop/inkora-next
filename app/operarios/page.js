@@ -19,7 +19,7 @@ import {
   getBridgeUpdateStatus,
 } from '@/lib/print-bridge-client';
 
-const LATEST_BRIDGE_VERSION = '1.6.2';
+const LATEST_BRIDGE_VERSION = '1.6.3';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 function DesignThumb({ designId, name, size = 24 }) {
@@ -48,6 +48,34 @@ const STATUS_TONE = {
 function toQty(value) {
   const qty = Number(value);
   return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function clampProgressQty(value) {
+  const qty = Number(value);
+  return Math.max(0, Number.isFinite(qty) ? qty : 0);
+}
+
+function normalizeTaskProgressPatch(patch) {
+  const next = {};
+  if (hasOwn(patch, 'produced_qty')) next.produced_qty = clampProgressQty(patch.produced_qty);
+  if (hasOwn(patch, 'waste_qty')) next.waste_qty = clampProgressQty(patch.waste_qty);
+  if (hasOwn(patch, 'printed_qty')) next.printed_qty = clampProgressQty(patch.printed_qty);
+  if (hasOwn(patch, 'note')) next.note = String(patch.note || '');
+  return next;
+}
+
+function buildTaskProgressRpcParams(taskId, patch, current = {}) {
+  return {
+    p_task_id: taskId,
+    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : clampProgressQty(current.produced_qty),
+    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : clampProgressQty(current.waste_qty),
+    p_note: hasOwn(patch, 'note') ? patch.note : String(current.note || ''),
+    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : clampProgressQty(current.printed_qty),
+  };
 }
 
 function formatShortDate(iso) {
@@ -615,28 +643,28 @@ export default function OperariosPage() {
 
   async function saveTask(task, patch) {
     const taskId = task.id;
-    let nextProduced, nextWaste, nextPrinted, nextNote;
+    const normalizedPatch = normalizeTaskProgressPatch(patch);
+    if (Object.keys(normalizedPatch).length === 0) return;
+
     setTasks(prev => {
-      const cur = prev.find(t => t.id === taskId) || task;
-      nextProduced = patch.produced_qty !== undefined ? Number(patch.produced_qty) : toQty(cur.produced_qty);
-      nextWaste    = patch.waste_qty    !== undefined ? Number(patch.waste_qty)    : toQty(cur.waste_qty);
-      nextPrinted  = patch.printed_qty  !== undefined ? Number(patch.printed_qty)  : toQty(cur.printed_qty);
-      nextNote     = patch.note         !== undefined ? patch.note                 : (cur.note || '');
-      return prev.map(r => r.id === taskId ? { ...r, produced_qty: nextProduced, waste_qty: nextWaste, printed_qty: nextPrinted, note: nextNote } : r);
+      return prev.map(r => r.id === taskId ? { ...r, ...normalizedPatch } : r);
     });
     if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = { saving: false, queued: null };
     const taskState = taskSaveStateRef.current[taskId];
-    if (taskState.saving) { taskState.queued = { nextProduced, nextWaste, nextPrinted, nextNote }; return; }
+    if (taskState.saving) { taskState.queued = { ...(taskState.queued || {}), ...normalizedPatch }; return; }
     taskState.saving = true;
     setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
-    let toSave = { nextProduced, nextWaste, nextPrinted, nextNote };
+    let toSave = normalizedPatch;
     try {
       while (toSave !== null) {
-        const { nextProduced: p, nextWaste: w, nextPrinted: pr, nextNote: n } = toSave;
-        let result = await supabase.rpc('update_production_task_progress', { p_task_id: taskId, p_produced_qty: Math.max(0, p), p_waste_qty: Math.max(0, w), p_note: String(n || ''), p_printed_qty: Math.max(0, pr) });
-        if (result.error && (result.error.code === 'PGRST202' || /printed_qty/i.test(result.error.message || ''))) {
-          result = await supabase.rpc('update_production_task_progress', { p_task_id: taskId, p_produced_qty: Math.max(0, p), p_waste_qty: Math.max(0, w), p_note: String(n || '') });
-        }
+        const { data: currentTask, error: currentTaskError } = await supabase
+          .from('production_order_tasks')
+          .select('produced_qty,waste_qty,printed_qty,note')
+          .eq('id', taskId)
+          .single();
+        if (currentTaskError) throw currentTaskError;
+
+        const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, toSave, currentTask));
         if (result.error) throw result.error;
         if (result.data) {
           const updated = result.data;
