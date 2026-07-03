@@ -62,10 +62,26 @@ public sealed class LocalApiServer : IDisposable
     }
 
     public int Port { get; }
-    public string Url => $"http://127.0.0.1:{Port}";
-    public string HealthUrl => $"{Url}/health";
+    public string LoopbackUrl => $"http://127.0.0.1:{Port}";
+    public string Url => LoopbackUrl;
+    public string NetworkUrl => $"http://{GetLocalNetworkIp()}:{Port}";
+    public string HealthUrl => $"{LoopbackUrl}/health";
     public bool IsRunning { get; private set; }
     public string LastError { get; private set; } = "";
+
+    public static string GetLocalNetworkIp()
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
+            socket.Connect("8.8.8.8", 65530);
+            return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString() ?? "127.0.0.1";
+        }
+        catch
+        {
+            return "127.0.0.1";
+        }
+    }
 
     public void Start()
     {
@@ -77,12 +93,12 @@ public sealed class LocalApiServer : IDisposable
         try
         {
             _cancellation = new CancellationTokenSource();
-            _listener = new TcpListener(IPAddress.Loopback, Port);
+            _listener = new TcpListener(IPAddress.Any, Port);
             _listener.Start();
             IsRunning = true;
             LastError = "";
             _ = Task.Run(() => AcceptLoopAsync(_cancellation.Token));
-            _logService.Info($"API local iniciada en {Url}.");
+            _logService.Info($"API iniciada en {LoopbackUrl} (red: {NetworkUrl}).");
         }
         catch (Exception exception)
         {
@@ -134,12 +150,6 @@ public sealed class LocalApiServer : IDisposable
     private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using var _client = client;
-
-        if (client.Client.RemoteEndPoint is not IPEndPoint remote || !IPAddress.IsLoopback(remote.Address))
-        {
-            await WriteJsonAsync(client.GetStream(), 403, "Forbidden", new { ok = false, error = "Solo loopback." }, null, cancellationToken);
-            return;
-        }
 
         var stream = client.GetStream();
         var request = await ReadRequestAsync(stream, cancellationToken);

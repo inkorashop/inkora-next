@@ -485,16 +485,37 @@ export default function ProductionTab({
   const [savingStatus, setSavingStatus] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Bridge init: localStorage first, then Supabase for missing pieces
   useEffect(() => {
     const stored = getStoredBridgeConfig();
-    const url = stored.url || DEFAULT_BRIDGE_URL;
-    const token = stored.token || '';
-    setBridgeUrl(url);
-    setBridgeToken(token);
-    if (token) {
-      // Auto-connect bridge on mount (launch if not running)
-      autoInitBridge(url, token);
-    }
+    const localUrl = stored.url || DEFAULT_BRIDGE_URL;
+    const localToken = stored.token || '';
+    setBridgeUrl(localUrl);
+    setBridgeToken(localToken);
+
+    supabase.auth.getSession().then(({ data }) => {
+      const accessToken = data?.session?.access_token;
+      if (!accessToken) {
+        if (localToken) autoInitBridge(localUrl, localToken);
+        return;
+      }
+      fetch('/api/bridge-config', { headers: { Authorization: `Bearer ${accessToken}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          const remoteToken = json?.token || localToken;
+          const remoteUrl = json?.url || localUrl;
+          const finalUrl = localUrl !== DEFAULT_BRIDGE_URL ? localUrl : (remoteUrl || DEFAULT_BRIDGE_URL);
+          const finalToken = localToken || remoteToken;
+          if (finalToken !== localToken || finalUrl !== localUrl) {
+            setBridgeToken(finalToken);
+            setBridgeUrl(finalUrl);
+            saveStoredBridgeConfig({ url: finalUrl, token: finalToken });
+          }
+          if (finalToken) autoInitBridge(finalUrl, finalToken);
+          else if (localToken) autoInitBridge(localUrl, localToken);
+        })
+        .catch(() => { if (localToken) autoInitBridge(localUrl, localToken); });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -540,6 +561,18 @@ export default function ProductionTab({
       }
 
       setBridgeStatus({ state: 'connected', message, health });
+      // Persist URL + token to Supabase so other devices auto-load them
+      if (token.trim()) {
+        supabase.auth.getSession().then(({ data }) => {
+          const accessToken = data?.session?.access_token;
+          if (!accessToken) return;
+          fetch('/api/bridge-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ token: token.trim(), url: url.trim() }),
+          }).catch(() => {});
+        });
+      }
     } catch (error) {
       const tokenMessage = error?.status === 401 ? 'Token Bridge incorrecto o faltante.' : '';
       setBridgePrinters([]);
@@ -1549,7 +1582,7 @@ export default function ProductionTab({
               <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Windows · impresión local</div>
             </div>
             <a
-              href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.1/Inkora.PrintBridge.zip"
+              href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.3/Inkora.PrintBridge.zip"
               style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
             >
               Descargar

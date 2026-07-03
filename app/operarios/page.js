@@ -187,33 +187,38 @@ export default function OperariosPage() {
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  // Bridge init from localStorage; if no token, try fetching from Supabase
+  // Bridge init: localStorage first, then Supabase for missing pieces
   useEffect(() => {
     const stored = getStoredBridgeConfig();
-    const url = stored.url || DEFAULT_BRIDGE_URL;
-    const token = stored.token || '';
-    setBridgeUrl(url);
-    setBridgeToken(token);
-    if (token) {
-      autoInitBridge(url, token);
-    } else {
-      supabase.auth.getSession().then(({ data }) => {
-        const accessToken = data?.session?.access_token;
-        if (!accessToken) return;
-        fetch('/api/bridge-config', {
-          headers: { Authorization: `Bearer ${accessToken}` },
+    const localUrl = stored.url || DEFAULT_BRIDGE_URL;
+    const localToken = stored.token || '';
+    setBridgeUrl(localUrl);
+    setBridgeToken(localToken);
+
+    // Always try Supabase to fill in any missing piece (token or url)
+    supabase.auth.getSession().then(({ data }) => {
+      const accessToken = data?.session?.access_token;
+      if (!accessToken) {
+        if (localToken) autoInitBridge(localUrl, localToken);
+        return;
+      }
+      fetch('/api/bridge-config', { headers: { Authorization: `Bearer ${accessToken}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          const remoteToken = json?.token || localToken;
+          const remoteUrl = json?.url || localUrl;
+          const finalUrl = localUrl !== DEFAULT_BRIDGE_URL ? localUrl : (remoteUrl || DEFAULT_BRIDGE_URL);
+          const finalToken = localToken || remoteToken;
+          if (finalToken !== localToken || finalUrl !== localUrl) {
+            setBridgeToken(finalToken);
+            setBridgeUrl(finalUrl);
+            saveStoredBridgeConfig({ url: finalUrl, token: finalToken });
+          }
+          if (finalToken) autoInitBridge(finalUrl, finalToken);
+          else if (localToken) autoInitBridge(localUrl, localToken);
         })
-          .then(r => r.ok ? r.json() : null)
-          .then(json => {
-            const remoteToken = json?.token;
-            if (!remoteToken) return;
-            setBridgeToken(remoteToken);
-            saveStoredBridgeConfig({ url, token: remoteToken });
-            autoInitBridge(url, remoteToken);
-          })
-          .catch(() => {});
-      });
-    }
+        .catch(() => { if (localToken) autoInitBridge(localUrl, localToken); });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -344,7 +349,7 @@ export default function OperariosPage() {
       } else {
         setBridgeStatus({ state: 'connected', message: 'Bridge conectado.', health: null });
       }
-      // Persist token to Supabase so other devices can auto-load it
+      // Persist URL + token to Supabase so other devices can auto-load them
       if (token.trim()) {
         supabase.auth.getSession().then(({ data }) => {
           const accessToken = data?.session?.access_token;
@@ -352,7 +357,7 @@ export default function OperariosPage() {
           fetch('/api/bridge-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-            body: JSON.stringify({ token: token.trim() }),
+            body: JSON.stringify({ token: token.trim(), url: url.trim() }),
           }).catch(() => {});
         });
       }
@@ -628,7 +633,7 @@ export default function OperariosPage() {
         )}
         <div style={{ marginLeft: 'auto' }}>
           <a
-            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.1/Inkora.PrintBridge.zip"
+            href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.3/Inkora.PrintBridge.zip"
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
             ↓ Instalar Bridge

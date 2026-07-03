@@ -23,7 +23,7 @@ CREATE POLICY "authenticated_read" ON public.app_config
   FOR SELECT TO authenticated
   USING (true);
 
--- Seed the bridge_token row (empty by default; saved when user connects).
+-- Seed rows (empty by default; saved when user connects).
 INSERT INTO public.app_config (key, value)
-VALUES ('bridge_token', '')
+VALUES ('bridge_token', ''), ('bridge_url', '')
 ON CONFLICT (key) DO NOTHING;

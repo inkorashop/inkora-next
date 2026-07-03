@@ -20,7 +20,9 @@ public sealed class MainForm : Form
     private readonly string _bridgeToken;
 
     private readonly DataGridView _printersGrid = new();
+    private readonly TextBox _tokenTextBox = new();
     private readonly TextBox _diagnosticTextBox = new();
+    private TextBox? _networkUrlBox;
     private readonly Label _statusLabel = new();
     private readonly Label _apiLabel = new();
     private readonly Label _pdfLabel = new();
@@ -136,9 +138,10 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             Padding = new Padding(12)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -151,6 +154,54 @@ public sealed class MainForm : Form
             Font = new Font(Font.FontFamily, 14, FontStyle.Bold),
             Height = 34
         };
+
+        // Token + URL display row
+        var tokenPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 4,
+            RowCount = 1,
+            Padding = new Padding(0, 4, 0, 8),
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+        };
+        tokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        tokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 440));
+        tokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        tokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        static Label MakeLabel(string text) => new()
+        {
+            Text = text, AutoSize = true,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Padding = new Padding(0, 5, 8, 0)
+        };
+
+        static TextBox MakeReadonlyBox(string text, int width) => new()
+        {
+            Text = text, ReadOnly = true, Width = width, Height = 28,
+            Font = new Font(FontFamily.GenericMonospace, 10),
+            BackColor = Color.WhiteSmoke
+        };
+
+        _tokenTextBox.Text = _bridgeToken;
+        _tokenTextBox.ReadOnly = true;
+        _tokenTextBox.Font = new Font(FontFamily.GenericMonospace, 10);
+        _tokenTextBox.Width = 440;
+        _tokenTextBox.Height = 28;
+        _tokenTextBox.BackColor = Color.WhiteSmoke;
+        _tokenTextBox.Click += (_, _) => _tokenTextBox.SelectAll();
+
+        // Network URL box — filled after Start()
+        var networkUrlBox = MakeReadonlyBox("", 260);
+        networkUrlBox.Click += (_, _) => networkUrlBox.SelectAll();
+        // We'll update it after the API starts — store reference
+        _networkUrlBox = networkUrlBox;
+
+        tokenPanel.Controls.Add(MakeLabel("Token Bridge:"), 0, 0);
+        tokenPanel.Controls.Add(_tokenTextBox, 1, 0);
+        tokenPanel.Controls.Add(MakeLabel("   URL de red:"), 2, 0);
+        tokenPanel.Controls.Add(networkUrlBox, 3, 0);
 
         ConfigurePrintersGrid();
         ConfigureDiagnosticTextBox();
@@ -204,9 +255,10 @@ public sealed class MainForm : Form
         footer.Controls.Add(_pdfLabel, 0, 3);
 
         root.Controls.Add(title, 0, 0);
-        root.Controls.Add(_printersGrid, 0, 1);
-        root.Controls.Add(_diagnosticTextBox, 0, 2);
-        root.Controls.Add(footer, 0, 3);
+        root.Controls.Add(tokenPanel, 0, 1);
+        root.Controls.Add(_printersGrid, 0, 2);
+        root.Controls.Add(_diagnosticTextBox, 0, 3);
+        root.Controls.Add(footer, 0, 4);
 
         Controls.Add(root);
     }
@@ -294,8 +346,10 @@ public sealed class MainForm : Form
 
         if (_localApiServer.IsRunning)
         {
-            _apiLabel.Text = $"API local: {_localApiServer.Url} | Token: {GetTokenPreview(_bridgeToken)} | Config: {_configService.ConfigRoot}";
-            AppendDiagnostic($"API local iniciada: {_localApiServer.Url}. /printers requiere token Bridge.");
+            var networkUrl = _localApiServer.NetworkUrl;
+            if (_networkUrlBox is not null) _networkUrlBox.Text = networkUrl;
+            _apiLabel.Text = $"API local: {_localApiServer.LoopbackUrl} | Red: {networkUrl} | Config: {_configService.ConfigRoot}";
+            AppendDiagnostic($"API iniciada en {_localApiServer.LoopbackUrl} (red: {networkUrl}). /printers requiere token Bridge.");
         }
         else
         {
