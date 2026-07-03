@@ -1569,14 +1569,27 @@ export default function ProductionTab({
             </button>
           </div>
 
-          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 0 }}>
+          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0, marginRight: 2 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Print Bridge</div>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Windows · impresión local</div>
             </div>
+            <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+              {bridgeTone.label}
+            </span>
+            {bridgeStatus.health?.version && (
+              <span style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                v{bridgeStatus.health.version.replace(/\.0+$/, '')}
+              </span>
+            )}
+            {bridgeStatus.state === 'connected' && bridgeToken && (
+              <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
+                🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
+              </span>
+            )}
             <a
               href="https://github.com/inkorashop/inkora-next/releases/download/bridge-v1.4.1/Inkora.PrintBridge.zip"
-              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
+              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block', marginLeft: 'auto' }}
             >
               Descargar
             </a>
@@ -1603,20 +1616,6 @@ export default function ProductionTab({
                 <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900 }}>
                   {bridgeTone.label}
                 </span>
-              )}
-              {bridgeStatus.state === 'connected' && bridgeToken.trim() && (
-                <>
-                  {bridgeStatus.health?.version && (
-                    <span style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
-                      v{bridgeStatus.health.version.replace(/\.0$/, '')}
-                    </span>
-                  )}
-                  {bridgeToken && (
-                    <span title={`Token: ${bridgeToken.slice(0, 4)}...${bridgeToken.slice(-4)}`} style={{ background: '#f3f5fb', color: '#5a6380', border: '1px solid #dde1ef', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 900, fontFamily: 'monospace', flexShrink: 0 }}>
-                      🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
-                    </span>
-                  )}
-                </>
               )}
               {bridgeStatus.state === 'connected' && bridgeTargetPrinter && bridgeToken.trim() && (
                 <>
