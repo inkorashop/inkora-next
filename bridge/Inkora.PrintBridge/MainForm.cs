@@ -41,6 +41,7 @@ public sealed class MainForm : Form
     private BindingList<PrinterInfo> _printers = new();
     private NotifyIcon _notifyIcon = new();
     private bool _allowClose;
+    private volatile string _updatePhase = "idle";
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -62,7 +63,8 @@ public sealed class MainForm : Form
             _logService,
             _bridgeToken,
             AddPdfRootFromApiAsync,
-            PerformUpdateAsync);
+            PerformUpdateAsync,
+            GetUpdatePhase);
 
         Text = "INKORA Print Bridge";
         Width = 860;
@@ -658,27 +660,25 @@ public sealed class MainForm : Form
         return builder.ToString().TrimEnd();
     }
 
+    private string GetUpdatePhase() => _updatePhase;
+
     private async Task PerformUpdateAsync(string downloadUrl)
     {
         _logService.Info($"[UPDATE] Iniciado desde: {downloadUrl}");
         try
         {
-            this.Invoke((Action)(() =>
-            {
-                ShowForm();
-                AppendDiagnostic($"[UPDATE] Descargando desde {downloadUrl}...");
-            }));
+            _updatePhase = "downloading";
 
             var tempDir = Path.Combine(Path.GetTempPath(), $"inkora_bridge_upd_{Environment.ProcessId}");
             if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
             Directory.CreateDirectory(tempDir);
 
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(8) };
             var bytes = await http.GetByteArrayAsync(downloadUrl);
             var zipPath = Path.Combine(tempDir, "update.zip");
             await File.WriteAllBytesAsync(zipPath, bytes);
 
-            this.Invoke((Action)(() => AppendDiagnostic("[UPDATE] Extrayendo nueva version...")));
+            _updatePhase = "extracting";
 
             using (var zip = ZipFile.OpenRead(zipPath))
             {
@@ -688,21 +688,27 @@ public sealed class MainForm : Form
                 entry.ExtractToFile(Path.Combine(tempDir, "Inkora.PrintBridge.exe"), overwrite: true);
             }
 
+            _updatePhase = "replacing";
+
             var currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
                 ?? throw new Exception("No se pudo determinar la ruta del ejecutable actual.");
             var newExe = Path.Combine(tempDir, "Inkora.PrintBridge.exe");
             var batPath = Path.Combine(tempDir, "do_update.bat");
+            var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
 
+            // Wait for THIS process (by PID) to fully exit before copying the locked exe.
             await File.WriteAllTextAsync(batPath,
                 "@echo off\r\n" +
-                "timeout /t 3 /nobreak > nul\r\n" +
+                $":waitpid\r\n" +
+                $"tasklist /fi \"pid eq {pid}\" 2>NUL | find /I \"Inkora\" >NUL\r\n" +
+                $"if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto waitpid)\r\n" +
                 $"copy /y \"{newExe}\" \"{currentExe}\"\r\n" +
-                "if errorlevel 1 exit /b 1\r\n" +
+                $"if errorlevel 1 exit /b 1\r\n" +
                 $"start \"\" \"{currentExe}\"\r\n" +
-                "del \"%~f0\"\r\n",
+                $"del \"%~f0\"\r\n",
                 Encoding.ASCII);
 
-            _logService.Info($"[UPDATE] Script listo. Reiniciando...");
+            _logService.Info($"[UPDATE] Script listo (PID={pid}). Cerrando...");
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
@@ -713,12 +719,14 @@ public sealed class MainForm : Form
                 UseShellExecute = true,
             });
 
-            this.Invoke((Action)(() => { _allowClose = true; Application.Exit(); }));
+            try { BeginInvoke((Action)(() => { _allowClose = true; Application.Exit(); })); }
+            catch { _allowClose = true; Application.Exit(); }
         }
         catch (Exception ex)
         {
+            _updatePhase = "idle";
             _logService.Error($"[UPDATE] Error: {ex}");
-            try { this.Invoke((Action)(() => AppendDiagnostic($"[UPDATE ERROR] {ex.Message}"))); }
+            try { BeginInvoke((Action)(() => AppendDiagnostic($"[UPDATE ERROR] {ex.Message}"))); }
             catch { }
         }
     }

@@ -35,6 +35,7 @@ public sealed class LocalApiServer : IDisposable
     private readonly string _pairingToken;
     private readonly Func<Task<IReadOnlyList<PdfRootInfo>>> _addPdfRootFromDialogAsync;
     private readonly Func<string, Task> _onUpdateApply;
+    private readonly Func<string> _getUpdatePhase;
     private TcpListener? _listener;
     private CancellationTokenSource? _cancellation;
 
@@ -49,6 +50,7 @@ public sealed class LocalApiServer : IDisposable
         string pairingToken,
         Func<Task<IReadOnlyList<PdfRootInfo>>> addPdfRootFromDialogAsync,
         Func<string, Task> onUpdateApply,
+        Func<string> getUpdatePhase,
         int port = 17389)
     {
         _printerService = printerService;
@@ -61,6 +63,7 @@ public sealed class LocalApiServer : IDisposable
         _pairingToken = pairingToken;
         _addPdfRootFromDialogAsync = addPdfRootFromDialogAsync;
         _onUpdateApply = onUpdateApply;
+        _getUpdatePhase = getUpdatePhase;
         Port = port;
     }
 
@@ -735,6 +738,22 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/update/status":
+                if (method != "GET")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa GET." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                await WriteJsonAsync(stream, 200, "OK", new { ok = true, phase = _getUpdatePhase() }, origin, cancellationToken);
+                break;
+
             case "/update/apply":
                 if (method != "POST")
                 {
@@ -797,7 +816,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/apply" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),

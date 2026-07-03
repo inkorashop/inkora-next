@@ -26,9 +26,10 @@ import {
   applyDevModeProfile,
   deleteDevModeProfile,
   applyBridgeUpdate,
+  getBridgeUpdateStatus,
 } from '../lib/print-bridge-client';
 
-const LATEST_BRIDGE_VERSION = '1.6.1';
+const LATEST_BRIDGE_VERSION = '1.6.2';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -454,6 +455,8 @@ export default function ProductionTab({
   const [bridgePrinters, setBridgePrinters] = useState([]);
   const [bridgeBusy, setBridgeBusy] = useState(false);
   const [bridgeUpdating, setBridgeUpdating] = useState(false);
+  const [updateLog, setUpdateLog] = useState([]);
+  const [showUpdatePanel, setShowUpdatePanel] = useState(false);
   const [bridgeDevMode, setBridgeDevMode] = useState(null);
   const [orderPdfBusy, setOrderPdfBusy] = useState(false);
   const [orderPdfMatches, setOrderPdfMatches] = useState({});
@@ -722,33 +725,88 @@ export default function ProductionTab({
   async function handleBridgeUpdate() {
     if (bridgeUpdating || !bridgeToken.trim()) return;
     setBridgeUpdating(true);
+    setShowUpdatePanel(true);
+    const log = [];
+    const pushLog = (text, status = 'active') => {
+      log.push({ text, status });
+      setUpdateLog([...log]);
+    };
+    const setLastLog = (text, status) => {
+      if (log.length > 0) { log[log.length - 1] = { text, status }; setUpdateLog([...log]); }
+    };
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const normVer = v => (v || '').split('+')[0].split('.').slice(0, 3).join('.');
     try {
-      await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
-      // Fase 1: esperar que el bridge se desconecte (descarga + salida, puede tardar 1-3 min)
-      let wentOffline = false;
-      const phase1End = Date.now() + 4 * 60 * 1000;
-      while (!wentOffline && Date.now() < phase1End) {
-        await sleep(3000);
-        try { await getBridgeHealth(bridgeUrl); }
-        catch { wentOffline = true; }
+      pushLog('Solicitando actualización al Bridge...', 'active');
+      try {
+        await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
+      } catch (err) {
+        if (err.status === 404) {
+          setLastLog(`Bridge demasiado antiguo para auto-actualizar. Instalá v${LATEST_BRIDGE_VERSION} manualmente desde "Descargar".`, 'error');
+          setBridgeUpdating(false);
+          return;
+        }
+        throw err;
       }
-      // Fase 2: esperar que el nuevo bridge arranque con version correcta
-      const phase2End = Date.now() + 90 * 1000;
-      while (Date.now() < phase2End) {
+      setLastLog('Actualización iniciada en el Bridge', 'done');
+
+      pushLog(`Descargando Bridge v${LATEST_BRIDGE_VERSION}...`, 'active');
+      const downloadDeadline = Date.now() + 6 * 60 * 1000;
+      let bridgeWentOffline = false;
+      while (!bridgeWentOffline && Date.now() < downloadDeadline) {
         await sleep(2000);
         try {
+          const status = await getBridgeUpdateStatus(bridgeUrl, bridgeToken.trim());
+          const phase = status?.phase || 'downloading';
+          if (phase === 'extracting') setLastLog(`Extrayendo Bridge v${LATEST_BRIDGE_VERSION}...`, 'active');
+          else if (phase === 'replacing') setLastLog('Preparando instalación...', 'active');
+          else setLastLog(`Descargando Bridge v${LATEST_BRIDGE_VERSION}...`, 'active');
+        } catch {
+          bridgeWentOffline = true;
+        }
+      }
+      setLastLog(`Descargando Bridge v${LATEST_BRIDGE_VERSION}...`, 'done');
+
+      pushLog('Cerrando e instalando...', 'active');
+      if (!bridgeWentOffline) {
+        const offlineDeadline = Date.now() + 60 * 1000;
+        while (!bridgeWentOffline && Date.now() < offlineDeadline) {
+          await sleep(2000);
+          try { await getBridgeHealth(bridgeUrl); } catch { bridgeWentOffline = true; }
+        }
+      }
+      if (!bridgeWentOffline) {
+        setLastLog('El Bridge no respondió. Verificá el estado manualmente.', 'error');
+        try { await checkPrintBridge(); } catch {}
+        return;
+      }
+      setLastLog('Cerrando e instalando...', 'done');
+
+      pushLog('Iniciando nueva versión...', 'active');
+      const startDeadline = Date.now() + 2 * 60 * 1000;
+      let succeeded = false;
+      while (!succeeded && Date.now() < startDeadline) {
+        await sleep(2500);
+        try {
           const health = await getBridgeHealth(bridgeUrl);
-          if (normVer(health?.version) === LATEST_BRIDGE_VERSION) {
-            await checkPrintBridge();
-            return;
-          }
+          if (normVer(health?.version) === normVer(LATEST_BRIDGE_VERSION)) succeeded = true;
         } catch {}
       }
+      if (!succeeded) {
+        setLastLog('Tiempo agotado esperando el nuevo Bridge. Inicialo manualmente.', 'error');
+        try { await checkPrintBridge(); } catch {}
+        return;
+      }
+      setLastLog('Iniciando nueva versión...', 'done');
+
+      pushLog('Reconectando...', 'active');
       try { await checkPrintBridge(); } catch {}
-    } catch {
-      await sleep(10000);
+      setLastLog('¡Actualización completada!', 'done');
+    } catch (err) {
+      const msg = err?.message || 'Error desconocido';
+      if (log.length > 0) setLastLog(`Error: ${msg}`, 'error');
+      else pushLog(`Error: ${msg}`, 'error');
+      await sleep(5000);
       try { await checkPrintBridge(); } catch {}
     } finally {
       setBridgeUpdating(false);
@@ -1683,16 +1741,39 @@ export default function ProductionTab({
                   🔑 {bridgeToken.slice(0, 4)}···{bridgeToken.slice(-4)}
                 </span>
               )}
-              {bridgeStatus.state === 'connected' && bridgeStatus.health?.version && bridgeStatus.health.version.split('.').slice(0, 3).join('.') !== LATEST_BRIDGE_VERSION && (
-                <button
-                  type="button"
-                  onClick={handleBridgeUpdate}
-                  disabled={bridgeUpdating}
-                  style={{ border: '1.5px solid #f59e0b', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeUpdating ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#d97706', background: '#fffbeb', flexShrink: 0 }}
-                >
-                  {bridgeUpdating ? 'Actualizando...' : '↑ Actualizar'}
-                </button>
-              )}
+              {(bridgeStatus.state === 'connected' && bridgeStatus.health?.version && bridgeStatus.health.version.split('.').slice(0, 3).join('.') !== LATEST_BRIDGE_VERSION) || bridgeUpdating ? (
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', border: '1.5px solid #f59e0b', borderRadius: 6, overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={handleBridgeUpdate}
+                      disabled={bridgeUpdating}
+                      style={{ border: 'none', borderRight: '1px solid #f59e0b', padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeUpdating ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#d97706', background: '#fffbeb' }}
+                    >
+                      {bridgeUpdating ? 'Actualizando...' : '↑ Actualizar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUpdatePanel(p => !p)}
+                      style={{ border: 'none', padding: '3px 6px', fontSize: 9, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', color: '#d97706', background: '#fffbeb' }}
+                    >
+                      {showUpdatePanel ? '▲' : '▼'}
+                    </button>
+                  </div>
+                  {showUpdatePanel && updateLog.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200, background: 'white', border: '1.5px solid #fed7aa', borderRadius: 8, padding: '8px 12px', minWidth: 280, maxWidth: 380, boxShadow: '0 6px 20px rgba(27,47,94,0.14)' }}>
+                      {updateLog.map((entry, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '2px 0', fontSize: 11, lineHeight: 1.4 }}>
+                          <span style={{ color: entry.status === 'error' ? '#dc2626' : entry.status === 'done' ? '#16a34a' : '#d97706', fontWeight: 900, flexShrink: 0 }}>
+                            {entry.status === 'error' ? '✗' : entry.status === 'done' ? '✓' : '→'}
+                          </span>
+                          <span style={{ color: entry.status === 'error' ? '#dc2626' : '#1B2F5E' }}>{entry.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
               <a
                 href={LATEST_BRIDGE_DOWNLOAD_URL}
                 style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
