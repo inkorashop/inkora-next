@@ -1971,13 +1971,9 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       const itemProduct = products.find(p => p.id === item.product_id);
                       return (
                       <div key={item.id} style={s.cartItem}>
-                        {item.image_url ? (
+                        {getDesignDisplayImageUrl(item) ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <SafeImage src={item.image_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
-                        ) : item.model_url && !is3dModelUrl(item.model_url) ? (
-                          // Non-3D file in model_url (e.g. PNG stored there)
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <SafeImage src={item.model_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                          <SafeImage src={getDesignDisplayImageUrl(item)} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'contain', background:'#f0f2f8', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                         ) : item.model_url ? (
                           // 3MF without captured thumbnail — show 3D icon placeholder
                           <div style={{width:36, height:36, borderRadius:6, border:'1px solid #dde1ef', flexShrink:0, background:'#eef0f6', display:'flex', alignItems:'center', justifyContent:'center'}}>
@@ -2063,8 +2059,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   const itemProduct = products.find(p => p.id === item.product_id);
                   return (
                   <div key={item.id} style={s.cartItem}>
-                    {item.image_url && (
-                      <SafeImage src={item.image_url} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
+                    {getDesignDisplayImageUrl(item) && (
+                      <SafeImage src={getDesignDisplayImageUrl(item)} alt={item.name} compactFallback style={{width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #dde1ef'}} />
                     )}
                     <div style={s.cartItemInfo}>
                       {itemProduct && <div style={{fontSize:9, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:1}}>{itemProduct.name}</div>}
