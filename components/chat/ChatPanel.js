@@ -150,6 +150,8 @@ export default function ChatPanel({
 
   const [channels, setChannels] = useState([]);
   const [channelMembers, setChannelMembers] = useState({});
+  const [muteSettings, setMuteSettings] = useState({});
+  const [muteMenuChannelId, setMuteMenuChannelId] = useState(null);
   const [loadingChannels, setLoadingChannels] = useState(true);
   const [internalChannelId, setInternalChannelId] = useState(null);
   const activeChannelId = controlledChannelId ?? internalChannelId;
@@ -194,16 +196,21 @@ export default function ChatPanel({
       return;
     }
 
-    const [{ data: channelRows }, { data: allMemberRows }, { data: lastMessages }] = await Promise.all([
+    const [{ data: channelRows }, { data: allMemberRows }, { data: lastMessages }, { data: muteRows }] = await Promise.all([
       supabase.from('chat_channels').select('*').in('id', channelIds),
       supabase.from('chat_channel_members').select('channel_id, email').in('channel_id', channelIds),
       supabase.from('chat_messages').select('channel_id, body, sender_email, created_at, reference, deleted_at, image_url')
         .in('channel_id', channelIds).order('created_at', { ascending: false }).limit(500),
+      supabase.from('chat_channel_member_settings').select('channel_id, mute_level').eq('email', currentUser).in('channel_id', channelIds),
     ]);
 
     const membersByChannel = {};
     (allMemberRows || []).forEach(r => { (membersByChannel[r.channel_id] ||= []).push(r.email); });
     setChannelMembers(membersByChannel);
+
+    const muteByChannel = {};
+    (muteRows || []).forEach(r => { muteByChannel[r.channel_id] = r.mute_level; });
+    setMuteSettings(muteByChannel);
 
     const lastByChannel = {};
     (lastMessages || []).forEach(m => { if (!lastByChannel[m.channel_id]) lastByChannel[m.channel_id] = m; });
@@ -250,6 +257,7 @@ export default function ChatPanel({
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channel_members' }, () => loadChannels())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channels' }, () => loadChannels())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channel_member_settings' }, () => loadChannels())
       .subscribe();
     return () => supabase.removeChannel(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,14 +275,16 @@ export default function ChatPanel({
   }
 
   // Elige el canal a mostrar apenas cargan los canales: el de la URL si vino
-  // uno (?canal=), si no el ultimo que el usuario dejo abierto, si no "General".
+  // uno (?canal=); si no, en mobile siempre "General" (entrar al chat en el
+  // celular tiene que arrancar ahi siempre, no en el ultimo canal visitado);
+  // en desktop, el ultimo canal que el usuario dejo abierto, si no "General".
   const autoSelectedRef = useRef(false);
   useEffect(() => {
     if (autoSelectedRef.current || channels.length === 0) return;
     autoSelectedRef.current = true;
     if (controlledChannelId && channels.some(c => c.id === controlledChannelId)) return;
-    const lastId = readLastChannelId();
-    const fallback = channels.find(c => c.id === lastId) || channels.find(c => c.type === 'main') || channels[0];
+    const lastId = isMobile ? null : readLastChannelId();
+    const fallback = (lastId && channels.find(c => c.id === lastId)) || channels.find(c => c.type === 'main') || channels[0];
     if (fallback) setActiveChannel(fallback.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channels]);
@@ -293,6 +303,7 @@ export default function ChatPanel({
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key !== 'Escape') return;
+      if (muteMenuChannelId) { setMuteMenuChannelId(null); return; }
       if (openMenuId) { setOpenMenuId(null); return; }
       if (mentionQuery) { setMentionQuery(null); return; }
       if (slashQuery) { setSlashQuery(null); return; }
@@ -303,7 +314,7 @@ export default function ChatPanel({
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [openMenuId, mentionQuery, slashQuery, editingId, replyTo, pendingReference, pendingImage]);
+  }, [muteMenuChannelId, openMenuId, mentionQuery, slashQuery, editingId, replyTo, pendingReference, pendingImage]);
 
   function openChannel(channel) {
     setActiveChannel(channel.id);
@@ -314,6 +325,15 @@ export default function ChatPanel({
     if (!channel.lastMessage || channel.lastMessage.sender_email === currentUser) return false;
     const read = lastReadAt[channel.id];
     return !read || new Date(channel.lastMessage.created_at) > new Date(read);
+  }
+
+  async function setChannelMute(channelId, level) {
+    setMuteSettings(prev => ({ ...prev, [channelId]: level }));
+    setMuteMenuChannelId(null);
+    await supabase.from('chat_channel_member_settings').upsert(
+      { channel_id: channelId, email: currentUser, mute_level: level, updated_at: new Date().toISOString() },
+      { onConflict: 'channel_id,email' }
+    );
   }
 
   async function createChannel(name, memberEmails) {
@@ -549,29 +569,47 @@ export default function ChatPanel({
                     : preview?.reference
                       ? `🔗 ${referenceLabel(preview.reference)}`
                       : 'Sin mensajes todavía';
+              const muteLevel = muteSettings[channel.id] || 'none';
               return (
-                <button
-                  key={channel.id}
-                  onClick={() => openChannel(channel)}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid #f4f6fb',
-                    background: activeChannelId === channel.id ? (adminDarkMode ? 'rgba(45,107,228,0.16)' : '#f0f5ff') : 'transparent',
-                    padding: '10px 14px', cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: adminDarkMode ? '#e7ecf8' : '#2d3352' }}>
-                      {channel.type === 'main' ? '# ' : ''}{channel.name}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {preview?.created_at && <span style={{ fontSize: 10, color: '#9aa3bc' }}>{formatChatTime(preview.created_at)}</span>}
-                      {unread && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2D6BE4', display: 'inline-block' }} />}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {preview?.sender_email ? `${displayNameForEmail(directory, preview.sender_email)}: ` : ''}{previewText}
-                  </div>
-                </button>
+                <div key={channel.id} style={{ position: 'relative', borderBottom: '1px solid #f4f6fb' }}>
+                  <button
+                    onClick={() => openChannel(channel)}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left', border: 'none',
+                      background: activeChannelId === channel.id ? (adminDarkMode ? 'rgba(45,107,228,0.16)' : '#f0f5ff') : 'transparent',
+                      padding: '10px 34px 10px 14px', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: adminDarkMode ? '#e7ecf8' : '#2d3352' }}>
+                        {channel.type === 'main' ? '# ' : ''}{channel.name}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {preview?.created_at && <span style={{ fontSize: 10, color: '#9aa3bc' }}>{formatChatTime(preview.created_at)}</span>}
+                        {unread && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2D6BE4', display: 'inline-block' }} />}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {preview?.sender_email ? `${displayNameForEmail(directory, preview.sender_email)}: ` : ''}{previewText}
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMuteMenuChannelId(prev => (prev === channel.id ? null : channel.id)); }}
+                    title="Notificaciones de este canal"
+                    style={{ position: 'absolute', top: 10, right: 8, border: 'none', background: 'none', cursor: 'pointer', color: muteLevel === 'none' ? '#c4c9d9' : '#9aa3bc', fontSize: 13, padding: 4, lineHeight: 1 }}
+                  >
+                    {muteLevel === 'mute_all' ? '🔕' : muteLevel === 'mute_sound' ? '🔈' : '🔔'}
+                  </button>
+
+                  {muteMenuChannelId === channel.id && (
+                    <div style={{ position: 'absolute', top: 32, right: 8, background: 'white', border: '1px solid #dde1ef', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.15)', zIndex: 6, minWidth: 170 }}>
+                      <button onClick={() => setChannelMute(channel.id, 'none')} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: muteLevel === 'none' ? '#f0f5ff' : 'none', padding: '8px 10px', fontSize: 12, cursor: 'pointer', color: '#2d3352' }}>🔔 Notificar normal</button>
+                      <button onClick={() => setChannelMute(channel.id, 'mute_sound')} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: muteLevel === 'mute_sound' ? '#f0f5ff' : 'none', padding: '8px 10px', fontSize: 12, cursor: 'pointer', color: '#2d3352' }}>🔈 Sin sonido</button>
+                      <button onClick={() => setChannelMute(channel.id, 'mute_all')} style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: muteLevel === 'mute_all' ? '#f0f5ff' : 'none', padding: '8px 10px', fontSize: 12, cursor: 'pointer', color: '#2d3352' }}>🔕 No notificar</button>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -12,6 +12,7 @@ import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import ChatPanel from '@/components/chat/ChatPanel';
 import PwaUpdateManager from '@/components/PwaUpdateManager';
+import ChatPushToggle from '@/components/ChatPushToggle';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
 import { toSlug as slugify } from '@/lib/slug';
 import {
@@ -5297,6 +5298,8 @@ useEffect(() => {
     {adminDarkMode ? '☾' : '☀'}
   </span>
 </button>
+
+<ChatPushToggle />
 
 {isNativeApp && (
   <button
