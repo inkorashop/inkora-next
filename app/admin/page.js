@@ -6536,7 +6536,13 @@ useEffect(() => {
                       return thumbSrc ? (
                         <button
                           type="button"
-                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original', zoom: 1.3 }); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            const storedSizes = designImageSizesById[String(d.id)] || {};
+                            const originalSizeKb = d.optimized_image_source_size_kb || storedSizes.originalSizeKb || 0;
+                            const optimizedSizeKb = d.optimized_image_size_kb || storedSizes.optimizedSizeKb || 0;
+                            setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original', zoom: 1.3, originalSizeKb, optimizedSizeKb });
+                          }}
                           onDragStart={e => e.stopPropagation()}
                           title={d.optimized_image_url ? 'Abrir miniatura optimizada' : 'Abrir imagen original'}
                           style={{border:'none', padding:0, background:'transparent', cursor:'pointer', position:'relative', flexShrink:0}}
@@ -6549,27 +6555,6 @@ useEffect(() => {
                           )}
                         </button>
                       ) : null;
-                    })()}
-                    {(() => {
-                      const status = optimizationStatus[d.id];
-                      if (status?.state === 'working' || status?.state === 'error') {
-                        return <span style={{fontSize:10, fontWeight:800, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4', whiteSpace:'nowrap', flexShrink:0}}>{status.message}</span>;
-                      }
-                      if (!d.optimized_image_url) {
-                        return <span style={{fontSize:10, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', flexShrink:0}}>Sin optimizar</span>;
-                      }
-                      const storedSizes = designImageSizesById[String(d.id)] || {};
-                      const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
-                      const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
-                      const label = originalKb ? `${formatPlainKb(originalKb)} -> ${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `-> ${formatPlainKb(optimizedKb)}`);
-                      return (
-                        <span
-                          title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
-                          style={{fontSize:10, fontWeight:800, color:'#15803d', background:'#e8f7ef', border:'1px solid #b7ebcf', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', flexShrink:0}}
-                        >
-                          {label}
-                        </span>
-                      );
                     })()}
                     <div>
                       <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
@@ -6671,34 +6656,53 @@ useEffect(() => {
                     >
                       <OptimizeIcon />
                     </button>
-                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && pdfMatch?.found && (
+                    {(() => {
+                      const status = optimizationStatus[d.id];
+                      const pillStyle = {fontSize:10, fontWeight:800, borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:76, textAlign:'center', flexShrink:0};
+                      if (status?.state === 'working' || status?.state === 'error') {
+                        return <span style={{...pillStyle, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4'}}>{status.message}</span>;
+                      }
+                      if (!d.optimized_image_url) {
+                        return <span style={{...pillStyle, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8'}}>Sin optimizar</span>;
+                      }
+                      const storedSizes = designImageSizesById[String(d.id)] || {};
+                      const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
+                      const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
+                      const label = originalKb ? `${formatPlainKb(originalKb)}->${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `->${formatPlainKb(optimizedKb)}`);
+                      return (
+                        <span
+                          title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
+                          style={{...pillStyle, color:'#15803d', background:'#e8f7ef', border:'1px solid #b7ebcf'}}
+                        >
+                          {label}
+                        </span>
+                      );
+                    })()}
+                    {designPdfSummary.state === 'ready' && (
                       <span
-                        title={`PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}`}
+                        title={pdfLinkEnabled ? (pdfMatch?.found ? `PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño') : undefined}
                         style={{
                           fontSize:10,
-                          fontWeight:800,
-                          color:'#15803d',
-                          background:'#e8f7ef',
-                          border:'1px solid #b7ebcf',
+                          fontWeight: pdfLinkEnabled && !pdfMatch?.found ? 900 : 800,
+                          color: !pdfLinkEnabled ? 'transparent' : pdfMatch?.found ? '#15803d' : '#b91c1c',
+                          background: !pdfLinkEnabled ? 'transparent' : pdfMatch?.found ? '#e8f7ef' : '#fff5f5',
+                          border: !pdfLinkEnabled ? '1px solid transparent' : pdfMatch?.found ? '1px solid #b7ebcf' : '1px solid #fecaca',
                           borderRadius:5,
                           padding:'3px 6px',
-                          maxWidth:120,
+                          width:120,
+                          boxSizing:'border-box',
                           overflow:'hidden',
                           textOverflow:'ellipsis',
                           whiteSpace:'nowrap',
                           lineHeight:1.3,
                           cursor:'default',
+                          flexShrink:0,
+                          display:'inline-flex',
+                          alignItems:'center',
+                          justifyContent: pdfLinkEnabled && !pdfMatch?.found ? 'center' : 'flex-start',
                         }}
                       >
-                        {pdfMatch.fileName}
-                      </span>
-                    )}
-                    {designPdfSummary.state === 'ready' && pdfLinkEnabled && !pdfMatch?.found && (
-                      <span
-                        title="No se encontró PDF local para este diseño"
-                        style={{border:'1px solid #fecaca', background:'#fff5f5', color:'#b91c1c', borderRadius:5, padding:'3px 5px', fontSize:10, fontWeight:900, lineHeight:1, display:'inline-flex', alignItems:'center'}}
-                      >
-                        <PdfIcon />!
+                        {pdfLinkEnabled ? (pdfMatch?.found ? pdfMatch.fileName : <><PdfIcon />!</>) : ''}
                       </span>
                     )}
                     <button
@@ -9236,9 +9240,9 @@ useEffect(() => {
                   >
                     <span style={{color:'white', fontSize:13, fontWeight:800, textShadow:'0 1px 4px rgba(0,0,0,0.8)'}}>{designPreviewImage.name || 'Diseño'}</span>
                     {[
-                      ['original', 'Original'],
-                      ['optimized', 'Optimizada'],
-                    ].map(([view, label]) => {
+                      ['original', 'Original', designPreviewImage.originalSizeKb],
+                      ['optimized', 'Optimizada', designPreviewImage.optimizedSizeKb],
+                    ].map(([view, label, sizeKb]) => {
                       const disabled = view === 'optimized' && !hasOptimized;
                       const active = currentView === view;
                       return (
@@ -9249,7 +9253,7 @@ useEffect(() => {
                           onClick={() => setDesignPreviewImage(prev => ({ ...prev, view }))}
                           style={{border:`1.5px solid ${active ? '#2D6BE4' : '#dde1ef'}`, borderRadius:999, padding:'4px 10px', background:active ? '#eef4ff' : 'white', color:disabled ? '#c4c9d9' : active ? '#2D6BE4' : '#1B2F5E', fontSize:11, fontWeight:900, cursor:disabled ? 'not-allowed' : 'pointer'}}
                         >
-                          {label}
+                          {label}{sizeKb > 0 ? ` · ${formatSizeKb(sizeKb)}` : ''}
                         </button>
                       );
                     })}
