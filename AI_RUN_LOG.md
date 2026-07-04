@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-04 -03:00 - Claude Sonnet 5 (v3)
+
+- Objetivo: El usuario no queria el flujo de publicacion de versiones desde una UI de Admin (file picker + inputs de version) que arme en el turno anterior — lo considero poco practico. Pidio en cambio: (1) un boton simple (icono de descargar) en la barra superior para que cualquiera baje el APK actual instalado, sin nada mas que elegir; (2) que la publicacion de versiones nuevas la haga la IA por terminal, no un admin desde el navegador.
+- Cambios: Se elimino por completo la tarjeta "App Android" de Admin > Config (file input, campos de version, boton "Subir y publicar") junto con su estado y handler `handleUploadAppApk`, y se borro la ruta `app/api/admin/app-apk-upload-url/route.js` que ya no hacia falta. En su lugar: un icono chico de descarga en la barra superior de `app/admin/page.js` (junto al boton de tema), que solo aparece si `settings.android_app_apk_url` tiene valor, y linkea directo a esa URL con atributo `download`. Se creo `android-app/publish-release.js`: script de Node que sube el APK compilado a Supabase Storage y hace upsert de las 3 keys de `settings`, para correr por terminal (`node publish-release.js <versionCode> <versionName>`) cada vez que se compile una version nueva. Se publico la v1.0.0 actual con este script como primera prueba end-to-end.
+- Verificacion: `npx eslint` sobre `app/admin/page.js` sin errores; `npx next build` completo sin errores (un intento anterior crasheo con codigo de salida nativo de Windows 0xC0000005, no relacionado al codigo — el reintento inmediato compilo limpio). Se verifico con `curl -I` que la URL publicada del APK responde 200 OK con el content-type correcto.
+- Auditoria: El primer diseño (upload UI en Admin) resolvia el problema equivocado — el usuario aclaro que solo existe una version "actual" y que public quiere descargar, no publicar, desde la web. Se corrigio rapido tras una sola pregunta de aclaracion en vez de asumir.
+- Pendiente/Riesgos: El SQL `sql/android_app_version.sql` quedo como documentacion nomas (las filas ya se crean solas via el script); no hace falta correrlo salvo que la tabla `settings` se recree desde cero. Cada vez que se compile un cambio nuevo en `android-app/`, correr `node android-app/publish-release.js <versionCode> <versionName>` para publicarlo — sin este paso el boton de descarga sigue apuntando a la version anterior y el auto-update de la app instalada nunca encuentra nada nuevo.
+
+---
+
 ## YYYY-MM-DD HH:mm -03:00 - IA
 
 - Objetivo:

@@ -726,11 +726,6 @@ useEffect(() => {
   const [loadingCarts, setLoadingCarts] = useState(false);
   const [cartsError, setCartsError] = useState('');
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all', [PASSWORD_PROMPT_ENABLED_KEY]: 'true', [PASSWORD_PROMPT_DELAY_DAYS_KEY]: String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS) });
-  const [appApkFile, setAppApkFile] = useState(null);
-  const [appApkVersionCode, setAppApkVersionCode] = useState('');
-  const [appApkVersionName, setAppApkVersionName] = useState('');
-  const [appApkUploading, setAppApkUploading] = useState(false);
-  const [appApkUploadMsg, setAppApkUploadMsg] = useState(null);
   // Always covers the full filtered set (not just the current selection) so
   // that selecting/deselecting rows never discards already-fetched size data
   // and never re-triggers a slow storage listing just to narrow the scope.
@@ -3850,57 +3845,6 @@ useEffect(() => {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
-  // Sube el .apk directo a Supabase Storage (URL firmada), sin pasar el
-  // archivo por una funcion de Vercel, y publica la version en settings
-  // para que /api/app-version la vea (y de ahi, la app la detecte sola).
-  async function handleUploadAppApk() {
-    const versionCode = parseInt(appApkVersionCode, 10);
-    const currentVersionCode = parseInt(settings.android_app_version_code || '0', 10);
-
-    if (!appApkFile) {
-      setAppApkUploadMsg({ ok: false, text: 'Elegí un archivo .apk primero.' });
-      return;
-    }
-    if (!Number.isFinite(versionCode) || versionCode <= currentVersionCode) {
-      setAppApkUploadMsg({ ok: false, text: `El numero de version debe ser mayor al actual (${currentVersionCode || 0}).` });
-      return;
-    }
-    if (!appApkVersionName.trim()) {
-      setAppApkUploadMsg({ ok: false, text: 'Falta el nombre de version (ej: 1.0.1).' });
-      return;
-    }
-
-    setAppApkUploading(true);
-    setAppApkUploadMsg(null);
-    try {
-      const urlRes = await fetch('/api/admin/app-apk-upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: appApkFile.name }),
-      });
-      const urlData = await urlRes.json();
-      if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo preparar la subida.');
-
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .uploadToSignedUrl(urlData.path, urlData.token, appApkFile);
-      if (uploadError) throw uploadError;
-
-      await saveSetting('android_app_version_code', String(versionCode));
-      await saveSetting('android_app_version_name', appApkVersionName.trim());
-      await saveSetting('android_app_apk_url', urlData.publicUrl);
-
-      setAppApkUploadMsg({ ok: true, text: `Version ${appApkVersionName.trim()} publicada. Los celus con la app instalada la van a detectar solos.` });
-      setAppApkFile(null);
-      setAppApkVersionName('');
-      setAppApkVersionCode('');
-    } catch (err) {
-      setAppApkUploadMsg({ ok: false, text: err.message || 'Error al subir la actualizacion.' });
-    } finally {
-      setAppApkUploading(false);
-    }
-  }
-
   function formatAdminDateTime(iso) {
     if (!iso) return 'Sin hora';
     try {
@@ -5350,6 +5294,20 @@ useEffect(() => {
   </span>
 </button>
 
+{settings.android_app_apk_url && (
+  <a
+    href={settings.android_app_apk_url}
+    download
+    title="Descargar app INKORA (Android)"
+    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 7, border: '1.5px solid rgba(255,255,255,0.25)', color: 'white', marginRight: 4 }}
+  >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  </a>
+)}
 <span style={s.headerUser} className="adm-header-user">{isImpersonating ? (impersonatedIdentity.name || impersonatedIdentity.email || 'Simulación') : currentUser}</span>
         {canImpersonate && (
           <button onClick={() => setShowImpersonatorPanel(true)}
@@ -7963,46 +7921,6 @@ useEffect(() => {
               </div>
             </div>
 
-            <div style={s.card}>
-              <h2 style={s.sectionTitle}>App Android (burbuja flotante)</h2>
-              <div style={{fontSize:11, color:'#9aa3bc', marginBottom:10}}>
-                Version actual publicada: <b>{settings.android_app_version_name || '—'}</b> (code {settings.android_app_version_code || '0'})
-              </div>
-              <div style={{display:'flex', flexWrap:'wrap', gap:10, alignItems:'center'}}>
-                <input
-                  type="file"
-                  accept=".apk"
-                  onChange={e => setAppApkFile(e.target.files?.[0] || null)}
-                  style={{fontSize:12}}
-                />
-                <input
-                  type="number"
-                  placeholder="Version code (ej: 2)"
-                  value={appApkVersionCode}
-                  onChange={e => setAppApkVersionCode(e.target.value)}
-                  style={{...s.input, width:150, fontSize:12}}
-                />
-                <input
-                  type="text"
-                  placeholder="Version name (ej: 1.0.1)"
-                  value={appApkVersionName}
-                  onChange={e => setAppApkVersionName(e.target.value)}
-                  style={{...s.input, width:150, fontSize:12}}
-                />
-                <button
-                  onClick={handleUploadAppApk}
-                  disabled={appApkUploading}
-                  style={{...s.btnPrimary, opacity: appApkUploading ? 0.6 : 1, cursor: appApkUploading ? 'not-allowed' : 'pointer'}}
-                >
-                  {appApkUploading ? 'Subiendo...' : 'Subir y publicar'}
-                </button>
-              </div>
-              {appApkUploadMsg && (
-                <div style={{marginTop:10, fontSize:12, fontWeight:600, color: appApkUploadMsg.ok ? '#15803d' : '#b91c1c'}}>
-                  {appApkUploadMsg.text}
-                </div>
-              )}
-            </div>
 
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Gestión de productos</h2>

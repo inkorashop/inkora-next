@@ -1,10 +1,8 @@
 -- INKORA - Version de la app nativa de Android (WebView + burbuja flotante)
--- Ejecutar en Supabase SQL Editor. La app chequea /api/app-version (lee esta
--- tabla) para saber si hay una version nueva del cascaron para descargar.
---
--- Cada vez que se compile una nueva version del APK (android-app/):
---   1. Subir el .apk a algun storage publico (ej. bucket "assets" de Supabase Storage).
---   2. Actualizar estas 3 filas con el nuevo versionCode/versionName/URL.
+-- Solo de referencia: estas filas ya se crean/actualizan solas al correr
+-- android-app/publish-release.js (sube el .apk a Supabase Storage y hace
+-- upsert de estas 3 keys). No hace falta ejecutar este archivo a mano salvo
+-- que la tabla settings se haya recreado desde cero.
 
 INSERT INTO public.settings (key, value)
 VALUES
