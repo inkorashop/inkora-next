@@ -15,7 +15,7 @@ async function getAuthUser(req) {
   if (!token) return null;
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_KEY,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
   const { data } = await supabase.auth.getUser(token);
