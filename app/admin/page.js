@@ -8249,7 +8249,7 @@ useEffect(() => {
 
       </div>
 
-      <footer style={s.footer}>INKORA® Admin</footer>
+      {!isMobile && <footer style={s.footer}>INKORA® Admin</footer>}
 
       {/* MODAL DE VISIBILIDAD DE PRODUCTOS POR CLIENTE */}
       {userProductsModal && (() => {
