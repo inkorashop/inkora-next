@@ -33,13 +33,22 @@ export default function ChatReferencePicker({ type, orders = [], designs = [], o
 
   function pick(item) {
     if (type === 'design') {
-      onSelect({ type: 'design', id: item.id, label: item.name, design: item });
+      onSelect({
+        type: 'design',
+        id: item.id,
+        label: item.name,
+        productName: item.products?.name || '',
+        imageUrl: getDesignDisplayImageUrl(item) || '',
+      });
     } else {
       onSelect({
         type,
         id: item.id,
         label: item.order_code || item.customer_name || 'Pedido',
-        order: item,
+        customerName: item.customer_name || '',
+        status: item.status || '',
+        total: Number(item.total) || 0,
+        itemsCount: Array.isArray(item.items) ? item.items.length : 0,
       });
     }
   }

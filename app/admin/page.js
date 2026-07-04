@@ -533,6 +533,10 @@ useEffect(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('pedido');
   });
+  const [chatActiveChannelId, setChatActiveChannelId] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('canal');
+  });
   const screenRef = useRef(screen);
   const activeTabRef = useRef(activeTab);
   const adminScrollPositionsRef = useRef({});
@@ -1183,6 +1187,10 @@ useEffect(() => {
       if (productionSubtab === 'produce' && productionSelectedOrderId) params.set('pedido', productionSelectedOrderId);
     }
 
+    if (activeTab === 'notifications' && chatActiveChannelId) {
+      params.set('canal', chatActiveChannelId);
+    }
+
     if (activeTab === 'designs' && selectedProductId) {
       params.set('producto', selectedProductId);
     }
@@ -1284,6 +1292,10 @@ useEffect(() => {
       const view = params.get('vista') || params.get('subtab') || '';
       setProductionSubtab(SLUG_PRODUCTION_SUBTABS[view] || 'produce');
       setProductionSelectedOrderId(params.get('pedido') || null);
+    }
+
+    if (nextTab === 'notifications') {
+      setChatActiveChannelId(params.get('canal') || null);
     }
 
     if (nextTab === 'designs') {
@@ -1486,6 +1498,7 @@ useEffect(() => {
     usersSubtab,
     productionSubtab,
     productionSelectedOrderId,
+    chatActiveChannelId,
     selectedProductId,
     productManageModal,
     infoTagsModal,
@@ -7019,6 +7032,8 @@ useEffect(() => {
               orders={orders}
               designs={designs}
               adminDarkMode={adminDarkMode}
+              activeChannelId={chatActiveChannelId}
+              onChangeActiveChannel={setChatActiveChannelId}
               onNavigateToOrder={(order) => { setActiveTab('orders'); setOrderDetail(order); }}
               onNavigateToProduction={(order) => { setActiveTab('production'); setProductionSubtab('produce'); setProductionSelectedOrderId(order.id); }}
               onNavigateToDesign={(design) => {

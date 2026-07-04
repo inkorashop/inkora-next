@@ -7,6 +7,8 @@ import ChatNewChannelModal from '@/components/chat/ChatNewChannelModal';
 import {
   CHAT_IMAGE_MAX_BYTES,
   CHAT_IMAGE_EXPIRY_DAYS,
+  ORDER_STATUS_LABEL,
+  ORDER_STATUS_COLOR,
   buildMemberDirectory,
   displayNameForEmail,
   emailHandle,
@@ -14,10 +16,14 @@ import {
   parseMentions,
   splitBodyWithMentions,
   referenceLabel,
+  resolveOrderSummary,
+  resolveDesignSummary,
   formatChatTime,
   formatChatDateSeparator,
   isSameDay,
 } from '@/lib/chat-helpers';
+
+const LAST_CHANNEL_KEY = 'inkora_chat_last_channel';
 
 const SLASH_COMMANDS = [
   { cmd: 'pedido', type: 'order', label: 'Pedido', hint: 'Referenciar un pedido' },
@@ -43,6 +49,63 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+function ReferenceCard({ reference, orders, designs, isOwn, onClick, style }) {
+  const cardStyle = {
+    border: `1px solid ${isOwn ? 'rgba(255,255,255,0.5)' : '#dde1ef'}`,
+    background: isOwn ? 'rgba(255,255,255,0.14)' : 'white',
+    color: isOwn ? 'white' : '#2d3352',
+    borderRadius: 8,
+    padding: '7px 9px',
+    cursor: 'pointer',
+    width: '100%',
+    textAlign: 'left',
+    display: 'block',
+    ...style,
+  };
+  const linkColor = isOwn ? 'inherit' : '#2D6BE4';
+
+  if (reference.type === 'design') {
+    const summary = resolveDesignSummary(reference, designs);
+    return (
+      <button onClick={onClick} style={{ ...cardStyle, display: 'flex', gap: 8, alignItems: 'center' }}>
+        {summary.imageUrl ? (
+          <SafeImage src={summary.imageUrl} alt="" style={{ width: 38, height: 38, borderRadius: 6, objectFit: 'contain', background: '#f0f2f8', flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 38, height: 38, borderRadius: 6, background: '#f0f2f8', flexShrink: 0 }} />
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary.name}</div>
+          <div style={{ fontSize: 10.5, opacity: 0.75 }}>{summary.productName || 'Diseño'}</div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: linkColor, marginTop: 1 }}>Ver diseño →</div>
+        </div>
+      </button>
+    );
+  }
+
+  const summary = resolveOrderSummary(reference, orders);
+  const statusColor = ORDER_STATUS_COLOR[summary.status] || '#9aa3bc';
+  const statusLabel = ORDER_STATUS_LABEL[summary.status] || summary.status || '';
+  return (
+    <button onClick={onClick} style={cardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 900 }}>{summary.orderCode}</span>
+        {statusLabel && <span style={{ fontSize: 9, fontWeight: 900, color: 'white', background: statusColor, borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>{statusLabel}</span>}
+      </div>
+      {summary.customerName && <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>{summary.customerName}</div>}
+      {(summary.itemsCount > 0 || summary.total > 0) && (
+        <div style={{ fontSize: 10.5, opacity: 0.7, marginTop: 2 }}>
+          {summary.itemsCount > 0 && `${summary.itemsCount} ítem${summary.itemsCount !== 1 ? 's' : ''}`}
+          {summary.itemsCount > 0 && summary.total > 0 && ' · '}
+          {summary.total > 0 && `$${summary.total.toLocaleString('es-AR')}`}
+        </div>
+      )}
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: linkColor, marginTop: 3 }}>
+        {reference.type === 'production' ? 'Ver producción →' : 'Ver pedido →'}
+      </div>
+    </button>
+  );
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -57,6 +120,16 @@ function readLastReadMap() {
   try { return JSON.parse(localStorage.getItem('inkora_chat_last_read') || '{}'); } catch { return {}; }
 }
 
+function readLastChannelId() {
+  if (typeof window === 'undefined') return null;
+  try { return localStorage.getItem(LAST_CHANNEL_KEY) || null; } catch { return null; }
+}
+
+function persistLastChannelId(channelId) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(LAST_CHANNEL_KEY, channelId); } catch {}
+}
+
 export default function ChatPanel({
   supabase,
   currentUser,
@@ -66,6 +139,8 @@ export default function ChatPanel({
   orders = [],
   designs = [],
   adminDarkMode = false,
+  activeChannelId: controlledChannelId,
+  onChangeActiveChannel,
   onNavigateToOrder,
   onNavigateToProduction,
   onNavigateToDesign,
@@ -76,7 +151,12 @@ export default function ChatPanel({
   const [channels, setChannels] = useState([]);
   const [channelMembers, setChannelMembers] = useState({});
   const [loadingChannels, setLoadingChannels] = useState(true);
-  const [activeChannelId, setActiveChannelId] = useState(null);
+  const [internalChannelId, setInternalChannelId] = useState(null);
+  const activeChannelId = controlledChannelId ?? internalChannelId;
+  function setActiveChannel(id) {
+    setInternalChannelId(id);
+    onChangeActiveChannel?.(id);
+  }
   const [mobileShowConversation, setMobileShowConversation] = useState(false);
   const [messagesByChannel, setMessagesByChannel] = useState({});
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -186,11 +266,48 @@ export default function ChatPanel({
     try { localStorage.setItem('inkora_chat_last_read', JSON.stringify(next)); } catch {}
   }
 
+  // Elige el canal a mostrar apenas cargan los canales: el de la URL si vino
+  // uno (?canal=), si no el ultimo que el usuario dejo abierto, si no "General".
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (autoSelectedRef.current || channels.length === 0) return;
+    autoSelectedRef.current = true;
+    if (controlledChannelId && channels.some(c => c.id === controlledChannelId)) return;
+    const lastId = readLastChannelId();
+    const fallback = channels.find(c => c.id === lastId) || channels.find(c => c.type === 'main') || channels[0];
+    if (fallback) setActiveChannel(fallback.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels]);
+
+  // Cualquier cambio del canal activo (click, URL, auto-seleccion) dispara
+  // carga de mensajes + marcar leido + recordar para la proxima visita.
+  useEffect(() => {
+    if (!activeChannelId) return;
+    if (!messagesByChannel[activeChannelId]) loadMessages(activeChannelId);
+    markRead(activeChannelId);
+    persistLastChannelId(activeChannelId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannelId]);
+
+  // Esc "suelta" el estado contextual mas reciente: menu > autocompletado > editar > responder > referencia > imagen.
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key !== 'Escape') return;
+      if (openMenuId) { setOpenMenuId(null); return; }
+      if (mentionQuery) { setMentionQuery(null); return; }
+      if (slashQuery) { setSlashQuery(null); return; }
+      if (editingId) { setEditingId(null); setEditingText(''); return; }
+      if (replyTo) { setReplyTo(null); return; }
+      if (pendingReference) { setPendingReference(null); return; }
+      if (pendingImage) { setPendingImage(null); return; }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [openMenuId, mentionQuery, slashQuery, editingId, replyTo, pendingReference, pendingImage]);
+
   function openChannel(channel) {
-    setActiveChannelId(channel.id);
+    setActiveChannel(channel.id);
     setMobileShowConversation(true);
-    markRead(channel.id);
-    if (!messagesByChannel[channel.id]) loadMessages(channel.id);
   }
 
   function hasUnread(channel) {
@@ -425,9 +542,13 @@ export default function ChatPanel({
               const preview = channel.lastMessage;
               const previewText = preview?.deleted_at
                 ? 'Se eliminó este mensaje'
-                : preview?.image_url && !preview?.body
-                  ? '📷 Imagen'
-                  : preview?.body || 'Sin mensajes todavía';
+                : preview?.body
+                  ? preview.body
+                  : preview?.image_url
+                    ? '📷 Imagen'
+                    : preview?.reference
+                      ? `🔗 ${referenceLabel(preview.reference)}`
+                      : 'Sin mensajes todavía';
               return (
                 <button
                   key={channel.id}
@@ -553,16 +674,14 @@ export default function ChatPanel({
                               ) : (
                                 <>
                                   {message.reference && (
-                                    <button
+                                    <ReferenceCard
+                                      reference={message.reference}
+                                      orders={orders}
+                                      designs={designs}
+                                      isOwn={isOwn}
                                       onClick={() => handleReferenceClick(message.reference)}
-                                      style={{
-                                        display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${isOwn ? 'rgba(255,255,255,0.5)' : '#dde1ef'}`,
-                                        background: isOwn ? 'rgba(255,255,255,0.12)' : 'white', color: isOwn ? 'white' : '#2D6BE4',
-                                        borderRadius: 8, padding: '5px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', marginBottom: message.body ? 5 : 0, width: '100%', textAlign: 'left',
-                                      }}
-                                    >
-                                      🔗 {referenceLabel(message.reference)}
-                                    </button>
+                                      style={{ marginBottom: message.body ? 5 : 0 }}
+                                    />
                                   )}
                                   {message.image_url && (
                                     <button onClick={() => setLightboxImage(message.image_url)} style={{ border: 'none', padding: 0, background: 'transparent', cursor: 'zoom-in', display: 'block', marginBottom: message.body ? 5 : 0 }}>
@@ -654,9 +773,11 @@ export default function ChatPanel({
                   </div>
                 )}
                 {pendingReference && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eef4ff', borderRadius: 8, padding: '5px 8px', marginBottom: 6, fontSize: 11, color: '#2D6BE4', fontWeight: 700 }}>
-                    <span>🔗 {referenceLabel(pendingReference)}</span>
-                    <button onClick={() => setPendingReference(null)} style={{ border: 'none', background: 'none', color: '#2D6BE4', cursor: 'pointer', fontSize: 14 }}>×</button>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
+                    <div style={{ flex: 1 }}>
+                      <ReferenceCard reference={pendingReference} orders={orders} designs={designs} isOwn={false} onClick={() => {}} />
+                    </div>
+                    <button onClick={() => setPendingReference(null)} style={{ border: 'none', background: 'none', color: '#9aa3bc', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>×</button>
                   </div>
                 )}
                 {pendingImage && (
