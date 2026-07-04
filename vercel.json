@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/expire-chat-images", "schedule": "0 4 * * *" }
+  ]
+}

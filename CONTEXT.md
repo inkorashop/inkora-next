@@ -96,6 +96,9 @@ Prompt corto recomendado para el usuario:
 - Si no tiene asignación específica, se mantiene el comportamiento normal del sistema.
 - Esta lógica no debe romper el uso general de price_tiers.
 
+## Planes de features pendientes
+- `CHAT_FEATURE_PLAN.md`: plan detallado de un chat interno para el admin (reemplaza la pestana Notificaciones). Solo planeado, no implementado todavia. Leer ese archivo completo antes de empezar a programarlo.
+
 ## Realtime / Admin
 - Hay scripts SQL relacionados con realtime y actividad admin: sql/admin_realtime.sql, sql/admin_activity_events.sql, sql/admin_version_snapshots.sql y sql/user_activity_events.sql.
 - El panel admin puede tener varias sesiones abiertas.
