@@ -18,6 +18,7 @@ import {
   applyBridgeUpdate,
   getBridgeUpdateStatus,
 } from '@/lib/print-bridge-client';
+import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
 const LATEST_BRIDGE_VERSION = '1.6.5';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
@@ -26,10 +27,10 @@ function DesignThumb({ designId, name, size = 24 }) {
   const [src, setSrc] = useState(null);
   useEffect(() => {
     if (!designId) return;
-    supabase.from('designs').select('image_url, model_url').eq('id', designId).single()
+    supabase.from('designs').select('*').eq('id', designId).single()
       .then(({ data }) => {
         if (!data) return;
-        const url = data.image_url || (!/\.(glb|gltf|usdz)$/i.test(data.model_url || '') ? data.model_url : null);
+        const url = getDesignDisplayImageUrl(data);
         if (url) setSrc(url);
       });
   }, [designId]);
@@ -44,6 +45,7 @@ const STATUS_TONE = {
   in_press: { bg: '#fff7ed', color: '#f59e0b' },
   done: { bg: '#e8f7ef', color: '#15803d' },
 };
+const LIVE_TASK_REFRESH_MS = 2500;
 
 function toQty(value) {
   const qty = Number(value);
@@ -225,6 +227,8 @@ export default function OperariosPage() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const taskSaveStateRef = useRef({});
   const counterRpcAvailableRef = useRef(true);
+  const silentTaskRefreshRef = useRef(false);
+  const operatorClaimedRef = useRef(false);
 
   // Bridge
   const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
@@ -304,25 +308,41 @@ export default function OperariosPage() {
   }, []);
 
   // Tasks
-  const loadTasks = useCallback(async () => {
+  useEffect(() => {
+    operatorClaimedRef.current = false;
+  }, [session?.user?.id]);
+
+  const loadTasks = useCallback(async ({ silent = false } = {}) => {
     if (!session) return;
-    setLoadingTasks(true);
-    setTasksError('');
-    const { error: claimError } = await supabase.rpc('claim_production_operator');
-    if (claimError) {
-      const msg = claimError.message || '';
-      const missing = claimError.code === '42883' || claimError.code === '42P01' || /claim_production_operator|production_operators/i.test(msg);
-      setTasksError(missing ? 'Falta aplicar el SQL de producción y operarios.' : 'Tu email no está habilitado como operario.');
-      setTasks([]);
-      setLoadingTasks(false);
-      return;
+    if (silent && silentTaskRefreshRef.current) return;
+    if (silent) silentTaskRefreshRef.current = true;
+    if (!silent) {
+      setLoadingTasks(true);
+      setTasksError('');
+    }
+    if (!operatorClaimedRef.current) {
+      const { error: claimError } = await supabase.rpc('claim_production_operator');
+      if (claimError) {
+        const msg = claimError.message || '';
+        const missing = claimError.code === '42883' || claimError.code === '42P01' || /claim_production_operator|production_operators/i.test(msg);
+        if (!silent) {
+          setTasksError(missing ? 'Falta aplicar el SQL de producción y operarios.' : 'Tu email no está habilitado como operario.');
+          setTasks([]);
+          setLoadingTasks(false);
+        }
+        if (silent) silentTaskRefreshRef.current = false;
+        return;
+      }
+      operatorClaimedRef.current = true;
     }
     const { data, error } = await supabase.rpc('get_operator_production_tasks');
     if (error) {
       const msg = error.message || '';
       const missing = error.code === '42883' || error.code === '42P01' || /production_order_tasks|production_operators|get_operator_production_tasks/i.test(msg);
-      setTasksError(missing ? 'Falta aplicar el SQL de producción y operarios.' : 'No tenés pedidos asignados o tu usuario no está habilitado como operario.');
-      setTasks([]);
+      if (!silent) {
+        setTasksError(missing ? 'Falta aplicar el SQL de producción y operarios.' : 'No tenés pedidos asignados o tu usuario no está habilitado como operario.');
+        setTasks([]);
+      }
     } else {
       setTasks(prev => {
         const prevMap = Object.fromEntries(prev.map(t => [t.id, t]));
@@ -334,7 +354,8 @@ export default function OperariosPage() {
         });
       });
     }
-    setLoadingTasks(false);
+    if (!silent) setLoadingTasks(false);
+    if (silent) silentTaskRefreshRef.current = false;
   }, [session]);
 
   useEffect(() => {
@@ -355,7 +376,14 @@ export default function OperariosPage() {
         }));
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    const liveTasksTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadTasks({ silent: true });
+    }, LIVE_TASK_REFRESH_MS);
+    return () => {
+      window.clearInterval(liveTasksTimer);
+      supabase.removeChannel(channel);
+    };
   }, [session, loadTasks]);
 
   // Auto-match ALL PDFs when bridge connects

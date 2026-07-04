@@ -21,6 +21,7 @@ import {
   getDesignLimitState,
   parseDesignLimitRules,
 } from '@/lib/design-limits';
+import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
 const SearchIconWhite = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1771,9 +1772,9 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   >
                     <div style={{...s.cardImg, aspectRatio: cardAspectRatio}}>
                       {d.model_url && is3dModelUrl(d.model_url)
-                        ? <LazyModelViewer url={d.model_url} autoRotate={true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={d.image_url} forceActive={isFirstRow3d} />
-                        : (d.image_url || d.model_url)
-                        ? <SafeImage src={d.image_url || d.model_url} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
+                        ? <LazyModelViewer url={d.model_url} autoRotate={true} modelConfig={activeProduct?.model_config || null} isHovered={isHovered} imageUrl={getDesignDisplayImageUrl(d)} forceActive={isFirstRow3d} />
+                        : getDesignDisplayImageUrl(d)
+                        ? <SafeImage src={getDesignDisplayImageUrl(d)} alt={d.name} style={{...s.img, objectFit: 'contain'}} />
                         : <span style={{fontSize:36}}>🎨</span>}
                       {(() => {
                         const tags = Array.isArray(activeProduct?.info_tags) ? activeProduct.info_tags : [];

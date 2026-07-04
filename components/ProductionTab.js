@@ -59,6 +59,7 @@ const PRODUCTION_SUBTAB_LABELS = {
   log: 'Historial',
   operators: 'Operarios',
 };
+const LIVE_TASK_REFRESH_MS = 2500;
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -530,6 +531,7 @@ export default function ProductionTab({
   const [savingTaskIds, setSavingTaskIds] = useState({});
   const taskSaveStateRef = useRef({}); // { [taskId]: { saving, queue, lockedFields } }
   const counterRpcAvailableRef = useRef(true);
+  const silentTaskRefreshRef = useRef(false);
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
   const [assigningOperatorIds, setAssigningOperatorIds] = useState({});
   const [printHistory, setPrintHistory] = useState(() => {
@@ -1086,18 +1088,23 @@ export default function ProductionTab({
     setStockLog(data || []);
   }, [supabase]);
 
-  const loadProductionTasks = useCallback(async () => {
-    setLoadingTasks(true);
+  const loadProductionTasks = useCallback(async ({ silent = false } = {}) => {
+    if (silent && silentTaskRefreshRef.current) return;
+    if (silent) silentTaskRefreshRef.current = true;
+    if (!silent) setLoadingTasks(true);
     const { data, error } = await supabase.rpc('get_operator_production_tasks');
     if (error) {
       console.error('Error loading production tasks', error);
       const missing = error.code === '42883' || error.code === '42P01' || /production_order_tasks|production_operators|get_operator_production_tasks/i.test(error.message || '');
-      setErrorMessage(missing
-        ? 'Falta ejecutar sql/production_orders_and_operators.sql en Supabase para activar Producir.'
-        : 'No se pudieron cargar las tareas de produccion.'
-      );
-      setProductionTasks([]);
-      setLoadingTasks(false);
+      if (!silent) {
+        setErrorMessage(missing
+          ? 'Falta ejecutar sql/production_orders_and_operators.sql en Supabase para activar Producir.'
+          : 'No se pudieron cargar las tareas de produccion.'
+        );
+        setProductionTasks([]);
+        setLoadingTasks(false);
+      }
+      if (silent) silentTaskRefreshRef.current = false;
       return;
     }
     setProductionTasks(prev => {
@@ -1119,7 +1126,8 @@ export default function ProductionTab({
         };
       });
     });
-    setLoadingTasks(false);
+    if (!silent) setLoadingTasks(false);
+    if (silent) silentTaskRefreshRef.current = false;
   }, [supabase]);
 
   useEffect(() => {
@@ -1150,8 +1158,13 @@ export default function ProductionTab({
         }));
       })
       .subscribe();
+    const liveTasksTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadProductionTasks({ silent: true });
+    }, LIVE_TASK_REFRESH_MS);
 
     return () => {
+      window.clearInterval(liveTasksTimer);
       supabase.removeChannel(stockSub);
       supabase.removeChannel(statusSub);
       supabase.removeChannel(logSub);

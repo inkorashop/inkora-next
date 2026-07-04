@@ -1,6 +1,7 @@
 'use client';
 
 import { useDesigns } from '@/contexts/DesignsContext';
+import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
 export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: nameProp, size = 32, style }) {
   const { designById, designByName, openLightbox } = useDesigns();
@@ -13,7 +14,7 @@ export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: na
     design = designByName.get(nameProp.toLowerCase()) ?? null;
   }
 
-  const imageUrl = imageUrlProp || design?.image_url || (!isModelUrl(design?.model_url) ? design?.model_url : null) || null;
+  const imageUrl = imageUrlProp || getDesignDisplayImageUrl(design);
   const name = nameProp || design?.name || '';
 
   if (!imageUrl) {
@@ -42,9 +43,4 @@ export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: na
       }}
     />
   );
-}
-
-function isModelUrl(url) {
-  if (!url) return false;
-  return /\.(glb|gltf|usdz)$/i.test(url);
 }

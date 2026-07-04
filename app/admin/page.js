@@ -10,6 +10,7 @@ import CreateOrderModal from '@/components/CreateOrderModal';
 import QuickPrintOverlay from '@/components/QuickPrintOverlay';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
+import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
 import {
   canInferSingleProductUnitPrice,
   formatOrderMoney,
@@ -70,6 +71,8 @@ const INVITE_DESTINATIONS = [
 ];
 const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
+const DEFAULT_OPTIMIZED_THUMB_KB = 50;
+const OPTIMIZED_THUMB_MAX_DIMENSION = 900;
 
 function formatBridgeError(error) {
   if (error?.status === 401) return 'Token Bridge incorrecto.';
@@ -116,11 +119,108 @@ function serializeDesignPdfEnabledIds(ids) {
 }
 
 function blobToBase64(blob) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo'));
     reader.readAsDataURL(blob);
   });
+}
+
+function canvasToBlob(canvas, mimeType, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('No se pudo generar la miniatura optimizada'));
+    }, mimeType, quality);
+  });
+}
+
+function loadImageFromBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('No se pudo abrir la imagen original'));
+    };
+    img.src = url;
+  });
+}
+
+async function makeOptimizedDesignImage(sourceUrl, targetKb) {
+  const response = await fetch(sourceUrl, { mode: 'cors' });
+  if (!response.ok) throw new Error(`No se pudo descargar original (${response.status})`);
+  const sourceBlob = await response.blob();
+  if (!sourceBlob.type.startsWith('image/')) throw new Error('El archivo original no es una imagen optimizable');
+
+  const img = await loadImageFromBlob(sourceBlob);
+  const mimeType = 'image/webp';
+  const targetBytes = Math.max(1, Number(targetKb) || DEFAULT_OPTIMIZED_THUMB_KB) * 1024;
+  const sourceMax = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
+  let scale = Math.min(1, OPTIMIZED_THUMB_MAX_DIMENSION / Math.max(1, sourceMax));
+  let bestBlob = null;
+  let bestMeta = null;
+
+  for (let attempt = 0; attempt < 9; attempt += 1) {
+    const width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+    const height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, width, height);
+
+    let low = 0.34;
+    let high = 0.88;
+    let candidate = null;
+    let candidateQuality = high;
+    for (let step = 0; step < 7; step += 1) {
+      const quality = (low + high) / 2;
+      const blob = await canvasToBlob(canvas, mimeType, quality);
+      if (!bestBlob || Math.abs(blob.size - targetBytes) < Math.abs(bestBlob.size - targetBytes)) {
+        bestBlob = blob;
+        bestMeta = { width, height, quality };
+      }
+      if (blob.size <= targetBytes) {
+        candidate = blob;
+        candidateQuality = quality;
+        low = quality;
+      } else {
+        high = quality;
+      }
+    }
+
+    if (candidate) {
+      return {
+        blob: candidate,
+        mimeType,
+        sourceSizeKb: Math.round(sourceBlob.size / 1024),
+        optimizedSizeKb: Math.round(candidate.size / 1024),
+        width,
+        height,
+        quality: candidateQuality,
+      };
+    }
+    scale *= 0.84;
+  }
+
+  if (!bestBlob) throw new Error('No se pudo generar la miniatura optimizada');
+  return {
+    blob: bestBlob,
+    mimeType,
+    sourceSizeKb: Math.round(sourceBlob.size / 1024),
+    optimizedSizeKb: Math.round(bestBlob.size / 1024),
+    width: bestMeta?.width,
+    height: bestMeta?.height,
+    quality: bestMeta?.quality,
+  };
 }
 
 function slugify(str) {
@@ -198,6 +298,17 @@ function PdfIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
       <polyline points="14 2 14 8 20 8"/>
+    </svg>
+  );
+}
+
+function OptimizeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14a8 8 0 1 0 2.34-5.66"/>
+      <path d="M4 4v5h5"/>
+      <path d="M12 8v8"/>
+      <path d="M8 12h8"/>
     </svg>
   );
 }
@@ -492,6 +603,10 @@ useEffect(() => {
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
   const [designPdfFilter, setDesignPdfFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
+  const [optimizedThumbTargetKb, setOptimizedThumbTargetKb] = useState(DEFAULT_OPTIMIZED_THUMB_KB);
+  const [optimizingDesignIds, setOptimizingDesignIds] = useState(new Set());
+  const [optimizationStatus, setOptimizationStatus] = useState({});
+  const [designPreviewImage, setDesignPreviewImage] = useState(null);
   const autoLaunchTriedRef = useRef(false);
   const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -2309,6 +2424,96 @@ useEffect(() => {
     await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ category }).eq('id', did)));
     trackAdminActivity('design_category_update', { design_ids: idsToUpdate, category }, 'designs');
     setDesigns(prev => prev.map(d => idsToUpdate.includes(d.id) ? { ...d, category } : d));
+  }
+
+  function setDesignOptimizationState(id, patch) {
+    setOptimizationStatus(prev => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] || {}),
+        ...patch,
+      },
+    }));
+  }
+
+  async function optimizeDesignImages(ids) {
+    const targetKb = Math.max(10, Math.min(500, parseInt(String(optimizedThumbTargetKb), 10) || DEFAULT_OPTIMIZED_THUMB_KB));
+    const idSet = new Set((ids || []).map(String).filter(Boolean));
+    const rows = designs.filter(design => idSet.has(String(design.id)));
+    if (rows.length === 0) return;
+
+    const nextOptimizing = new Set(optimizingDesignIds);
+    rows.forEach(design => nextOptimizing.add(design.id));
+    setOptimizingDesignIds(nextOptimizing);
+
+    let okCount = 0;
+    let failCount = 0;
+
+    for (const design of rows) {
+      const latestDesign = designs.find(item => item.id === design.id) || design;
+      const sourceUrl = getDesignOriginalImageUrl(latestDesign);
+      if (!sourceUrl) {
+        failCount += 1;
+        setDesignOptimizationState(design.id, { state: 'error', message: 'Sin imagen original' });
+        continue;
+      }
+
+      try {
+        setDesignOptimizationState(design.id, { state: 'working', message: 'Procesando...' });
+        const optimized = await makeOptimizedDesignImage(sourceUrl, targetKb);
+        const fileBase64 = await blobToBase64(optimized.blob);
+        setDesignOptimizationState(design.id, {
+          state: 'working',
+          message: `Subiendo ${optimized.optimizedSizeKb} KB...`,
+          sourceSizeKb: optimized.sourceSizeKb,
+          optimizedSizeKb: optimized.optimizedSizeKb,
+        });
+
+        const response = await fetch('/api/admin/design-optimized-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            designId: design.id,
+            fileBase64,
+            mimeType: optimized.mimeType,
+            targetKb,
+            originalUrl: sourceUrl,
+            previousOptimizedUrl: latestDesign.optimized_image_url || '',
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'No se pudo guardar la miniatura optimizada');
+
+        okCount += 1;
+        setDesigns(prev => prev.map(item => item.id === design.id ? { ...item, ...(payload.design || {}) } : item));
+        setDesignOptimizationState(design.id, {
+          state: 'done',
+          message: `${optimized.sourceSizeKb} KB -> ${payload.optimizedSizeKb || optimized.optimizedSizeKb} KB`,
+          sourceSizeKb: optimized.sourceSizeKb,
+          optimizedSizeKb: payload.optimizedSizeKb || optimized.optimizedSizeKb,
+          updatedAt: Date.now(),
+        });
+      } catch (error) {
+        failCount += 1;
+        setDesignOptimizationState(design.id, {
+          state: 'error',
+          message: error?.message || 'Error optimizando',
+        });
+      } finally {
+        setOptimizingDesignIds(prev => {
+          const next = new Set(prev);
+          next.delete(design.id);
+          return next;
+        });
+      }
+    }
+
+    trackAdminActivity('design_optimize_images', { design_ids: rows.map(row => row.id), target_kb: targetKb, ok_count: okCount, fail_count: failCount }, 'designs');
+  }
+
+  function optimizeDesignFromRow(design) {
+    const idsToOptimize = selectedIds.has(design.id) && selectedIds.size > 1 ? [...selectedIds] : [design.id];
+    optimizeDesignImages(idsToOptimize);
   }
 
   async function reorderProductCategory(productId, srcCat, tgtCat) {
@@ -5945,6 +6150,29 @@ useEffect(() => {
                   })()}
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <label style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:11, fontWeight:900, color:'#5a6380', whiteSpace:'nowrap'}}>
+                    Miniatura
+                    <input
+                      type="number"
+                      min="10"
+                      max="500"
+                      value={optimizedThumbTargetKb}
+                      onChange={e => setOptimizedThumbTargetKb(e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      style={{...s.input, width:64, fontSize:12, padding:'4px 6px', textAlign:'center'}}
+                    />
+                    KB
+                  </label>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); optimizeDesignImages([...selectedIds]); }}
+                    disabled={selectedIds.size === 0 || optimizingDesignIds.size > 0}
+                    title={selectedIds.size === 0 ? 'Seleccioná uno o varios diseños para optimizar' : `Optimizar ${selectedIds.size} diseño${selectedIds.size !== 1 ? 's' : ''} seleccionado${selectedIds.size !== 1 ? 's' : ''}`}
+                    style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'5px 10px', background:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? '#f7f8fc' : '#f8faff', color:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? '#9aa3bc' : '#2D6BE4', fontSize:12, fontWeight:900, cursor:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', display:'inline-flex', alignItems:'center', gap:5, whiteSpace:'nowrap'}}
+                  >
+                    <OptimizeIcon />
+                    {optimizingDesignIds.size > 0 ? `Procesando ${optimizingDesignIds.size}` : 'Optimizar'}
+                  </button>
                   <select
                     value={designSortBy}
                     onChange={e => setDesignSortBy(e.target.value)}
@@ -6166,9 +6394,25 @@ useEffect(() => {
                 >
                   <div style={s.designInfo}>
                     {(() => {
-                      const thumbSrc = d.image_url || (!is3dModelUrl(d.model_url) ? d.model_url : null);
+                      const thumbSrc = getDesignDisplayImageUrl(d);
+                      const originalSrc = getDesignOriginalImageUrl(d);
                       // eslint-disable-next-line @next/next/no-img-element
-                      return thumbSrc ? <img src={thumbSrc} alt={d.name} style={s.designThumb} /> : null;
+                      return thumbSrc ? (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ url: thumbSrc, name: d.name, originalUrl: originalSrc, optimizedUrl: d.optimized_image_url || '' }); }}
+                          onDragStart={e => e.stopPropagation()}
+                          title={d.optimized_image_url ? 'Abrir miniatura optimizada' : 'Abrir imagen original'}
+                          style={{border:'none', padding:0, background:'transparent', cursor:'zoom-in', position:'relative', flexShrink:0}}
+                        >
+                          <img src={thumbSrc} alt={d.name} style={s.designThumb} />
+                          {d.optimized_image_url && (
+                            <span style={{position:'absolute', right:-4, bottom:-4, border:'1px solid #b7ebcf', background:'#e8f7ef', color:'#15803d', borderRadius:5, padding:'1px 4px', fontSize:8, fontWeight:900, lineHeight:1}}>
+                              OPT
+                            </span>
+                          )}
+                        </button>
+                      ) : null;
                     })()}
                     <div>
                       <input
@@ -6258,9 +6502,22 @@ useEffect(() => {
                           <span>{d.category}</span>
                         )}
                       </div>
+                      <div style={{fontSize:10, color: optimizationStatus[d.id]?.state === 'error' ? '#b91c1c' : d.optimized_image_url ? '#15803d' : '#9aa3bc', marginTop:3, fontWeight:700}}>
+                        {optimizationStatus[d.id]?.message || (d.optimized_image_url ? `Optimizada ${d.optimized_image_size_kb || '?'} KB${d.optimized_image_target_kb ? ` / objetivo ${d.optimized_image_target_kb} KB` : ''}` : 'Sin miniatura optimizada')}
+                      </div>
                     </div>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:4}}>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); optimizeDesignFromRow(d); }}
+                      disabled={optimizingDesignIds.has(d.id)}
+                      onDragStart={e => e.stopPropagation()}
+                      title={(selectedIds.has(d.id) && selectedIds.size > 1 ? `Optimizar ${selectedIds.size} diseños seleccionados` : 'Optimizar miniatura')}
+                      style={{border:'1px solid', borderColor:d.optimized_image_url ? '#b7ebcf' : '#dde1ef', background:d.optimized_image_url ? '#e8f7ef' : '#f8faff', color:d.optimized_image_url ? '#15803d' : '#2D6BE4', borderRadius:6, padding:4, display:'flex', alignItems:'center', cursor:optimizingDesignIds.has(d.id) ? 'wait' : 'pointer', opacity:optimizingDesignIds.has(d.id) ? 0.55 : 1}}
+                    >
+                      <OptimizeIcon />
+                    </button>
                     {designPdfSummary.state === 'ready' && pdfLinkEnabled && pdfMatch?.found && (
                       <span
                         title={`PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}`}
@@ -8767,6 +9024,42 @@ useEffect(() => {
                 <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}>Eliminar</button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PREVIEW MINIATURA OPTIMIZADA */}
+      {designPreviewImage && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setDesignPreviewImage(null); }}
+          style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:340, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
+        >
+          <div style={{position:'relative', maxWidth:'86vw', maxHeight:'86vh', display:'flex', flexDirection:'column', gap:10, alignItems:'center'}}>
+            <img
+              src={designPreviewImage.url}
+              alt={designPreviewImage.name || ''}
+              style={{display:'block', maxWidth:'86vw', maxHeight:'78vh', objectFit:'contain', borderRadius:10, boxShadow:'0 8px 48px rgba(0,0,0,0.48)', background:'white'}}
+            />
+            <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'center'}}>
+              <span style={{color:'white', fontSize:13, fontWeight:800, textShadow:'0 1px 4px rgba(0,0,0,0.8)'}}>{designPreviewImage.name || 'Diseño'}</span>
+              {designPreviewImage.optimizedUrl && (
+                <span style={{background:'#e8f7ef', color:'#15803d', border:'1px solid #b7ebcf', borderRadius:999, padding:'2px 8px', fontSize:11, fontWeight:900}}>
+                  Miniatura optimizada
+                </span>
+              )}
+              {designPreviewImage.originalUrl && designPreviewImage.originalUrl !== designPreviewImage.url && (
+                <a href={designPreviewImage.originalUrl} target="_blank" rel="noreferrer" style={{background:'white', color:'#1B2F5E', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:900, textDecoration:'none'}}>
+                  Abrir original
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => setDesignPreviewImage(null)}
+              aria-label="Cerrar"
+              style={{position:'absolute', top:-14, right:-14, width:30, height:30, borderRadius:'50%', background:'white', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'#1B2F5E', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', lineHeight:1}}
+            >
+              x
+            </button>
           </div>
         </div>
       )}
