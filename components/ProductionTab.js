@@ -114,14 +114,30 @@ function normalizeTaskProgressPatch(patch) {
   return next;
 }
 
-function buildTaskProgressRpcParams(taskId, patch, current = {}) {
+function buildTaskProgressRpcParams(taskId, patch) {
   return {
     p_task_id: taskId,
-    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : clampProgressQty(current.produced_qty),
-    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : clampProgressQty(current.waste_qty),
-    p_note: hasOwn(patch, 'note') ? patch.note : String(current.note || ''),
-    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : clampProgressQty(current.printed_qty),
+    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : null,
+    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : null,
+    p_note: hasOwn(patch, 'note') ? patch.note : null,
+    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : null,
   };
+}
+
+function isMissingRpcError(error) {
+  const msg = String(error?.message || '').toLowerCase();
+  return error?.code === '42883' || msg.includes('could not find the function') || msg.includes('function') && msg.includes('does not exist');
+}
+
+function mergeRealtimeTask(existing, incoming, lockedFields = new Set()) {
+  if (!incoming) return existing;
+  const next = { ...existing, ...incoming, id: incoming.id || existing?.id };
+  lockedFields.forEach(field => {
+    if (hasOwn(existing, field)) next[field] = existing[field];
+  });
+  next.note = next.note ?? existing?.note ?? '';
+  next.printed_qty = next.printed_qty ?? existing?.printed_qty ?? 0;
+  return next;
 }
 
 function getItemDesignKey(item) {
@@ -240,12 +256,13 @@ function NoteCell({ row, onSave }) {
 // FIX: StockCell ahora recibe qty_produced como prop separada para evitar que el re-render
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
-function StockCell({ qtyProduced, onSave, onChange, step = 1 }) {
+function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1 }) {
   const [val, setVal] = useState(stockInputValue(qtyProduced));
   const editingRef = useRef(false);
   const saveTimerRef = useRef(null);
   const latestQtyRef = useRef(qtyProduced);
   const onSaveRef = useRef(onSave);
+  const onDeltaRef = useRef(onDelta);
   const onChangeRef = useRef(onChange);
   const savingRef = useRef(false);
   const queuedQtyRef = useRef(null);
@@ -258,6 +275,7 @@ function StockCell({ qtyProduced, onSave, onChange, step = 1 }) {
   }, [qtyProduced]);
 
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+  useEffect(() => { onDeltaRef.current = onDelta; }, [onDelta]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => () => {
@@ -324,8 +342,10 @@ function StockCell({ qtyProduced, onSave, onChange, step = 1 }) {
     if (nextQty === baseQty) return;
     editingRef.current = true;
     setVal(stockInputValue(nextQty));
+    latestQtyRef.current = nextQty;
     onChangeRef.current?.(nextQty);
-    scheduleSave(nextQty);
+    if (onDeltaRef.current) onDeltaRef.current(nextQty - baseQty, nextQty);
+    else scheduleSave(nextQty);
   };
 
   const handleFocus = (e) => {
@@ -508,7 +528,8 @@ export default function ProductionTab({
   const [productionTasks, setProductionTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(true); // true on mount so panel doesn't flash before data loads
   const [savingTaskIds, setSavingTaskIds] = useState({});
-  const taskSaveStateRef = useRef({}); // { [taskId]: { saving: boolean, queued: values|null } }
+  const taskSaveStateRef = useRef({}); // { [taskId]: { saving, queue, lockedFields } }
+  const counterRpcAvailableRef = useRef(true);
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
   const [assigningOperatorIds, setAssigningOperatorIds] = useState({});
   const [printHistory, setPrintHistory] = useState(() => {
@@ -1087,7 +1108,7 @@ export default function ProductionTab({
         // If this task has an in-progress or queued save, keep the current optimistic state
         // so that a realtime event from a stale DB read doesn't overwrite it.
         const taskState = taskSaveStateRef.current[taskId];
-        if (taskState?.saving || taskState?.queued) {
+        if (taskState?.saving || taskState?.queue?.length) {
           return existing || { ...task, id: taskId, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
         }
         return {
@@ -1117,7 +1138,17 @@ export default function ProductionTab({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_stock_log' }, () => loadStockLog())
       .subscribe();
     const tasksSub = supabase.channel('production-order-tasks-' + Math.random())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, () => loadProductionTasks())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, payload => {
+        if (payload.eventType !== 'UPDATE' || !payload.new?.id) {
+          loadProductionTasks();
+          return;
+        }
+        setProductionTasks(prev => prev.map(task => {
+          if (task.id !== payload.new.id) return task;
+          const lockedFields = ensureTaskSaveState(payload.new.id).lockedFields;
+          return mergeRealtimeTask(task, payload.new, lockedFields);
+        }));
+      })
       .subscribe();
 
     return () => {
@@ -1296,6 +1327,93 @@ export default function ProductionTab({
     }
   }
 
+  function ensureTaskSaveState(taskId) {
+    if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = {};
+    const state = taskSaveStateRef.current[taskId];
+    if (!Array.isArray(state.queue)) state.queue = [];
+    if (!(state.lockedFields instanceof Set)) state.lockedFields = new Set();
+    state.saving = Boolean(state.saving);
+    return state;
+  }
+
+  function unlockTaskFields(taskId, fields) {
+    const state = ensureTaskSaveState(taskId);
+    fields.forEach(field => {
+      const stillQueued = state.queue.some(op => op.fields?.includes(field));
+      if (!stillQueued) state.lockedFields.delete(field);
+    });
+  }
+
+  function getQueuedTaskFields(taskId) {
+    const state = ensureTaskSaveState(taskId);
+    return new Set(state.queue.flatMap(op => op.fields || []));
+  }
+
+  async function commitProductionTaskPatch(taskId, patch) {
+    const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, patch));
+    if (result.error) throw result.error;
+    if (result.data) {
+      const queuedFields = getQueuedTaskFields(taskId);
+      setProductionTasks(prev => prev.map(t => t.id === taskId ? mergeRealtimeTask(t, result.data, queuedFields) : t));
+    }
+  }
+
+  async function commitProductionTaskDelta(taskId, field, delta, fallbackValue) {
+    if (!counterRpcAvailableRef.current) {
+      await commitProductionTaskPatch(taskId, { [field]: fallbackValue });
+      return;
+    }
+    const result = await supabase.rpc('increment_production_task_counter', {
+      p_task_id: taskId,
+      p_field: field,
+      p_delta: delta,
+    });
+    if (result.error) {
+      if (isMissingRpcError(result.error)) {
+        counterRpcAvailableRef.current = false;
+        await commitProductionTaskPatch(taskId, { [field]: fallbackValue });
+        return;
+      }
+      throw result.error;
+    }
+    if (result.data) {
+      const queuedFields = getQueuedTaskFields(taskId);
+      setProductionTasks(prev => prev.map(t => t.id === taskId ? mergeRealtimeTask(t, result.data, queuedFields) : t));
+    }
+  }
+
+  async function processProductionTaskQueue(taskId) {
+    const state = ensureTaskSaveState(taskId);
+    if (state.saving) return;
+    state.saving = true;
+    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
+    setErrorMessage('');
+    try {
+      while (state.queue.length > 0) {
+        const op = state.queue.shift();
+        if (op.type === 'delta') await commitProductionTaskDelta(taskId, op.field, op.delta, op.fallbackValue);
+        else await commitProductionTaskPatch(taskId, op.patch);
+        unlockTaskFields(taskId, op.fields || []);
+      }
+    } catch (error) {
+      state.queue = [];
+      state.lockedFields.clear();
+      console.error('Error saving production task', error);
+      await loadProductionTasks();
+      setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
+    } finally {
+      state.saving = false;
+      setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
+    }
+  }
+
+  function enqueueProductionTaskOperation(taskId, op) {
+    const state = ensureTaskSaveState(taskId);
+    op.fields?.forEach(field => state.lockedFields.add(field));
+    state.queue.push(op);
+    processProductionTaskQueue(taskId);
+  }
+
   async function saveProductionTask(task, patch) {
     if (!task?.id) {
       setErrorMessage('Primero selecciona el pedido para preparar sus tareas de produccion.');
@@ -1314,57 +1432,14 @@ export default function ProductionTab({
       } : row);
     });
 
-    // Per-task queue: if a save is already running for this task, queue latest values and return.
-    // The running save's while-loop will pick them up after it finishes the current RPC.
-    if (!taskSaveStateRef.current[taskId]) {
-      taskSaveStateRef.current[taskId] = { saving: false, queued: null };
-    }
-    const taskState = taskSaveStateRef.current[taskId];
-    if (taskState.saving) {
-      taskState.queued = { ...(taskState.queued || {}), ...normalizedPatch };
-      return;
-    }
+    enqueueProductionTaskOperation(taskId, { type: 'patch', patch: normalizedPatch, fields: Object.keys(normalizedPatch) });
+  }
 
-    taskState.saving = true;
-    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
-    setErrorMessage('');
-
-    let toSave = normalizedPatch;
-    try {
-      while (toSave !== null) {
-        const { data: currentTask, error: currentTaskError } = await supabase
-          .from('production_order_tasks')
-          .select('produced_qty,waste_qty,printed_qty,note')
-          .eq('id', taskId)
-          .single();
-        if (currentTaskError) throw currentTaskError;
-
-        const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, toSave, currentTask));
-        if (result.error) throw result.error;
-
-        // Update state from RPC return value — no reload race
-        const updated = result.data;
-        if (updated) {
-          setProductionTasks(prev => prev.map(t => t.id === taskId ? {
-            ...t, ...updated, id: taskId,
-            note: updated.note ?? t.note ?? '',
-            printed_qty: updated.printed_qty ?? t.printed_qty ?? 0,
-          } : t));
-        }
-
-        toSave = taskState.queued;
-        taskState.queued = null;
-      }
-      await Promise.all([loadStock(), loadStockLog()]);
-    } catch (error) {
-      taskState.queued = null;
-      console.error('Error saving production task', error);
-      await loadProductionTasks();
-      setErrorMessage(formatProductionError(error, 'No se pudo guardar el avance de produccion.'));
-    } finally {
-      taskState.saving = false;
-      setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
-    }
+  function adjustProductionTaskCounter(task, field, delta, nextValue) {
+    const taskId = task.id;
+    if (!['printed_qty', 'produced_qty', 'waste_qty'].includes(field) || !delta) return;
+    setProductionTasks(prev => prev.map(row => row.id === taskId ? { ...row, [field]: nextValue } : row));
+    enqueueProductionTaskOperation(taskId, { type: 'delta', field, delta, fallbackValue: nextValue, fields: [field] });
   }
 
   useEffect(() => {
@@ -1994,6 +2069,7 @@ export default function ProductionTab({
                               <StockCell
                                 qtyProduced={task.printed_qty || 0}
                                 onSave={qty => saveProductionTask(task, { printed_qty: qty })}
+                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'printed_qty', delta, next)}
                                 onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
                                 step={2}
                               />
@@ -2012,6 +2088,7 @@ export default function ProductionTab({
                               <StockCell
                                 qtyProduced={task.produced_qty || 0}
                                 onSave={qty => saveProductionTask(task, { produced_qty: qty })}
+                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'produced_qty', delta, next)}
                                 onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
                               />
                               <button
@@ -2028,6 +2105,7 @@ export default function ProductionTab({
                             <StockCell
                               qtyProduced={task.waste_qty || 0}
                               onSave={qty => saveProductionTask(task, { waste_qty: qty })}
+                              onDelta={(delta, next) => adjustProductionTaskCounter(task, 'waste_qty', delta, next)}
                               onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, waste_qty: qty } : t))}
                             />
                           </td>

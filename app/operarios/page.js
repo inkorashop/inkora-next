@@ -68,14 +68,31 @@ function normalizeTaskProgressPatch(patch) {
   return next;
 }
 
-function buildTaskProgressRpcParams(taskId, patch, current = {}) {
+function buildTaskProgressRpcParams(taskId, patch) {
   return {
     p_task_id: taskId,
-    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : clampProgressQty(current.produced_qty),
-    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : clampProgressQty(current.waste_qty),
-    p_note: hasOwn(patch, 'note') ? patch.note : String(current.note || ''),
-    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : clampProgressQty(current.printed_qty),
+    p_produced_qty: hasOwn(patch, 'produced_qty') ? patch.produced_qty : null,
+    p_waste_qty: hasOwn(patch, 'waste_qty') ? patch.waste_qty : null,
+    p_note: hasOwn(patch, 'note') ? patch.note : null,
+    p_printed_qty: hasOwn(patch, 'printed_qty') ? patch.printed_qty : null,
   };
+}
+
+function isMissingRpcError(error) {
+  const msg = String(error?.message || '').toLowerCase();
+  return error?.code === '42883' || msg.includes('could not find the function') || msg.includes('function') && msg.includes('does not exist');
+}
+
+function mergeRealtimeTask(existing, incoming, lockedFields = new Set()) {
+  if (!incoming) return existing;
+  const normalized = normalizeTask(incoming);
+  const next = { ...existing, ...normalized };
+  lockedFields.forEach(field => {
+    if (hasOwn(existing, field)) next[field] = existing[field];
+  });
+  next.note = next.note ?? existing?.note ?? '';
+  next.printed_qty = next.printed_qty ?? existing?.printed_qty ?? 0;
+  return next;
 }
 
 function formatShortDate(iso) {
@@ -109,43 +126,76 @@ function normalizeTask(task) {
   return { ...task, id: task.id || task.task_id, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
 }
 
-function QtyCell({ value, disabled, onSave, step }) {
+function QtyCell({ value, disabled, onSave, onDelta, onChange, step }) {
   const [val, setVal] = useState(String(Number(value) || 0));
-  const [saving, setSaving] = useState(false);
   const latestRef = useRef(value);
+  const savingRef = useRef(false);
+  const queuedSaveRef = useRef(null);
+  const onSaveRef = useRef(onSave);
+  const onDeltaRef = useRef(onDelta);
+  const onChangeRef = useRef(onChange);
 
   useEffect(() => {
     latestRef.current = value;
-    if (!saving) setVal(String(Number(value) || 0));
-  }, [value, saving]);
+    if (!savingRef.current) setVal(String(Number(value) || 0));
+  }, [value]);
+
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+  useEffect(() => { onDeltaRef.current = onDelta; }, [onDelta]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
+  async function runSave(qty) {
+    if (savingRef.current) {
+      queuedSaveRef.current = qty;
+      return;
+    }
+    savingRef.current = true;
+    let target = qty;
+    try {
+      while (target !== null) {
+        await onSaveRef.current(target);
+        latestRef.current = target;
+        target = queuedSaveRef.current;
+        queuedSaveRef.current = null;
+      }
+    } finally {
+      savingRef.current = false;
+    }
+  }
 
   async function commit(next) {
     const qty = Math.max(0, parseInt(String(next), 10) || 0);
     setVal(String(qty));
+    onChangeRef.current?.(qty);
     if (qty === latestRef.current) return;
-    setSaving(true);
-    try { await onSave(qty); latestRef.current = qty; }
-    finally { setSaving(false); }
+    await runSave(qty);
   }
 
   function adjust(delta) {
     const cur = Math.max(0, parseInt(val, 10) || 0);
-    commit(cur + delta);
+    const next = Math.max(0, cur + delta);
+    const appliedDelta = next - cur;
+    if (appliedDelta === 0) return;
+    setVal(String(next));
+    latestRef.current = next;
+    onChangeRef.current?.(next);
+    if (onDeltaRef.current) onDeltaRef.current(appliedDelta, next);
+    else runSave(next);
   }
 
   const num = parseInt(val, 10) || 0;
   const inc = step || 1;
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, width: 90 }}>
-      <button type="button" disabled={disabled || saving || num <= 0} onClick={() => adjust(-inc)}
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: num <= 0 || disabled || saving ? '#f7f8fc' : '#fef2f2', color: num <= 0 || disabled || saving ? '#c4c9d9' : '#e53e3e', fontWeight: 900, cursor: num <= 0 || disabled || saving ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>-</button>
-      <input type="number" min="0" value={val} disabled={disabled || saving}
+      <button type="button" disabled={disabled || num <= 0} onClick={() => adjust(-inc)}
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: num <= 0 || disabled ? '#f7f8fc' : '#fef2f2', color: num <= 0 || disabled ? '#c4c9d9' : '#e53e3e', fontWeight: 900, cursor: num <= 0 || disabled ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>-</button>
+      <input type="number" min="0" value={val} disabled={disabled}
         onChange={e => setVal(e.target.value)}
         onBlur={() => commit(val)}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: disabled || saving ? '#f4f5f8' : 'white' }} />
-      <button type="button" disabled={disabled || saving} onClick={() => adjust(inc)}
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: disabled || saving ? '#f7f8fc' : '#f0fdf4', color: disabled || saving ? '#c4c9d9' : '#18a36a', fontWeight: 900, cursor: disabled || saving ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>+</button>
+        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: disabled ? '#f4f5f8' : 'white' }} />
+      <button type="button" disabled={disabled} onClick={() => adjust(inc)}
+        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: disabled ? '#f7f8fc' : '#f0fdf4', color: disabled ? '#c4c9d9' : '#18a36a', fontWeight: 900, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}>+</button>
     </div>
   );
 }
@@ -173,8 +223,8 @@ export default function OperariosPage() {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
-  const [savingTaskIds, setSavingTaskIds] = useState({});
   const taskSaveStateRef = useRef({});
+  const counterRpcAvailableRef = useRef(true);
 
   // Bridge
   const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_BRIDGE_URL);
@@ -279,7 +329,7 @@ export default function OperariosPage() {
         return (data || []).map(task => {
           const normalized = normalizeTask(task);
           const taskState = taskSaveStateRef.current[normalized.id];
-          if (taskState?.saving || taskState?.queued) return prevMap[normalized.id] || normalized;
+          if (taskState?.saving || taskState?.queue?.length) return prevMap[normalized.id] || normalized;
           return normalized;
         });
       });
@@ -292,7 +342,18 @@ export default function OperariosPage() {
     loadTasks();
     const channel = supabase
       .channel(`operator-production-${Math.random()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, () => loadTasks())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, payload => {
+        if (payload.eventType !== 'UPDATE' || !payload.new?.id) {
+          loadTasks();
+          return;
+        }
+        const incoming = normalizeTask(payload.new);
+        setTasks(prev => prev.map(task => {
+          if (task.id !== incoming.id) return task;
+          const lockedFields = ensureTaskSaveState(incoming.id).lockedFields;
+          return mergeRealtimeTask(task, incoming, lockedFields);
+        }));
+      })
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [session, loadTasks]);
@@ -641,6 +702,91 @@ export default function OperariosPage() {
 
   async function signOut() { await supabase.auth.signOut(); setTasks([]); setSelectedOrderId(null); }
 
+  function ensureTaskSaveState(taskId) {
+    if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = {};
+    const state = taskSaveStateRef.current[taskId];
+    if (!Array.isArray(state.queue)) state.queue = [];
+    if (!(state.lockedFields instanceof Set)) state.lockedFields = new Set();
+    state.saving = Boolean(state.saving);
+    return state;
+  }
+
+  function unlockTaskFields(taskId, fields) {
+    const state = ensureTaskSaveState(taskId);
+    fields.forEach(field => {
+      const stillQueued = state.queue.some(op => op.fields?.includes(field));
+      if (!stillQueued) state.lockedFields.delete(field);
+    });
+  }
+
+  function getQueuedTaskFields(taskId) {
+    const state = ensureTaskSaveState(taskId);
+    return new Set(state.queue.flatMap(op => op.fields || []));
+  }
+
+  async function commitTaskPatch(taskId, patch) {
+    const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, patch));
+    if (result.error) throw result.error;
+    if (result.data) {
+      const updated = normalizeTask(result.data);
+      const queuedFields = getQueuedTaskFields(taskId);
+      setTasks(prev => prev.map(t => t.id === taskId ? mergeRealtimeTask(t, updated, queuedFields) : t));
+    }
+  }
+
+  async function commitTaskDelta(taskId, field, delta, fallbackValue) {
+    if (!counterRpcAvailableRef.current) {
+      await commitTaskPatch(taskId, { [field]: fallbackValue });
+      return;
+    }
+    const result = await supabase.rpc('increment_production_task_counter', {
+      p_task_id: taskId,
+      p_field: field,
+      p_delta: delta,
+    });
+    if (result.error) {
+      if (isMissingRpcError(result.error)) {
+        counterRpcAvailableRef.current = false;
+        await commitTaskPatch(taskId, { [field]: fallbackValue });
+        return;
+      }
+      throw result.error;
+    }
+    if (result.data) {
+      const updated = normalizeTask(result.data);
+      const queuedFields = getQueuedTaskFields(taskId);
+      setTasks(prev => prev.map(t => t.id === taskId ? mergeRealtimeTask(t, updated, queuedFields) : t));
+    }
+  }
+
+  async function processTaskQueue(taskId) {
+    const state = ensureTaskSaveState(taskId);
+    if (state.saving) return;
+    state.saving = true;
+    try {
+      while (state.queue.length > 0) {
+        const op = state.queue.shift();
+        if (op.type === 'delta') await commitTaskDelta(taskId, op.field, op.delta, op.fallbackValue);
+        else await commitTaskPatch(taskId, op.patch);
+        unlockTaskFields(taskId, op.fields || []);
+      }
+    } catch {
+      state.queue = [];
+      state.lockedFields.clear();
+      await loadTasks();
+      setTasksError('No se pudo guardar el avance.');
+    } finally {
+      state.saving = false;
+    }
+  }
+
+  function enqueueTaskOperation(taskId, op) {
+    const state = ensureTaskSaveState(taskId);
+    op.fields?.forEach(field => state.lockedFields.add(field));
+    state.queue.push(op);
+    processTaskQueue(taskId);
+  }
+
   async function saveTask(task, patch) {
     const taskId = task.id;
     const normalizedPatch = normalizeTaskProgressPatch(patch);
@@ -649,38 +795,14 @@ export default function OperariosPage() {
     setTasks(prev => {
       return prev.map(r => r.id === taskId ? { ...r, ...normalizedPatch } : r);
     });
-    if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = { saving: false, queued: null };
-    const taskState = taskSaveStateRef.current[taskId];
-    if (taskState.saving) { taskState.queued = { ...(taskState.queued || {}), ...normalizedPatch }; return; }
-    taskState.saving = true;
-    setSavingTaskIds(prev => ({ ...prev, [taskId]: true }));
-    let toSave = normalizedPatch;
-    try {
-      while (toSave !== null) {
-        const { data: currentTask, error: currentTaskError } = await supabase
-          .from('production_order_tasks')
-          .select('produced_qty,waste_qty,printed_qty,note')
-          .eq('id', taskId)
-          .single();
-        if (currentTaskError) throw currentTaskError;
+    enqueueTaskOperation(taskId, { type: 'patch', patch: normalizedPatch, fields: Object.keys(normalizedPatch) });
+  }
 
-        const result = await supabase.rpc('update_production_task_progress', buildTaskProgressRpcParams(taskId, toSave, currentTask));
-        if (result.error) throw result.error;
-        if (result.data) {
-          const updated = result.data;
-          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated, id: taskId, note: updated.note ?? t.note ?? '', printed_qty: updated.printed_qty ?? t.printed_qty ?? 0 } : t));
-        }
-        toSave = taskState.queued;
-        taskState.queued = null;
-      }
-    } catch {
-      taskState.queued = null;
-      await loadTasks();
-      setTasksError('No se pudo guardar el avance.');
-    } finally {
-      taskState.saving = false;
-      setSavingTaskIds(prev => ({ ...prev, [taskId]: false }));
-    }
+  function adjustTaskCounter(task, field, delta, nextValue) {
+    const taskId = task.id;
+    if (!['printed_qty', 'produced_qty', 'waste_qty'].includes(field) || !delta) return;
+    setTasks(prev => prev.map(r => r.id === taskId ? { ...r, [field]: nextValue } : r));
+    enqueueTaskOperation(taskId, { type: 'delta', field, delta, fallbackValue: nextValue, fields: [field] });
   }
 
   if (checkingSession) return <div style={{ minHeight: '100vh', background: '#f7f8fc' }} />;
@@ -1021,7 +1143,13 @@ export default function OperariosPage() {
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
                           <td style={{ padding: '4px 5px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <QtyCell value={task.printed_qty || 0} disabled={savingTaskIds[task.id]} step={2} onSave={qty => saveTask(task, { printed_qty: qty })} />
+                              <QtyCell
+                                value={task.printed_qty || 0}
+                                step={2}
+                                onSave={qty => saveTask(task, { printed_qty: qty })}
+                                onDelta={(delta, next) => adjustTaskCounter(task, 'printed_qty', delta, next)}
+                                onChange={qty => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
+                              />
                               <button type="button" title={`Marcar ${printedEven} impreso`} onClick={() => saveTask(task, { printed_qty: printedEven })}
                                 style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}>
                                 ={printedEven}
@@ -1030,7 +1158,12 @@ export default function OperariosPage() {
                           </td>
                           <td style={{ padding: '4px 5px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <QtyCell value={task.produced_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { produced_qty: qty })} />
+                              <QtyCell
+                                value={task.produced_qty || 0}
+                                onSave={qty => saveTask(task, { produced_qty: qty })}
+                                onDelta={(delta, next) => adjustTaskCounter(task, 'produced_qty', delta, next)}
+                                onChange={qty => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
+                              />
                               <button type="button" title={`Marcar ${task.required_qty} troquelado`} onClick={() => saveTask(task, { produced_qty: task.required_qty })}
                                 style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}>
                                 ={task.required_qty}
@@ -1038,10 +1171,15 @@ export default function OperariosPage() {
                             </div>
                           </td>
                           <td style={{ padding: '4px 5px' }}>
-                            <QtyCell value={task.waste_qty || 0} disabled={savingTaskIds[task.id]} onSave={qty => saveTask(task, { waste_qty: qty })} />
+                            <QtyCell
+                              value={task.waste_qty || 0}
+                              onSave={qty => saveTask(task, { waste_qty: qty })}
+                              onDelta={(delta, next) => adjustTaskCounter(task, 'waste_qty', delta, next)}
+                              onChange={qty => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, waste_qty: qty } : t))}
+                            />
                           </td>
                           <td style={{ padding: '4px 5px' }}>
-                            <input defaultValue={task.note || ''} disabled={savingTaskIds[task.id]}
+                            <input defaultValue={task.note || ''}
                               onBlur={e => saveTask(task, { note: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                               placeholder="Agregar observación..."
