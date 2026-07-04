@@ -455,8 +455,19 @@ function TrashBtn({ onClick }) {
   );
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function Admin() {
   // ── Auth ──
+  const isMobile = useIsMobile();
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
   const [impersonatedIdentity, setImpersonatedIdentity] = useState(() => {
@@ -6884,135 +6895,215 @@ useEffect(() => {
                 {ordersView === 'archived' ? 'No hay pedidos archivados.' : 'No hay pedidos activos.'}
               </p>
             )}
-            {filteredOrders.length > 0 && (
-              <div style={{overflowX: 'auto'}}>
-                <table style={s.tbl}>
-                  <thead>
-                    <tr>
-                      <th style={{...s.th, width: 20}}></th>
-                      <th style={s.th}>Código</th>
-                      <th style={s.th}>Fecha</th>
-                      <th style={s.th}>Cliente</th>
-                      <th style={s.th}>Email</th>
-                      <th style={s.th}>Items</th>
-                      <th style={{...s.th, minWidth: 160}}>Notas</th>
-                      <th style={s.th}>Total</th>
-                      <th style={s.th}>Estado</th>
-                      <th style={s.th}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
+            {filteredOrders.length > 0 && (() => {
+              const handleOrderRowClick = (o) => (e) => {
+                e.stopPropagation();
+                if (e.shiftKey && lastSelectedOrderIdRef.current) {
+                  const ids = filteredOrders.map(x => x.id);
+                  const lastIdx = ids.indexOf(lastSelectedOrderIdRef.current);
+                  const currIdx = ids.indexOf(o.id);
+                  const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
+                  setSelectedOrderIds(new Set(ids.slice(start, end + 1)));
+                } else if (e.ctrlKey || e.metaKey || selectedOrderIds.has(o.id)) {
+                  setSelectedOrderIds(prev => {
+                    const next = new Set(prev);
+
+                    if (next.has(o.id)) {
+                      next.delete(o.id);
+                    } else {
+                      next.add(o.id);
+                    }
+
+                    if (next.size === 0) {
+                      lastSelectedOrderIdRef.current = null;
+                    } else {
+                      lastSelectedOrderIdRef.current = o.id;
+                    }
+
+                    return next;
+                  });
+                } else {
+                  setSelectedOrderIds(new Set([o.id]));
+                  lastSelectedOrderIdRef.current = o.id;
+                }
+              };
+
+              if (isMobile) {
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {filteredOrders.map(o => {
                       const sc = getStatusCfg(o.status);
                       const notes = String(o.notes || '').trim();
                       const notesExpanded = expandedOrderNotes.has(o.id);
                       const longNotes = notes.length > 70;
+                      const selected = selectedOrderIds.has(o.id);
                       return (
-                        <tr key={o.id}
-                          onClick={e => {
-                            e.stopPropagation();
-                            if (e.shiftKey && lastSelectedOrderIdRef.current) {
-                              const ids = filteredOrders.map(x => x.id);
-                              const lastIdx = ids.indexOf(lastSelectedOrderIdRef.current);
-                              const currIdx = ids.indexOf(o.id);
-                              const [start, end] = lastIdx < currIdx ? [lastIdx, currIdx] : [currIdx, lastIdx];
-                              setSelectedOrderIds(new Set(ids.slice(start, end + 1)));
-                            } else if (e.ctrlKey || e.metaKey || selectedOrderIds.has(o.id)) {
-                              setSelectedOrderIds(prev => {
-                                const next = new Set(prev);
-
-                                if (next.has(o.id)) {
-                                  next.delete(o.id);
-                                } else {
-                                  next.add(o.id);
-                                }
-
-                                if (next.size === 0) {
-                                  lastSelectedOrderIdRef.current = null;
-                                } else {
-                                  lastSelectedOrderIdRef.current = o.id;
-                                }
-
-                                return next;
-                              });
-                            } else {
-                              setSelectedOrderIds(new Set([o.id]));
-                              lastSelectedOrderIdRef.current = o.id;
-                            }
+                        <div
+                          key={o.id}
+                          onClick={handleOrderRowClick(o)}
+                          style={{
+                            border: '1.5px solid #eef0f6',
+                            borderLeft: selected ? '3px solid #2D6BE4' : '3px solid transparent',
+                            borderRadius: 10,
+                            padding: '12px 14px',
+                            background: selected ? '#f0f5ff' : 'white',
+                            cursor: 'pointer',
                           }}
-                          style={{ cursor: 'pointer', background: selectedOrderIds.has(o.id) ? '#f0f5ff' : undefined, borderLeft: selectedOrderIds.has(o.id) ? '3px solid #2D6BE4' : '3px solid transparent' }}
                         >
-                          <td style={s.td}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedOrderIds.has(o.id) ? '#2D6BE4' : '#eef0f6', margin: '0 auto' }} />
-                          </td>
-                          <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
-                          <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
-                          <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
-                          <td style={s.td}>
-                            {notes ? (
-                              <div style={{display:'flex', alignItems: notesExpanded ? 'flex-start' : 'center', gap:6, maxWidth:220}}>
-                                <span
-                                  title={notes}
-                                  style={{
-                                    fontSize:12,
-                                    color:'#5a6380',
-                                    lineHeight:1.35,
-                                    display:'block',
-                                    maxWidth: longNotes ? 170 : 210,
-                                    whiteSpace: notesExpanded ? 'normal' : 'nowrap',
-                                    overflow: notesExpanded ? 'visible' : 'hidden',
-                                    textOverflow: notesExpanded ? 'clip' : 'ellipsis',
-                                  }}
-                                >
-                                  {notes}
-                                </span>
-                                {longNotes && (
-                                  <button
-                                    type="button"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setExpandedOrderNotes(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
-                                        return next;
-                                      });
-                                    }}
-                                    style={{border:'1.5px solid #dde1ef', background:'white', color:'#2D6BE4', borderRadius:5, padding:'2px 6px', fontSize:11, fontWeight:700, cursor:'pointer', flexShrink:0}}
-                                  >
-                                    {notesExpanded ? 'Menos' : 'Más'}
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{fontSize:12, color:'#c4c9d9'}}>—</span>
-                            )}
-                          </td>
-                          <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
-                          <td style={s.td}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{o.order_code}</span>
                             <select
                               value={o.status || 'pending'}
                               onChange={e => updateOrderStatus(o.id, e.target.value)}
                               onClick={e => e.stopPropagation()}
-                              style={{border:`1.5px solid ${sc.color}`, background:sc.bg, color:sc.color, borderRadius:6, padding:'3px 7px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                              style={{ border: `1.5px solid ${sc.color}`, background: sc.bg, color: sc.color, borderRadius: 6, padding: '4px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}
                             >
                               {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
                             </select>
-                          </td>
-                          <td style={s.td}>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#2d3352', marginTop: 6 }}>{o.customer_name || '—'}</div>
+                          <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 2 }}>
+                            {o.created_at ? new Date(o.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {o.customer_email ? ` · ${o.customer_email}` : ''}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#5a6380', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summarizeItems(o.items)}</div>
+                          {notes && (
+                            <div style={{ marginTop: 6, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                              <span style={{ fontSize: 12, color: '#5a6380', lineHeight: 1.35, flex: 1, whiteSpace: notesExpanded ? 'normal' : 'nowrap', overflow: notesExpanded ? 'visible' : 'hidden', textOverflow: notesExpanded ? 'clip' : 'ellipsis' }}>
+                                📝 {notes}
+                              </span>
+                              {longNotes && (
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setExpandedOrderNotes(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+                                      return next;
+                                    });
+                                  }}
+                                  style={{ border: '1.5px solid #dde1ef', background: 'white', color: '#2D6BE4', borderRadius: 5, padding: '2px 6px', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                                >
+                                  {notesExpanded ? 'Menos' : 'Más'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f2f8' }}>
+                            <span style={{ fontSize: 15, fontWeight: 800, color: '#2d3352' }}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span>
+                            <div style={{ display: 'flex', gap: 6 }}>
                               <button style={s.editBtn} onClick={e => { e.stopPropagation(); goToProductionOrder(o.id); }}>Producir</button>
                               <button style={s.editBtn} onClick={e => { e.stopPropagation(); setOrderDetail(o); }}>Ver</button>
                             </div>
-                          </td>
-                        </tr>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{overflowX: 'auto'}}>
+                  <table style={s.tbl}>
+                    <thead>
+                      <tr>
+                        <th style={{...s.th, width: 20}}></th>
+                        <th style={s.th}>Código</th>
+                        <th style={s.th}>Fecha</th>
+                        <th style={s.th}>Cliente</th>
+                        <th style={s.th}>Email</th>
+                        <th style={s.th}>Items</th>
+                        <th style={{...s.th, minWidth: 160}}>Notas</th>
+                        <th style={s.th}>Total</th>
+                        <th style={s.th}>Estado</th>
+                        <th style={s.th}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOrders.map(o => {
+                        const sc = getStatusCfg(o.status);
+                        const notes = String(o.notes || '').trim();
+                        const notesExpanded = expandedOrderNotes.has(o.id);
+                        const longNotes = notes.length > 70;
+                        return (
+                          <tr key={o.id}
+                            onClick={handleOrderRowClick(o)}
+                            style={{ cursor: 'pointer', background: selectedOrderIds.has(o.id) ? '#f0f5ff' : undefined, borderLeft: selectedOrderIds.has(o.id) ? '3px solid #2D6BE4' : '3px solid transparent' }}
+                          >
+                            <td style={s.td}>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedOrderIds.has(o.id) ? '#2D6BE4' : '#eef0f6', margin: '0 auto' }} />
+                            </td>
+                            <td style={s.td}><span style={{fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#1B2F5E'}}>{o.order_code}</span></td>
+                            <td style={s.td}><span style={{fontSize:12, color:'#5a6380', whiteSpace:'nowrap'}}>{o.created_at ? new Date(o.created_at).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</span></td>
+                            <td style={s.td}><span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{o.customer_name || '—'}</span></td>
+                            <td style={s.td}><span style={{fontSize:12, color:'#5a6380'}}>{o.customer_email || '—'}</span></td>
+                            <td style={s.td}><span style={{fontSize:12, color:'#5a6380', maxWidth:200, display:'block', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{summarizeItems(o.items)}</span></td>
+                            <td style={s.td}>
+                              {notes ? (
+                                <div style={{display:'flex', alignItems: notesExpanded ? 'flex-start' : 'center', gap:6, maxWidth:220}}>
+                                  <span
+                                    title={notes}
+                                    style={{
+                                      fontSize:12,
+                                      color:'#5a6380',
+                                      lineHeight:1.35,
+                                      display:'block',
+                                      maxWidth: longNotes ? 170 : 210,
+                                      whiteSpace: notesExpanded ? 'normal' : 'nowrap',
+                                      overflow: notesExpanded ? 'visible' : 'hidden',
+                                      textOverflow: notesExpanded ? 'clip' : 'ellipsis',
+                                    }}
+                                  >
+                                    {notes}
+                                  </span>
+                                  {longNotes && (
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setExpandedOrderNotes(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(o.id)) next.delete(o.id); else next.add(o.id);
+                                          return next;
+                                        });
+                                      }}
+                                      style={{border:'1.5px solid #dde1ef', background:'white', color:'#2D6BE4', borderRadius:5, padding:'2px 6px', fontSize:11, fontWeight:700, cursor:'pointer', flexShrink:0}}
+                                    >
+                                      {notesExpanded ? 'Menos' : 'Más'}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{fontSize:12, color:'#c4c9d9'}}>—</span>
+                              )}
+                            </td>
+                            <td style={s.td}><span style={{fontSize:13, fontWeight:700, color:'#2d3352', whiteSpace:'nowrap'}}>{o.total ? `$${Number(o.total).toLocaleString('es-AR')}` : '—'}</span></td>
+                            <td style={s.td}>
+                              <select
+                                value={o.status || 'pending'}
+                                onChange={e => updateOrderStatus(o.id, e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                style={{border:`1.5px solid ${sc.color}`, background:sc.bg, color:sc.color, borderRadius:6, padding:'3px 7px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}}
+                              >
+                                {ORDER_STATUSES.map(st => <option key={st.value} value={st.value}>{st.label}</option>)}
+                              </select>
+                            </td>
+                            <td style={s.td}>
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                <button style={s.editBtn} onClick={e => { e.stopPropagation(); goToProductionOrder(o.id); }}>Producir</button>
+                                <button style={s.editBtn} onClick={e => { e.stopPropagation(); setOrderDetail(o); }}>Ver</button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         )}
 
