@@ -1,7 +1,7 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 export function normalizeAssetUrl(src) {
   const raw = String(src || '').trim();
@@ -73,16 +73,32 @@ export default function SafeImage({
   fallback = null,
   compactFallback = false,
   onError,
+  onLoad,
   ...props
 }) {
   const candidates = useMemo(() => buildCandidates(src), [src]);
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [failed, setFailed] = useState(false);
+  // "loaded" gates opacity; "instant" skips the transition when the image
+  // was already in the browser cache, so cached images never wait to appear.
+  const [loaded, setLoaded] = useState(false);
+  const [instant, setInstant] = useState(false);
+  const imgRef = useRef(null);
+  const currentSrc = candidates[candidateIndex];
 
   useEffect(() => {
     setCandidateIndex(0);
     setFailed(false);
+    setLoaded(false);
+    setInstant(false);
   }, [src]);
+
+  useLayoutEffect(() => {
+    if (imgRef.current?.complete) {
+      setInstant(true);
+      setLoaded(true);
+    }
+  }, [currentSrc]);
 
   if (!candidates.length || failed) {
     return fallback || <DefaultFallback style={style} compact={compactFallback} />;
@@ -90,13 +106,22 @@ export default function SafeImage({
 
   return (
     <img
+      ref={imgRef}
       {...props}
-      src={candidates[candidateIndex]}
+      src={currentSrc}
       alt={alt}
-      style={style}
+      style={{
+        ...style,
+        opacity: loaded ? (style?.opacity ?? 1) : 0,
+        transition: instant ? 'none' : 'opacity .25s ease-out',
+      }}
       loading={props.loading || 'lazy'}
       decoding={props.decoding || 'async'}
       referrerPolicy={props.referrerPolicy || 'no-referrer'}
+      onLoad={(event) => {
+        setLoaded(true);
+        onLoad?.(event);
+      }}
       onError={(event) => {
         if (candidateIndex < candidates.length - 1) {
           setCandidateIndex(index => index + 1);

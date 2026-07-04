@@ -2601,6 +2601,34 @@ useEffect(() => {
     optimizeDesignImages(idsToOptimize);
   }
 
+  // Best-effort background optimization for freshly uploaded design images.
+  // Runs un-awaited so it never slows down or blocks addDesigns(); failures
+  // are silent since the original image is already saved and usable.
+  async function autoOptimizeDesignImage(designId, sourceUrl, previousOptimizedUrl) {
+    try {
+      const optimized = await makeOptimizedDesignImage(sourceUrl, DEFAULT_OPTIMIZED_THUMB_KB);
+      const fileBase64 = await blobToBase64(optimized.blob);
+      const response = await fetch('/api/admin/design-optimized-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          designId,
+          fileBase64,
+          mimeType: optimized.mimeType,
+          targetKb: DEFAULT_OPTIMIZED_THUMB_KB,
+          sourceSizeKb: optimized.sourceSizeKb,
+          originalUrl: sourceUrl,
+          previousOptimizedUrl: previousOptimizedUrl || '',
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'No se pudo optimizar');
+      setDesigns(prev => prev.map(item => item.id === designId ? { ...item, ...(payload.design || {}) } : item));
+    } catch (error) {
+      console.warn(`Auto-optimización falló para diseño ${designId}:`, error?.message || error);
+    }
+  }
+
   async function reorderProductCategory(productId, srcCat, tgtCat) {
     if (srcCat === tgtCat) return;
     const current = getProductCategories(productId);
@@ -2885,6 +2913,8 @@ useEffect(() => {
         }
 
         if (imageUrl || modelUrl) {
+          let designId = null;
+          let previousOptimizedUrl = '';
           if (entry.nameExists && entry.overwriteExisting && entry.existingDesignId) {
             const payload = {
               name: entry.name,
@@ -2896,9 +2926,18 @@ useEffect(() => {
             };
             const { error } = await supabase.from('designs').update(payload).eq('id', entry.existingDesignId);
             if (error) throw error;
+            designId = entry.existingDesignId;
+            previousOptimizedUrl = designs.find(d => d.id === entry.existingDesignId)?.optimized_image_url || '';
           } else {
-            const { error } = await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId });
+            const { data: inserted, error } = await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId }).select('id').single();
             if (error) throw error;
+            designId = inserted?.id ?? null;
+          }
+
+          // Solo imágenes reales (png/jpg) subidas para el diseño; no aplica a
+          // thumbnails auto-capturados de modelos 3D ni a portadas de producto.
+          if (entry.file && imageUrl && designId) {
+            autoOptimizeDesignImage(designId, imageUrl, previousOptimizedUrl);
           }
         } else { alert(`"${entry.name}" no tiene imagen ni modelo.`); anyError = true; }
       } catch (err) { alert(`Error al subir "${entry.name}": ${err.message}`); anyError = true; }
