@@ -1908,7 +1908,7 @@ export default function ProductionTab({
             <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
               <h2 style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>Pedidos</h2>
             </div>
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', ...(isMobile ? { display: 'flex', flexDirection: 'column', gap: 8, padding: 10 } : {}) }}>
               {loadingTasks && produceOrderRows.length === 0 ? (
                 <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '36px 12px' }}>Cargando pedidos...</p>
               ) : produceOrderRows.length === 0 ? (
@@ -1926,7 +1926,9 @@ export default function ProductionTab({
                       key={row.id}
                       type="button"
                       onClick={() => handleSelectProductionOrder(row.id)}
-                      style={{ width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 4 }}
+                      style={isMobile
+                        ? { width: '100%', border: '1.5px solid #eef0f6', borderRadius: 10, background: selected ? '#f0f5ff' : 'white', padding: '12px 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 5 }
+                        : { width: '100%', border: 'none', borderBottom: '1px solid #eef0f6', background: selected ? '#f0f5ff' : 'white', padding: '8px 10px', textAlign: 'left', cursor: 'pointer', fontFamily: 'Barlow, sans-serif', display: 'grid', gap: 4 }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                         <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 900, color: '#1B2F5E' }}>{row.order_code || row.id}</span>

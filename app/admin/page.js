@@ -5401,8 +5401,8 @@ useEffect(() => {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th style={{...s.th, ...(isMobile ? { position: 'sticky', left: 0, zIndex: 3 } : {})}}>Ver</th>
-                      <th style={{...s.th, ...(isMobile ? { position: 'sticky', left: 42, zIndex: 3 } : {})}}>Producto</th>
+                      <th style={s.th}>Ver</th>
+                      <th style={s.th}>Producto</th>
                       <th style={s.th}>Variante</th>
                       {useProductManagementModals && <th style={s.th}>Categorías</th>}
                       {useProductManagementModals && <th style={s.th}>Escalas precios</th>}
@@ -5452,10 +5452,10 @@ useEffect(() => {
                               ? `inset 4px 0 0 ${adminDarkMode ? 'rgba(45,107,228,0.45)' : '#dbe7ff'}`
                               : 'none'
                           }}>
-                          <td style={{...s.td, textAlign:'center', ...(isMobile ? { position: 'sticky', left: 0, zIndex: 1, background: adminDarkMode ? '#0b1224' : 'white' } : {})}}>
+                          <td style={{...s.td, textAlign:'center'}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
-                          <td style={{...s.td, ...(isMobile ? { position: 'sticky', left: 42, zIndex: 1, background: adminDarkMode ? '#0b1224' : 'white' } : {})}}>
+                          <td style={s.td}>
                             {isVariant
                               ? <span style={{fontSize:12, color:'#9aa3bc', paddingLeft:4}}>{form.name || ''}</span>
                               : <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
