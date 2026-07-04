@@ -11,6 +11,7 @@ import QuickPrintOverlay from '@/components/QuickPrintOverlay';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import ChatPanel from '@/components/chat/ChatPanel';
+import PwaUpdateManager from '@/components/PwaUpdateManager';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
 import {
   canInferSingleProductUnitPrice,
@@ -5086,6 +5087,7 @@ useEffect(() => {
   // ── PANEL ──
   return (
     <DesignsProvider designs={designs}>
+    <PwaUpdateManager />
     <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
       {adminDarkMode && (
         <style dangerouslySetInnerHTML={{__html: `
