@@ -6398,7 +6398,7 @@ useEffect(() => {
                   </div>
                 );
               })()}
-              <div onClick={() => setSelectedIds(new Set())}>
+              <div onClick={e => { if (e.target === e.currentTarget) setSelectedIds(new Set()); }} style={{minHeight:180, paddingBottom:8}}>
               {(() => {
                 const getFileExt = d => {
                   const url = d.model_url || d.image_url || '';
@@ -6459,7 +6459,7 @@ useEffect(() => {
                       return thumbSrc ? (
                         <button
                           type="button"
-                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original' }); }}
+                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original', zoom: 1.3 }); }}
                           onDragStart={e => e.stopPropagation()}
                           title={d.optimized_image_url ? 'Abrir miniatura optimizada' : 'Abrir imagen original'}
                           style={{border:'none', padding:0, background:'transparent', cursor:'pointer', position:'relative', flexShrink:0}}
@@ -9107,21 +9107,39 @@ useEffect(() => {
       {designPreviewImage && (
         <div
           onClick={e => { if (e.target === e.currentTarget) setDesignPreviewImage(null); }}
-          style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:340, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
+          onWheel={e => {
+            e.preventDefault();
+            const direction = e.deltaY < 0 ? 1 : -1;
+            setDesignPreviewImage(prev => {
+              const currentZoom = Number(prev?.zoom) || 1.3;
+              const nextZoom = Math.max(0.45, Math.min(4, currentZoom + direction * 0.12));
+              return { ...prev, zoom: nextZoom };
+            });
+          }}
+          style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:340, overflow:'hidden'}}
         >
-          <div style={{position:'relative', maxWidth:'86vw', maxHeight:'86vh', display:'flex', flexDirection:'column', gap:10, alignItems:'center'}}>
+          <div
+            onClick={e => { if (e.target === e.currentTarget) setDesignPreviewImage(null); }}
+            style={{position:'absolute', inset:0}}
+          >
             {(() => {
               const hasOptimized = Boolean(designPreviewImage.optimizedUrl);
               const currentView = hasOptimized && designPreviewImage.view === 'optimized' ? 'optimized' : 'original';
               const currentUrl = currentView === 'optimized' ? designPreviewImage.optimizedUrl : designPreviewImage.originalUrl;
+              const zoom = Number(designPreviewImage.zoom) || 1.3;
               return (
                 <>
                   <img
                     src={currentUrl}
                     alt={designPreviewImage.name || ''}
-                    style={{display:'block', maxWidth:'86vw', maxHeight:'78vh', objectFit:'contain', borderRadius:10, boxShadow:'0 8px 48px rgba(0,0,0,0.48)', background:'white'}}
+                    draggable={false}
+                    style={{position:'absolute', left:'50%', top:'50%', display:'block', maxWidth:'86vw', maxHeight:'78vh', objectFit:'contain', borderRadius:10, boxShadow:'0 8px 48px rgba(0,0,0,0.48)', background:'white', transform:`translate(-50%, -50%) scale(${zoom})`, transformOrigin:'center center', transition:'transform 0.08s ease-out', cursor:'zoom-in', userSelect:'none'}}
                   />
-                  <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'center'}}>
+                  <div
+                    onClick={e => e.stopPropagation()}
+                    onWheel={e => e.stopPropagation()}
+                    style={{position:'absolute', left:'50%', bottom:28, transform:'translateX(-50%)', zIndex:2, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'center', background:'rgba(9,16,32,0.62)', border:'1px solid rgba(255,255,255,0.18)', borderRadius:999, padding:'7px 10px', boxShadow:'0 6px 24px rgba(0,0,0,0.28)'}}
+                  >
                     <span style={{color:'white', fontSize:13, fontWeight:800, textShadow:'0 1px 4px rgba(0,0,0,0.8)'}}>{designPreviewImage.name || 'Diseño'}</span>
                     {[
                       ['original', 'Original'],
@@ -9141,6 +9159,9 @@ useEffect(() => {
                         </button>
                       );
                     })}
+                    <span style={{color:'rgba(255,255,255,0.82)', fontSize:11, fontWeight:800, minWidth:42, textAlign:'right'}}>
+                      {Math.round(zoom * 100)}%
+                    </span>
                   </div>
                 </>
               );
@@ -9148,7 +9169,7 @@ useEffect(() => {
             <button
               onClick={() => setDesignPreviewImage(null)}
               aria-label="Cerrar"
-              style={{position:'absolute', top:-14, right:-14, width:30, height:30, borderRadius:'50%', background:'white', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'#1B2F5E', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', lineHeight:1}}
+              style={{position:'absolute', top:18, right:18, zIndex:3, width:30, height:30, borderRadius:'50%', background:'white', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'#1B2F5E', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', lineHeight:1}}
             >
               x
             </button>

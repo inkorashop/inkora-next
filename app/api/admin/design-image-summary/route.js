@@ -40,17 +40,44 @@ function sizeFromMetadata(metadata) {
 async function loadObjectSizes(supabaseAdmin, paths) {
   const uniquePaths = [...new Set(paths.filter(Boolean))];
   const sizes = new Map();
-  for (let i = 0; i < uniquePaths.length; i += 200) {
-    const batch = uniquePaths.slice(i, i + 200);
-    const { data, error } = await supabaseAdmin
-      .schema('storage')
-      .from('objects')
-      .select('name, metadata')
-      .eq('bucket_id', 'assets')
-      .in('name', batch);
-    if (error) throw error;
-    (data || []).forEach(row => sizes.set(row.name, sizeFromMetadata(row.metadata)));
+
+  const folders = new Map();
+  uniquePaths.forEach(path => {
+    const parts = String(path).split('/');
+    const fileName = parts.pop();
+    if (!fileName) return;
+    const folder = parts.join('/');
+    if (!folders.has(folder)) folders.set(folder, new Set());
+    folders.get(folder).add(fileName);
+  });
+
+  for (const [folder, fileNames] of folders.entries()) {
+    let offset = 0;
+    const limit = 1000;
+    const pending = new Set(fileNames);
+
+    while (pending.size > 0) {
+      const { data, error } = await supabaseAdmin.storage
+        .from('assets')
+        .list(folder, {
+          limit,
+          offset,
+          sortBy: { column: 'name', order: 'asc' },
+        });
+      if (error) throw error;
+
+      (data || []).forEach(row => {
+        if (!pending.has(row.name)) return;
+        const fullPath = folder ? `${folder}/${row.name}` : row.name;
+        sizes.set(fullPath, sizeFromMetadata(row.metadata));
+        pending.delete(row.name);
+      });
+
+      if (!data || data.length < limit) break;
+      offset += limit;
+    }
   }
+
   return sizes;
 }
 
