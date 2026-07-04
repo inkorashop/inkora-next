@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -19,6 +20,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlin.math.abs
 
@@ -49,7 +51,7 @@ class FloatingBubbleService : Service() {
         intent?.getStringExtra(EXTRA_URL)?.let { startUrl = it }
         startForeground(NOTIFICATION_ID, buildNotification())
         if (bubbleView == null) {
-            addBubble()
+            runCatching { addBubble() }.onFailure { stopSelf() }
         }
         return START_STICKY
     }
@@ -155,7 +157,9 @@ class FloatingBubbleService : Service() {
         if (expanded) {
             removeExpandedView()
         } else {
-            addExpandedView()
+            runCatching { addExpandedView() }.onFailure {
+                Toast.makeText(this, "No se pudo abrir la vista flotante.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -163,7 +167,14 @@ class FloatingBubbleService : Service() {
     private fun addExpandedView() {
         val overlayType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
-        val container = LayoutInflater.from(this).inflate(R.layout.floating_expanded, null) as FrameLayout
+        // Un Service no tiene tema propio (a diferencia de una Activity), asi
+        // que hay que envolver el contexto con el tema de la app antes de
+        // inflar: sin esto, atributos de AppCompat como
+        // ?attr/selectableItemBackgroundBorderless no resuelven y el inflado
+        // tira una excepcion (crashea la app cada vez que se toca la burbuja).
+        val themedContext = ContextThemeWrapper(this, R.style.Theme_InkoraApp)
+
+        val container = LayoutInflater.from(themedContext).inflate(R.layout.floating_expanded, null) as FrameLayout
         val webView = container.findViewById<WebView>(R.id.floating_webview)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true

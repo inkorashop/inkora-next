@@ -171,7 +171,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val START_URL = "https://www.inkora.com.ar/"
+        const val START_URL = "https://www.inkora.com.ar/admin"
         const val EXTRA_OPEN_URL = "extra_open_url"
     }
 }
