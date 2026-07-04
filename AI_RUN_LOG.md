@@ -18,6 +18,16 @@ Formato obligatorio:
 
 ---
 
+## 2026-07-04 09:33 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir en Admin > Disenos que al hacer click en espacio vacio se suelte la seleccion.
+- Cambios: Se ajusto `app/admin/page.js` para distinguir entre zona seleccionable de la fila, controles de la derecha y espacios vacios. Ahora el hueco visual de la fila y el fondo de la lista limpian `selectedIds`, mientras que la info del diseno sigue seleccionando normalmente.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con avisos CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se reviso la entrada anterior y se confirmo que el cambio previo estaba desplegado en `8a96de1`, pero no cubria el espacio vacio dentro del ancho de una fila. Se mantuvieron fuera de scope `.claude/settings*.json`, `Inkora.PrintBridge.zip` raiz y `Messi 2.3mf`.
+- Pendiente/Riesgos: Probar manualmente en produccion haciendo click en el hueco entre la info del diseno y los botones, y debajo de la lista.
+
+---
+
 ## 2026-07-04 09:15 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir el error de suma de pesos en Disenos, permitir soltar seleccion con click en espacio vacio y mejorar el visor de miniaturas con imagen mas grande y zoom con rueda.

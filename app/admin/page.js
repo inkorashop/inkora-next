@@ -6437,7 +6437,15 @@ useEffect(() => {
                   onDragLeave={handleDragLeave}
                   onDrop={e => handleDrop(e, d.id)}
                   onDragEnd={handleDragEnd}
-                  onClick={e => { e.stopPropagation(); handleDesignClick(e, d.id); }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (e.target?.closest?.('[data-design-row-control]')) return;
+                    if (!e.target?.closest?.('[data-design-row-selectable]')) {
+                      setSelectedIds(new Set());
+                      return;
+                    }
+                    handleDesignClick(e, d.id);
+                  }}
                   style={{
                     ...s.designRow,
                     opacity: !d.active ? 0.45 : (draggingId && selectedIds.has(draggingId) && selectedIds.has(d.id) ? 0.35 : 1),
@@ -6451,7 +6459,7 @@ useEffect(() => {
                     cursor: draggingId === d.id ? 'grabbing' : 'grab',
                   }}
                 >
-                  <div style={s.designInfo}>
+                  <div data-design-row-selectable style={s.designInfo}>
                     {(() => {
                       const thumbSrc = getDesignDisplayImageUrl(d);
                       const originalSrc = getDesignOriginalImageUrl(d);
@@ -6566,7 +6574,7 @@ useEffect(() => {
                       </div>
                     </div>
                   </div>
-                  <div style={{display:'flex', alignItems:'center', gap:4}}>
+                  <div data-design-row-control style={{display:'flex', alignItems:'center', gap:4}}>
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); optimizeDesignFromRow(d); }}
