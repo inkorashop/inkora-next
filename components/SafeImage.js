@@ -3,6 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+const SUPABASE_PUBLIC_ASSET_MARKER = '/storage/v1/object/public/assets/';
+
 export function normalizeAssetUrl(src) {
   const raw = String(src || '').trim();
   if (!raw) return '';
@@ -15,6 +17,15 @@ export function normalizeAssetUrl(src) {
     if (parsed.pathname.includes('/storage/v1/object/sign/')) {
       parsed.pathname = parsed.pathname.replace('/storage/v1/object/sign/', '/storage/v1/object/public/');
       parsed.search = '';
+    }
+
+    // Supabase doesn't reliably honor long-lived Cache-Control on public
+    // Storage URLs, so route through our own proxy (app/api/asset) which
+    // re-serves the same file with a real long-lived cache header.
+    const markerIdx = parsed.pathname.indexOf(SUPABASE_PUBLIC_ASSET_MARKER);
+    if (markerIdx !== -1) {
+      const assetPath = parsed.pathname.slice(markerIdx + SUPABASE_PUBLIC_ASSET_MARKER.length);
+      return `/api/asset/${assetPath}`;
     }
 
     return parsed.toString();
