@@ -1,4 +1,4 @@
-param([string]$Version = "1.6.4")
+param([string]$Version = "1.6.5")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
@@ -54,6 +54,22 @@ if ($sumatraSrc) {
     Invoke-WebRequest -Uri $sumatraUrl -OutFile $sumatraDst -UseBasicParsing -TimeoutSec 90
     Write-Host "==> SumatraPDF descargado e incluido."
 }
+
+# Include the package installer. It installs this folder into
+# %LOCALAPPDATA%\Inkora\PrintBridge\app, registers inkora-bridge:// and starts it.
+Copy-Item (Join-Path $projDir "install.ps1") (Join-Path $outDir "install.ps1") -Force
+Copy-Item (Join-Path $projDir "install.bat") (Join-Path $outDir "install.bat") -Force
+@"
+INKORA Print Bridge v$Version
+
+Instalacion recomendada:
+1. Extraer este ZIP completo.
+2. Ejecutar install.bat.
+3. El instalador copia el Bridge a %LOCALAPPDATA%\Inkora\PrintBridge\app.
+4. El Bridge incluye SumatraPDF.exe para imprimir multiples copias como un unico trabajo.
+
+No ejecutes el Bridge directamente desde Descargas si queres una instalacion estable.
+"@ | Set-Content -Path (Join-Path $outDir "LEEME-INSTALACION.txt") -Encoding ASCII
 
 # Show what ended up in the package
 Write-Host ""

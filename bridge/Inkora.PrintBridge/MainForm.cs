@@ -793,8 +793,9 @@ public sealed class MainForm : Form
 
             var currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName
                 ?? throw new Exception("No se pudo determinar la ruta del ejecutable actual.");
-            var installDir = Path.GetDirectoryName(currentExe)
-                ?? throw new Exception("No se pudo determinar la carpeta instalada.");
+            var installDir = GetStableInstallDirectory();
+            Directory.CreateDirectory(installDir);
+            var targetExe = Path.Combine(installDir, "Inkora.PrintBridge.exe");
             var newExe = Directory.GetFiles(payloadDir, "Inkora.PrintBridge.exe", SearchOption.AllDirectories).FirstOrDefault()
                 ?? throw new Exception("No se encontro Inkora.PrintBridge.exe en el ZIP.");
             var payloadRoot = Path.GetDirectoryName(newExe)
@@ -820,7 +821,7 @@ public sealed class MainForm : Form
                 "robocopy \"%PAYLOAD%\" \"%TARGET%\" /E /NFL /NDL /NJH /NJS /NC /NS /NP\r\n" +
                 "set \"RC=%ERRORLEVEL%\"\r\n" +
                 "if %RC% GEQ 8 exit /b %RC%\r\n" +
-                $"start \"\" \"{currentExe}\" --updated\r\n" +
+                $"start \"\" \"{targetExe}\" --updated\r\n" +
                 $"del \"%~f0\"\r\n",
                 Encoding.ASCII);
 
@@ -846,6 +847,15 @@ public sealed class MainForm : Form
             try { BeginInvoke((Action)(() => AppendDiagnostic($"[UPDATE ERROR] {ex.Message}"))); }
             catch { }
         }
+    }
+
+    private static string GetStableInstallDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Inkora",
+            "PrintBridge",
+            "app");
     }
 
     private static string BuildPdfSummary(IReadOnlyList<PdfRootInfo> roots, IReadOnlyList<PdfFileInfo> pdfs)

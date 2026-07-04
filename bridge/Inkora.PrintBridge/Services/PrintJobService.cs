@@ -6,21 +6,16 @@ namespace Inkora.PrintBridge.Services;
 
 public sealed class PrintJobService
 {
-    private static readonly string[] SumatraSearchPaths =
-    [
-        Path.Combine(AppContext.BaseDirectory, "SumatraPDF.exe"), // bundled junto al exe del Bridge
-        @"C:\Program Files\SumatraPDF\SumatraPDF.exe",
-        @"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe",
-    ];
-
     private readonly PdfCatalogService _pdfCatalogService;
     private readonly PrinterService _printerService;
     private readonly DevModeService _devModeService;
     private readonly BridgeLogService _logService;
     private readonly object _lock = new();
     private readonly List<PrintJob> _jobs = [];
+    private readonly List<string> _sumatraProbePaths = [];
 
     public string? SumatraPdfPath { get; private set; }
+    public IReadOnlyList<string> SumatraProbePaths => _sumatraProbePaths;
     public string PrintMethod => SumatraPdfPath is not null ? "SumatraPDF" : "shell-printto-single-copy";
 
     public PrintJobService(PdfCatalogService pdfCatalogService, PrinterService printerService, DevModeService devModeService, BridgeLogService logService)
@@ -43,8 +38,10 @@ public sealed class PrintJobService
 
     private void DetectSumatraPdf()
     {
-        foreach (var path in SumatraSearchPaths)
+        _sumatraProbePaths.Clear();
+        foreach (var path in GetSumatraCandidatePaths())
         {
+            _sumatraProbePaths.Add(path);
             if (File.Exists(path))
             {
                 SumatraPdfPath = path;
@@ -53,33 +50,70 @@ public sealed class PrintJobService
             }
         }
 
+        _logService.Info("SumatraPDF no detectado. Rutas revisadas: " + string.Join(" | ", _sumatraProbePaths));
+        _logService.Info("Se usara shell printto solo para 1 copia. Para copias multiples exactas, instala o empaqueta SumatraPDF.exe junto al Bridge.");
+    }
+
+    private static IEnumerable<string> GetSumatraCandidatePaths()
+    {
+        var candidates = new List<string>();
+
+        AddSibling(candidates, Environment.ProcessPath);
+
         try
         {
-            var inPath = FindInPath("SumatraPDF.exe");
-            if (inPath is not null)
-            {
-                SumatraPdfPath = inPath;
-                _logService.Info($"SumatraPDF detectado en PATH: {inPath}");
-                return;
-            }
+            AddSibling(candidates, Process.GetCurrentProcess().MainModule?.FileName);
         }
         catch
         {
-            // Ignore
+            // Some environments deny MainModule access.
         }
 
-        _logService.Info("SumatraPDF no detectado. Se usara shell printto. Para impresion silenciosa, instala SumatraPDF.");
-    }
+        AddCandidate(candidates, Path.Combine(GetStableInstallDirectory(), "SumatraPDF.exe"));
+        AddCandidate(candidates, Path.Combine(AppContext.BaseDirectory, "SumatraPDF.exe"));
+        AddCandidate(candidates, Path.Combine(Environment.CurrentDirectory, "SumatraPDF.exe"));
+        AddCandidate(candidates, @"C:\Program Files\SumatraPDF\SumatraPDF.exe");
+        AddCandidate(candidates, @"C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe");
 
-    private static string? FindInPath(string executable)
-    {
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(';') ?? [];
+        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [];
         foreach (var dir in pathDirs)
         {
-            var full = Path.Combine(dir.Trim(), executable);
-            if (File.Exists(full)) return full;
+            AddCandidate(candidates, Path.Combine(dir.Trim(), "SumatraPDF.exe"));
         }
-        return null;
+
+        return candidates
+            .Select(NormalizePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void AddSibling(List<string> candidates, string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath)) return;
+        var dir = Path.GetDirectoryName(executablePath);
+        if (string.IsNullOrWhiteSpace(dir)) return;
+        AddCandidate(candidates, Path.Combine(dir, "SumatraPDF.exe"));
+    }
+
+    private static void AddCandidate(List<string> candidates, string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path)) candidates.Add(path);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        try { return Path.GetFullPath(path); }
+        catch { return path; }
+    }
+
+    private static string GetStableInstallDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Inkora",
+            "PrintBridge",
+            "app");
     }
 
     public PrintJob Prepare(PrintRequest request)

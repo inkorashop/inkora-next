@@ -43,8 +43,10 @@ Write-Header
 
 $scriptDir   = Split-Path -Parent $PSCommandPath
 $projectPath = Join-Path $scriptDir "Inkora.PrintBridge.csproj"
-$publishPath = Join-Path $scriptDir "bin\Published"
-$exePath     = Join-Path $publishPath "Inkora.PrintBridge.exe"
+$installPath = Join-Path $env:LOCALAPPDATA "Inkora\PrintBridge\app"
+$exePath     = Join-Path $installPath "Inkora.PrintBridge.exe"
+$packageExe  = Join-Path $scriptDir "Inkora.PrintBridge.exe"
+$packageMode = Test-Path $packageExe
 
 Write-Step "Preparando instalacion"
 $running = Get-Process -Name "Inkora.PrintBridge" -ErrorAction SilentlyContinue
@@ -57,43 +59,70 @@ if ($running) {
     Write-Ok "No habia Bridge activo"
 }
 
-Write-Step "Buscando .NET SDK"
-$dotnetExe = $null
-$candidates = @(
-    (Join-Path $env:ProgramFiles "dotnet\dotnet.exe"),
-    (Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe"),
-    (Join-Path $env:USERPROFILE ".dotnet\dotnet.exe")
-)
-foreach ($candidate in $candidates) {
-    if (Test-Path $candidate) {
-        $dotnetExe = $candidate
-        break
-    }
-}
-if (-not $dotnetExe) {
-    try { $dotnetExe = (Get-Command dotnet -ErrorAction Stop).Source } catch {}
-}
-if (-not $dotnetExe) {
-    Write-Fail "No se encontro .NET SDK. Instala .NET 8 desde https://dotnet.microsoft.com"
-    Read-Host "Presiona Enter para salir"
-    exit 1
-}
-Write-Ok ".NET detectado: $dotnetExe"
+New-Item -ItemType Directory -Force $installPath | Out-Null
+Write-Ok "Carpeta estable: $installPath"
 
-Write-Step "Compilando Bridge"
-Write-Host "    Esto puede tardar alrededor de 30 segundos la primera vez..." -ForegroundColor Gray
-& $dotnetExe publish $projectPath -c Release -r win-x64 --self-contained true -o $publishPath --nologo -v quiet
-if ($LASTEXITCODE -ne 0) {
-    Write-Fail "No se pudo compilar. Revisa que el proyecto este completo."
+if ($packageMode) {
+    Write-Step "Instalando paquete descargado"
+    $sourceFull = [IO.Path]::GetFullPath($scriptDir)
+    $targetFull = [IO.Path]::GetFullPath($installPath)
+    if ($sourceFull -ne $targetFull) {
+        Get-ChildItem -Path $scriptDir -Force | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $installPath -Recurse -Force
+        }
+    }
+    Write-Ok "Archivos copiados"
+} else {
+    Write-Step "Buscando .NET SDK"
+    $dotnetExe = $null
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "dotnet\dotnet.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe"),
+        (Join-Path $env:USERPROFILE ".dotnet\dotnet.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            $dotnetExe = $candidate
+            break
+        }
+    }
+    if (-not $dotnetExe) {
+        try { $dotnetExe = (Get-Command dotnet -ErrorAction Stop).Source } catch {}
+    }
+    if (-not $dotnetExe) {
+        Write-Fail "No se encontro .NET SDK. Instala .NET 8 desde https://dotnet.microsoft.com"
+        Read-Host "Presiona Enter para salir"
+        exit 1
+    }
+    Write-Ok ".NET detectado: $dotnetExe"
+
+    Write-Step "Compilando Bridge"
+    Write-Host "    Esto puede tardar alrededor de 30 segundos la primera vez..." -ForegroundColor Gray
+    & $dotnetExe publish $projectPath -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:IncludeAllContentForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -o $installPath --nologo -v quiet
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "No se pudo compilar. Revisa que el proyecto este completo."
+        Read-Host "Presiona Enter para salir"
+        exit 1
+    }
+    Write-Ok "Bridge compilado"
+}
+
+if (-not (Test-Path $exePath)) {
+    Write-Fail "No se encontro Inkora.PrintBridge.exe en la instalacion."
     Read-Host "Presiona Enter para salir"
     exit 1
 }
-Write-Ok "Bridge compilado"
 
 Write-Step "Verificando motor de impresion PDF"
-$sumatraDst = Join-Path $publishPath "SumatraPDF.exe"
+$sumatraDst = Join-Path $installPath "SumatraPDF.exe"
 $sumatraCandidates = @(
     (Join-Path $scriptDir "tools\SumatraPDF.exe"),
+    (Join-Path $scriptDir "SumatraPDF.exe"),
     $sumatraDst,
     "C:\Program Files\SumatraPDF\SumatraPDF.exe",
     "C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe"
@@ -149,11 +178,16 @@ $shortcutPath  = Join-Path $startupFolder "INKORA Print Bridge.lnk"
 $wsh      = New-Object -ComObject WScript.Shell
 $shortcut = $wsh.CreateShortcut($shortcutPath)
 $shortcut.TargetPath  = $exePath
-$shortcut.WorkingDirectory = $publishPath
+$shortcut.WorkingDirectory = $installPath
 $shortcut.WindowStyle = 7
 $shortcut.Description = "INKORA Print Bridge"
 $shortcut.Save()
 Write-Ok "Auto-inicio configurado"
+
+Write-Step "Iniciando Bridge"
+Start-Process -FilePath $exePath -WorkingDirectory $installPath -WindowStyle Hidden
+Start-Sleep -Seconds 2
+Write-Ok "Bridge iniciado"
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor DarkBlue

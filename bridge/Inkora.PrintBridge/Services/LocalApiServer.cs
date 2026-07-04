@@ -820,6 +820,7 @@ public sealed class LocalApiServer : IDisposable
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             sumatraPdfPath = _printJobService.SumatraPdfPath ?? "",
+            sumatraPdfProbePaths = _printJobService.SumatraProbePaths,
             allowedOrigins = _allowedOrigins.OrderBy(origin => origin).ToArray(),
             timestamp = DateTimeOffset.Now
         };
