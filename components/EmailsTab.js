@@ -14,6 +14,16 @@ const VARIABLES = [
   { v: '{{totalSection}}', desc: 'Sección de total' },
 ];
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 // ─── Bloques por defecto ───────────────────────────────────────────────────
 let _uid = 1;
 function uid() { return String(_uid++); }
@@ -231,6 +241,7 @@ const BLOCK_LABELS = { header: 'Encabezado', info_box: 'Caja info', text: 'Texto
 
 // ─── Main component ────────────────────────────────────────────────────────
 export default function EmailsTab({ supabase }) {
+  const isMobile = useIsMobile();
   const [activeKey, setActiveKey] = useState(TEMPLATES[0].key);
   const [editorMode, setEditorMode] = useState('blocks'); // 'blocks' | 'html'
   const [allBlocks, setAllBlocks] = useState({});     // key -> block[]
@@ -393,10 +404,10 @@ export default function EmailsTab({ supabase }) {
       </div>
 
       {/* Main split area */}
-      <div style={{ display: 'flex', flex: 1, gap: 0, minHeight: 0 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flex: 1, gap: 0, minHeight: 0 }}>
 
         {/* LEFT: editor */}
-        <div style={{ width: '45%', minWidth: 280, display: 'flex', flexDirection: 'column', borderRight: '1.5px solid #dde1ef', background: 'white' }}>
+        <div style={{ width: isMobile ? '100%' : '45%', minWidth: isMobile ? undefined : 280, flex: isMobile ? 1 : undefined, display: 'flex', flexDirection: 'column', borderRight: isMobile ? 'none' : '1.5px solid #dde1ef', borderBottom: isMobile ? '1.5px solid #dde1ef' : 'none', background: 'white' }}>
 
           {editorMode === 'blocks' ? (
             <>

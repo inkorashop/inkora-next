@@ -29,6 +29,16 @@ import {
   getBridgeUpdateStatus,
 } from '../lib/print-bridge-client';
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 const LATEST_BRIDGE_VERSION = '1.6.5';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
@@ -460,6 +470,7 @@ export default function ProductionTab({
   renderOperatorsPanel,
   designPdfMatches = {},
 }) {
+  const isMobile = useIsMobile();
   const [internalActiveSubTab, setInternalActiveSubTab] = useState('produce');
   const activeSubTab = activeSubtab || internalActiveSubTab;
   const changeSubTab = (id) => {
@@ -1892,8 +1903,8 @@ export default function ProductionTab({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
-            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : bridgeStatus.state === 'connected' && bridgeToken.trim() ? 'minmax(165px, 0.48fr) minmax(0, 1.42fr) minmax(170px, 0.47fr)' : 'minmax(220px, 0.6fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+            <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: isMobile && selectedProductionOrderId ? 'none' : 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
               <h2 style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>Pedidos</h2>
             </div>
@@ -1937,11 +1948,16 @@ export default function ProductionTab({
             </div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: isMobile && !selectedProductionOrderId ? 'none' : 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {isMobile && (
+                      <button type="button" onClick={() => selectProductionOrder('')} style={{ border: 'none', background: 'none', fontSize: 16, cursor: 'pointer', color: '#1B2F5E', padding: 0, lineHeight: 1 }}>←</button>
+                    )}
+                    <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
+                  </div>
                   <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
                     {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : '—'}
                   </h2>
@@ -2307,7 +2323,7 @@ export default function ProductionTab({
               );
             })()}
           </div>
-          {bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
+          {!isMobile && bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
             const uniqueMap = {};
             Object.values(designPdfMatches || {}).forEach(m => {
               if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
@@ -2773,6 +2789,18 @@ export default function ProductionTab({
               <div style={{ padding: 16, overflowX: 'auto' }}>
                 {stockLog.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin movimientos registrados.</p>
+                ) : isMobile ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {stockLog.map(log => (
+                      <div key={log.id} style={{ border: '1px solid #f0f2f8', borderRadius: 8, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 600, color: '#1B2F5E', fontSize: 13 }}>{log.design_name}</span>
+                          <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{log.type === 'add' ? '+' : '−'}{log.qty}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 3 }}>{formatDate(log.created_at)}{log.note ? ` · ${log.note}` : ''}</div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
@@ -2813,6 +2841,25 @@ export default function ProductionTab({
               <div style={{ padding: 16, overflowX: 'auto' }}>
                 {printHistory.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin impresiones registradas.</p>
+                ) : isMobile ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {printHistory.map(entry => (
+                      <div key={entry.id} style={{ border: '1px solid #f0f2f8', borderRadius: 8, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 600, color: '#1B2F5E', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.diseno || '—'}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, flexShrink: 0, background: entry.estado === 'done' || entry.estado === 'printed' ? '#dcfce7' : entry.estado === 'error' ? '#fee2e2' : entry.estado === 'cancelled' ? '#fef9c3' : '#f0f2f8', color: entry.estado === 'done' || entry.estado === 'printed' ? '#15803d' : entry.estado === 'error' ? '#dc2626' : entry.estado === 'cancelled' ? '#92400e' : '#5a6380' }}>
+                            {entry.estado === 'done' ? 'Enviado' : entry.estado === 'printed' ? 'Impreso' : entry.estado === 'error' ? 'Error' : entry.estado === 'cancelled' ? 'Cancelado' : entry.estado || '—'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 3 }}>
+                          {entry.fecha ? new Date(entry.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                          {entry.copias != null ? ` · ${entry.copias} copias` : ''}
+                          {entry.hojas != null ? ` · ${entry.hojas} hojas` : ''}
+                          {entry.impresora ? ` · ${entry.impresora}` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>

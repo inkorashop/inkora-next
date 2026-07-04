@@ -4812,7 +4812,7 @@ useEffect(() => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={s.card}>
           <h2 style={s.sectionTitle}>Crear operario</h2>
-          <form onSubmit={createOperator} className="adm-grid-form" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(160px, 1fr) minmax(190px, 1.2fr) auto', gap: 10, alignItems: 'end' }}>
+          <form onSubmit={createOperator} className="adm-grid-form" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(160px, 1fr) minmax(160px, 1fr) minmax(190px, 1.2fr) auto', gap: 10, alignItems: 'end' }}>
             <div style={{ ...s.formGroup, marginBottom: 0 }}>
               <label style={s.label}>Nombre</label>
               <input style={s.input} value={operatorForm.name} onChange={e => setOperatorForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre completo" />
@@ -4845,6 +4845,26 @@ useEffect(() => {
             <p style={s.emptyMsg}>Cargando operarios...</p>
           ) : operators.length === 0 ? (
             <p style={s.emptyMsg}>Todavía no hay operarios.</p>
+          ) : isMobile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {operators.map(op => (
+                <div key={op.id} style={{ border: '1px solid #eef0f6', borderRadius: 10, padding: '10px 12px', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, color: '#1B2F5E', fontSize: 13 }}>{op.name || 'Sin nombre'}</div>
+                    <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{op.email}</div>
+                    <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 2 }}>{op.phone || '—'}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                    <span style={{ background: op.active === false ? '#fee2e2' : '#e8f7ef', color: op.active === false ? '#b91c1c' : '#15803d', borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800 }}>
+                      {op.active === false ? 'Inactivo' : 'Activo'}
+                    </span>
+                    <button type="button" onClick={() => toggleOperator(op)} style={{ ...s.editBtn, color: op.active === false ? '#18a36a' : '#e53e3e' }}>
+                      {op.active === false ? 'Habilitar' : 'Deshabilitar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={s.tbl}>
@@ -4915,6 +4935,30 @@ useEffect(() => {
         </div>
         {filteredOrders.length === 0 ? (
           <p style={s.emptyMsg}>No hay pedidos para mostrar.</p>
+        ) : isMobile ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filteredOrders.map(o => {
+              const sc = getStatusCfg(o.status);
+              return (
+                <div key={o.id} style={{ border: '1.5px solid #eef0f6', borderRadius: 10, padding: '12px 14px', background: 'white' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 800, color: '#1B2F5E' }}>{o.order_code}</span>
+                    <span style={{ border: `1.5px solid ${sc.color}`, background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 12, fontWeight: 800 }}>{sc.label}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#2d3352', marginTop: 6 }}>{o.customer_name || '—'}</div>
+                  <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 2 }}>
+                    {o.created_at ? new Date(o.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                    {o.delivery_date ? ` · Entrega ${new Date(o.delivery_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}` : ''}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#5a6380', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summarizeItems(o.items)}</div>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f2f8' }}>
+                    <button type="button" style={s.editBtn} onClick={() => goToProductionOrder(o.id)}>Producir</button>
+                    <button type="button" style={s.editBtn} onClick={() => setOrderDetail(o)}>Ver</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={s.tbl}>
@@ -5357,8 +5401,8 @@ useEffect(() => {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th style={s.th}>Ver</th>
-                      <th style={s.th}>Producto</th>
+                      <th style={{...s.th, ...(isMobile ? { position: 'sticky', left: 0, zIndex: 3 } : {})}}>Ver</th>
+                      <th style={{...s.th, ...(isMobile ? { position: 'sticky', left: 42, zIndex: 3 } : {})}}>Producto</th>
                       <th style={s.th}>Variante</th>
                       {useProductManagementModals && <th style={s.th}>Categorías</th>}
                       {useProductManagementModals && <th style={s.th}>Escalas precios</th>}
@@ -5408,10 +5452,10 @@ useEffect(() => {
                               ? `inset 4px 0 0 ${adminDarkMode ? 'rgba(45,107,228,0.45)' : '#dbe7ff'}`
                               : 'none'
                           }}>
-                          <td style={{...s.td, textAlign:'center'}}>
+                          <td style={{...s.td, textAlign:'center', ...(isMobile ? { position: 'sticky', left: 0, zIndex: 1, background: adminDarkMode ? '#0b1224' : 'white' } : {})}}>
                             <button style={s.iconBtn} onClick={() => toggleProduct(p.id, p.active)}>{p.active ? <EyeOpen /> : <EyeOff />}</button>
                           </td>
-                          <td style={s.td}>
+                          <td style={{...s.td, ...(isMobile ? { position: 'sticky', left: 42, zIndex: 1, background: adminDarkMode ? '#0b1224' : 'white' } : {})}}>
                             {isVariant
                               ? <span style={{fontSize:12, color:'#9aa3bc', paddingLeft:4}}>{form.name || ''}</span>
                               : <input ref={setRef(0)} style={{...s.tblInput, minWidth:180}} value={form.name || ''} onChange={e => updateProductForm(p.id, 'name', e.target.value)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 0)} />
@@ -7432,6 +7476,8 @@ useEffect(() => {
                     onClick={e => handleUserClick(e, u.id)}
                     style={{
                       ...s.userRow,
+                      flexDirection: isMobile ? 'column' : 'row',
+                      alignItems: isMobile ? 'stretch' : 'center',
                       opacity: isDeleted ? 0.58 : 1,
                       background: isDeleted
                         ? (adminDarkMode ? 'rgba(229,62,62,0.08)' : '#fff5f5')
@@ -7548,8 +7594,8 @@ useEffect(() => {
                         </div>
                       )}
                     </div>
-                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:14, flex:'0 0 1260px', width:1260, minWidth:0}} onClick={e => e.stopPropagation()}>
-                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'nowrap', justifyContent:'center', flex:'0 0 auto', minWidth:620}}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent: isMobile ? 'flex-start' : 'space-between', flexWrap: isMobile ? 'wrap' : 'nowrap', gap:14, flex: isMobile ? '1 1 100%' : '0 0 1260px', width: isMobile ? '100%' : 1260, minWidth:0}} onClick={e => e.stopPropagation()}>
+                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap: isMobile ? 'wrap' : 'nowrap', justifyContent: isMobile ? 'flex-start' : 'center', flex: isMobile ? '1 1 100%' : '0 0 auto', minWidth: isMobile ? 0 : 620}}>
                         <button
                           disabled={hasBulkUserSelection}
                           onClick={() => setUserScaleModal(u)}
@@ -7885,6 +7931,31 @@ useEffect(() => {
               <h2 style={s.sectionTitle}>Vendedores ({sellers.length})</h2>
               {sellers.length === 0 && <p style={s.emptyMsg}>No hay vendedores todavía.</p>}
               {sellers.length > 0 && (
+                isMobile ? (
+                  <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                    {sellers.map(sel => (
+                      <div key={sel.id} style={{border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white', opacity: sel.active ? 1 : 0.5}}>
+                        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                          <input
+                            style={{...s.tblInput, flex:1}}
+                            defaultValue={sel.name}
+                            onBlur={e => updateSellerField(sel.id, 'name', e.target.value)}
+                          />
+                          <button style={s.iconBtn} onClick={() => toggleSeller(sel.id, sel.active)}>
+                            {sel.active ? <EyeOpen /> : <EyeOff />}
+                          </button>
+                          <TrashBtn onClick={() => deleteSeller(sel.id)} />
+                        </div>
+                        <input
+                          style={{...s.tblInput, width:'100%', boxSizing:'border-box', marginTop:6}}
+                          defaultValue={sel.phone || ''}
+                          placeholder="Teléfono"
+                          onBlur={e => updateSellerField(sel.id, 'phone', e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div style={{overflowX:'auto'}}>
                   <table style={s.tbl}>
                     <thead>
@@ -7926,6 +7997,7 @@ useEffect(() => {
                     </tbody>
                   </table>
                 </div>
+                )
               )}
             </div>
           </>
@@ -7978,7 +8050,7 @@ useEffect(() => {
                       </div>
                       <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
                     </div>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, paddingLeft:22}}>
+                    <div style={{display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:8, paddingLeft:22}}>
                       <div>
                         <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Nombre</div>
                         <input
@@ -9653,6 +9725,7 @@ function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCar
 }
 
 function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefresh, onSave, onView, retentionDays }) {
+  const isMobile = useIsMobile();
   const formatDate = (value) => new Date(value).toLocaleString('es-AR', {
     day: '2-digit',
     month: '2-digit',
@@ -9715,22 +9788,41 @@ function VersionHistoryTab({ snapshots, loading, saving, error, notice, onRefres
         ) : (
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             {snapshots.map(snapshot => (
-              <div key={snapshot.id} style={{display:'grid', gridTemplateColumns:'minmax(150px, 210px) 92px 1fr minmax(140px, 220px) 92px', gap:12, alignItems:'center', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white'}}>
-                <div>
-                  <div style={{fontSize:13, fontWeight:800, color:'#1B2F5E'}}>{formatDate(snapshot.created_at)}</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>hash {snapshot.content_hash}</div>
+              isMobile ? (
+                <div key={snapshot.id} style={{border:'1px solid #eef0f6', borderRadius:10, padding:'12px 14px', background:'white'}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8}}>
+                    <div>
+                      <div style={{fontSize:13, fontWeight:800, color:'#1B2F5E'}}>{formatDate(snapshot.created_at)}</div>
+                      <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>hash {snapshot.content_hash}</div>
+                    </div>
+                    <span style={{background: snapshot.source === 'manual' ? '#e8eef9' : '#f0f2f8', color: snapshot.source === 'manual' ? '#1B2F5E' : '#5a6380', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:800, flexShrink:0}}>
+                      {snapshot.source === 'manual' ? 'Manual' : 'Auto'}
+                    </span>
+                  </div>
+                  <div style={{fontSize:12, color:'#5a6380', lineHeight:1.5, marginTop:8}}>{countLabel(snapshot.counts)}</div>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:10, paddingTop:10, borderTop:'1px solid #f0f2f8'}}>
+                    <span style={{fontSize:11, color:'#9aa3bc', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{snapshot.created_by || 'Sin usuario registrado'}</span>
+                    <button style={{...styles.editBtn, padding:'6px 10px', flexShrink:0}} onClick={() => onView(snapshot)}>Ver datos</button>
+                  </div>
                 </div>
-                <span style={{justifySelf:'start', background: snapshot.source === 'manual' ? '#e8eef9' : '#f0f2f8', color: snapshot.source === 'manual' ? '#1B2F5E' : '#5a6380', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:800}}>
-                  {snapshot.source === 'manual' ? 'Manual' : 'Auto'}
-                </span>
-                <div style={{fontSize:12, color:'#5a6380', lineHeight:1.5}}>{countLabel(snapshot.counts)}</div>
-                <div style={{fontSize:11, color:'#9aa3bc', textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                  {snapshot.created_by || 'Sin usuario registrado'}
+              ) : (
+                <div key={snapshot.id} style={{display:'grid', gridTemplateColumns:'minmax(150px, 210px) 92px 1fr minmax(140px, 220px) 92px', gap:12, alignItems:'center', border:'1px solid #eef0f6', borderRadius:10, padding:'10px 12px', background:'white'}}>
+                  <div>
+                    <div style={{fontSize:13, fontWeight:800, color:'#1B2F5E'}}>{formatDate(snapshot.created_at)}</div>
+                    <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>hash {snapshot.content_hash}</div>
+                  </div>
+                  <span style={{justifySelf:'start', background: snapshot.source === 'manual' ? '#e8eef9' : '#f0f2f8', color: snapshot.source === 'manual' ? '#1B2F5E' : '#5a6380', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:800}}>
+                    {snapshot.source === 'manual' ? 'Manual' : 'Auto'}
+                  </span>
+                  <div style={{fontSize:12, color:'#5a6380', lineHeight:1.5}}>{countLabel(snapshot.counts)}</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                    {snapshot.created_by || 'Sin usuario registrado'}
+                  </div>
+                  <button style={{...styles.editBtn, padding:'6px 10px', justifySelf:'end'}} onClick={() => onView(snapshot)}>
+                    Ver datos
+                  </button>
                 </div>
-                <button style={{...styles.editBtn, padding:'6px 10px', justifySelf:'end'}} onClick={() => onView(snapshot)}>
-                  Ver datos
-                </button>
-              </div>
+              )
             ))}
           </div>
         )}
@@ -10220,6 +10312,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 }
 
 function TrackingTab({ supabase, products, sellers, orders, activeSubtab, onChangeSubtab }) {
+  const isMobile = useIsMobile();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -10868,16 +10961,27 @@ function ActivityHistory({ supabase }) {
           </div>
 
           <div style={{ border: '1px solid #eef0f6', borderRadius: 8, overflow: 'hidden', minWidth: 0 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, background: '#f7f8fc', padding: '6px 9px', fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase' }}>
-              <span>Hora</span><span>Evento</span><span>Detalle</span><span>Pagina</span>
-            </div>
+            {!isMobile && (
+              <div style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, background: '#f7f8fc', padding: '6px 9px', fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase' }}>
+                <span>Hora</span><span>Evento</span><span>Detalle</span><span>Pagina</span>
+              </div>
+            )}
             {loading ? (
               <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>Cargando actividad...</div>
             ) : selectedEvents.length === 0 ? (
               <div style={{ padding: 10, color: '#9aa3bc', fontSize: 12 }}>No hay eventos para esta seleccion.</div>
             ) : selectedEvents.map(event => {
               const cfg = ACTIVITY_EVENT_CONFIG[event.event_type] || { label: event.event_type, color: '#9aa3bc' };
-              return (
+              return isMobile ? (
+                <div key={event.id} style={{ padding: '6px 9px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: cfg.color, fontWeight: 800 }}>{cfg.label}</span>
+                    <span style={{ color: '#9aa3bc', fontSize: 11, flexShrink: 0 }}>{dateTimeLabel(event.created_at)}</span>
+                  </div>
+                  <div style={{ color: '#5a6380', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{describeEvent(event)}</div>
+                  <div style={{ color: '#9aa3bc', fontSize: 11, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{event.page || '-'}</div>
+                </div>
+              ) : (
                 <div key={event.id} style={{ display: 'grid', gridTemplateColumns: '116px 132px 1fr 86px', gap: 8, alignItems: 'center', padding: '5px 9px', borderTop: '1px solid #eef0f6', fontSize: 12 }}>
                   <span style={{ color: '#9aa3bc' }}>{dateTimeLabel(event.created_at)}</span>
                   <span style={{ color: cfg.color, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cfg.label}</span>
