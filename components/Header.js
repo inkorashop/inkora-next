@@ -7,6 +7,7 @@ import GoogleOneTap from '@/components/GoogleOneTap';
 import SafeImage from '@/components/SafeImage';
 import { signInWithGoogle } from '@/lib/auth';
 import { useTrack } from '@/hooks/useTrack';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_COLOR } from '@/lib/order-status';
 
 
 export default function Header({ headerVisible = true, showCart = false, page = 'landing' }) {
@@ -187,7 +188,7 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                 </svg>
                 {cartItems.length > 0 && (
                   <span style={{ position: 'absolute', top: -6, left: -6, background: '#2D6BE4', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    1
+                    {cartItems.length}
                   </span>
                 )}
                 {pendingCount > 0 && (
@@ -278,8 +279,10 @@ export default function Header({ headerVisible = true, showCart = false, page = 
                     ) : orders.length === 0 ? (
                       <div style={{ padding: '24px 16px', textAlign: 'center', color: '#9aa3bc', fontSize: 13 }}>No tenés pedidos todavía.</div>
                     ) : orders.map(o => {
-                      const statusMap = { pending: { label: 'Pendiente', color: '#f6a800' }, confirmed: { label: 'Confirmado', color: '#2D6BE4' }, in_production: { label: 'En producción', color: '#6d28d9' }, ready: { label: 'Listo', color: '#18a36a' }, cancelled: { label: 'Cancelado', color: '#e53e3e' } };
-                      const st = statusMap[o.status] || statusMap.pending;
+                      const st = {
+                        label: ORDER_STATUS_LABEL[o.status] || ORDER_STATUS_LABEL.pending,
+                        color: ORDER_STATUS_COLOR[o.status] || ORDER_STATUS_COLOR.pending,
+                      };
                       const showStatus = uiSettings['show_order_status'] !== 'false';
                       return (
                         <div key={o.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f2f8' }}>

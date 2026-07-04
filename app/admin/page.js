@@ -13,6 +13,7 @@ import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import ChatPanel from '@/components/chat/ChatPanel';
 import PwaUpdateManager from '@/components/PwaUpdateManager';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
+import { toSlug as slugify } from '@/lib/slug';
 import {
   canInferSingleProductUnitPrice,
   formatOrderMoney,
@@ -235,10 +236,6 @@ async function makeOptimizedDesignImage(sourceUrl, targetKb) {
     height: bestMeta?.height,
     quality: bestMeta?.quality,
   };
-}
-
-function slugify(str) {
-  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
 function getAdminSessionId() {
@@ -672,7 +669,6 @@ useEffect(() => {
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const lastSelectedUserIdRef = useRef(null);
   const [bulkUpdatingUsers, setBulkUpdatingUsers] = useState(false);
-  const inviteOpen = true;
   const [inviteForm, setInviteForm] = useState({ name: '', phone: '', email: '', password: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
@@ -4774,7 +4770,6 @@ useEffect(() => {
   const pendingExistingConflicts = pendingFiles.filter(f => f.nameExists && f.existingDesignId);
 
   const s = getAdminStyles(adminDarkMode);
-  const useProductManagementModals = true;
   const modalProduct = productManageModal?.productId
     ? products.find(p => p.id === productManageModal.productId)
     : null;
@@ -5375,16 +5370,16 @@ useEffect(() => {
                 <h2 style={{...s.sectionTitle, marginBottom:0}}>Productos</h2>
                 <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600}}>{products.length} producto{products.length !== 1 ? 's' : ''}</span>
               </div>
-              <div style={{...s.productTableWrap, maxHeight: useProductManagementModals ? 'calc(100vh - 112px)' : undefined}} data-orders-table>
-                <table style={{ ...s.tbl, minWidth: useProductManagementModals ? 1570 : 1320 }}>
+              <div style={{...s.productTableWrap, maxHeight: 'calc(100vh - 112px)'}} data-orders-table>
+                <table style={{ ...s.tbl, minWidth: 1570 }}>
                   <colgroup>
                     <col style={{width:42}} />
                     <col style={{width:200}} />
                     <col style={{width:220}} />
-                    {useProductManagementModals && <col style={{width:78}} />}
-                    {useProductManagementModals && <col style={{width:72}} />}
-                    {useProductManagementModals && <col style={{width:86}} />}
-                    {useProductManagementModals && <col style={{width:64}} />}
+                    <col style={{width:78}} />
+                    <col style={{width:72}} />
+                    <col style={{width:86}} />
+                    <col style={{width:64}} />
                     <col style={{width:70}} />
                     <col style={{width:70}} />
                     <col style={{width:72}} />
@@ -5404,10 +5399,10 @@ useEffect(() => {
                       <th style={s.th}>Ver</th>
                       <th style={s.th}>Producto</th>
                       <th style={s.th}>Variante</th>
-                      {useProductManagementModals && <th style={s.th}>Categorías</th>}
-                      {useProductManagementModals && <th style={s.th}>Escalas precios</th>}
-                      {useProductManagementModals && <th style={s.th}>Escalas diseños</th>}
-                      {useProductManagementModals && <th style={s.th}>INFO</th>}
+                      <th style={s.th}>Categorías</th>
+                      <th style={s.th}>Escalas precios</th>
+                      <th style={s.th}>Escalas diseños</th>
+                      <th style={s.th}>INFO</th>
                       <th style={s.th}>Cat PC</th>
                       <th style={s.th}>Cat Cel</th>
                       <th style={s.th}>Land PC</th>
@@ -5492,60 +5487,52 @@ useEffect(() => {
                               </div>
                             </div>
                           </td>
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
-                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
-                              >
-                                Categorías
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                              </button>
-                            </td>
-                          )}
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
-                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
-                              >
-                                Escalas Precios
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                              </button>
-                            </td>
-                          )}
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative', display:'flex', alignItems:'center', gap:4}}
-                                onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'design_limits', productId: p.id }); }}
-                              >
-                                Escalas Diseños
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                {(() => {
-                                  const config = getProductDesignLimitConfig(p);
-                                  const own = getDesignLimitRules()[p.id];
-                                  const count = own?.inheritParent && p.parent_product_id ? '↳' : config.tiers.length;
-                                  return config.tiers.length > 0 ? (
-                                    <span style={{position:'absolute', top:-4, right:-4, minWidth:14, height:14, borderRadius:7, background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, padding:'0 3px'}}>{count}</span>
-                                  ) : null;
-                                })()}
-                              </button>
-                            </td>
-                          )}
-                          {useProductManagementModals && (
-                            <td style={{...s.td, textAlign:'center'}}>
-                              <button
-                                style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative'}}
-                                onClick={e => { e.stopPropagation(); setInfoTagsModal({ productId: p.id, tags: Array.isArray(p.info_tags) ? p.info_tags : [] }); }}
-                              >
-                                INFO
-                                {Array.isArray(p.info_tags) && p.info_tags.length > 0 && (
-                                  <span style={{position:'absolute', top:-4, right:-4, width:14, height:14, borderRadius:'50%', background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{p.info_tags.length}</span>
-                                )}
-                              </button>
-                            </td>
-                          )}
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
+                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'categories', productId: p.id }); }}
+                            >
+                              Categorías
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4}}
+                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'tiers', productId: p.id }); }}
+                            >
+                              Escalas Precios
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative', display:'flex', alignItems:'center', gap:4}}
+                              onClick={e => { e.stopPropagation(); setProductManageModal({ type: 'design_limits', productId: p.id }); }}
+                            >
+                              Escalas Diseños
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              {(() => {
+                                const config = getProductDesignLimitConfig(p);
+                                const own = getDesignLimitRules()[p.id];
+                                const count = own?.inheritParent && p.parent_product_id ? '↳' : config.tiers.length;
+                                return config.tiers.length > 0 ? (
+                                  <span style={{position:'absolute', top:-4, right:-4, minWidth:14, height:14, borderRadius:7, background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1, padding:'0 3px'}}>{count}</span>
+                                ) : null;
+                              })()}
+                            </button>
+                          </td>
+                          <td style={{...s.td, textAlign:'center'}}>
+                            <button
+                              style={{...s.editBtn, padding:'4px 8px', whiteSpace:'nowrap', position:'relative'}}
+                              onClick={e => { e.stopPropagation(); setInfoTagsModal({ productId: p.id, tags: Array.isArray(p.info_tags) ? p.info_tags : [] }); }}
+                            >
+                              INFO
+                              {Array.isArray(p.info_tags) && p.info_tags.length > 0 && (
+                                <span style={{position:'absolute', top:-4, right:-4, width:14, height:14, borderRadius:'50%', background:'#2D6BE4', color:'white', fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}>{p.info_tags.length}</span>
+                              )}
+                            </button>
+                          </td>
                           <td style={s.td}>
                             <input ref={setRef(1)} style={{...s.tblInput, width: 62}} type="number" min="80" max="600" value={form.card_width_desktop ?? 180} onChange={e => updateProductForm(p.id, 'card_width_desktop', parseInt(e.target.value)||180)} onBlur={() => saveProduct(p.id)} onKeyDown={e => handleProductKeyDown(e, rowIdx, 1)} />
                           </td>
@@ -5836,8 +5823,8 @@ useEffect(() => {
                         </td>
                         <td style={s.td}><input style={{...s.tblInput, width:64}} type="number" min="100" value={newProduct.landing_max_file_size_kb} onChange={e => setNewProduct(p => ({...p, landing_max_file_size_kb: parseInt(e.target.value)||4096}))} /></td>
                         <td style={{...s.td, textAlign:'center', color:'#9aa3bc', fontSize:11}}>Luego</td>
-                        {useProductManagementModals && <td style={s.td}></td>}
-                        {useProductManagementModals && <td style={s.td}></td>}
+                        <td style={s.td}></td>
+                        <td style={s.td}></td>
                         <td style={s.td}>
                           <button style={{...s.btnPrimary, padding:'6px 14px', fontSize:13, opacity: newProduct.name && !savingProduct ? 1 : 0.5}} disabled={!newProduct.name || savingProduct} onClick={addProduct}>
                             {savingProduct ? '...' : 'Crear'}
@@ -5847,7 +5834,7 @@ useEffect(() => {
                       </tr>
                     )}
                     <tr>
-                      <td colSpan={useProductManagementModals ? 17 : 15} style={{padding:'10px 6px'}}>
+                      <td colSpan={17} style={{padding:'10px 6px'}}>
                         <button style={{...s.editBtn, width:'100%', textAlign:'center', padding:'8px'}} onClick={() => { setShowAddForm(v => !v); setNewProduct(EMPTY_PRODUCT); }}>
                           {showAddForm ? '✕ Cancelar' : '+ Agregar producto'}
                         </button>
@@ -5858,257 +5845,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {!useProductManagementModals && (
-              <>
-
-            {/* CATEGORIAS */}
-            <div style={s.card}>
-              <h2 style={s.sectionTitle}>Categorías por producto</h2>
-              {products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p> : (
-                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
-                  {products.filter(p => p.active).map(product => {
-                    const cats = getProductCategories(product.id);
-                    const newCat = newCatInputs[product.id] || '';
-                    return (
-                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 200px', minWidth:180}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{productDisplayName(product)}</div>
-                        <div style={{padding:'8px 10px', display:'flex', flexWrap:'wrap', gap:4, minHeight:36}}>
-                          <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
-                          {cats.map(cat => {
-                            const p = products.find(pr => pr.id === product.id);
-                            const savedColor = p?.category_colors?.[cat] || '#e8eef9';
-                            const pickerKey = `${product.id}:${cat}`;
-                            const pickerOpen = catColorPicker[pickerKey];
-                            const isEditingCat = editingProductCategory?.productId === product.id && editingProductCategory?.oldName === cat;
-                            return (
-                              <span key={cat}
-                                draggable={!isEditingCat}
-                                onDragStart={e => { if (isEditingCat) { e.preventDefault(); return; } dragSrcCatRef.current = cat; setDragOverCat(null); }}
-                                onDragOver={e => { if (isEditingCat) return; e.preventDefault(); setDragOverCat(cat); }}
-                                onDrop={() => { if (!isEditingCat) reorderProductCategory(product.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
-                                onDragEnd={() => { dragSrcCatRef.current = null; setDragOverCat(null); }}
-                                style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor: isEditingCat ? 'text' : 'grab'}}>
-                                {isEditingCat ? (
-                                  <input
-                                    autoFocus
-                                    value={editingProductCategory.value}
-                                    disabled={savingProductCategory}
-                                    onMouseDown={e => e.stopPropagation()}
-                                    onClick={e => e.stopPropagation()}
-                                    onChange={e => setEditingProductCategory(prev => prev ? {...prev, value: e.target.value} : prev)}
-                                    onBlur={saveProductCategoryName}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter' || e.key === 'Escape') {
-                                        e.preventDefault();
-                                        e.currentTarget.blur();
-                                      }
-                                    }}
-                                    style={{width: Math.max(72, editingProductCategory.value.length * 7), maxWidth:160, border:'none', borderBottom:'1px solid #2D6BE4', background:'transparent', color:'#1B2F5E', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:600, padding:0, outline:'none'}}
-                                  />
-                                ) : cat}
-                                <span
-                                  title="Color de la categoría"
-                                  onClick={e => { e.stopPropagation(); const pickerOpen = catColorPicker[pickerKey]; setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
-                                  style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
-                                />
-                                <input
-                                  type="color"
-                                  defaultValue={savedColor}
-                                  style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
-                                  onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(product.id, cat, e.target.value); }}
-                                  onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
-                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(product.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
-                                />
-                                <button
-                                  title="Editar categoria"
-                                  style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}}
-                                  onMouseDown={e => e.stopPropagation()}
-                                  onClick={e => { e.stopPropagation(); startProductCategoryEdit(product.id, cat); }}
-                                >
-                                  ✎
-                                </button>
-                                <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(product.id, cat)}>×</button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                        <div style={{padding:'0 8px 8px', display:'flex', gap:4}}>
-                          <input
-                            style={{...s.tblInput, flex:1, padding:'3px 6px', fontSize:12}}
-                            placeholder="Nueva categoría..."
-                            value={newCat}
-                            onChange={e => setNewCatInputs(prev => ({...prev, [product.id]: e.target.value}))}
-                            onKeyDown={e => { if (e.key === 'Enter') addProductCategory(product.id, newCat); }}
-                          />
-                          <button style={{...s.editBtn, whiteSpace:'nowrap'}} onClick={() => addProductCategory(product.id, newCat)}>+ Agregar</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* ESCALAS */}
-            <div style={s.card}>
-              <h2 style={s.sectionTitle}>Escalas de precio</h2>
-              {localities.filter(l => l.active).length === 0 ? <p style={s.emptyMsg}>No hay localidades activas.</p>
-              : products.filter(p => p.active).length === 0 ? <p style={s.emptyMsg}>No hay productos activos.</p>
-              : (
-                <div style={{display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-start'}}>
-                  {products.filter(p => p.active).map(product => {
-                    const productTiers = priceTiers.filter(t => t.product_id === product.id);
-                    const activeLocalities = localities.filter(l => l.active);
-
-                    const renderLocalityBlock = (localityId, localityName, borderTop) => {
-                      const key = `${product.id}_${localityId}`;
-                      const tiers = productTiers
-                        .filter(t => t.locality_id === localityId)
-                        .sort((a,b) => Number(a.min_quantity) - Number(b.min_quantity));
-
-                      const nt = newTiers[key] || { min_quantity: '', price_per_unit: '' };
-                      const cellStyle = {padding:'2px 6px', verticalAlign:'middle'};
-                      const emptyRowIdx = tiers.length;
-
-                      return (
-                        <div key={key} style={{borderTop: borderTop ? '1px solid #f0f2f8' : 'none'}}>
-                          <div style={{padding:'4px 8px 2px', fontSize:10, fontWeight:700, color:'#9aa3bc', letterSpacing:0.5, textTransform:'uppercase'}}>
-                            {localityName}
-                          </div>
-
-                          <table style={{width:'100%', borderCollapse:'collapse'}}>
-                            <thead>
-                              <tr style={{borderBottom:'1px solid #eef0f6'}}>
-                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Cantidad</th>
-                                <th style={{padding:'2px 6px', fontSize:10, fontWeight:600, color:'#b0b8d0', textAlign:'left', whiteSpace:'nowrap'}}>Precio/u</th>
-                                <th style={{padding:'2px 4px', width:22}}></th>
-                              </tr>
-                            </thead>
-
-                            <tbody>
-                              {tiers.map((t, tierRowIdx) => {
-                                const ef = editingTiers[t.id] || { min_quantity: t.min_quantity, price_per_unit: t.price_per_unit };
-
-                                return (
-                                  <tr key={t.id} style={{borderBottom:'1px solid #f0f2f8'}}>
-                                    <td style={cellStyle}>
-                                      <input
-                                        ref={setTierCellRef(key, tierRowIdx, 0)}
-                                        className="tier-input"
-                                        type="number"
-                                        min="1"
-                                        value={ef.min_quantity}
-                                        onChange={e => updateTierForm(t.id, 'min_quantity', e.target.value)}
-                                        onBlur={() => saveTierAuto(t.id)}
-                                        onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 0, t.id)}
-                                      />
-                                    </td>
-
-                                    <td style={cellStyle}>
-                                      <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                        <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
-                                        <input
-                                          ref={setTierCellRef(key, tierRowIdx, 1)}
-                                          className="tier-input"
-                                          type="number"
-                                          min="0"
-                                          value={ef.price_per_unit}
-                                          onChange={e => updateTierForm(t.id, 'price_per_unit', e.target.value)}
-                                          onBlur={() => saveTierAuto(t.id)}
-                                          onKeyDown={e => handleTierCellKeyDown(e, key, tierRowIdx, 1, t.id)}
-                                        />
-                                        <span
-                                          style={{
-                                            width: 12,
-                                            minWidth: 12,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: '#18a36a',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            opacity: savedTierId === t.id ? 1 : 0
-                                          }}
-                                        >
-                                          ✓
-                                        </span>
-                                      </div>
-                                    </td>
-
-                                    <td style={{...cellStyle, textAlign:'center'}}>
-                                      <TrashBtn onClick={() => deleteScale(t.id)} />
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-
-                              <tr style={{borderBottom:'1px solid #f0f2f8', background:'#fbfcff'}}>
-                                <td style={cellStyle}>
-                                  <input
-                                    ref={setTierCellRef(key, emptyRowIdx, 0)}
-                                    className="tier-input"
-                                    type="number"
-                                    min="1"
-                                    placeholder="Cantidad"
-                                    value={nt.min_quantity}
-                                    onChange={e => updateNewTierForm(key, 'min_quantity', e.target.value)}
-                                    onBlur={() => commitNewTierIfReady(product.id, localityId, key)}
-                                    onKeyDown={e => handleNewTierKeyDown(e, product.id, localityId, key, emptyRowIdx, 0)}
-                                  />
-                                </td>
-
-                                <td style={cellStyle}>
-                                  <div style={{display:'flex', alignItems:'center', gap:2}}>
-                                    <span style={{fontSize:11, color:'#c4c9d9'}}>$</span>
-                                    <input
-                                      ref={setTierCellRef(key, emptyRowIdx, 1)}
-                                      className="tier-input"
-                                      type="number"
-                                      min="0"
-                                      placeholder="Precio"
-                                      value={nt.price_per_unit}
-                                      onChange={e => updateNewTierForm(key, 'price_per_unit', e.target.value)}
-                                      onBlur={() => commitNewTierIfReady(product.id, localityId, key)}
-                                      onKeyDown={e => handleNewTierKeyDown(e, product.id, localityId, key, emptyRowIdx, 1)}
-                                    />
-                                    <span
-                                      style={{
-                                        width: 12,
-                                        minWidth: 12,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#18a36a',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        opacity: 0
-                                      }}
-                                    >
-                                      ✓
-                                    </span>
-                                  </div>
-                                </td>
-
-                                <td style={{...cellStyle, textAlign:'center'}} />
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <div key={product.id} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden', flex:'1 1 220px', minWidth:200}}>
-                        <div style={{background:'#1B2F5E', color:'white', padding:'5px 10px', fontSize:12, fontWeight:700, letterSpacing:0.5}}>{productDisplayName(product)}</div>
-                        {activeLocalities.map((locality, li) => renderLocalityBlock(locality.id, locality.name, li > 0))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-              </>
-            )}
           </>
         )}
 
@@ -7295,8 +7031,7 @@ useEffect(() => {
               >
                 <span style={{fontSize:13, fontWeight:700, color: adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>+ Invitar usuario</span>
               </div>
-              {inviteOpen && (
-                <div style={{padding:'16px', display:'flex', flexDirection:'column', gap:12}}>
+              <div style={{padding:'16px', display:'flex', flexDirection:'column', gap:12}}>
                   <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
                     <div style={{flex:'1 1 140px', display:'flex', flexDirection:'column', gap:4}}>
                       <label style={{fontSize:11, fontWeight:600, color:'#5a6380'}}>Nombre *</label>
@@ -7346,7 +7081,6 @@ useEffect(() => {
                     )}
                   </div>
                 </div>
-              )}
             </div>
 
             {/* Buscador + filtros */}
@@ -8781,7 +8515,7 @@ useEffect(() => {
       })()}
 
       {/* MODALES DE GESTIÓN POR PRODUCTO */}
-      {useProductManagementModals && productManageModal && modalProduct && (
+      {productManageModal && modalProduct && (
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20, overscrollBehavior:'contain'}} onClick={() => setProductManageModal(null)}>
           <div
             ref={productManageModalRef}

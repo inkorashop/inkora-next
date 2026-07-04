@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_COLOR } from '@/lib/order-status';
 
 
 function formatDate(dateStr) {
@@ -11,13 +12,11 @@ function formatDate(dateStr) {
 }
 
 function statusLabel(status) {
-  const map = { pending: 'Pendiente', confirmed: 'Confirmado', completed: 'Completado', cancelled: 'Cancelado' };
-  return map[status] || status;
+  return ORDER_STATUS_LABEL[status] || status;
 }
 
 function statusColor(status) {
-  const map = { pending: '#f6a800', confirmed: '#2D6BE4', completed: '#18a36a', cancelled: '#e53e3e' };
-  return map[status] || '#9aa3bc';
+  return ORDER_STATUS_COLOR[status] || '#9aa3bc';
 }
 
 export default function Dashboard() {

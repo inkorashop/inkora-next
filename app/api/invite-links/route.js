@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getAdminClient } from '@/lib/supabase-admin';
 import {
   createStoredInviteLink,
   loadInviteState,
@@ -8,13 +8,6 @@ import {
   updateStoredInviteLink,
 } from '@/lib/invite-access-links';
 import { adminAuthStatus, requireAdmin } from '@/lib/admin-api-auth';
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Faltan variables de Supabase en el servidor');
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
 
 function filterState(state, userId) {
   if (!userId) return state;

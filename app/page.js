@@ -9,13 +9,10 @@ import {
   parseVisibilityRules,
   userVisibilityKey,
 } from '@/lib/visibility-rules';
+import { toSlug } from '@/lib/slug';
 
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP;
-
-function toSlug(name) {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-}
 
 export default function Landing() {
   const { track } = useTrack();

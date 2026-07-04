@@ -9,6 +9,7 @@ import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
 import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
+import { toSlug } from '@/lib/slug';
 import {
   filterCategoriesForVisibility,
   filterDesignsForVisibility,
@@ -46,10 +47,6 @@ function useWindowWidth() {
     return () => window.removeEventListener('resize', handler);
   }, []);
   return width;
-}
-
-function toSlug(name) {
-  return String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
 function is3dModelUrl(url) {
@@ -430,6 +427,25 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Precios en vivo: si un admin edita una escala mientras el cliente tiene
+  // el catálogo abierto, se refleja sin recargar la página.
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const channel = supabase
+      .channel('price-tiers-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'price_tiers' }, () => {
+        loadPriceTiersForUser(userId);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // Heatmap overlay — solo si ?heatmap=1 y es admin
   const heatmapEventsRef = useRef([]);
   const heatmapDrawRef = useRef(null);
@@ -785,9 +801,7 @@ export default function Home() {
     };
   }, []);
 
-  async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
-    setProfile(data);
+  async function loadPriceTiersForUser(userId) {
     const [{ data: assignments, error: assignmentError }, { data: allTiers }] = await Promise.all([
       supabase.from('user_product_localities').select('product_id, locality_id').eq('user_id', userId),
       supabase.from('price_tiers').select('*').order('min_quantity'),
@@ -806,6 +820,12 @@ export default function Home() {
       return productLocalityId ? tier.locality_id === productLocalityId : false;
     });
     setPriceTiers(visibleTiers);
+  }
+
+  async function loadProfile(userId) {
+    const { data } = await supabase.from('profiles').select('*, localities(*), sellers(id, name, phone)').eq('id', userId).single();
+    setProfile(data);
+    await loadPriceTiersForUser(userId);
   }
 
   async function loadAdminStatus(email) {
