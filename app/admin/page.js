@@ -10,6 +10,7 @@ import CreateOrderModal from '@/components/CreateOrderModal';
 import QuickPrintOverlay from '@/components/QuickPrintOverlay';
 import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
+import ChatPanel from '@/components/chat/ChatPanel';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
 import {
   canInferSingleProductUnitPrice,
@@ -3839,18 +3840,6 @@ useEffect(() => {
     }
   }
 
-  function formatAdminTime(iso) {
-    if (!iso) return '';
-    try {
-      return new Date(iso).toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
-    }
-  }
-
   function getNotificationTone(type) {
     if (type === 'password_changed') return { label: 'Contraseña', color: '#7c3aed', bg: '#f3e8ff' };
     if (type === 'order_created') return { label: 'Pedido', color: '#15803d', bg: '#dcfce7' };
@@ -5281,7 +5270,7 @@ useEffect(() => {
       <div style={s.tabBar}>
         <div style={s.tabBarInner} className="adm-tabs">
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Chat', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -7017,82 +7006,29 @@ useEffect(() => {
           <div style={s.card}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, marginBottom:14}}>
               <div>
-                <h2 style={{...s.sectionTitle, marginBottom:4}}>Notificaciones internas ({adminNotifications.length})</h2>
-                <div style={{fontSize:12, color:'#8b95b3'}}>Pedidos nuevos y cambios manuales de contraseña.</div>
+                <h2 style={{...s.sectionTitle, marginBottom:4}}>Chat interno</h2>
+                <div style={{fontSize:12, color:'#8b95b3'}}>Mensajes del equipo y notificaciones del sistema (pedidos nuevos, cambios de contraseña).</div>
               </div>
-              <button
-                onClick={loadAdminNotifications}
-                disabled={loadingNotifications}
-                style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 12px', background:'#f8faff', color:'#1B2F5E', fontSize:12, fontWeight:800, cursor:loadingNotifications ? 'not-allowed' : 'pointer', opacity:loadingNotifications ? 0.55 : 1}}
-              >
-                Actualizar
-              </button>
             </div>
-
-            {notificationsError && (
-              <div style={{border:'1.5px solid #fed7aa', background:'#fff7ed', color:'#c2410c', borderRadius:10, padding:'10px 12px', fontSize:12, fontWeight:700, marginBottom:12}}>
-                {notificationsError}
-              </div>
-            )}
-
-            {loadingNotifications && adminNotifications.length === 0 && <p style={s.emptyMsg}>Cargando notificaciones...</p>}
-            {!loadingNotifications && !notificationsError && adminNotifications.length === 0 && (
-              <p style={s.emptyMsg}>Todavía no hay notificaciones internas.</p>
-            )}
-
-            <div style={{display:'flex', flexDirection:'column', gap:8}}>
-              {adminNotifications.map(notification => {
-                const meta = notification.metadata || {};
-                const tone = notification.tone || getNotificationTone(notification.type);
-                const itemsPreview = meta.items_preview || summarizeNotificationItems(meta.items);
-                return (
-                  <div
-                    key={notification.id}
-                    style={{
-                      border:'1.5px solid #eef2fb',
-                      borderRadius:10,
-                      padding:'11px 12px',
-                      background: adminDarkMode ? 'rgba(255,255,255,0.03)' : '#fbfcff',
-                      display:'grid',
-                      gridTemplateColumns:'auto 1fr auto',
-                      gap:10,
-                      alignItems:'start',
-                    }}
-                  >
-                    <span style={{fontSize:11, fontWeight:900, color:tone.color, background:tone.bg, borderRadius:999, padding:'3px 8px', whiteSpace:'nowrap'}}>
-                      {tone.label}
-                    </span>
-                    <div style={{minWidth:0}}>
-                      <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
-                        <span style={{fontSize:13, fontWeight:900, color:adminDarkMode ? '#e7ecf8' : '#1B2F5E'}}>{notification.title}</span>
-                        {meta.order_code && <span style={{fontSize:11, fontFamily:'monospace', color:'#2D6BE4', fontWeight:800}}>{meta.order_code}</span>}
-                      </div>
-                      <div style={{fontSize:12, color:adminDarkMode ? '#b9c4da' : '#5a6380', marginTop:3, lineHeight:1.35}}>
-                        {notification.body}
-                      </div>
-                      {notification.type === 'order_created' && (
-                        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:6, fontSize:11, color:'#8b95b3'}}>
-                          {meta.customer_email && <span>{meta.customer_email}</span>}
-                          {meta.customer_phone && <span>{meta.customer_phone}</span>}
-                          {itemsPreview && <span style={{maxWidth:420, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{itemsPreview}</span>}
-                          {meta.notes && <span style={{maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>Nota: {meta.notes}</span>}
-                        </div>
-                      )}
-                      {notification.type === 'password_changed' && (
-                        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:6, fontSize:11, color:'#8b95b3'}}>
-                          {meta.user_email && <span>{meta.user_email}</span>}
-                          {meta.user_name && <span>{meta.user_name}</span>}
-                          <span>No se registra ni se muestra la contraseña.</span>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{fontSize:11, color:'#9aa3bc', fontWeight:800, whiteSpace:'nowrap', textAlign:'right'}} title={formatAdminDateTime(notification.created_at)}>
-                      {formatAdminTime(notification.created_at)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ChatPanel
+              supabase={supabase}
+              currentUser={currentUser}
+              isOwner={currentUser === 'inkorashop@gmail.com'}
+              admins={admins}
+              operators={operators}
+              orders={orders}
+              designs={designs}
+              adminDarkMode={adminDarkMode}
+              onNavigateToOrder={(order) => { setActiveTab('orders'); setOrderDetail(order); }}
+              onNavigateToProduction={(order) => { setActiveTab('production'); setProductionSubtab('produce'); setProductionSelectedOrderId(order.id); }}
+              onNavigateToDesign={(design) => {
+                setActiveTab('designs');
+                setSelectedProductId(design.product_id);
+                const thumbSrc = getDesignDisplayImageUrl(design);
+                const originalSrc = getDesignOriginalImageUrl(design);
+                setDesignPreviewImage({ name: design.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: design.optimized_image_url || '', view: 'original', zoom: 1.3 });
+              }}
+            />
           </div>
         )}
 
@@ -8098,7 +8034,7 @@ useEffect(() => {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Chat', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
