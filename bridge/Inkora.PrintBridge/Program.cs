@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -12,8 +13,11 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        // Exit silently if a Bridge instance is already listening
-        if (IsPortInUse(BridgePort)) return;
+        // Una instancia vieja/colgada (ej. arrancada por Windows al iniciar sesion,
+        // o una version desactualizada) no debe bloquear la instancia nueva: se la
+        // mata y esta toma el lugar. Asi el usuario nunca tiene que adivinar cual
+        // proceso esta realmente atendiendo pedidos.
+        KillOtherInstancesAndWaitForPort();
 
         RegisterUriScheme();
 
@@ -21,6 +25,37 @@ internal static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm());
+    }
+
+    private static void KillOtherInstancesAndWaitForPort()
+    {
+        try
+        {
+            var current = Process.GetCurrentProcess();
+            foreach (var proc in Process.GetProcessesByName(current.ProcessName))
+            {
+                if (proc.Id == current.Id) continue;
+                try
+                {
+                    proc.Kill();
+                    proc.WaitForExit(5000);
+                }
+                catch
+                {
+                    // Best-effort: si no se puede matar, igual seguimos e intentamos levantar.
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort
+        }
+
+        var deadline = Environment.TickCount64 + 5000;
+        while (IsPortInUse(BridgePort) && Environment.TickCount64 < deadline)
+        {
+            Thread.Sleep(200);
+        }
     }
 
     private static bool IsPortInUse(int port)

@@ -32,6 +32,15 @@ public sealed class PrintJobService
         DetectSumatraPdf();
     }
 
+    // Se re-verifica antes de cada impresion (no solo al arrancar el proceso), asi
+    // no hace falta reiniciar el Bridge si SumatraPDF.exe se agrego/reemplazo despues.
+    private void EnsureSumatraDetected()
+    {
+        if (SumatraPdfPath is not null && File.Exists(SumatraPdfPath)) return;
+        SumatraPdfPath = null;
+        DetectSumatraPdf();
+    }
+
     private void DetectSumatraPdf()
     {
         foreach (var path in SumatraSearchPaths)
@@ -162,6 +171,7 @@ public sealed class PrintJobService
 
         job.Status = "printing";
         job.StartedAt = DateTimeOffset.Now;
+        EnsureSumatraDetected();
 
         try
         {

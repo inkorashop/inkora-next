@@ -29,7 +29,7 @@ import {
   getBridgeUpdateStatus,
 } from '../lib/print-bridge-client';
 
-const LATEST_BRIDGE_VERSION = '1.6.3';
+const LATEST_BRIDGE_VERSION = '1.6.4';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
