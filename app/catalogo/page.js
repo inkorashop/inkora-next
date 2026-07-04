@@ -140,6 +140,7 @@ export default function Home() {
   const [products, setProducts] = useState([]);
   const [activeProductId, setActiveProductId] = useState(null);
   const [designsByProduct, setDesignsByProduct] = useState({});
+  const [designsLoading, setDesignsLoading] = useState(true);
   const [gridOpacity, setGridOpacity] = useState(1);
   const [gridTransition, setGridTransition] = useState('opacity 0.2s ease');
   const [filter, setFilter] = useState('Todos');
@@ -995,16 +996,21 @@ export default function Home() {
   }
 
   async function loadAllDesigns(productList, rulesOverride = visibilityRules) {
-    const results = await Promise.all(
-      productList.map(p =>
-        supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order', { nullsFirst: false }).order('created_at').limit(10000)
-      )
-    );
-    const map = {};
-    productList.forEach((p, i) => {
-      if (results[i].data) map[p.id] = filterDesignsForVisibility(results[i].data, rulesOverride);
-    });
-    setDesignsByProduct(map);
+    setDesignsLoading(true);
+    try {
+      const results = await Promise.all(
+        productList.map(p =>
+          supabase.from('designs').select('*').eq('active', true).eq('product_id', p.id).order('sort_order', { nullsFirst: false }).order('created_at').limit(10000)
+        )
+      );
+      const map = {};
+      productList.forEach((p, i) => {
+        if (results[i].data) map[p.id] = filterDesignsForVisibility(results[i].data, rulesOverride);
+      });
+      setDesignsByProduct(map);
+    } finally {
+      setDesignsLoading(false);
+    }
   }
 
   function beginCategoryEdit(cat, anchor, event) {
@@ -1738,7 +1744,9 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           <div style={{opacity: gridOpacity, transition: gridTransition, minHeight: 'calc(100vh - 300px)', width: '100%'}}>
-          {designs.length === 0 ? (
+          {designs.length === 0 && designsLoading ? (
+            <div style={s.emptyState}><p>Cargando...</p></div>
+          ) : designs.length === 0 ? (
             <div style={s.emptyState}><p>Próximamente...</p></div>
           ) : filtered.length === 0 ? (
             <div style={s.emptyState}><p>Sin resultados para <strong>{searchQuery}</strong>.</p></div>

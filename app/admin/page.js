@@ -713,8 +713,10 @@ useEffect(() => {
   const [loadingCarts, setLoadingCarts] = useState(false);
   const [cartsError, setCartsError] = useState('');
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all', [PASSWORD_PROMPT_ENABLED_KEY]: 'true', [PASSWORD_PROMPT_DELAY_DAYS_KEY]: String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS) });
-  const designSummaryRows = React.useMemo(() => {
-    if (selectedIds.size > 0) return designs.filter(d => selectedIds.has(d.id));
+  // Always covers the full filtered set (not just the current selection) so
+  // that selecting/deselecting rows never discards already-fetched size data
+  // and never re-triggers a slow storage listing just to narrow the scope.
+  const designImageFetchRows = React.useMemo(() => {
     const pdfEnabledSet = new Set(parseDesignPdfEnabledIds(settings[DESIGN_PDF_LINK_ENABLED_KEY]));
     return designs.filter(d => {
       const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
@@ -726,11 +728,27 @@ useEffect(() => {
             || (pdfEnabled && designPdfFilter === 'linked' && designPdfMatches[d.id]?.found)
             || (pdfEnabled && designPdfFilter === 'unlinked' && !designPdfMatches[d.id]?.found));
     });
-  }, [designs, selectedIds, designFilterProduct, designSearch, designCatFilter, designPdfFilter, designPdfMatches, settings]);
+  }, [designs, designFilterProduct, designSearch, designCatFilter, designPdfFilter, designPdfMatches, settings]);
+  const designSummaryRows = selectedIds.size > 0
+    ? designs.filter(d => selectedIds.has(d.id))
+    : designImageFetchRows;
   const designSummaryScopeLabel = selectedIds.size > 0
     ? 'Selección'
     : (designFilterProduct !== 'all' || designSearch || designCatFilter || designPdfFilter !== 'all') ? 'Filtro' : 'Total';
-  const designSummaryKey = React.useMemo(() => designSummaryRows.map(d => d.id).sort().join(','), [designSummaryRows]);
+  const designImageFetchKey = React.useMemo(() => designImageFetchRows.map(d => d.id).sort().join(','), [designImageFetchRows]);
+  const designSummaryTotals = React.useMemo(() => {
+    if (selectedIds.size === 0) {
+      return { originalSizeKb: designImageSummary.originalSizeKb || 0, optimizedSizeKb: designImageSummary.optimizedSizeKb || 0 };
+    }
+    let originalSizeKb = 0;
+    let optimizedSizeKb = 0;
+    designSummaryRows.forEach(d => {
+      const sizes = designImageSizesById[String(d.id)] || {};
+      originalSizeKb += d.optimized_image_source_size_kb || sizes.originalSizeKb || 0;
+      optimizedSizeKb += d.optimized_image_size_kb || sizes.optimizedSizeKb || 0;
+    });
+    return { originalSizeKb, optimizedSizeKb };
+  }, [selectedIds, designSummaryRows, designImageSizesById, designImageSummary.originalSizeKb, designImageSummary.optimizedSizeKb]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const value = Math.max(10, Math.min(500, parseInt(String(optimizedThumbTargetKb), 10) || DEFAULT_OPTIMIZED_THUMB_KB));
@@ -741,7 +759,7 @@ useEffect(() => {
   useEffect(() => {
     if (screen !== 'panel' || activeTab !== 'designs') return;
     let cancelled = false;
-    const ids = designSummaryRows.map(d => d.id).filter(Boolean);
+    const ids = designImageFetchRows.map(d => d.id).filter(Boolean);
     if (ids.length === 0) {
       setDesignImageSummary({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
       setDesignImageSummaryLoading(false);
@@ -770,7 +788,7 @@ useEffect(() => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [screen, activeTab, designSummaryKey, designSummaryRows]);
+  }, [screen, activeTab, designImageFetchKey, designImageFetchRows]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
@@ -6495,10 +6513,6 @@ useEffect(() => {
                   onClick={e => {
                     e.stopPropagation();
                     if (e.target?.closest?.('[data-design-row-control]')) return;
-                    if (!e.target?.closest?.('[data-design-row-selectable]')) {
-                      setSelectedIds(new Set());
-                      return;
-                    }
                     handleDesignClick(e, d.id);
                   }}
                   style={{
@@ -6511,10 +6525,10 @@ useEffect(() => {
                         : undefined,
                     borderLeft: dragOverId === d.id ? '3px solid #2D6BE4' : selectedIds.has(d.id) ? '3px solid #2D6BE4' : '3px solid transparent',
                     transition: 'background 0.12s, border-left 0.12s',
-                    cursor: draggingId === d.id ? 'grabbing' : 'grab',
+                    cursor: draggingId === d.id ? 'grabbing' : 'pointer',
                   }}
                 >
-                  <div data-design-row-selectable style={s.designInfo}>
+                  <div style={s.designInfo}>
                     {(() => {
                       const thumbSrc = getDesignDisplayImageUrl(d);
                       const originalSrc = getDesignOriginalImageUrl(d);
@@ -6537,33 +6551,58 @@ useEffect(() => {
                       ) : null;
                     })()}
                     <div>
-                      <input
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: adminDarkMode ? '#e7ecf8' : '#2d3352',
-                          border: '1px solid transparent',
-                          borderRadius: 4,
-                          padding: '2px 6px',
-                          fontFamily: 'Barlow, sans-serif',
-                          background: 'transparent',
-                          width: '100%',
-                        }}
-                        value={d.name}
-                        onFocus={e => { e.target.style.borderColor = '#dde1ef'; e.target.dataset.originalName = d.name; }}
-                        onBlur={async e => {
-                          e.target.style.borderColor = 'transparent';
-                          const nextName = e.target.value.trim();
-                          const originalName = e.target.dataset.originalName || d.name;
-                          if (!nextName || nextName === originalName) return;
-                          await supabase.from('designs').update({ name: nextName }).eq('id', d.id);
-                          trackAdminActivity('design_rename', { design_id: d.id, from: originalName, to: nextName }, 'designs');
-                        }}
-                        onChange={e => setDesigns(prev => prev.map(x => x.id === d.id ? { ...x, name: e.target.value } : x))}
-                        onClick={e => e.stopPropagation()}
-                        onDragStart={e => e.stopPropagation()}
-                      />
-                      <div style={{fontSize: 11, color: '#9aa3bc', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center'}}>
+                      <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
+                        <input
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: adminDarkMode ? '#e7ecf8' : '#2d3352',
+                            border: '1px solid transparent',
+                            borderRadius: 4,
+                            padding: '2px 6px',
+                            fontFamily: 'Barlow, sans-serif',
+                            background: 'transparent',
+                            flex: '1 1 100px',
+                            minWidth: 70,
+                          }}
+                          value={d.name}
+                          onFocus={e => { e.target.style.borderColor = '#dde1ef'; e.target.dataset.originalName = d.name; }}
+                          onBlur={async e => {
+                            e.target.style.borderColor = 'transparent';
+                            const nextName = e.target.value.trim();
+                            const originalName = e.target.dataset.originalName || d.name;
+                            if (!nextName || nextName === originalName) return;
+                            await supabase.from('designs').update({ name: nextName }).eq('id', d.id);
+                            trackAdminActivity('design_rename', { design_id: d.id, from: originalName, to: nextName }, 'designs');
+                          }}
+                          onChange={e => setDesigns(prev => prev.map(x => x.id === d.id ? { ...x, name: e.target.value } : x))}
+                          onClick={e => e.stopPropagation()}
+                          onDragStart={e => e.stopPropagation()}
+                        />
+                        {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
+                        {(() => {
+                          const status = optimizationStatus[d.id];
+                          if (status?.state === 'working' || status?.state === 'error') {
+                            return <span style={{fontSize:10, fontWeight:800, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4', whiteSpace:'nowrap'}}>{status.message}</span>;
+                          }
+                          if (!d.optimized_image_url) {
+                            return <span style={{fontSize:10, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap'}}>Sin optimizar</span>;
+                          }
+                          const storedSizes = designImageSizesById[String(d.id)] || {};
+                          const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
+                          const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
+                          const label = originalKb ? `${formatPlainKb(originalKb)} -> ${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `-> ${formatPlainKb(optimizedKb)}`);
+                          return (
+                            <span
+                              title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
+                              style={{fontSize:10, fontWeight:800, color:'#15803d', background:'#e8f7ef', border:'1px solid #b7ebcf', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap'}}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div style={{fontSize: 11, color: adminDarkMode ? 'rgba(231,236,248,0.5)' : '#9aa3bc', marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center'}}>
                         {(d.tags || []).map((tag, ti) => (
                           <span key={ti} style={{background: '#f0f2f8', color: '#5a6380', borderRadius: 4, padding: '1px 6px', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2}}>
                             {tag}
@@ -6571,7 +6610,7 @@ useEffect(() => {
                           </span>
                         ))}
                         <input
-                          style={{fontSize: 11, border: '1px dashed #dde1ef', borderRadius: 4, padding: '1px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: 80, color: '#5a6380'}}
+                          style={{fontSize: 11, border: '1px dashed #dde1ef', borderRadius: 4, padding: '1px 6px', fontFamily: 'Barlow, sans-serif', background: 'transparent', width: 60, color: '#5a6380'}}
                           placeholder="+ tag"
                           onClick={e => e.stopPropagation()}
                           onDragStart={e => e.stopPropagation()}
@@ -6593,47 +6632,31 @@ useEffect(() => {
                             }
                           }}
                         />
-                      </div>
-                      <div style={s.designCat}>
-                        {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
-                        {' '}
                         {d.product_id ? (
-                          <div style={{display:'flex', flexWrap:'wrap', gap:3}} onClick={e => e.stopPropagation()} onDragStart={e => e.stopPropagation()}>
-                            {getProductCategories(d.product_id).map(c => {
-                              const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
-                              const active = cats.includes(c);
-                              return (
-                                <span
-                                  key={c}
-                                  onClick={async e => {
-                                    e.stopPropagation();
-                                    const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
-                                    const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
-                                    await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
-                                    trackAdminActivity('design_categories_update', { design_ids: idsToUpdate, category: c, active: !active, categories: newCats }, 'designs');
-                                    setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
-                                  }}
-                                  style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : '#f0f2f8', color: active ? 'white' : '#9aa3bc'}}
-                                >
-                                  {c}
-                                </span>
-                              );
-                            })}
-                          </div>
+                          getProductCategories(d.product_id).map(c => {
+                            const cats = Array.isArray(d.categories) ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+                            const active = cats.includes(c);
+                            return (
+                              <span
+                                key={c}
+                                onClick={async e => {
+                                  e.stopPropagation();
+                                  const idsToUpdate = selectedIds.has(d.id) && selectedIds.size > 1 ? [...selectedIds] : [d.id];
+                                  const newCats = active ? cats.filter(x => x !== c) : [...cats, c];
+                                  await Promise.all(idsToUpdate.map(did => supabase.from('designs').update({ categories: newCats, category: newCats[0] || 'Sin categoría' }).eq('id', did)));
+                                  trackAdminActivity('design_categories_update', { design_ids: idsToUpdate, category: c, active: !active, categories: newCats }, 'designs');
+                                  setDesigns(prev => prev.map(x => idsToUpdate.includes(x.id) ? {...x, categories: newCats, category: newCats[0] || 'Sin categoría'} : x));
+                                }}
+                                onDragStart={e => e.stopPropagation()}
+                                style={{fontSize:10, borderRadius:4, padding:'1px 6px', cursor:'pointer', fontWeight:600, background: active ? '#1B2F5E' : 'transparent', color: active ? 'white' : '#9aa3bc', border: active ? '1px solid #1B2F5E' : '1px dashed #dde1ef'}}
+                              >
+                                {c}
+                              </span>
+                            );
+                          })
                         ) : (
                           <span>{d.category}</span>
                         )}
-                      </div>
-                      <div style={{fontSize:10, color: optimizationStatus[d.id]?.state === 'error' ? '#b91c1c' : d.optimized_image_url ? '#15803d' : '#9aa3bc', marginTop:3, fontWeight:700}}>
-                        {(() => {
-                          const status = optimizationStatus[d.id];
-                          if (status?.state === 'working' || status?.state === 'error') return status.message;
-                          if (!d.optimized_image_url) return status?.message || 'Sin miniatura optimizada';
-                          const storedSizes = designImageSizesById[String(d.id)] || {};
-                          const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
-                          const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
-                          return `Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`;
-                        })()}
                       </div>
                     </div>
                   </div>
@@ -6699,8 +6722,8 @@ useEffect(() => {
                 <span style={{fontSize:11, fontWeight:900, color:'#5a6380', textTransform:'uppercase', letterSpacing:0}}>{designSummaryScopeLabel}</span>
                 {[
                   ['Recuento', designSummaryRows.length.toLocaleString('es-AR')],
-                  ['Originales', designImageSummaryLoading ? '...' : formatSizeKb(designImageSummary.originalSizeKb)],
-                  ['Optimizadas', designImageSummaryLoading ? '...' : formatSizeKb(designImageSummary.optimizedSizeKb)],
+                  ['Originales', (selectedIds.size === 0 && designImageSummaryLoading) ? '...' : formatSizeKb(designSummaryTotals.originalSizeKb)],
+                  ['Optimizadas', (selectedIds.size === 0 && designImageSummaryLoading) ? '...' : formatSizeKb(designSummaryTotals.optimizedSizeKb)],
                 ].map(([label, value]) => (
                   <span key={label} style={{display:'inline-flex', alignItems:'center', gap:5, border:'1px solid #dbe5ff', background:'#e8f7ef', color:'#15803d', borderRadius:7, padding:'4px 8px', fontSize:11, fontWeight:800}}>
                     <span style={{color:'#5a6380', fontWeight:700}}>{label}:</span>
@@ -11293,7 +11316,7 @@ const styles = {
   btnWarning: { background: '#fff8e1', color: '#7a5800', border: '1.5px solid #f6c200', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   editBtn: { background: '#e8eef9', color: '#2D6BE4', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
   iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center', borderRadius: 5 },
-  designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eef0f6' },
+  designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eef0f6' },
   designInfo: { display: 'flex', alignItems: 'center', gap: 10 },
   designThumb: { width: 36, height: 36, objectFit: 'contain', background: '#f0f2f8', borderRadius: 6, border: '1px solid #dde1ef' },
   designName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
