@@ -26,6 +26,11 @@ export default function Header({ headerVisible = true, showCart = false, page = 
   const [loadingOrders, setLoadingOrders] = useState(false);
   const historyRef = useRef(null);
   const pendingCount = orders.filter(o => o.status === 'pending').length;
+  const [isNativeApp, setIsNativeApp] = useState(false);
+
+  useEffect(() => {
+    setIsNativeApp(typeof window !== 'undefined' && !!window.AndroidBridge);
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('inkora_theme');
@@ -372,6 +377,19 @@ export default function Header({ headerVisible = true, showCart = false, page = 
             track('auth_login', { method: 'google_one_tap' });
           }}
         />
+      )}
+
+      {isNativeApp && (
+        <button
+          onClick={() => window.AndroidBridge?.activateFloating?.()}
+          title="Activar flotante"
+          style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 500, width: 48, height: 48, borderRadius: '50%', background: '#2D6BE4', border: 'none', color: 'white', boxShadow: '0 4px 14px rgba(0,0,0,0.35)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="22" height="22">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M8 12l3 3 5-6" />
+          </svg>
+        </button>
       )}
     </>
   );
