@@ -97,6 +97,12 @@ function hashString(str) {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+function formatSizeKb(kb) {
+  const value = Number(kb) || 0;
+  if (value >= 1024) return `${(value / 1024).toLocaleString('es-AR', { maximumFractionDigits: 2 })} MB`;
+  return `${Math.round(value).toLocaleString('es-AR')} KB`;
+}
+
 function fileToBase64(file) {
   return new Promise(resolve => {
     const reader = new FileReader();
@@ -607,6 +613,8 @@ useEffect(() => {
   const [optimizingDesignIds, setOptimizingDesignIds] = useState(new Set());
   const [optimizationStatus, setOptimizationStatus] = useState({});
   const [designPreviewImage, setDesignPreviewImage] = useState(null);
+  const [designImageSummary, setDesignImageSummary] = useState({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
+  const [designImageSummaryLoading, setDesignImageSummaryLoading] = useState(false);
   const autoLaunchTriedRef = useRef(false);
   const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -687,6 +695,57 @@ useEffect(() => {
   const [loadingCarts, setLoadingCarts] = useState(false);
   const [cartsError, setCartsError] = useState('');
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all', [PASSWORD_PROMPT_ENABLED_KEY]: 'true', [PASSWORD_PROMPT_DELAY_DAYS_KEY]: String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS) });
+  const designSummaryRows = React.useMemo(() => {
+    if (selectedIds.size > 0) return designs.filter(d => selectedIds.has(d.id));
+    const pdfEnabledSet = new Set(parseDesignPdfEnabledIds(settings[DESIGN_PDF_LINK_ENABLED_KEY]));
+    return designs.filter(d => {
+      const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
+      const pdfEnabled = pdfEnabledSet.has(String(d.id));
+      return (designFilterProduct === 'all' || d.product_id === designFilterProduct)
+        && (!designSearch || d.name.toLowerCase().includes(designSearch.toLowerCase()))
+        && (!designCatFilter || cats.includes(designCatFilter))
+        && (designPdfFilter === 'all'
+            || (pdfEnabled && designPdfFilter === 'linked' && designPdfMatches[d.id]?.found)
+            || (pdfEnabled && designPdfFilter === 'unlinked' && !designPdfMatches[d.id]?.found));
+    });
+  }, [designs, selectedIds, designFilterProduct, designSearch, designCatFilter, designPdfFilter, designPdfMatches, settings]);
+  const designSummaryScopeLabel = selectedIds.size > 0
+    ? 'Selección'
+    : (designFilterProduct !== 'all' || designSearch || designCatFilter || designPdfFilter !== 'all') ? 'Filtro' : 'Total';
+  const designSummaryKey = React.useMemo(() => designSummaryRows.map(d => d.id).sort().join(','), [designSummaryRows]);
+  useEffect(() => {
+    if (screen !== 'panel' || activeTab !== 'designs') return;
+    let cancelled = false;
+    const ids = designSummaryRows.map(d => d.id).filter(Boolean);
+    if (ids.length === 0) {
+      setDesignImageSummary({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
+      setDesignImageSummaryLoading(false);
+      return;
+    }
+    setDesignImageSummaryLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/admin/design-image-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ designIds: ids }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'No se pudo calcular el resumen');
+        if (!cancelled) setDesignImageSummary(payload);
+      } catch (error) {
+        if (!cancelled) {
+          setDesignImageSummary(prev => ({ ...prev, error: error?.message || 'Error' }));
+        }
+      } finally {
+        if (!cancelled) setDesignImageSummaryLoading(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [screen, activeTab, designSummaryKey, designSummaryRows]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
@@ -6400,10 +6459,10 @@ useEffect(() => {
                       return thumbSrc ? (
                         <button
                           type="button"
-                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ url: thumbSrc, name: d.name, originalUrl: originalSrc, optimizedUrl: d.optimized_image_url || '' }); }}
+                          onClick={e => { e.stopPropagation(); setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original' }); }}
                           onDragStart={e => e.stopPropagation()}
                           title={d.optimized_image_url ? 'Abrir miniatura optimizada' : 'Abrir imagen original'}
-                          style={{border:'none', padding:0, background:'transparent', cursor:'zoom-in', position:'relative', flexShrink:0}}
+                          style={{border:'none', padding:0, background:'transparent', cursor:'pointer', position:'relative', flexShrink:0}}
                         >
                           <img src={thumbSrc} alt={d.name} style={s.designThumb} />
                           {d.optimized_image_url && (
@@ -6564,6 +6623,22 @@ useEffect(() => {
                   );
                 });
               })()}
+              </div>
+              <div style={{position:'sticky', bottom:0, zIndex:5, marginTop:8, padding:'6px 10px', borderTop:'1px solid #dde1ef', background:adminDarkMode ? 'rgba(24,31,48,0.96)' : 'rgba(248,250,255,0.96)', backdropFilter:'blur(6px)', display:'flex', justifyContent:'flex-end', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                <span style={{fontSize:11, fontWeight:900, color:'#5a6380', textTransform:'uppercase', letterSpacing:0}}>{designSummaryScopeLabel}</span>
+                {[
+                  ['Recuento', designSummaryRows.length.toLocaleString('es-AR')],
+                  ['Originales', designImageSummaryLoading ? '...' : formatSizeKb(designImageSummary.originalSizeKb)],
+                  ['Optimizadas', designImageSummaryLoading ? '...' : formatSizeKb(designImageSummary.optimizedSizeKb)],
+                ].map(([label, value]) => (
+                  <span key={label} style={{display:'inline-flex', alignItems:'center', gap:5, border:'1px solid #dbe5ff', background:'#e8f7ef', color:'#15803d', borderRadius:7, padding:'4px 8px', fontSize:11, fontWeight:800}}>
+                    <span style={{color:'#5a6380', fontWeight:700}}>{label}:</span>
+                    <span>{value}</span>
+                  </span>
+                ))}
+                {designImageSummary.error && !designImageSummaryLoading && (
+                  <span style={{fontSize:10, fontWeight:800, color:'#b91c1c'}}>{designImageSummary.error}</span>
+                )}
               </div>
             </div>
           </>
@@ -9035,24 +9110,41 @@ useEffect(() => {
           style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:340, display:'flex', alignItems:'center', justifyContent:'center', padding:24}}
         >
           <div style={{position:'relative', maxWidth:'86vw', maxHeight:'86vh', display:'flex', flexDirection:'column', gap:10, alignItems:'center'}}>
-            <img
-              src={designPreviewImage.url}
-              alt={designPreviewImage.name || ''}
-              style={{display:'block', maxWidth:'86vw', maxHeight:'78vh', objectFit:'contain', borderRadius:10, boxShadow:'0 8px 48px rgba(0,0,0,0.48)', background:'white'}}
-            />
-            <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'center'}}>
-              <span style={{color:'white', fontSize:13, fontWeight:800, textShadow:'0 1px 4px rgba(0,0,0,0.8)'}}>{designPreviewImage.name || 'Diseño'}</span>
-              {designPreviewImage.optimizedUrl && (
-                <span style={{background:'#e8f7ef', color:'#15803d', border:'1px solid #b7ebcf', borderRadius:999, padding:'2px 8px', fontSize:11, fontWeight:900}}>
-                  Miniatura optimizada
-                </span>
-              )}
-              {designPreviewImage.originalUrl && designPreviewImage.originalUrl !== designPreviewImage.url && (
-                <a href={designPreviewImage.originalUrl} target="_blank" rel="noreferrer" style={{background:'white', color:'#1B2F5E', borderRadius:999, padding:'3px 9px', fontSize:11, fontWeight:900, textDecoration:'none'}}>
-                  Abrir original
-                </a>
-              )}
-            </div>
+            {(() => {
+              const hasOptimized = Boolean(designPreviewImage.optimizedUrl);
+              const currentView = hasOptimized && designPreviewImage.view === 'optimized' ? 'optimized' : 'original';
+              const currentUrl = currentView === 'optimized' ? designPreviewImage.optimizedUrl : designPreviewImage.originalUrl;
+              return (
+                <>
+                  <img
+                    src={currentUrl}
+                    alt={designPreviewImage.name || ''}
+                    style={{display:'block', maxWidth:'86vw', maxHeight:'78vh', objectFit:'contain', borderRadius:10, boxShadow:'0 8px 48px rgba(0,0,0,0.48)', background:'white'}}
+                  />
+                  <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'center'}}>
+                    <span style={{color:'white', fontSize:13, fontWeight:800, textShadow:'0 1px 4px rgba(0,0,0,0.8)'}}>{designPreviewImage.name || 'Diseño'}</span>
+                    {[
+                      ['original', 'Original'],
+                      ['optimized', 'Optimizada'],
+                    ].map(([view, label]) => {
+                      const disabled = view === 'optimized' && !hasOptimized;
+                      const active = currentView === view;
+                      return (
+                        <button
+                          key={view}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setDesignPreviewImage(prev => ({ ...prev, view }))}
+                          style={{border:`1.5px solid ${active ? '#2D6BE4' : '#dde1ef'}`, borderRadius:999, padding:'4px 10px', background:active ? '#eef4ff' : 'white', color:disabled ? '#c4c9d9' : active ? '#2D6BE4' : '#1B2F5E', fontSize:11, fontWeight:900, cursor:disabled ? 'not-allowed' : 'pointer'}}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
             <button
               onClick={() => setDesignPreviewImage(null)}
               aria-label="Cerrar"
