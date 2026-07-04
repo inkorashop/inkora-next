@@ -2510,7 +2510,7 @@ useEffect(() => {
       });
       lastSelectedIdRef.current = id;
     } else {
-      setSelectedIds(new Set([id]));
+      setSelectedIds(prev => (prev.size === 1 && prev.has(id)) ? new Set() : new Set([id]));
       lastSelectedIdRef.current = id;
     }
   }
@@ -6550,6 +6550,27 @@ useEffect(() => {
                         </button>
                       ) : null;
                     })()}
+                    {(() => {
+                      const status = optimizationStatus[d.id];
+                      if (status?.state === 'working' || status?.state === 'error') {
+                        return <span style={{fontSize:10, fontWeight:800, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4', whiteSpace:'nowrap', flexShrink:0}}>{status.message}</span>;
+                      }
+                      if (!d.optimized_image_url) {
+                        return <span style={{fontSize:10, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', flexShrink:0}}>Sin optimizar</span>;
+                      }
+                      const storedSizes = designImageSizesById[String(d.id)] || {};
+                      const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
+                      const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
+                      const label = originalKb ? `${formatPlainKb(originalKb)} -> ${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `-> ${formatPlainKb(optimizedKb)}`);
+                      return (
+                        <span
+                          title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
+                          style={{fontSize:10, fontWeight:800, color:'#15803d', background:'#e8f7ef', border:'1px solid #b7ebcf', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', flexShrink:0}}
+                        >
+                          {label}
+                        </span>
+                      );
+                    })()}
                     <div>
                       <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
                         <input
@@ -6562,7 +6583,7 @@ useEffect(() => {
                             padding: '2px 6px',
                             fontFamily: 'Barlow, sans-serif',
                             background: 'transparent',
-                            flex: '1 1 100px',
+                            flex: '0 1 140px',
                             minWidth: 70,
                           }}
                           value={d.name}
@@ -6580,27 +6601,6 @@ useEffect(() => {
                           onDragStart={e => e.stopPropagation()}
                         />
                         {d.products?.name ? <span style={s.productTag}>{d.products.name}</span> : <span style={s.orphanTag}>Sin producto</span>}
-                        {(() => {
-                          const status = optimizationStatus[d.id];
-                          if (status?.state === 'working' || status?.state === 'error') {
-                            return <span style={{fontSize:10, fontWeight:800, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4', whiteSpace:'nowrap'}}>{status.message}</span>;
-                          }
-                          if (!d.optimized_image_url) {
-                            return <span style={{fontSize:10, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap'}}>Sin optimizar</span>;
-                          }
-                          const storedSizes = designImageSizesById[String(d.id)] || {};
-                          const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
-                          const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
-                          const label = originalKb ? `${formatPlainKb(originalKb)} -> ${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `-> ${formatPlainKb(optimizedKb)}`);
-                          return (
-                            <span
-                              title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
-                              style={{fontSize:10, fontWeight:800, color:'#15803d', background:'#e8f7ef', border:'1px solid #b7ebcf', borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap'}}
-                            >
-                              {label}
-                            </span>
-                          );
-                        })()}
                       </div>
                       <div style={{fontSize: 11, color: adminDarkMode ? 'rgba(231,236,248,0.5)' : '#9aa3bc', marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center'}}>
                         {(d.tags || []).map((tag, ti) => (
