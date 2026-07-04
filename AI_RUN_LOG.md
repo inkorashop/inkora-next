@@ -18,6 +18,16 @@ Formato obligatorio:
 
 ---
 
+## 2026-07-04 09:41 -03:00 - ChatGPT Codex
+
+- Objetivo: Ajustar UX de optimizacion en Disenos: persistir el objetivo de KB, quitar el boton grande de optimizar y mostrar Original/Optimizada sin objetivo.
+- Cambios: Se actualizo `app/admin/page.js` para guardar `Miniatura` en `localStorage`, quitar el boton bulk del encabezado y dejar solo los botones inline, enviar `sourceSizeKb` al optimizar y mostrar `Original X KB / Optimizada Y KB`. Se extendio `app/api/admin/design-optimized-image/route.js` para guardar el peso original cuando la columna exista y reintentar sin bloquear si falta. Se extendio `app/api/admin/design-image-summary/route.js` para devolver tamanos por diseno desde Storage. Se agrego `optimized_image_source_size_kb` a `sql/design_optimized_images.sql`.
+- Verificacion: `node --check app\admin\page.js` OK; `node --check app\api\admin\design-optimized-image\route.js` OK; `node --check app\api\admin\design-image-summary\route.js` OK; `git diff --check` OK con avisos CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se reviso la entrada anterior y el estado real del repo. El ultimo deploy estaba en `77d1f93`; se mantuvieron fuera de scope `.claude/settings*.json`, `Inkora.PrintBridge.zip` raiz y `Messi 2.3mf`.
+- Pendiente/Riesgos: Ejecutar nuevamente `sql/design_optimized_images.sql` en Supabase para agregar `optimized_image_source_size_kb`; si no se ejecuta, la optimizacion sigue funcionando por fallback pero el peso original no queda persistido en DB para futuras recargas.
+
+---
+
 ## 2026-07-04 09:33 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir en Admin > Disenos que al hacer click en espacio vacio se suelte la seleccion.

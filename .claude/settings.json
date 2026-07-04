@@ -51,7 +51,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -Command \"Set-Location 'C:\\Users\\Franco\\Desktop\\inkora-next'; $s = git status --porcelain; if ($s) { git add -A; git commit -m 'deploy'; git push }\""
+            "shell": "powershell",
+            "command": "Set-Location 'C:\\Users\\compu\\Desktop\\Code\\inkora-next'; git add app/ components/ contexts/ lib/ sql/ package.json package-lock.json 2>$null; $staged = git diff --cached --name-only; if ($staged) { git commit -m 'deploy'; git push origin main } ",
+            "timeout": 60,
+            "statusMessage": "Deploying..."
           }
         ]
       }

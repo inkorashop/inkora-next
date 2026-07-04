@@ -5,6 +5,7 @@
 ALTER TABLE public.designs
   ADD COLUMN IF NOT EXISTS optimized_image_url text,
   ADD COLUMN IF NOT EXISTS optimized_image_source_url text,
+  ADD COLUMN IF NOT EXISTS optimized_image_source_size_kb integer CHECK (optimized_image_source_size_kb IS NULL OR optimized_image_source_size_kb >= 0),
   ADD COLUMN IF NOT EXISTS optimized_image_size_kb integer CHECK (optimized_image_size_kb IS NULL OR optimized_image_size_kb >= 0),
   ADD COLUMN IF NOT EXISTS optimized_image_target_kb integer CHECK (optimized_image_target_kb IS NULL OR optimized_image_target_kb > 0),
   ADD COLUMN IF NOT EXISTS optimized_image_updated_at timestamptz;

@@ -73,6 +73,7 @@ const VERSION_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000;
 const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 const DEFAULT_OPTIMIZED_THUMB_KB = 50;
 const OPTIMIZED_THUMB_MAX_DIMENSION = 900;
+const OPTIMIZED_THUMB_TARGET_STORAGE_KEY = 'inkora_admin_optimized_thumb_target_kb';
 
 function formatBridgeError(error) {
   if (error?.status === 401) return 'Token Bridge incorrecto.';
@@ -101,6 +102,11 @@ function formatSizeKb(kb) {
   const value = Number(kb) || 0;
   if (value >= 1024) return `${(value / 1024).toLocaleString('es-AR', { maximumFractionDigits: 2 })} MB`;
   return `${Math.round(value).toLocaleString('es-AR')} KB`;
+}
+
+function formatPlainKb(kb) {
+  const value = Number(kb) || 0;
+  return value > 0 ? `${Math.round(value).toLocaleString('es-AR')} KB` : '? KB';
 }
 
 function fileToBase64(file) {
@@ -609,12 +615,24 @@ useEffect(() => {
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
   const [designPdfFilter, setDesignPdfFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
-  const [optimizedThumbTargetKb, setOptimizedThumbTargetKb] = useState(DEFAULT_OPTIMIZED_THUMB_KB);
+  const [optimizedThumbTargetKb, setOptimizedThumbTargetKb] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_OPTIMIZED_THUMB_KB;
+    try {
+      const saved = Number(localStorage.getItem(OPTIMIZED_THUMB_TARGET_STORAGE_KEY));
+      return Number.isFinite(saved) && saved >= 10 && saved <= 500 ? String(Math.round(saved)) : String(DEFAULT_OPTIMIZED_THUMB_KB);
+    } catch {
+      return String(DEFAULT_OPTIMIZED_THUMB_KB);
+    }
+  });
   const [optimizingDesignIds, setOptimizingDesignIds] = useState(new Set());
   const [optimizationStatus, setOptimizationStatus] = useState({});
   const [designPreviewImage, setDesignPreviewImage] = useState(null);
   const [designImageSummary, setDesignImageSummary] = useState({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
   const [designImageSummaryLoading, setDesignImageSummaryLoading] = useState(false);
+  const designImageSizesById = React.useMemo(() => {
+    const items = Array.isArray(designImageSummary.items) ? designImageSummary.items : [];
+    return Object.fromEntries(items.map(item => [String(item.id), item]));
+  }, [designImageSummary.items]);
   const autoLaunchTriedRef = useRef(false);
   const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -713,6 +731,13 @@ useEffect(() => {
     ? 'Selección'
     : (designFilterProduct !== 'all' || designSearch || designCatFilter || designPdfFilter !== 'all') ? 'Filtro' : 'Total';
   const designSummaryKey = React.useMemo(() => designSummaryRows.map(d => d.id).sort().join(','), [designSummaryRows]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const value = Math.max(10, Math.min(500, parseInt(String(optimizedThumbTargetKb), 10) || DEFAULT_OPTIMIZED_THUMB_KB));
+    try {
+      localStorage.setItem(OPTIMIZED_THUMB_TARGET_STORAGE_KEY, String(value));
+    } catch {}
+  }, [optimizedThumbTargetKb]);
   useEffect(() => {
     if (screen !== 'panel' || activeTab !== 'designs') return;
     let cancelled = false;
@@ -2536,6 +2561,7 @@ useEffect(() => {
             fileBase64,
             mimeType: optimized.mimeType,
             targetKb,
+            sourceSizeKb: optimized.sourceSizeKb,
             originalUrl: sourceUrl,
             previousOptimizedUrl: latestDesign.optimized_image_url || '',
           }),
@@ -6222,16 +6248,6 @@ useEffect(() => {
                     />
                     KB
                   </label>
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); optimizeDesignImages([...selectedIds]); }}
-                    disabled={selectedIds.size === 0 || optimizingDesignIds.size > 0}
-                    title={selectedIds.size === 0 ? 'Seleccioná uno o varios diseños para optimizar' : `Optimizar ${selectedIds.size} diseño${selectedIds.size !== 1 ? 's' : ''} seleccionado${selectedIds.size !== 1 ? 's' : ''}`}
-                    style={{border:'1.5px solid #2D6BE4', borderRadius:8, padding:'5px 10px', background:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? '#f7f8fc' : '#f8faff', color:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? '#9aa3bc' : '#2D6BE4', fontSize:12, fontWeight:900, cursor:selectedIds.size === 0 || optimizingDesignIds.size > 0 ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', display:'inline-flex', alignItems:'center', gap:5, whiteSpace:'nowrap'}}
-                  >
-                    <OptimizeIcon />
-                    {optimizingDesignIds.size > 0 ? `Procesando ${optimizingDesignIds.size}` : 'Optimizar'}
-                  </button>
                   <select
                     value={designSortBy}
                     onChange={e => setDesignSortBy(e.target.value)}
@@ -6570,7 +6586,15 @@ useEffect(() => {
                         )}
                       </div>
                       <div style={{fontSize:10, color: optimizationStatus[d.id]?.state === 'error' ? '#b91c1c' : d.optimized_image_url ? '#15803d' : '#9aa3bc', marginTop:3, fontWeight:700}}>
-                        {optimizationStatus[d.id]?.message || (d.optimized_image_url ? `Optimizada ${d.optimized_image_size_kb || '?'} KB${d.optimized_image_target_kb ? ` / objetivo ${d.optimized_image_target_kb} KB` : ''}` : 'Sin miniatura optimizada')}
+                        {(() => {
+                          const status = optimizationStatus[d.id];
+                          if (status?.state === 'working' || status?.state === 'error') return status.message;
+                          if (!d.optimized_image_url) return status?.message || 'Sin miniatura optimizada';
+                          const storedSizes = designImageSizesById[String(d.id)] || {};
+                          const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
+                          const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
+                          return `Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`;
+                        })()}
                       </div>
                     </div>
                   </div>

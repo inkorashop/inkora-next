@@ -33,6 +33,7 @@ export async function POST(request) {
     const mimeType = String(body.mimeType || 'image/webp');
     const targetKb = Math.max(1, Math.min(2048, Number(body.targetKb) || 50));
     const originalUrl = String(body.originalUrl || '').trim();
+    const sourceSizeKb = Math.max(0, Math.round(Number(body.sourceSizeKb) || 0));
     const previousOptimizedUrl = String(body.previousOptimizedUrl || '').trim();
 
     if (!designId || !fileBase64 || !/^image\/(webp|jpeg|png)$/i.test(mimeType)) {
@@ -62,18 +63,34 @@ export async function POST(request) {
     const { data: publicData } = supabaseAdmin.storage.from('assets').getPublicUrl(path);
     const optimizedUrl = publicData.publicUrl;
 
-    const { data: updated, error: updateError } = await supabaseAdmin
+    const updatePayload = {
+      optimized_image_url: optimizedUrl,
+      optimized_image_source_size_kb: sourceSizeKb || null,
+      optimized_image_size_kb: Math.round(buffer.length / 1024),
+      optimized_image_target_kb: targetKb,
+      optimized_image_source_url: originalUrl || null,
+      optimized_image_updated_at: new Date().toISOString(),
+    };
+
+    let { data: updated, error: updateError } = await supabaseAdmin
       .from('designs')
-      .update({
-        optimized_image_url: optimizedUrl,
-        optimized_image_size_kb: Math.round(buffer.length / 1024),
-        optimized_image_target_kb: targetKb,
-        optimized_image_source_url: originalUrl || null,
-        optimized_image_updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', designId)
       .select('*, products(name)')
       .single();
+
+    if (updateError && /optimized_image_source_size_kb/i.test(updateError.message || '')) {
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.optimized_image_source_size_kb;
+      const fallbackResult = await supabaseAdmin
+        .from('designs')
+        .update(fallbackPayload)
+        .eq('id', designId)
+        .select('*, products(name)')
+        .single();
+      updated = fallbackResult.data ? { ...fallbackResult.data, optimized_image_source_size_kb: sourceSizeKb || null } : fallbackResult.data;
+      updateError = fallbackResult.error;
+    }
 
     if (updateError) {
       await supabaseAdmin.storage.from('assets').remove([path]);
@@ -93,6 +110,7 @@ export async function POST(request) {
     return NextResponse.json({
       design: updated,
       optimizedUrl,
+      sourceSizeKb,
       optimizedSizeKb: Math.round(buffer.length / 1024),
       path,
     });

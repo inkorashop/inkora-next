@@ -116,6 +116,7 @@ export async function POST(request) {
     let optimizedBytes = 0;
     let originalKnownCount = 0;
     let optimizedKnownCount = 0;
+    const items = [];
 
     pathPairs.forEach(pair => {
       const original = objectSizes.get(pair.originalPath) || 0;
@@ -128,6 +129,11 @@ export async function POST(request) {
         optimizedBytes += optimized;
         optimizedKnownCount += 1;
       }
+      items.push({
+        id: pair.id,
+        originalSizeKb: original > 0 ? Math.round(original / 1024) : 0,
+        optimizedSizeKb: optimized > 0 ? Math.round(optimized / 1024) : 0,
+      });
     });
 
     return NextResponse.json({
@@ -136,6 +142,7 @@ export async function POST(request) {
       optimizedSizeKb: Math.round(optimizedBytes / 1024),
       originalKnownCount,
       optimizedKnownCount,
+      items,
     });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: adminAuthStatus(error) });
