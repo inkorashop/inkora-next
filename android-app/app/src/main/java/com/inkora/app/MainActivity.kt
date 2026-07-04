@@ -62,6 +62,11 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.settings.databaseEnabled = true
         webView.settings.mediaPlaybackRequiresUserGesture = false
+        // Google bloquea "Iniciar sesion con Google" dentro de un WebView
+        // embebido (error 403: disallowed_useragent) detectando el token
+        // "; wv" que Android agrega al user-agent por defecto. Se lo saca
+        // para que el login de Google funcione normalmente.
+        webView.settings.userAgentString = webView.settings.userAgentString.replace("; wv", "")
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()
         webView.addJavascriptInterface(AndroidBridge(), "AndroidBridge")

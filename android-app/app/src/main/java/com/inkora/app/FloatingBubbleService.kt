@@ -178,6 +178,7 @@ class FloatingBubbleService : Service() {
         val webView = container.findViewById<WebView>(R.id.floating_webview)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        webView.settings.userAgentString = webView.settings.userAgentString.replace("; wv", "")
         webView.webViewClient = WebViewClient()
         webView.webChromeClient = WebChromeClient()
         webView.loadUrl(startUrl)
