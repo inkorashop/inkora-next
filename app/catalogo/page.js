@@ -57,6 +57,42 @@ function is3dModelUrl(url) {
   return /\.(3mf|glb|gltf|obj)/i.test(url.split('?')[0]);
 }
 
+// Agrupa los items por producto (respetando el orden en que el cliente los
+// eligio dentro de cada grupo, y el orden en que aparecio cada producto por
+// primera vez) y agrega un recuento por producto al final cuando hay mas de uno.
+function buildWhatsAppConfirmationMessage(orderCode, customerName, items, total) {
+  const productOrder = [];
+  const groups = new Map();
+  (items || []).forEach(item => {
+    const product = item.productName || '—';
+    if (!groups.has(product)) {
+      groups.set(product, []);
+      productOrder.push(product);
+    }
+    groups.get(product).push(item);
+  });
+
+  const multipleProducts = productOrder.length > 1;
+  const itemsText = productOrder.map(product => {
+    const lines = groups.get(product).map(i => `- ${i.name} x ${i.qty}`).join('\n');
+    return multipleProducts ? `*${product}*\n${lines}` : lines;
+  }).join('\n\n');
+
+  let message = `Hola INKORA! Quiero confirmar mi pedido\nCodigo: ${orderCode}\nNombre: ${customerName}\nItems:\n${itemsText}`;
+
+  if (multipleProducts) {
+    const summary = productOrder.map(product => {
+      const qty = groups.get(product).reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
+      return `- ${product}: ${qty} unidades`;
+    }).join('\n');
+    message += `\n\nResumen por producto:\n${summary}`;
+  }
+
+  if (total > 0) message += `\nTotal: $${total.toLocaleString()}`;
+
+  return message;
+}
+
 function productUrlSlug(product) {
   return toSlug(product?.name);
 }
@@ -2228,7 +2264,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 <p>Te enviamos la confirmacion a tu email.</p>
                 <div style={{display:'flex', gap:10, marginTop:16, justifyContent:'center'}}>
                   <a href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent(
-                    "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (confirmedOrder.total > 0 ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '')
+                    buildWhatsAppConfirmationMessage(orderCode, confirmedOrder.form.name, confirmedOrder.items, confirmedOrder.total)
                   )} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, background:'rgba(37,211,102,0.15)', color:'#18a36a', border:'1.5px solid #25D366'}} onClick={closeModal}>
                     Confirmar por WhatsApp
                   </a>
@@ -2239,7 +2275,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
 
                 {/* Caja opcional: copiar texto para WhatsApp */}
                 {(() => {
-                  const waText = "Hola INKORA! Quiero confirmar mi pedido\nCodigo: " + orderCode + "\nNombre: " + confirmedOrder.form.name + "\nItems:\n" + confirmedOrder.items.map(i => "- " + i.name + " x " + i.qty).join('\n') + (confirmedOrder.total > 0 ? "\nTotal: $" + confirmedOrder.total.toLocaleString() : '');
+                  const waText = buildWhatsAppConfirmationMessage(orderCode, confirmedOrder.form.name, confirmedOrder.items, confirmedOrder.total);
                   return (
                     <div style={{marginTop:24, borderTop:'1.5px dashed #dde1ef', paddingTop:18, textAlign:'left'}}>
                       <p style={{fontSize:11, color:'#9aa3bc', margin:'0 0 8px', textAlign:'center', letterSpacing:0.3}}>También podés copiar el mensaje y mandarlo vos</p>

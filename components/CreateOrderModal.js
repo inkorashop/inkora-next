@@ -673,21 +673,32 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     if (!SR) return null;
     const rec = new SR();
     rec.lang = 'es-AR';
-    // continuous:false avoids Chrome's resultIndex=0 bug that causes duplicates.
-    // Each session captures one utterance; onend restarts for the next one.
-    rec.continuous = false;
+    // continuous:true keeps one listening session alive across the natural
+    // pauses between phrases. continuous:false used to end the session on
+    // every such pause, which forced a brand-new SpeechRecognition + .start()
+    // each time — that's what caused the repeated mic beep on Android and a
+    // ~150ms+ dead window right after each phrase (e.g. right after saying
+    // "siguiente") where speech was lost while the new session spun up.
+    // Chrome can occasionally reset event.resultIndex, so instead of trusting
+    // it we track how many final results we've already consumed ourselves,
+    // to avoid re-processing/duplicating old ones.
+    rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
+    let processedFinalCount = 0;
     rec.onresult = (event) => {
-      // With continuous:false there is exactly one result slot per session.
-      const result = event.results[0];
-      if (!result) return;
-      if (result.isFinal) {
-        setVoiceInterim('');
-        processVoiceFinal(result[0].transcript);
-      } else {
-        setVoiceInterim(result[0].transcript);
+      let interimTranscript = '';
+      for (let i = processedFinalCount; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (!result) continue;
+        if (result.isFinal) {
+          processedFinalCount = i + 1;
+          processVoiceFinal(result[0].transcript);
+        } else {
+          interimTranscript += result[0].transcript;
+        }
       }
+      setVoiceInterim(interimTranscript);
     };
     const startedAt = Date.now();
     rec.onerror = (e) => {
