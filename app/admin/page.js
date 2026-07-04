@@ -5280,7 +5280,12 @@ useEffect(() => {
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
-        <span style={s.headerTitle} className="adm-header-title">Panel de Administración</span>
+        <span style={s.headerTitle} className="adm-header-title">
+          Panel de Administración
+          {process.env.NEXT_PUBLIC_APP_VERSION && (
+            <span style={{ fontSize: 9, opacity: 0.35, marginLeft: 8, letterSpacing: 0.5 }}>v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
+          )}
+        </span>
         <button
   type="button"
   onClick={() => setAdminDarkMode(v => !v)}

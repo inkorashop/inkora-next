@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-04 -03:00 - Claude Sonnet 5 (v6)
+## 2026-07-04 -03:00 - Claude Sonnet 5 (v7)
+
+- Objetivo: Mostrar la version actual (del deploy) en la barra superior de Admin, muy sutil, tanto en web como en PWA.
+- Cambios: `next.config.mjs` calcula el hash corto de git (`git rev-parse --short HEAD`) en build time y lo expone como `NEXT_PUBLIC_APP_VERSION` (con fallback `'dev'` si no hay git disponible). `app/admin/page.js` lo muestra como `v{hash}` junto al titulo "Panel de Administración", en texto chico y opacidad 0.35 — no requiere distincion entre web/PWA porque ambas cargan la misma pagina.
+- Verificacion: `npx eslint` sin errores; `npx next build` completo sin errores.
+- Auditoria: N/A (cambio chico y autocontenido).
+- Pendiente/Riesgos: Ninguno — se recalcula solo en cada build/deploy, siempre refleja el commit real desplegado.
 
 - Objetivo: (1) Notificaciones push para mensajes nuevos del chat interno; (2) silenciar notificaciones por canal en 2 niveles (sin sonido / no mostrar nada); (3) en mobile, el canal por defecto al entrar a la pestana Chat siempre debe ser "General", no el ultimo canal visitado.
 - Cambios: No existia ninguna infraestructura de push previa (se investigo con un agente antes de tocar nada). Se agrego: `sql/chat_push_notifications.sql` con las tablas `push_subscriptions` (endpoint/keys por dispositivo) y `chat_channel_member_settings` (mute_level 'none'|'mute_sound'|'mute_all' por canal y usuario, + last_read_at server-side a futuro), mas un trigger `on_chat_message_created_notify` via `pg_net` (misma extension que usa el feature nativo "Database Webhooks" de Supabase) que llama a `/api/webhooks/chat-message-created` en cada INSERT de `chat_messages`. Esa ruta valida un secreto (`CHAT_WEBHOOK_SECRET`) y manda los push reales con `web-push` (nueva dependencia) usando un par de claves VAPID generadas para este proyecto, respetando el mute_level de cada destinatario (excluye al que escribio, salta a los `mute_all`, manda silencioso a los `mute_sound`) y limpiando suscripciones vencidas (404/410). `public/sw.js` gano handlers `push` y `notificationclick`. Nuevo componente `components/ChatPushToggle.js` (boton campana en la barra superior de Admin) maneja pedir permiso + suscribirse/desuscribirse via `/api/push/subscribe` y `/api/push/unsubscribe`. En `components/chat/ChatPanel.js`: nuevo menu por canal (🔔/🔈/🔕) para elegir el mute_level, persistido en `chat_channel_member_settings`; y se corrigio el efecto de auto-seleccion de canal para que en mobile (`isMobile`) ignore el ultimo canal guardado en localStorage y vaya siempre al canal `type==='main'` ("General"), salvo que venga un `?canal=` explicito en la URL (deep link).
