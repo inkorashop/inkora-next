@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-04 -03:00 - Claude Sonnet 5 (v7)
+## 2026-07-04 -03:00 - Claude Sonnet 5 (v8)
+
+- Objetivo: El indicador de version agregado en el turno anterior no se veia en mobile/PWA.
+- Cambios: Causa: la version quedo anidada dentro de `.adm-header-title`, y hay un media query (`@media max-width:480px`) que oculta esa clase entera para hacer lugar a los botones de icono en pantallas chicas. Se saco el span de version de adentro del titulo y se lo puso como elemento independiente (sin esa clase) entre el logo y el titulo, con `flexShrink:0` para que no se lo coma el layout.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A.
+- Pendiente/Riesgos: Ninguno.
 
 - Objetivo: Mostrar la version actual (del deploy) en la barra superior de Admin, muy sutil, tanto en web como en PWA.
 - Cambios: `next.config.mjs` calcula el hash corto de git (`git rev-parse --short HEAD`) en build time y lo expone como `NEXT_PUBLIC_APP_VERSION` (con fallback `'dev'` si no hay git disponible). `app/admin/page.js` lo muestra como `v{hash}` junto al titulo "Panel de Administración", en texto chico y opacidad 0.35 — no requiere distincion entre web/PWA porque ambas cargan la misma pagina.
