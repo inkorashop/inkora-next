@@ -8,7 +8,7 @@ import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
-import { buildOrderItemsSnapshot, getOrderItemsTotal } from '@/lib/order-pricing';
+import { buildOrderItemsSnapshot, formatOrderMoney, getOrderItemsTotal } from '@/lib/order-pricing';
 import { toSlug } from '@/lib/slug';
 import {
   filterCategoriesForVisibility,
@@ -2233,21 +2233,21 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         {showPrices && i.showPrice !== false && (() => {
                           const price = getUnitPrice(i.product_id);
                           if (price === null) return null;
-                          if (price > 0) return <span>${(i.qty * price).toLocaleString()}</span>;
+                          if (price > 0) return <span>{formatOrderMoney(i.qty * price)}</span>;
                           return null;
                         })()}
                       </div>
                     ))}
                     <div style={{...s.summaryItem, fontWeight:700, borderTop:'1px solid #dde1ef', paddingTop:8, marginTop:4}}>
                       <span>Total</span>
-                      <span>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+                      <span>{showTotal ? formatOrderMoney(total) : '-'}</span>
                     </div>
                   </div>
                   <textarea style={{...s.notes, marginTop:8}} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notas adicionales..." rows={2} />
                   <div style={{...s.modalActions, position:'sticky', bottom:0, background:'white', paddingTop:10, marginTop:4, borderTop:'1.5px solid #eef0f6', marginLeft:-16, marginRight:-16, paddingLeft:16, paddingRight:16, paddingBottom:16}}>
                     <button style={s.btnSecondary} onClick={closeModal}>Cancelar</button>
                     <button style={s.btnPrimary} onClick={submitOrder} disabled={loading}>
-                      {loading ? 'Enviando...' : 'Enviar pedido'}
+                      {loading ? 'Confirmando...' : 'Confirmar pedido'}
                     </button>
                   </div>
                 </div>

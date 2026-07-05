@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 16:40 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir formato de miles en el resumen de confirmacion del catalogo y cambiar el boton de envio a "Confirmar pedido" / "Confirmando...".
+- Cambios: Se actualizo `app/catalogo/page.js` para usar `formatOrderMoney` en los importes del modal de confirmacion, evitando que valores numericos o strings se rendericen como `$6000` sin separador, y se ajusto el texto del boton principal.
+- Verificacion: `node --check app\catalogo\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. Se audito el turno anterior sobre Categorias y el arbol tracked estaba limpio antes de editar; quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: Probar manualmente un pedido con importes de 4 digitos para confirmar que se vea `$6.000` y que el estado loading muestre "Confirmando...".
+
+---
+
 ## 2026-07-05 16:36 -03:00 - ChatGPT Codex
 
 - Objetivo: Mejorar la pestana de Categorias del modal de productos: tags alineadas con mismo tamano, opcion de color "Por defecto" y reordenamiento visual mientras se arrastra.
