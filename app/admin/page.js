@@ -83,6 +83,9 @@ const ADMIN_TAB_ICONS = {
 const PASSWORD_PROMPT_ENABLED_KEY = 'password_change_prompt_enabled';
 const PASSWORD_PROMPT_DELAY_DAYS_KEY = 'password_change_prompt_delay_days';
 const DEFAULT_PASSWORD_PROMPT_DELAY_DAYS = 14;
+const MAINTENANCE_ACTIVATES_AT_KEY = 'maintenance_activates_at';
+const MAINTENANCE_MINUTES_KEY = 'maintenance_minutes';
+const DEFAULT_MAINTENANCE_MINUTES = 10;
 const DESIGN_PDF_LINK_ENABLED_KEY = 'design_pdf_link_enabled_ids';
 const INVITE_DESTINATIONS = [
   { label: 'Inicio', value: '/' },
@@ -4031,6 +4034,24 @@ useEffect(() => {
     await supabase.from('settings').upsert({ key, value });
     trackAdminActivity('setting_update', { key, value }, 'config');
     setSettings(prev => ({ ...prev, [key]: value }));
+  }
+
+  function activateMaintenance() {
+    const minutes = parseInt(settings[MAINTENANCE_MINUTES_KEY], 10) || DEFAULT_MAINTENANCE_MINUTES;
+    if (!window.confirm(`¿Activar el servicio técnico? Los usuarios activos van a ver un aviso y serán redirigidos en ${minutes} minuto${minutes !== 1 ? 's' : ''}. Los que entren de nuevo a la página lo van a ver de inmediato.`)) return;
+    const activatesAt = new Date(Date.now() + minutes * 60000).toISOString();
+    saveSetting(MAINTENANCE_ACTIVATES_AT_KEY, activatesAt);
+  }
+
+  function activateMaintenanceInstant() {
+    if (!window.confirm('¿Activar el servicio técnico DE INMEDIATO? Esto afecta a todos los usuarios activos ahora mismo, sin aviso previo.')) return;
+    if (!window.confirm('Confirmá de nuevo: esta acción es inmediata y va a sacar a los usuarios activos ahora mismo. ¿Seguro que querés continuar?')) return;
+    saveSetting(MAINTENANCE_ACTIVATES_AT_KEY, new Date().toISOString());
+  }
+
+  function deactivateMaintenance() {
+    if (!window.confirm('¿Desactivar el servicio técnico y volver a habilitar la página para todos?')) return;
+    saveSetting(MAINTENANCE_ACTIVATES_AT_KEY, '');
   }
 
   function formatAdminDateTime(iso) {
@@ -8079,6 +8100,65 @@ useEffect(() => {
       {/* == CONFIGURACIÓN == */}
         {activeTab === 'config' && (
           <>
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Servicio técnico (mantenimiento)</h2>
+              <div style={{fontSize:12, color:'#9aa3bc', marginBottom:14, lineHeight:1.5}}>
+                {(() => {
+                  const iso = settings[MAINTENANCE_ACTIVATES_AT_KEY];
+                  if (!iso) return 'Estado actual: inactivo — la página funciona con normalidad.';
+                  const activatesAt = new Date(iso);
+                  if (Number.isNaN(activatesAt.getTime())) return 'Estado actual: inactivo — la página funciona con normalidad.';
+                  const isActive = activatesAt.getTime() <= Date.now();
+                  return isActive
+                    ? 'Estado actual: ACTIVO — la página muestra la pantalla de mantenimiento a todos los usuarios (excepto admin/operarios/producción).'
+                    : `Estado actual: programado — entra en mantenimiento a las ${formatAdminDateTime(iso)}.`;
+                })()}
+              </div>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Minutos de aviso antes de bloquear</div>
+                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Tiempo que ven los usuarios activos en el cartel antes de ser redirigidos.</div>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <input
+                    type="number"
+                    min="1"
+                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', width:78}}
+                    value={settings[MAINTENANCE_MINUTES_KEY] ?? String(DEFAULT_MAINTENANCE_MINUTES)}
+                    onChange={e => setSettings(prev => ({...prev, [MAINTENANCE_MINUTES_KEY]: e.target.value}))}
+                    onBlur={e => {
+                      const parsed = parseInt(e.target.value, 10);
+                      const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAINTENANCE_MINUTES;
+                      saveSetting(MAINTENANCE_MINUTES_KEY, String(minutes));
+                    }}
+                  />
+                  <span style={{fontSize:12, color:'#7d879f', fontWeight:700}}>min</span>
+                </div>
+              </div>
+              <div style={{display:'flex', flexWrap:'wrap', gap:10, padding:'14px 0 0'}}>
+                <button
+                  onClick={activateMaintenance}
+                  style={{background:'#1B2F5E', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer'}}
+                >
+                  Activar servicio técnico
+                </button>
+                <button
+                  onClick={activateMaintenanceInstant}
+                  style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.35)'}}
+                >
+                  Activar al instante
+                </button>
+                {!!settings[MAINTENANCE_ACTIVATES_AT_KEY] && (
+                  <button
+                    onClick={deactivateMaintenance}
+                    style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:600, cursor:'pointer'}}
+                  >
+                    Desactivar
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Inicio de sesión</h2>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>

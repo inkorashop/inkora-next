@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
+import { notifyOpsError } from '@/lib/error-alert';
 
 function escapeCSV(value) {
   if (value === null || value === undefined) return '';
@@ -235,6 +236,11 @@ export async function POST(request) {
 
     if (!res.ok) {
       const err = await res.text();
+      notifyOpsError({
+        source: 'order_admin_email_failed',
+        message: `No se pudo avisar el pedido ${orderCode} por email (nadie se entera del pedido nuevo).`,
+        details: err,
+      }).catch(() => {});
       return NextResponse.json({ error: err }, { status: 500 });
     }
 

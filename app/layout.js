@@ -5,6 +5,7 @@ import { CartProvider } from '@/contexts/CartContext';
 import TrackBootstrap from '@/components/TrackBootstrap';
 import AuthHashHandler from '@/components/AuthHashHandler';
 import PasswordChangeReminder from '@/components/PasswordChangeReminder';
+import MaintenanceGate from '@/components/MaintenanceGate';
 
 const barlow = Barlow({
   subsets: ['latin'],
@@ -37,7 +38,7 @@ export default function RootLayout({ children }) {
           <AuthHashHandler />
           <TrackBootstrap />
           <PasswordChangeReminder />
-          {children}
+          <MaintenanceGate>{children}</MaintenanceGate>
         </CartProvider>
       </body>
     </html>
