@@ -2542,6 +2542,12 @@ useEffect(() => {
     }
   }
 
+  function clearDesignSelectionOutsideCards(e) {
+    if (activeTab !== 'designs' || selectedIds.size === 0) return;
+    if (e.target?.closest?.('[data-design-card]')) return;
+    setSelectedIds(new Set());
+  }
+
   function getProductCategories(productId) {
     const p = products.find(pr => pr.id === productId);
     const cats = p?.categories;
@@ -5400,7 +5406,11 @@ useEffect(() => {
         </div>
       </div>
 
-      <div style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}} className="adm-content">
+      <div
+        style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}}
+        className="adm-content"
+        onClick={clearDesignSelectionOutsideCards}
+      >
 
         {/* == PRODUCTOS == */}
         {activeTab === 'products' && (

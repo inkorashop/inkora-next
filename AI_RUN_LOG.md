@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 12:34 -03:00 - ChatGPT Codex
+
+- Objetivo: Explicar como se llama el espacio gris lateral de Admin > Disenos y hacer que al clickear ese margen/gutter se suelte la seleccion de disenos.
+- Cambios: Se actualizo `app/admin/page.js` agregando `clearDesignSelectionOutsideCards` y conectandolo al contenedor `.adm-content`, limitado a la pestana Disenos. Ahora cualquier click del area principal que no este dentro de una fila `data-design-card`, incluido el margen exterior gris/padding lateral, limpia `selectedIds`.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. El arbol tracked estaba limpio antes de editar; solo habia untracked `Inkora.PrintBridge.zip` y `Messi 2.3mf`, que quedaron fuera de scope. Se audito el turno anterior y se confirmo que el fix previo limpiaba dentro de las cards, pero no cubria el gutter lateral gris fuera de ellas.
+- Pendiente/Riesgos: Probar manualmente en produccion click sobre el margen exterior izquierdo/derecho de la pestana Disenos para confirmar que deselecciona, y que click dentro de una fila de diseno siga seleccionando normalmente.
+
+---
+
 ## 2026-07-04 21:55 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir dos detalles puntuales: en Admin > Disenos soltar seleccion al hacer click fuera de cualquier card de diseno, y en Catalogo ocultar "Sin variantes" cuando el producto no tiene variantes.
