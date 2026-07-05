@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v9)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v10)
+
+- Objetivo: El usuario no notaba el efecto de transparencia del overlay de "copiado" (85% opacidad + blur 5px resultaba demasiado sutil en la practica, casi indistinguible de solido).
+- Cambios: En `app/catalogo/page.js` se bajo la opacidad de 0.85 a 0.6 y el desenfoque de 5px a 2px en ambos overlays (codigo del pedido y recuadro de WhatsApp), para que el texto de atras se note bastante mas. Se agrego `textShadow` sutil al texto blanco de confirmacion para mantenerlo legible a pesar de la menor opacidad de fondo.
+- Verificacion: `npx eslint`/`npx next build` sin errores; se confirmo con `curl` sobre el bundle desplegado que el cambio anterior (0.85/5px) SI estaba en produccion antes de este ajuste — no era un problema de deploy, era que el efecto resultaba demasiado sutil a simple vista.
+- Auditoria: N/A.
+- Pendiente/Riesgos: Ninguno esperado. Sigue pendiente, sin resolver, la decision sobre sacar `www.inkora.com.ar` del proyecto viejo `inkora` en Vercel (ver entrada anterior) — se sigue reforzando cada deploy con `vercel --prod` manual ademas del push a git por las dudas.
 
 - Objetivo: Ajustar el overlay de "copiado" para que sea semi-transparente (no solido) y se siga viendo el texto de atras, en vez de taparlo del todo.
 - Cambios: En `app/catalogo/page.js`, el fondo del overlay (`.copied-overlay`, tanto en el codigo del pedido como en el recuadro de WhatsApp) paso de `background:'#18a36a'` solido a `background:'rgba(24,163,106,0.85)'` + `backdropFilter:'blur(5px)'` (con prefijo `WebkitBackdropFilter` para Safari). El texto de atras queda visible pero desenfocado, sin competir en nitidez con el texto blanco de confirmacion que va encima.
