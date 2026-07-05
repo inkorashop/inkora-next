@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v3)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v4)
+
+- Objetivo: Sumarle al feedback de copiar (codigo del pedido y texto de WhatsApp) un toast "Copiado al portapapeles" con animacion suave, difuminado del contenido copiado mientras se muestra, y un icono chico de portapapeles (que pasa a ✓ por 2s) al lado/esquina de cada elemento.
+- Cambios: En `app/catalogo/page.js` se agrego el keyframe `copied-toast-pop` (fade+scale in, pausa, fade+scale out, 2s totales via clase `.copied-toast`) al bloque `<style>` existente. El codigo del pedido ahora es `display:inline-block` con un icono de portapapeles/check inline a la derecha del texto (semi-transparente en reposo, opaco+verde al copiar) y el toast aparece flotando arriba centrado; el texto en si se difumina (`filter: blur(4px)` + opacidad reducida) mientras esta copiado. Mismo patron en el recuadro de WhatsApp, con el icono en la esquina superior derecha (estilo bloque de codigo de documentacion) en vez de inline, ya que es una caja de varias lineas.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A (iteracion de diseno acordada explicitamente con el usuario sobre el turno anterior).
+- Pendiente/Riesgos: Ninguno esperado.
 
 - Objetivo: Simplificar mas la pantalla de "pedido confirmado": sacar el boton/label de "Copiar" (tanto del texto de confirmacion como del codigo del pedido) sin perder que ambos se puedan copiar, y agrandar el titulo "Pedido confirmado!" para que se entienda de un vistazo que ya quedo confirmado.
 - Cambios: En `app/catalogo/page.js`: `successTitle` paso de 22px/700 a 30px/800. El codigo del pedido (`{orderCode}`) y el recuadro con el texto de WhatsApp ahora son clickeables directamente (todo el elemento, no un boton aparte): `cursor:pointer`, `title="Click para copiar"` como tooltip nativo, y feedback puramente visual (fondo/borde verde ~2s) via los estados `codeCopied` (nuevo) y `waCopied` (ya existia). Se elimino la fila con el label "TEXTO DE CONFIRMACION" y el boton "Copiar"/"Copiado".
