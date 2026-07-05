@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 16:49 -03:00 - ChatGPT Codex
+
+- Objetivo: Reorganizar la pantalla posterior a confirmar pedido en Catalogo: titulo "Pedido confirmado", boton principal "Listo", seccion separada de WhatsApp y texto de confirmacion con accion de copiar integrada.
+- Cambios: Se actualizo `app/catalogo/page.js` para cambiar el titulo de exito, separar el cierre del modal como accion principal, mover WhatsApp a una tarjeta secundaria y reemplazar el boton grande de copiar por un boton pequeno "Copiar" en el encabezado del texto.
+- Verificacion: `node --check app\catalogo\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. Se audito el turno anterior sobre formato de dinero del checkout y el arbol tracked estaba limpio antes de editar; quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: Probar manualmente la pantalla de exito en mobile y desktop para ajustar espaciados si hiciera falta.
+
+---
+
 ## 2026-07-05 16:40 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir formato de miles en el resumen de confirmacion del catalogo y cambiar el boton de envio a "Confirmar pedido" / "Confirmando...".

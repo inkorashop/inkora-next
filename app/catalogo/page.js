@@ -2255,36 +2255,44 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
             ) : (
               <div style={s.successScreen}>
                 <div style={s.successIcon}>✓</div>
-                <h3 style={s.successTitle}>Pedido enviado!</h3>
+                <h3 style={s.successTitle}>Pedido confirmado!</h3>
                 <p>Codigo de tu pedido:</p>
                 <div style={s.successCode}>{orderCode}</div>
                 <p>Te enviamos la confirmacion a tu email.</p>
-                <div style={{display:'flex', gap:10, marginTop:16, justifyContent:'center'}}>
-                  <a href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent(
-                    buildWhatsAppConfirmationMessage(orderCode, confirmedOrder.form.name, confirmedOrder.items, confirmedOrder.total)
-                  )} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, background:'rgba(37,211,102,0.15)', color:'#18a36a', border:'1.5px solid #25D366'}} onClick={closeModal}>
-                    Confirmar por WhatsApp
-                  </a>
-                  <button style={{background:'#1B2F5E', border:'none', color:'white', borderRadius:10, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'Barlow, sans-serif'}} onClick={closeModal}>
-                    Listo ✓
-                  </button>
-                </div>
-
-                {/* Caja opcional: copiar texto para WhatsApp */}
+                <button
+                  style={{marginTop:16, width:'100%', maxWidth:260, background:'#1B2F5E', border:'none', color:'white', borderRadius:10, padding:'12px 24px', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:'Barlow, sans-serif', boxShadow:'0 8px 20px rgba(27,47,94,0.16)'}}
+                  onClick={closeModal}
+                >
+                  Listo ✓
+                </button>
                 {(() => {
                   const waText = buildWhatsAppConfirmationMessage(orderCode, confirmedOrder.form.name, confirmedOrder.items, confirmedOrder.total);
                   return (
-                    <div style={{marginTop:24, borderTop:'1.5px dashed #dde1ef', paddingTop:18, textAlign:'left'}}>
-                      <p style={{fontSize:11, color:'#9aa3bc', margin:'0 0 8px', textAlign:'center', letterSpacing:0.3}}>También podés copiar el mensaje y mandarlo vos</p>
-                      <div style={{background:'#f4f9f4', border:'1.5px dashed #25D366', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.6, fontFamily:'monospace'}}>
-                        {waText}
+                    <div style={{marginTop:22, borderTop:'1.5px solid #eef0f6', paddingTop:18, textAlign:'left'}}>
+                      <div style={{background:'#f8fdf9', border:'1.5px solid #c7f4d8', borderRadius:12, padding:14}}>
+                        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:12}}>
+                          <div>
+                            <div style={{fontSize:13, fontWeight:800, color:'#15803d'}}>Confirmar por WhatsApp</div>
+                            <div style={{fontSize:11, color:'#7d879f', marginTop:2}}>Opcional, para avisarnos directo.</div>
+                          </div>
+                          <a href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent(waText)} target="_blank" rel="noreferrer" style={{...s.btnWaConfirm, marginTop:0, padding:'9px 13px', borderRadius:9, background:'#18a36a', color:'white', border:'none', fontSize:12, fontWeight:800, whiteSpace:'nowrap'}} onClick={closeModal}>
+                            WhatsApp
+                          </a>
+                        </div>
+                        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, margin:'2px 0 8px'}}>
+                          <span style={{fontSize:11, color:'#5a6380', fontWeight:800, textTransform:'uppercase', letterSpacing:0.5}}>Texto de confirmacion</span>
+                          <button
+                            type="button"
+                            onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
+                            style={{background: waCopied ? '#dcfce7' : 'white', border:'1.5px solid #bbf7d0', color: waCopied ? '#15803d' : '#18a36a', borderRadius:999, padding:'4px 10px', fontSize:11, fontWeight:800, cursor:'pointer', transition:'all 0.2s', fontFamily:'Barlow, sans-serif'}}
+                          >
+                            {waCopied ? 'Copiado' : 'Copiar'}
+                          </button>
+                        </div>
+                        <div style={{background:'white', border:'1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 12px', fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto'}}>
+                          {waText}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
-                        style={{marginTop:8, width:'100%', background: waCopied ? '#18a36a' : 'white', border:'1.5px solid #25D366', color: waCopied ? 'white' : '#18a36a', borderRadius:8, padding:'8px 0', fontSize:12, fontWeight:700, cursor:'pointer', transition:'all 0.2s', fontFamily:'Barlow, sans-serif'}}
-                      >
-                        {waCopied ? '¡Copiado!' : 'Copiar mensaje'}
-                      </button>
                     </div>
                   );
                 })()}
