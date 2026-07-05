@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v2)
+
+- Objetivo: (1) Terminar y desplegar un cambio de Codex (reorganizar pantalla de "pedido confirmado") que habia quedado sin commitear porque esa sesion corto por limite de uso; (2) evitar que las cards de diseno en Catalogo cambien de alto cuando aparece/desaparece el precio unitario segun la cantidad.
+- Cambios: (1) Se reviso el diff sin commitear que dejo Codex en `app/catalogo/page.js` y `AI_RUN_LOG.md`, se verifico que compilaba y lintaba limpio, y se completo el paso que faltaba (commit + push). (2) En `app/catalogo/page.js`, el bloque que muestra `$precio/u` debajo de la categoria de cada diseno devolvia `null` cuando el precio todavia no aplicaba (cantidad insuficiente para ese tramo), haciendo que esa card (y por extension toda la fila del grid) creciera verticalmente recien cuando el precio aparecia. Se cambio para que el `div` siempre se renderice con el mismo alto, alternando `visibility: hidden/visible` en vez de `null`, asi el espacio queda reservado desde el principio.
+- Verificacion: `npx eslint`/`npx next build` sin errores en ambos cambios.
+- Auditoria: Para (1), se comparo el diff de Codex contra los requisitos que el usuario ya habia pedido en esa sesion (titulo "Pedido confirmado", boton "Listo" unico, WhatsApp en tarjeta aparte, "Copiar" chico integrado arriba del texto) y coincidia exactamente, no hizo falta corregir nada, solo desplegar.
+- Pendiente/Riesgos: Ninguno esperado.
+
+---
+
 ## 2026-07-05 16:49 -03:00 - ChatGPT Codex
 
 - Objetivo: Reorganizar la pantalla posterior a confirmar pedido en Catalogo: titulo "Pedido confirmado", boton principal "Listo", seccion separada de WhatsApp y texto de confirmacion con accion de copiar integrada.

@@ -1883,10 +1883,15 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       })()}
                       {showPrices && activeProduct?.show_price !== false && (() => {
                         const price = getUnitPrice(activeProductId);
-                        if (price !== null && price > 0) {
-                          return <div style={s.cardUnitPrice}>${price.toLocaleString()}/u</div>;
-                        }
-                        return null;
+                        const hasPrice = price !== null && price > 0;
+                        // Se reserva el mismo espacio siempre (visibility, no display:none)
+                        // para que la card no cambie de alto cuando el precio aparece o
+                        // desaparece segun la cantidad elegida.
+                        return (
+                          <div style={{...s.cardUnitPrice, visibility: hasPrice ? 'visible' : 'hidden'}}>
+                            {hasPrice ? `$${price.toLocaleString()}/u` : ' '}
+                          </div>
+                        );
                       })()}
                       <div style={{...s.qtyControl, borderColor: inCart ? '#2D6BE4' : '#dde1ef', background: inCart ? '#1B2F5E' : 'white', marginTop: 'auto'}}>
                         <button style={{...s.qtyBtn, color: inCart ? 'white' : '#5a6380'}} onClick={() => changeQty(d.id, -1)}>-</button>
