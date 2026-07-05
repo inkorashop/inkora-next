@@ -85,7 +85,7 @@ function buildWhatsAppConfirmationMessage(orderCode, customerName, items, total)
     message += `\n\nResumen por producto:\n${summary}`;
   }
 
-  if (total > 0) message += `\nTotal: $${total.toLocaleString()}`;
+  if (total > 0) message += `\nTotal: $${total.toLocaleString('es-AR')}`;
 
   return message;
 }
@@ -1484,7 +1484,7 @@ export default function Home() {
 
       setForm(normalizedForm);
 
-      await supabase.from('orders').insert({
+      const { error: orderInsertError } = await supabase.from('orders').insert({
         order_code: orderCode,
         customer_name: normalizedForm.name,
         customer_phone: normalizedForm.phone,
@@ -1496,20 +1496,38 @@ export default function Home() {
         seller_id: profile?.sellers?.id || null,
       });
 
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderCode,
-          form: normalizedForm,
-          cartItems: pricedCartItems,
-          total: orderTotal,
-          showPrice: showTotal,
-          notes,
-          sellerName: profile?.sellers?.name || null,
-          sendConfirmation: profile?.send_confirmation_email !== false,
-        }),
-      });
+      if (orderInsertError) {
+        throw orderInsertError;
+      }
+
+      // El pedido ya quedo guardado en este punto: si el email falla, no hay
+      // que bloquear la confirmacion al cliente (el pedido es el dato real,
+      // el email es solo un aviso). Se registra el fallo para poder
+      // detectarlo despues, en vez de fallar en silencio.
+      try {
+        const emailRes = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderCode,
+            form: normalizedForm,
+            cartItems: pricedCartItems,
+            total: orderTotal,
+            showPrice: showTotal,
+            notes,
+            sellerName: profile?.sellers?.name || null,
+            sendConfirmation: profile?.send_confirmation_email !== false,
+          }),
+        });
+        const emailBody = await emailRes.json().catch(() => ({}));
+        if (!emailRes.ok) {
+          track('order_email_failed', { order_code: orderCode, status: emailRes.status, error: emailBody?.error || null });
+        } else if (emailBody?.clientEmailSent === false) {
+          track('order_client_email_failed', { order_code: orderCode, error: emailBody?.clientEmailError || null });
+        }
+      } catch (emailErr) {
+        track('order_email_failed', { order_code: orderCode, error: emailErr?.message || 'network_error' });
+      }
 
       track('order_confirm', {
         order_code: orderCode,

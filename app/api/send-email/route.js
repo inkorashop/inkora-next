@@ -10,6 +10,18 @@ function escapeCSV(value) {
   return str;
 }
 
+// Datos que vienen del formulario del cliente (nombre, notas, etc.) van
+// directo a un template de HTML: hay que escaparlos para que no rompan el
+// layout del email ni inyecten markup si alguien pone < > & " ' en un campo.
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildTable(cartItems, hasPrice) {
   const tdStyle = 'padding:5px 10px;border-bottom:1px solid #eef0f6;';
   const thStyle = 'padding:7px 10px;text-align:left;';
@@ -32,10 +44,13 @@ function buildTable(cartItems, hasPrice) {
     const rowStyle = 'font-size:13px;';
     const pricing = getOrderItemPricing(i);
 
+    const productName = escapeHtml(i.productName || '—');
+    const designName = escapeHtml(i.name || '—');
+
     if (hasPrice) {
       return `<tr style="${rowStyle}">
-        <td style="${tdStyle}">${i.productName || '—'}</td>
-        <td style="${tdStyle}">${i.name || '—'}</td>
+        <td style="${tdStyle}">${productName}</td>
+        <td style="${tdStyle}">${designName}</td>
         <td style="${tdStyle}text-align:center">${i.qty}</td>
         <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}</td>
         <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.subtotal) : '—'}</td>
@@ -43,8 +58,8 @@ function buildTable(cartItems, hasPrice) {
     }
 
     return `<tr style="${rowStyle}">
-      <td style="${tdStyle}">${i.productName || '—'}</td>
-      <td style="${tdStyle}">${i.name || '—'}</td>
+      <td style="${tdStyle}">${productName}</td>
+      <td style="${tdStyle}">${designName}</td>
       <td style="${tdStyle}text-align:center">${i.qty}</td>
     </tr>`;
   }).join('');
@@ -64,10 +79,11 @@ function buildTable(cartItems, hasPrice) {
 
   const productRows = productEntries.map(([pName, pQty], idx) => {
     const td = idx === 0 ? footerTdFirst : footerTd;
+    const safePName = escapeHtml(pName);
 
     if (hasPrice) {
       return `<tr style="background:#f8faff">
-        <td colspan="2" style="${td}">${pName}</td>
+        <td colspan="2" style="${td}">${safePName}</td>
         <td style="${td}text-align:center">${pQty}</td>
         <td style="${td}"></td>
         <td style="${td}"></td>
@@ -75,7 +91,7 @@ function buildTable(cartItems, hasPrice) {
     }
 
     return `<tr style="background:#f8faff">
-      <td colspan="2" style="${td}">${pName}</td>
+      <td colspan="2" style="${td}">${safePName}</td>
       <td style="${td}text-align:center">${pQty}</td>
     </tr>`;
   }).join('');
@@ -109,13 +125,23 @@ export async function POST(request) {
     const table = buildTable(cartItems, hasPrice);
     const totalSection = hasPrice ? `<div style="padding:12px 16px;background:#e8f0fe;border:1px solid #dde1ef;border-top:none;border-radius:0 0 8px 8px;text-align:right;font-weight:700;font-size:15px;color:#1B2F5E">Total: ${formatOrderMoney(emailTotal)}</div>` : '';
 
+    // Todo lo que viene del formulario del cliente se escapa una sola vez
+    // aca, y esas versiones seguras son las que se usan tanto en el
+    // template por defecto como en tplVars (para templates personalizados).
+    const safeOrderCode = escapeHtml(orderCode);
+    const safeName = escapeHtml(form.name);
+    const safeEmail = escapeHtml(form.email);
+    const safePhone = escapeHtml(form.phone || '—');
+    const safeSellerName = escapeHtml(sellerName || '');
+    const safeNotes = escapeHtml(notes || '');
+
     const tplVars = {
-      orderCode,
-      customerName: form.name,
-      customerEmail: form.email,
-      customerPhone: form.phone || '—',
-      sellerName: sellerName || '',
-      notes: notes || '',
+      orderCode: safeOrderCode,
+      customerName: safeName,
+      customerEmail: safeEmail,
+      customerPhone: safePhone,
+      sellerName: safeSellerName,
+      notes: safeNotes,
       fecha,
       itemsTable: table,
       totalSection,
@@ -129,12 +155,12 @@ export async function POST(request) {
           <h2 style="color:white;margin:0;font-size:18px">Nuevo pedido INKORA</h2>
         </div>
         <div style="background:#f8faff;padding:20px 24px;border:1px solid #dde1ef;border-top:none">
-          <p style="margin:0 0 6px"><strong>Código:</strong> ${orderCode}</p>
-          <p style="margin:0 0 6px"><strong>Cliente:</strong> ${form.name}</p>
-          <p style="margin:0 0 6px"><strong>Teléfono:</strong> ${form.phone || '—'}</p>
-          <p style="margin:0 0 6px"><strong>Email:</strong> ${form.email}</p>
-          ${sellerName ? `<p style="margin:0 0 6px"><strong>Vendedor:</strong> ${sellerName}</p>` : ''}
-          ${notes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${notes}</p>` : ''}
+          <p style="margin:0 0 6px"><strong>Código:</strong> ${safeOrderCode}</p>
+          <p style="margin:0 0 6px"><strong>Cliente:</strong> ${safeName}</p>
+          <p style="margin:0 0 6px"><strong>Teléfono:</strong> ${safePhone}</p>
+          <p style="margin:0 0 6px"><strong>Email:</strong> ${safeEmail}</p>
+          ${safeSellerName ? `<p style="margin:0 0 6px"><strong>Vendedor:</strong> ${safeSellerName}</p>` : ''}
+          ${safeNotes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${safeNotes}</p>` : ''}
           <p style="margin:6px 0 0;font-size:12px;color:#9aa3bc"><strong>Fecha:</strong> ${fecha}</p>
         </div>
         ${table}
@@ -203,9 +229,9 @@ export async function POST(request) {
             <h2 style="color:white;margin:0;font-size:18px">¡Recibimos tu pedido!</h2>
           </div>
           <div style="background:#f8faff;padding:20px 24px;border:1px solid #dde1ef;border-top:none">
-            <p style="margin:0 0 6px">Hola <strong>${form.name}</strong>, tu pedido fue registrado correctamente.</p>
-            <p style="margin:0 0 6px"><strong>Código de pedido:</strong> ${orderCode}</p>
-            ${notes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${notes}</p>` : ''}
+            <p style="margin:0 0 6px">Hola <strong>${safeName}</strong>, tu pedido fue registrado correctamente.</p>
+            <p style="margin:0 0 6px"><strong>Código de pedido:</strong> ${safeOrderCode}</p>
+            ${safeNotes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${safeNotes}</p>` : ''}
           </div>
           ${table}
           ${totalSection}
@@ -221,19 +247,35 @@ export async function POST(request) {
         ? applyTemplate(customTemplates['email_subject_client'], tplVars)
         : `Tu pedido ${orderCode} — INKORA`;
 
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'INKORA <onboarding@resend.dev>',
-          to: [form.email],
-          subject: clientSubject,
-          html: clientHtml,
-        }),
-      });
+      // El email al admin (arriba) ya se mando bien en este punto — es el
+      // critico para que se enteren del pedido. Si el de confirmacion al
+      // cliente falla, no tiene sentido devolver un error 500 (el pedido y
+      // el aviso al admin ya estan hechos), pero tampoco hay que fallar en
+      // silencio: se informa en la respuesta para poder detectarlo.
+      try {
+        const clientRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'INKORA <onboarding@resend.dev>',
+            to: [form.email],
+            subject: clientSubject,
+            html: clientHtml,
+          }),
+        });
+
+        if (!clientRes.ok) {
+          const clientErr = await clientRes.text();
+          console.error('Error enviando email de confirmacion al cliente:', clientErr);
+          return NextResponse.json({ ok: true, clientEmailSent: false, clientEmailError: clientErr });
+        }
+      } catch (clientEmailErr) {
+        console.error('Error de red enviando email de confirmacion al cliente:', clientEmailErr);
+        return NextResponse.json({ ok: true, clientEmailSent: false, clientEmailError: clientEmailErr.message });
+      }
     }
 
     return NextResponse.json({ ok: true });
