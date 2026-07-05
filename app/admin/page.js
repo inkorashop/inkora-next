@@ -849,6 +849,22 @@ useEffect(() => {
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, []);
 
+  useEffect(() => {
+    function handleSelectionEscape(e) {
+      if (e.key !== 'Escape') return;
+      if (activeTab === 'designs' && selectedIds.size > 0) {
+        setSelectedIds(new Set());
+      }
+      if (activeTab === 'users' && usersSubtab === 'clients' && selectedUserIds.size > 0) {
+        setSelectedUserIds(new Set());
+        lastSelectedUserIdRef.current = null;
+      }
+    }
+
+    window.addEventListener('keydown', handleSelectionEscape);
+    return () => window.removeEventListener('keydown', handleSelectionEscape);
+  }, [activeTab, usersSubtab, selectedIds.size, selectedUserIds.size]);
+
 
 
   // Price tiers
@@ -2548,6 +2564,11 @@ useEffect(() => {
     setSelectedIds(new Set());
   }
 
+  function clearAdminSelectionOutsideCards(e) {
+    clearDesignSelectionOutsideCards(e);
+    clearUserSelectionOutsideCards(e);
+  }
+
   function getProductCategories(productId) {
     const p = products.find(pr => pr.id === productId);
     const cats = p?.categories;
@@ -3336,8 +3357,15 @@ useEffect(() => {
       return;
     }
 
-    setSelectedUserIds(new Set([id]));
+    setSelectedUserIds(prev => (prev.size === 1 && prev.has(id)) ? new Set() : new Set([id]));
     lastSelectedUserIdRef.current = id;
+  }
+
+  function clearUserSelectionOutsideCards(e) {
+    if (activeTab !== 'users' || usersSubtab !== 'clients' || selectedUserIds.size === 0) return;
+    if (e.target?.closest?.('[data-user-card]')) return;
+    setSelectedUserIds(new Set());
+    lastSelectedUserIdRef.current = null;
   }
 
   async function updateUserLocality(userId, localityId) {
@@ -5152,7 +5180,7 @@ useEffect(() => {
     <div
       style={s.wrap}
       data-admin-theme={adminDarkMode ? 'dark' : 'light'}
-      onClick={clearDesignSelectionOutsideCards}
+      onClick={clearAdminSelectionOutsideCards}
     >
       {adminDarkMode && (
         <style dangerouslySetInnerHTML={{__html: `
@@ -5413,7 +5441,7 @@ useEffect(() => {
       <div
         style={{...s.content, ...(['products', 'database'].includes(activeTab) ? s.contentFull : {})}}
         className="adm-content"
-        onClick={clearDesignSelectionOutsideCards}
+        onClick={clearAdminSelectionOutsideCards}
       >
 
         {/* == PRODUCTOS == */}
@@ -7274,7 +7302,11 @@ useEffect(() => {
                 return (
                   <div
                     key={u.id}
-                    onClick={e => handleUserClick(e, u.id)}
+                    data-user-card
+                    onClick={e => {
+                      if (e.target?.closest?.('button, input, select, textarea, a, [data-user-row-control]')) return;
+                      handleUserClick(e, u.id);
+                    }}
                     style={{
                       ...s.userRow,
                       flexDirection: isMobile ? 'column' : 'row',
@@ -7395,7 +7427,7 @@ useEffect(() => {
                         </div>
                       )}
                     </div>
-                    <div style={{display:'flex', alignItems:'center', justifyContent: isMobile ? 'flex-start' : 'space-between', flexWrap: isMobile ? 'wrap' : 'nowrap', gap:14, flex: isMobile ? '1 1 100%' : '0 0 1260px', width: isMobile ? '100%' : 1260, minWidth:0}} onClick={e => e.stopPropagation()}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent: isMobile ? 'flex-start' : 'space-between', flexWrap: isMobile ? 'wrap' : 'nowrap', gap:14, flex: isMobile ? '1 1 100%' : '0 0 1260px', width: isMobile ? '100%' : 1260, minWidth:0}}>
                       <div style={{display:'flex', gap:8, alignItems:'center', flexWrap: isMobile ? 'wrap' : 'nowrap', justifyContent: isMobile ? 'flex-start' : 'center', flex: isMobile ? '1 1 100%' : '0 0 auto', minWidth: isMobile ? 0 : 620}}>
                         <button
                           disabled={hasBulkUserSelection}
@@ -7414,6 +7446,7 @@ useEffect(() => {
                         <div style={{display:'flex', alignItems:'center', gap:6}}>
                           <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, whiteSpace:'nowrap'}}>Email de pedido</span>
                           <div
+                            data-user-row-control
                             onClick={() => {
                               if (hasBulkUserSelection) return;
                               updateUserConfirmation(u.id, u.send_confirmation_email !== true);

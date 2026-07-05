@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 14:47 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir la seleccion de clientes en Admin > Usuarios para que funcione parecido a Disenos: click en la fila/card selecciona o deselecciona, Ctrl/Cmd y Shift permiten seleccion multiple, Escape y click afuera sueltan la seleccion.
+- Cambios: Se actualizo `app/admin/page.js` agregando limpieza de seleccion de usuarios al handler general del admin, soporte de Escape para usuarios/disenos, marcado `data-user-card` en filas de clientes y filtrado de clicks sobre controles interactivos para que botones, inputs, selects y el switch de email no cambien la seleccion accidentalmente.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. Se audito la entrada anterior sobre el desplegable de vendedores y se confirmo que el arbol tracked solo tenia cambios de este turno; quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: Probar manualmente en produccion Admin > Usuarios/Clientes: click en margen/lista vacia, Escape, click en una fila seleccionada, Ctrl/Cmd, Shift y uso de controles dentro de la fila.
+
+---
+
 ## 2026-07-05 14:36 -03:00 - ChatGPT Codex
 
 - Objetivo: En Admin > Usuarios/Clientes cambiar la asignacion de vendedor por fila de varios botones a un desplegable; confirmar que clientes nuevos nacen con email de confirmacion de pedido desactivado; auditar registro/auth sin modificarlo.
