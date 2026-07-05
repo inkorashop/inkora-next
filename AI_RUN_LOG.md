@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-04 21:55 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir dos detalles puntuales: en Admin > Disenos soltar seleccion al hacer click fuera de cualquier card de diseno, y en Catalogo ocultar "Sin variantes" cuando el producto no tiene variantes.
+- Cambios: Se actualizo `app/admin/page.js` para que los paneles de la pestana Disenos limpien `selectedIds` cuando el click no ocurre dentro de una fila marcada como `data-design-card`; las filas de diseno quedan marcadas como cards para no disparar la limpieza. Se actualizo `app/catalogo/page.js` para ocultar la fila de variantes cuando `activeVariants.length <= 1`.
+- Verificacion: `node --check app\admin\page.js` OK; `node --check app\catalogo\page.js` OK; `git diff --check` OK con avisos CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se reviso `git status --short` y los ultimos commits de Claude (`6dcbee5`, `fcad1ac`, `f7e9634`, `5b5b8eb`, `87ce92a`). El arbol tracked estaba limpio antes de editar; solo quedaban untracked `Inkora.PrintBridge.zip` y `Messi 2.3mf`, que se mantuvieron fuera de scope.
+- Pendiente/Riesgos: Probar manualmente en produccion que clickear filtros/panel superior o espacios fuera de una fila de diseno deseleccione, y que el Catalogo no muestre nada entre productos y categorias si no hay variantes.
+
+---
+
 ## 2026-07-04 -03:00 - Claude Sonnet 5 (v8)
 
 - Objetivo: El indicador de version agregado en el turno anterior no se veia en mobile/PWA.

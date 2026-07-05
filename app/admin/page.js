@@ -5893,6 +5893,11 @@ useEffect(() => {
           <>
             <div
               style={{...s.card, position:'relative', outline: dragOverUpload ? '2.5px dashed #2D6BE4' : '2.5px solid transparent', transition:'outline 0.15s', background: dragOverUpload ? '#f0f5ff' : undefined}}
+              onClick={e => {
+                if (selectedIds.size === 0) return;
+                if (e.target?.closest?.('[data-design-card]')) return;
+                setSelectedIds(new Set());
+              }}
               onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverUpload(true); }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverUpload(false); }}
               onDrop={e => {
@@ -6107,7 +6112,14 @@ useEffect(() => {
                 </>
               )}
             </div>
-            <div style={s.card}>
+            <div
+              style={s.card}
+              onClick={e => {
+                if (selectedIds.size === 0) return;
+                if (e.target?.closest?.('[data-design-card]')) return;
+                setSelectedIds(new Set());
+              }}
+            >
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12, flexWrap:'wrap', gap:8}}>
                 <div style={{display:'flex', alignItems:'center', gap:8}}>
                   <h2 style={{...s.sectionTitle, marginBottom: 0}}>Diseños actuales ({designs.length})</h2>
@@ -6339,6 +6351,7 @@ useEffect(() => {
                   return (
                 <div
                   key={d.id}
+                  data-design-card
                   draggable
                   onDragStart={e => handleDragStart(e, d.id)}
                   onDragOver={e => handleDragOver(e, d.id)}

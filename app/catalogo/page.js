@@ -1637,7 +1637,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
           )}
 
           <div style={{
-            display: 'flex',
+            display: activeProduct && activeVariants.length > 1 ? 'flex' : 'none',
             gap: 8,
             flexWrap: 'wrap',
             margin: '2px 0 14px',
