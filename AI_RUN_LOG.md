@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 16:36 -03:00 - ChatGPT Codex
+
+- Objetivo: Mejorar la pestana de Categorias del modal de productos: tags alineadas con mismo tamano, opcion de color "Por defecto" y reordenamiento visual mientras se arrastra.
+- Cambios: Se actualizo `app/admin/page.js` para que las categorias se rendericen como chips de ancho/alto fijo, se agrego un menu de color propio con boton "Por defecto" que elimina el color guardado del JSON `category_colors`, y se reemplazo el drag flotante por un preview local que reordena las categorias visualmente durante el arrastre y persiste al soltar.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. Se audito la entrada anterior sobre seleccion en Admin > Usuarios y el arbol tracked estaba limpio antes de editar; quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: Probar manualmente en produccion el modal de Categorias: abrir/cerrar menu de color, volver a Por defecto, cambiar color personalizado y arrastrar categorias entre varias posiciones.
+
+---
+
 ## 2026-07-05 14:47 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir la seleccion de clientes en Admin > Usuarios para que funcione parecido a Disenos: click en la fila/card selecciona o deselecciona, Ctrl/Cmd y Shift permiten seleccion multiple, Escape y click afuera sueltan la seleccion.

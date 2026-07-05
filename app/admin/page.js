@@ -78,6 +78,8 @@ const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 const DEFAULT_OPTIMIZED_THUMB_KB = 50;
 const OPTIMIZED_THUMB_MAX_DIMENSION = 900;
 const OPTIMIZED_THUMB_TARGET_STORAGE_KEY = 'inkora_admin_optimized_thumb_target_kb';
+const DEFAULT_CATEGORY_BG = '#e8eef9';
+const DEFAULT_CATEGORY_TEXT = '#1B2F5E';
 
 function formatBridgeError(error) {
   if (error?.status === 401) return 'Token Bridge incorrecto.';
@@ -615,14 +617,17 @@ useEffect(() => {
   const [draggingProductId, setDraggingProductId] = useState(null);
   const dragSrcProductIdRef = useRef(null);
   const [dragOverCat, setDragOverCat] = useState(null);
+  const [draggingCat, setDraggingCat] = useState(null);
   const dragSrcCatRef = useRef(null);
+  const categoryDragOriginalRef = useRef({});
+  const categoryDragLatestRef = useRef({});
+  const categoryDropHandledRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const lastSelectedIdRef = useRef(null);
   const [newCatInputs, setNewCatInputs] = useState({});
   const [catColorPicker, setCatColorPicker] = useState({});
   const [editingProductCategory, setEditingProductCategory] = useState(null);
   const [savingProductCategory, setSavingProductCategory] = useState(false);
-  const catColorValueRef = useRef({});
   const catColorPickerRef = useRef({});
   const [designSearch, setDesignSearch] = useState('');
   const [designCatFilter, setDesignCatFilter] = useState('');
@@ -1751,17 +1756,6 @@ useEffect(() => {
       const openKeys = Object.keys(catColorPickerRef.current).filter(k => catColorPickerRef.current[k]);
       if (openKeys.length > 0) {
         e.preventDefault();
-        openKeys.forEach(pickerKey => {
-          const val = catColorValueRef.current[pickerKey];
-          if (val) {
-            const [productId, ...catParts] = pickerKey.split(':');
-            const cat = catParts.join(':');
-            supabase.from('products').select('*').eq('id', productId).single().then(({ data: p }) => {
-              const current = p?.category_colors || {};
-              supabase.from('products').update({ category_colors: { ...current, [cat]: val } }).eq('id', productId).then(() => loadProducts());
-            });
-          }
-        });
         setCatColorPicker({});
         catColorPickerRef.current = {};
       } else {
@@ -2701,18 +2695,101 @@ useEffect(() => {
     }
   }
 
-  async function reorderProductCategory(productId, srcCat, tgtCat) {
-    if (srcCat === tgtCat) return;
-    const current = getProductCategories(productId);
+  function getCategoryTextColor(bg, fallback = DEFAULT_CATEGORY_TEXT) {
+    if (!bg || !/^#[0-9a-f]{6}$/i.test(bg)) return fallback;
+    const hex = bg.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 135 ? '#0f172a' : '#ffffff';
+  }
+
+  function moveCategoryInList(current, srcCat, tgtCat) {
+    if (!srcCat || !tgtCat || srcCat === tgtCat) return current;
     const srcIdx = current.indexOf(srcCat);
     const tgtIdx = current.indexOf(tgtCat);
-    if (srcIdx === -1 || tgtIdx === -1) return;
+    if (srcIdx === -1 || tgtIdx === -1) return current;
     const reordered = [...current];
     reordered.splice(srcIdx, 1);
     reordered.splice(tgtIdx, 0, srcCat);
+    return reordered;
+  }
+
+  function setCategoryColorPickerOpen(pickerKey, open) {
+    setCatColorPicker(prev => ({ ...prev, [pickerKey]: open }));
+    catColorPickerRef.current = { ...catColorPickerRef.current, [pickerKey]: open };
+  }
+
+  function previewProductCategoryOrder(productId, srcCat, tgtCat) {
+    if (!srcCat || !tgtCat || srcCat === tgtCat) return;
+    setProducts(prev => prev.map(product => {
+      if (product.id !== productId) return product;
+      const current = Array.isArray(product.categories) ? product.categories : [];
+      const reordered = moveCategoryInList(current, srcCat, tgtCat);
+      if (reordered === current || reordered.join('\u0001') === current.join('\u0001')) return product;
+      categoryDragLatestRef.current[productId] = reordered;
+      return { ...product, categories: reordered };
+    }));
+  }
+
+  async function persistProductCategoryOrder(productId, movedCat) {
+    const reordered = categoryDragLatestRef.current[productId] || getProductCategories(productId);
     await supabase.from('products').update({ categories: reordered }).eq('id', productId);
-    trackAdminActivity('product_category_reorder', { product_id: productId, category: srcCat }, 'products');
+    trackAdminActivity('product_category_reorder', { product_id: productId, category: movedCat, categories: reordered }, 'products');
     loadProducts();
+  }
+
+  function restoreProductCategoryOrder(productId) {
+    const original = categoryDragOriginalRef.current[productId];
+    if (!original) return;
+    setProducts(prev => prev.map(product => product.id === productId ? { ...product, categories: original } : product));
+  }
+
+  function cleanupProductCategoryDrag(productId) {
+    dragSrcCatRef.current = null;
+    setDraggingCat(null);
+    setDragOverCat(null);
+    delete categoryDragOriginalRef.current[productId];
+    delete categoryDragLatestRef.current[productId];
+    categoryDropHandledRef.current = false;
+  }
+
+  function startProductCategoryDrag(e, productId, cat) {
+    dragSrcCatRef.current = cat;
+    categoryDragOriginalRef.current[productId] = getProductCategories(productId);
+    categoryDragLatestRef.current[productId] = getProductCategories(productId);
+    categoryDropHandledRef.current = false;
+    setDraggingCat(cat);
+    setDragOverCat(null);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      const ghost = new Image();
+      ghost.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+      e.dataTransfer.setDragImage(ghost, 0, 0);
+    }
+  }
+
+  async function dropProductCategory(productId, tgtCat) {
+    const srcCat = dragSrcCatRef.current;
+    if (!srcCat) {
+      cleanupProductCategoryDrag(productId);
+      return;
+    }
+    categoryDropHandledRef.current = true;
+    const current = categoryDragLatestRef.current[productId] || getProductCategories(productId);
+    const reordered = moveCategoryInList(current, srcCat, tgtCat);
+    categoryDragLatestRef.current[productId] = reordered;
+    setProducts(prev => prev.map(product => product.id === productId ? { ...product, categories: reordered } : product));
+    try {
+      await persistProductCategoryOrder(productId, srcCat);
+    } finally {
+      cleanupProductCategoryDrag(productId);
+    }
+  }
+
+  function endProductCategoryDrag(productId) {
+    if (!categoryDropHandledRef.current) restoreProductCategoryOrder(productId);
+    cleanupProductCategoryDrag(productId);
   }
 
   async function addProductCategory(productId, cat) {
@@ -2731,16 +2808,19 @@ useEffect(() => {
   async function saveCategoryColor(productId, cat, color) {
     const p = products.find(pr => pr.id === productId);
     const current = p?.category_colors || {};
-    const updated = { ...current, [cat]: color };
+    const updated = { ...current };
+    if (color) updated[cat] = color;
+    else delete updated[cat];
     setProducts(prev => prev.map(product => product.id === productId ? { ...product, category_colors: updated } : product));
     await supabase.from('products').update({ category_colors: updated }).eq('id', productId);
-    trackAdminActivity('product_category_color_update', { product_id: productId, category: cat, color }, 'products');
+    trackAdminActivity('product_category_color_update', { product_id: productId, category: cat, color: color || 'default' }, 'products');
     loadProducts();
   }
 
   function startProductCategoryEdit(productId, cat) {
     setEditingProductCategory({ productId, oldName: cat, value: cat });
     setDragOverCat(null);
+    setDraggingCat(null);
     dragSrcCatRef.current = null;
   }
 
@@ -8665,23 +8745,53 @@ useEffect(() => {
             {productManageModal.type === 'categories' && (() => {
               const cats = getProductCategories(modalProduct.id);
               const newCat = newCatInputs[modalProduct.id] || '';
+              const categoryChipStyle = {
+                width: 152,
+                height: 28,
+                boxSizing: 'border-box',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 5,
+                borderRadius: 7,
+                padding: '3px 6px 3px 9px',
+                fontSize: 11,
+                fontWeight: 700,
+                position: 'relative',
+                border: '1.5px solid transparent',
+                transition: 'background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease',
+              };
               return (
-                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
-                  <div style={{padding:'10px 12px', display:'flex', flexWrap:'wrap', gap:6, minHeight:42}}>
-                    <span style={{display:'inline-flex', alignItems:'center', background:'#f0f2f8', color:'#9aa3bc', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:600}}>Sin categoría</span>
+                <div style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'visible'}}>
+                  <div style={{padding:'10px 12px', display:'flex', flexWrap:'wrap', alignItems:'flex-start', gap:8, minHeight:48}}>
+                    <span style={{...categoryChipStyle, background:'#f0f2f8', color:'#9aa3bc', justifyContent:'center', cursor:'default'}}>Sin categoría</span>
                     {cats.map(cat => {
-                      const savedColor = modalProduct?.category_colors?.[cat] || '#e8eef9';
+                      const savedColor = modalProduct?.category_colors?.[cat];
+                      const chipBg = savedColor || DEFAULT_CATEGORY_BG;
+                      const chipTextColor = savedColor ? getCategoryTextColor(savedColor) : DEFAULT_CATEGORY_TEXT;
                       const pickerKey = `${modalProduct.id}:${cat}`;
                       const pickerOpen = catColorPicker[pickerKey];
                       const isEditingCat = editingProductCategory?.productId === modalProduct.id && editingProductCategory?.oldName === cat;
+                      const isDraggingCat = draggingCat === cat;
                       return (
-                        <span key={cat}
+                        <span
+                          key={cat}
                           draggable={!isEditingCat}
-                          onDragStart={e => { if (isEditingCat) { e.preventDefault(); return; } dragSrcCatRef.current = cat; setDragOverCat(null); }}
-                          onDragOver={e => { if (isEditingCat) return; e.preventDefault(); setDragOverCat(cat); }}
-                          onDrop={() => { if (!isEditingCat) reorderProductCategory(modalProduct.id, dragSrcCatRef.current, cat); dragSrcCatRef.current = null; setDragOverCat(null); }}
-                          onDragEnd={() => { dragSrcCatRef.current = null; setDragOverCat(null); }}
-                          style={{display:'inline-flex', alignItems:'center', gap:3, background: dragOverCat === cat ? '#d0dff7' : '#e8eef9', color:'#1B2F5E', borderRadius:6, padding:'2px 6px 2px 8px', fontSize:11, fontWeight:600, position:'relative', cursor: isEditingCat ? 'text' : 'grab'}}>
+                          onDragStart={e => { if (isEditingCat) { e.preventDefault(); return; } startProductCategoryDrag(e, modalProduct.id, cat); }}
+                          onDragOver={e => { if (isEditingCat || !dragSrcCatRef.current) return; e.preventDefault(); setDragOverCat(cat); previewProductCategoryOrder(modalProduct.id, dragSrcCatRef.current, cat); }}
+                          onDrop={e => { e.preventDefault(); if (!isEditingCat) dropProductCategory(modalProduct.id, cat); }}
+                          onDragEnd={() => endProductCategoryDrag(modalProduct.id)}
+                          style={{
+                            ...categoryChipStyle,
+                            background: dragOverCat === cat && draggingCat !== cat ? '#d0dff7' : chipBg,
+                            color: chipTextColor,
+                            borderColor: pickerOpen ? '#2D6BE4' : (isDraggingCat ? '#93b7ff' : 'transparent'),
+                            cursor: isEditingCat ? 'text' : 'grab',
+                            opacity: isDraggingCat ? 0.55 : 1,
+                            transform: isDraggingCat ? 'scale(0.98)' : 'scale(1)',
+                            boxShadow: pickerOpen ? '0 6px 18px rgba(45,107,228,0.16)' : 'none',
+                          }}
+                        >
                           {isEditingCat ? (
                             <input
                               autoFocus
@@ -8699,22 +8809,66 @@ useEffect(() => {
                               }}
                               style={{width: Math.max(72, editingProductCategory.value.length * 7), maxWidth:160, border:'none', borderBottom:'1px solid #2D6BE4', background:'transparent', color:'#1B2F5E', fontFamily:'Barlow, sans-serif', fontSize:11, fontWeight:600, padding:0, outline:'none'}}
                             />
-                          ) : cat}
-                          <span
-                            title="Color de la categoría"
-                            onClick={e => { e.stopPropagation(); setTimeout(() => { e.target.nextSibling?.click(); }, 30); }}
-                            style={{width:12, height:12, borderRadius:'50%', background:savedColor, border:'1.5px solid rgba(0,0,0,0.15)', cursor:'pointer', display:'inline-block', flexShrink:0, marginLeft:2}}
-                          />
-                          <input
-                            type="color"
-                            defaultValue={savedColor}
-                            style={{position:'absolute', width:0, height:0, border:'none', padding:0, opacity:0, pointerEvents: pickerOpen ? 'auto' : 'none'}}
-                            onChange={e => { catColorValueRef.current[pickerKey] = e.target.value; saveCategoryColor(modalProduct.id, cat, e.target.value); }}
-                            onBlur={() => setCatColorPicker(prev => ({...prev, [pickerKey]: false}))}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const val = catColorValueRef.current[pickerKey]; if (val) saveCategoryColor(modalProduct.id, cat, val); setCatColorPicker(prev => ({...prev, [pickerKey]: false})); catColorPickerRef.current = {}; e.target.blur(); }}}
-                          />
-                          <button title="Editar categoria" style={{background:'none', border:'none', cursor:'pointer', color:'#5a6380', fontSize:11, lineHeight:1, padding:0, marginLeft:1}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); startProductCategoryEdit(modalProduct.id, cat); }}>✎</button>
-                          <button style={{background:'none', border:'none', cursor:'pointer', color:'#9aa3bc', fontSize:13, lineHeight:1, padding:0, marginLeft:1}} onClick={() => removeProductCategory(modalProduct.id, cat)}>×</button>
+                          ) : (
+                            <span title={cat} style={{minWidth:0, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                              {cat}
+                            </span>
+                          )}
+                          <span style={{display:'inline-flex', alignItems:'center', gap:3, flexShrink:0}}>
+                            <button
+                              type="button"
+                              title="Color de la categoría"
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setCategoryColorPickerOpen(pickerKey, !pickerOpen);
+                              }}
+                              style={{width:16, height:16, borderRadius:'50%', background:chipBg, border:'1.5px solid rgba(0,0,0,0.18)', cursor:'pointer', display:'inline-block', padding:0, flexShrink:0}}
+                            />
+                            <button title="Editar categoria" style={{background:'none', border:'none', cursor:'pointer', color:savedColor ? chipTextColor : '#5a6380', fontSize:11, lineHeight:1, padding:0, opacity:0.78}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); startProductCategoryEdit(modalProduct.id, cat); }}>✎</button>
+                            <button style={{background:'none', border:'none', cursor:'pointer', color:savedColor ? chipTextColor : '#9aa3bc', fontSize:13, lineHeight:1, padding:0, opacity:0.78}} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); removeProductCategory(modalProduct.id, cat); }}>×</button>
+                          </span>
+                          {pickerOpen && (
+                            <div
+                              onMouseDown={e => e.stopPropagation()}
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                position:'absolute',
+                                top:'calc(100% + 6px)',
+                                left:0,
+                                zIndex:20,
+                                width:178,
+                                background:'white',
+                                border:'1.5px solid #dde1ef',
+                                borderRadius:9,
+                                boxShadow:'0 12px 30px rgba(27,47,94,0.18)',
+                                padding:8,
+                                display:'flex',
+                                flexDirection:'column',
+                                gap:7,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await saveCategoryColor(modalProduct.id, cat, null);
+                                  setCategoryColorPickerOpen(pickerKey, false);
+                                }}
+                                style={{border:'1.5px solid #dde1ef', borderRadius:7, background:'#f8faff', color:'#1B2F5E', padding:'6px 8px', fontSize:12, fontWeight:800, cursor:'pointer', textAlign:'left', fontFamily:'Barlow, sans-serif'}}
+                              >
+                                Por defecto
+                              </button>
+                              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+                                <span style={{fontSize:11, color:'#7d879f', fontWeight:800}}>Personalizado</span>
+                                <input
+                                  type="color"
+                                  value={savedColor || DEFAULT_CATEGORY_BG}
+                                  onChange={e => saveCategoryColor(modalProduct.id, cat, e.target.value)}
+                                  style={{width:34, height:28, borderRadius:7, border:'1.5px solid #dde1ef', padding:2, cursor:'pointer', background:'white'}}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </span>
                       );
                     })}
