@@ -63,6 +63,23 @@ const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/
 const ADMIN_ACTIVE_THRESHOLD = 15000;
 const ADMIN_TABS = ['products','designs','orders','notifications','carts','database','users','sellers','config','tracking','production','version_history','emails'];
 const ADMIN_TAB_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Notificaciones', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', admins:'Admins', config:'Config.', tracking:'Seguimiento', heatmap:'Actividad', stats:'Estadísticas', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const ADMIN_TAB_ORDER_SETTING_KEY = 'admin_tab_order';
+const ADMIN_TAB_DISPLAY_LABELS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Chat', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
+const ADMIN_TAB_ICONS = {
+  products: ['M4 7h16', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'],
+  designs: ['M4 19l5-1 10-10-4-4L5 14l-1 5z', 'M13 6l4 4'],
+  orders: ['M7 3h10l2 4v14H5V7l2-4z', 'M7 7h10', 'M9 12h6', 'M9 16h4'],
+  notifications: ['M4 5h16v11H8l-4 4V5z', 'M8 9h8', 'M8 13h5'],
+  carts: ['M5 5h2l2 10h8l2-7H8', 'M10 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', 'M17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
+  database: ['M5 6c0-2 14-2 14 0s-14 2-14 0z', 'M5 6v6c0 2 14 2 14 0V6', 'M5 12v6c0 2 14 2 14 0v-6'],
+  users: ['M15 19c0-3-6-3-6 0', 'M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M18 18c0-2-3-3-5-3', 'M17 10a2 2 0 1 0 0-4'],
+  sellers: ['M4 8l8-4 8 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z', 'M8 20v-7h8v7', 'M4 8h16'],
+  config: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19 12h2', 'M3 12h2', 'M12 3v2', 'M12 19v2', 'M17 7l1.5-1.5', 'M5.5 18.5L7 17', 'M17 17l1.5 1.5', 'M5.5 5.5L7 7'],
+  tracking: ['M4 18V6', 'M4 18h16', 'M8 15l3-4 3 2 4-6'],
+  production: ['M4 17h16', 'M7 17V9l5-3 5 3v8', 'M9 13h2', 'M13 13h2'],
+  version_history: ['M12 8v5l3 2', 'M4 12a8 8 0 1 0 2.3-5.7', 'M4 4v5h5'],
+  emails: ['M4 6h16v12H4z', 'M4 7l8 6 8-6'],
+};
 const PASSWORD_PROMPT_ENABLED_KEY = 'password_change_prompt_enabled';
 const PASSWORD_PROMPT_DELAY_DAYS_KEY = 'password_change_prompt_delay_days';
 const DEFAULT_PASSWORD_PROMPT_DELAY_DAYS = 14;
@@ -78,6 +95,33 @@ const VERSION_SNAPSHOT_RETENTION_DAYS = 90;
 const DEFAULT_OPTIMIZED_THUMB_KB = 50;
 const OPTIMIZED_THUMB_MAX_DIMENSION = 900;
 const OPTIMIZED_THUMB_TARGET_STORAGE_KEY = 'inkora_admin_optimized_thumb_target_kb';
+
+function normalizeAdminTabOrder(value) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!Array.isArray(parsed)) return null;
+    const seen = new Set();
+    const filtered = parsed.filter(tab => {
+      if (!ADMIN_TABS.includes(tab) || seen.has(tab)) return false;
+      seen.add(tab);
+      return true;
+    });
+    return [...filtered, ...ADMIN_TABS.filter(tab => !seen.has(tab))];
+  } catch {
+    return null;
+  }
+}
+
+function AdminTabIcon({ id }) {
+  const paths = ADMIN_TAB_ICONS[id] || ADMIN_TAB_ICONS.products;
+  return (
+    <svg className="adm-tab-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {paths.map((d, idx) => (
+        <path key={idx} d={d} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+    </svg>
+  );
+}
 const DEFAULT_CATEGORY_BG = '#e8eef9';
 const DEFAULT_CATEGORY_TEXT = '#1B2F5E';
 
@@ -559,15 +603,13 @@ useEffect(() => {
   const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
     try {
-      const saved = localStorage.getItem('admin_tab_order');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const filtered = parsed.filter(t => ADMIN_TABS.includes(t));
-        if (Array.isArray(parsed) && ADMIN_TABS.every(t => filtered.includes(t))) return filtered;
-      }
+      const saved = normalizeAdminTabOrder(localStorage.getItem(ADMIN_TAB_ORDER_SETTING_KEY));
+      if (saved) return saved;
     } catch {}
     return ADMIN_TABS;
   });
+  const tabOrderRef = useRef(tabOrder);
+  const tabOrderSyncedRef = useRef(false);
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
   const [sellers, setSellers] = useState([]);
@@ -736,6 +778,32 @@ useEffect(() => {
   const [loadingCarts, setLoadingCarts] = useState(false);
   const [cartsError, setCartsError] = useState('');
   const [settings, setSettings] = useState({ landing_mode: 'dark', catalogo_mode: 'dark', landing_show_theme: 'true', landing_show_cart: 'true', landing_show_account: 'true', landing_show_whatsapp: 'true', catalogo_show_theme: 'true', catalogo_show_cart: 'true', catalogo_show_account: 'true', catalogo_show_whatsapp: 'true', landing_tab_text: 'INKORA 🔷', landing_tab_interval: '1000', landing_tab_on_away: 'true', landing_tab_on_active: 'false', catalogo_tab_text: 'INKORA 🔷', catalogo_tab_interval: '1000', catalogo_tab_on_away: 'true', catalogo_tab_on_active: 'false', login_method: 'modal', products_management_mode: 'table_modal', admin_scale_seller_filter_individual: 'true', admin_scale_seller_filter_global: 'all', [PASSWORD_PROMPT_ENABLED_KEY]: 'true', [PASSWORD_PROMPT_DELAY_DAYS_KEY]: String(DEFAULT_PASSWORD_PROMPT_DELAY_DAYS) });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  useEffect(() => {
+    tabOrderRef.current = tabOrder;
+  }, [tabOrder]);
+  useEffect(() => {
+    if (!settingsLoaded || tabOrderSyncedRef.current) return;
+    tabOrderSyncedRef.current = true;
+    const remoteOrder = normalizeAdminTabOrder(settings[ADMIN_TAB_ORDER_SETTING_KEY]);
+    if (remoteOrder) {
+      tabOrderRef.current = remoteOrder;
+      setTabOrder(remoteOrder);
+      try { localStorage.setItem(ADMIN_TAB_ORDER_SETTING_KEY, JSON.stringify(remoteOrder)); } catch {}
+      return;
+    }
+    const localOrder = normalizeAdminTabOrder(typeof window !== 'undefined' ? localStorage.getItem(ADMIN_TAB_ORDER_SETTING_KEY) : null);
+    if (!localOrder) return;
+    const serialized = JSON.stringify(localOrder);
+    tabOrderRef.current = localOrder;
+    setTabOrder(localOrder);
+    supabase
+      .from('settings')
+      .upsert({ key: ADMIN_TAB_ORDER_SETTING_KEY, value: serialized })
+      .then(({ error }) => {
+        if (!error) setSettings(prev => ({ ...prev, [ADMIN_TAB_ORDER_SETTING_KEY]: serialized }));
+      });
+  }, [settingsLoaded, settings]);
   // Always covers the full filtered set (not just the current selection) so
   // that selecting/deselecting rows never discards already-fetched size data
   // and never re-triggers a slow storage listing just to narrow the scope.
@@ -3956,6 +4024,7 @@ useEffect(() => {
       data.forEach(s => { map[s.key] = s.value; });
       setSettings(prev => ({ ...prev, ...map }));
     }
+    setSettingsLoaded(true);
   }
 
   async function saveSetting(key, value) {
@@ -5383,8 +5452,14 @@ useEffect(() => {
       <style dangerouslySetInnerHTML={{__html: `
         .adm-tabs { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .adm-tabs::-webkit-scrollbar { display: none; }
+        .adm-tab-main { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; }
+        .adm-tab-icon { width: 14px; height: 14px; flex: 0 0 14px; opacity: 0.82; }
+        .adm-tab-label { line-height: 1; }
         @media (max-width: 700px) {
-          .adm-tab { flex: none !important; padding: 10px 10px !important; font-size: 11px !important; }
+          .adm-tabs { gap: 1px !important; padding: 0 5px !important; }
+          .adm-tab { flex: none !important; padding: 8px 6px !important; font-size: 11px !important; gap: 3px !important; }
+          .adm-tab-main { gap: 3px; }
+          .adm-tab-icon { width: 13px; height: 13px; flex-basis: 13px; }
           .adm-content { padding: 0 6px !important; width: 100% !important; box-sizing: border-box; }
           .adm-grid-form { grid-template-columns: 1fr !important; }
           .adm-grid-2col { grid-template-columns: 1fr !important; }
@@ -5493,7 +5568,6 @@ useEffect(() => {
       <div style={s.tabBar}>
         <div style={s.tabBarInner} className="adm-tabs">
           {(() => {
-            const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Chat', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
             return tabOrder.map(id => (
               <button
                 key={id}
@@ -5505,7 +5579,10 @@ useEffect(() => {
                 className="adm-tab"
                 style={{...s.tab, ...(activeTab === id ? s.tabActive : {})}}
               >
-                {ALL_TABS[id]}
+                <span className="adm-tab-main">
+                  <AdminTabIcon id={id} />
+                  <span className="adm-tab-label">{ADMIN_TAB_DISPLAY_LABELS[id] || id}</span>
+                </span>
                 {id === 'designs' && orphanCount > 0 && <span style={s.orphanBadge}>{orphanCount}</span>}
                 {id === 'orders' && activeOrders.filter(o => o.status === 'pending').length > 0 && <span style={s.orphanBadge}>{activeOrders.filter(o => o.status === 'pending').length}</span>}
                 {id === 'notifications' && adminNotifications.length > 0 && <span style={s.orphanBadge}>{adminNotifications.length}</span>}
@@ -8134,14 +8211,19 @@ useEffect(() => {
               <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>Arrastrá para reordenar las pestañas del panel.</p>
               <div style={{display:'flex', flexDirection:'column', gap:6}}>
                 {(() => {
-                  const ALL_TABS = { products:'Productos', designs:'Diseños', orders:'Pedidos', notifications:'Chat', carts:'Carritos', database:'Base de datos', users:'Usuarios', sellers:'Vendedores', config:'Configuración', tracking:'Seguimiento', production:'Producción', version_history:'Historial de versiones', emails:'Emails' };
                   return tabOrder.map((id, idx) => (
                     <div
                       key={id}
                       draggable
                       onDragStart={e => { e.stopPropagation(); setDraggingConfigTab(id); }}
-                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingConfigTab && draggingConfigTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingConfigTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingConfigTab); return next; }); }}}
-                      onDragEnd={() => { setDraggingConfigTab(null); localStorage.setItem('admin_tab_order', JSON.stringify(tabOrder)); }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (draggingConfigTab && draggingConfigTab !== id) { setTabOrder(prev => { const next = [...prev]; const from = next.indexOf(draggingConfigTab); const to = next.indexOf(id); next.splice(from, 1); next.splice(to, 0, draggingConfigTab); tabOrderRef.current = next; return next; }); }}}
+                      onDragEnd={() => {
+                        setDraggingConfigTab(null);
+                        const nextOrder = normalizeAdminTabOrder(tabOrderRef.current) || ADMIN_TABS;
+                        const serialized = JSON.stringify(nextOrder);
+                        try { localStorage.setItem(ADMIN_TAB_ORDER_SETTING_KEY, serialized); } catch {}
+                        saveSetting(ADMIN_TAB_ORDER_SETTING_KEY, serialized);
+                      }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '10px 12px', borderRadius: 8,
@@ -8154,7 +8236,8 @@ useEffect(() => {
                       }}
                     >
                       <span style={{color:'#b0b8d0', fontSize:16, lineHeight:1}}>⠿</span>
-                      <span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{ALL_TABS[id]}</span>
+                      <AdminTabIcon id={id} />
+                      <span style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>{ADMIN_TAB_DISPLAY_LABELS[id] || id}</span>
                       <span style={{marginLeft:'auto', fontSize:11, color:'#b0b8d0'}}>#{idx + 1}</span>
                     </div>
                   ));
@@ -11434,7 +11517,7 @@ const styles = {
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
   tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef', position: 'sticky', top: 0, zIndex: 120, boxShadow: '0 5px 16px rgba(27,47,94,0.08)' },
-  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 3, overflowX: 'auto', scrollbarWidth: 'none' },
+  tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 2, overflowX: 'auto', scrollbarWidth: 'none' },
   tab: { background: 'none', border: 'none', padding: '10px 8px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'none', whiteSpace:'nowrap' },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
   orphanBadge: { background: '#fee2e2', color: '#dc2626', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 },
