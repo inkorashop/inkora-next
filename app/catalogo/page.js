@@ -2275,7 +2275,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                   </span>
                   {codeCopied && (
-                    <span className="copied-overlay" style={{position: 'absolute', inset: 0, background: '#18a36a', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14, fontWeight: 800, borderRadius: 8, pointerEvents: 'none'}}>
+                    <span className="copied-overlay" style={{position: 'absolute', inset: 0, background: 'rgba(24,163,106,0.85)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14, fontWeight: 800, borderRadius: 8, pointerEvents: 'none'}}>
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                       ¡Copiado!
                     </span>
@@ -2320,7 +2320,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                           </span>
                           {waCopied && (
-                            <span className="copied-overlay" style={{position:'absolute', inset:0, background:'#18a36a', color:'white', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontSize:14, fontWeight:800, borderRadius:10, pointerEvents:'none'}}>
+                            <span className="copied-overlay" style={{position:'absolute', inset:0, background:'rgba(24,163,106,0.85)', backdropFilter:'blur(5px)', WebkitBackdropFilter:'blur(5px)', color:'white', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontSize:14, fontWeight:800, borderRadius:10, pointerEvents:'none'}}>
                               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                               Copiado al portapapeles
                             </span>

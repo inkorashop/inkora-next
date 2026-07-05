@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v8)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v9)
+
+- Objetivo: Ajustar el overlay de "copiado" para que sea semi-transparente (no solido) y se siga viendo el texto de atras, en vez de taparlo del todo.
+- Cambios: En `app/catalogo/page.js`, el fondo del overlay (`.copied-overlay`, tanto en el codigo del pedido como en el recuadro de WhatsApp) paso de `background:'#18a36a'` solido a `background:'rgba(24,163,106,0.85)'` + `backdropFilter:'blur(5px)'` (con prefijo `WebkitBackdropFilter` para Safari). El texto de atras queda visible pero desenfocado, sin competir en nitidez con el texto blanco de confirmacion que va encima.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A (ajuste de diseno discutido y acordado con el usuario antes de implementar, incluyendo la alternativa de solo-opacidad que se descarto por legibilidad).
+- Pendiente/Riesgos: Se detecto en el turno anterior que `www.inkora.com.ar` esta asignado a 2 proyectos de Vercel a la vez (`inkora-next` y un proyecto viejo `inkora` sin actualizar hace 40 dias), lo que puede hacer que el auto-deploy de GitHub no se refleje de forma confiable. Sigue sin resolverse (el usuario no confirmo sacar el dominio del proyecto viejo todavia) — por las dudas, se va a reforzar cada deploy de este turno con `vercel --prod` manual ademas del push a git.
 
 - Objetivo: Rehacer el feedback de "copiado" (codigo del pedido y texto de WhatsApp) que el usuario no aprobaba: no le gustaba el difuminado del contenido ni que el aviso flotara arriba del elemento en vez de taparlo. Se propuso una alternativa (overlay que cubre el elemento) antes de tocar codigo, y el usuario la aprobo.
 - Cambios: En `app/catalogo/page.js` se reemplazo por completo el patron anterior (blur + toast flotando afuera con `bottom:100%`) por un overlay `position:absolute; inset:0` que cubre el elemento entero al copiar, con fondo verde solido (#18a36a), icono de check + texto centrado, animacion de fade+scale suave (`copied-overlay-pop`, reemplaza a la vieja `copied-toast-pop`). El icono de copiar en la esquina/al lado deja de alternar a check (queda fijo) ya que el overlay es ahora la unica señal de "copiado". Para el codigo del pedido (elemento chico) el texto del overlay es "¡Copiado!" corto para que entre sin achicarse; para el recuadro de WhatsApp (mas ancho) se mantiene "Copiado al portapapeles" completo.
