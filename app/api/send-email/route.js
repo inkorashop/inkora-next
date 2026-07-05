@@ -46,12 +46,17 @@ function buildTable(cartItems, hasPrice) {
 
     const productName = escapeHtml(i.productName || '—');
     const designName = escapeHtml(i.name || '—');
+    // qty deberia ser siempre un numero (ya normalizado en buildOrderItemsSnapshot
+    // en el flujo normal de la app), pero esta ruta acepta cualquier payload
+    // JSON directo: se escapa igual que el resto por si alguien la llama a mano
+    // con un valor no numerico.
+    const safeQty = escapeHtml(i.qty);
 
     if (hasPrice) {
       return `<tr style="${rowStyle}">
         <td style="${tdStyle}">${productName}</td>
         <td style="${tdStyle}">${designName}</td>
-        <td style="${tdStyle}text-align:center">${i.qty}</td>
+        <td style="${tdStyle}text-align:center">${safeQty}</td>
         <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}</td>
         <td style="${tdStyle}text-align:right">${pricing.hasPrice ? formatOrderMoney(pricing.subtotal) : '—'}</td>
       </tr>`;
@@ -60,7 +65,7 @@ function buildTable(cartItems, hasPrice) {
     return `<tr style="${rowStyle}">
       <td style="${tdStyle}">${productName}</td>
       <td style="${tdStyle}">${designName}</td>
-      <td style="${tdStyle}text-align:center">${i.qty}</td>
+      <td style="${tdStyle}text-align:center">${safeQty}</td>
     </tr>`;
   }).join('');
 

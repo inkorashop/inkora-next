@@ -1910,7 +1910,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         // desaparece segun la cantidad elegida.
                         return (
                           <div style={{...s.cardUnitPrice, visibility: hasPrice ? 'visible' : 'hidden'}}>
-                            {hasPrice ? `$${price.toLocaleString()}/u` : ' '}
+                            {hasPrice ? `$${price.toLocaleString('es-AR')}/u` : ' '}
                           </div>
                         );
                       })()}
@@ -2052,7 +2052,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                           <div style={s.cartItemName}>{item.name}</div>
                           {showPrices && item.showPrice !== false && (() => {
                             const price = getUnitPrice(item.product_id);
-                            if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                            if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString('es-AR')}</div>;
                             const minQty = getProductMinQty(item.product_id);
                             const currentQty = cartByProduct[item.product_id] || 0;
                             if (minQty && currentQty < minQty) return <div style={{...s.cartItemUnitPrice, color:'#e53e3e'}}>Mín. {minQty}u.</div>;
@@ -2063,7 +2063,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                           <span style={s.cartQty}>x{item.qty}</span>
                           {showPrices && item.showPrice !== false && (() => {
                             const price = getUnitPrice(item.product_id);
-                            if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                            if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString('es-AR')}</span>;
                             return null;
                           })()}
                         </div>
@@ -2093,7 +2093,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   )}
                   <div style={s.totalRow}>
                     <span>Total</span>
-                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+                    <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString('es-AR') : '-'}</span>
                   </div>
                   <button style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
                     disabled={cartItems.length === 0} onClick={openModal}>
@@ -2134,7 +2134,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <div style={s.cartItemName}>{item.name}</div>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString()}</div>;
+                        if (price !== null && price > 0) return <div style={s.cartItemUnitPrice}>c/u ${price.toLocaleString('es-AR')}</div>;
                         return null;
                       })()}
                     </div>
@@ -2142,7 +2142,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                       <span style={s.cartQty}>x{item.qty}</span>
                       {showPrices && item.showPrice !== false && (() => {
                         const price = getUnitPrice(item.product_id);
-                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString()}</span>;
+                        if (price !== null && price > 0) return <span style={s.cartPrice}>${(item.qty * price).toLocaleString('es-AR')}</span>;
                         return null;
                       })()}
                     </div>
@@ -2172,7 +2172,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
               )}
               <div style={s.totalRow}>
                 <span>Total</span>
-                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString() : '-'}</span>
+                <span style={s.totalAmount}>{showTotal ? '$' + total.toLocaleString('es-AR') : '-'}</span>
               </div>
               <button
                 style={{...s.confirmBtn, opacity: cartItems.length === 0 ? 0.5 : 1}}
@@ -2190,7 +2190,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
               return next;
             })}>
               <span style={s.mobileBadge}>{totalItems}</span>
-              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString() : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
+              <span style={s.mobileTotal}>{showTotal ? '$' + total.toLocaleString('es-AR') : totalItems + ' producto' + (totalItems !== 1 ? 's' : '')}</span>
             </button>
             <button
               style={{...s.mobileConfirmBtn, ...(cartItems.length === 0 ? s.mobileConfirmBtnDisabled : {})}}
