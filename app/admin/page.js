@@ -603,6 +603,8 @@ useEffect(() => {
   const screenRef = useRef(screen);
   const activeTabRef = useRef(activeTab);
   const adminScrollPositionsRef = useRef({});
+  const tabsScrollRef = useRef(null);
+  const [tabScrollState, setTabScrollState] = useState({ left: false, right: false });
   const suppressAdminScrollSaveUntilRef = useRef(0);
   const [tabOrder, setTabOrder] = useState(() => {
     try {
@@ -1084,6 +1086,28 @@ useEffect(() => {
   useEffect(() => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
+
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    function updateTabScrollState() {
+      setTabScrollState({
+        left: el.scrollLeft > 4,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+      });
+    }
+    updateTabScrollState();
+    el.addEventListener('scroll', updateTabScrollState, { passive: true });
+    window.addEventListener('resize', updateTabScrollState);
+    return () => {
+      el.removeEventListener('scroll', updateTabScrollState);
+      window.removeEventListener('resize', updateTabScrollState);
+    };
+  }, [tabOrder, screen]);
+
+  function scrollAdminTabs(direction) {
+    tabsScrollRef.current?.scrollBy({ left: direction * 220, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     function isVisibleSearchInput(el) {
@@ -5586,8 +5610,17 @@ useEffect(() => {
         </div>
       )}
 
-      <div style={s.tabBar}>
-        <div style={s.tabBarInner} className="adm-tabs">
+      <div style={{...s.tabBar, position: 'relative'}}>
+        {tabScrollState.left && (
+          <button
+            onClick={() => scrollAdminTabs(-1)}
+            aria-label="Ver pestañas anteriores"
+            style={{position:'absolute', left:0, top:0, bottom:0, zIndex:2, width:32, border:'none', cursor:'pointer', background:'linear-gradient(90deg, white 45%, rgba(255,255,255,0))', display:'flex', alignItems:'center', justifyContent:'flex-start', color:'#1B2F5E', fontSize:16, fontWeight:900, paddingLeft:2}}
+          >
+            ‹
+          </button>
+        )}
+        <div ref={tabsScrollRef} style={s.tabBarInner} className="adm-tabs">
           {(() => {
             return tabOrder.map(id => (
               <button
@@ -5614,6 +5647,15 @@ useEffect(() => {
             ));
           })()}
         </div>
+        {tabScrollState.right && (
+          <button
+            onClick={() => scrollAdminTabs(1)}
+            aria-label="Ver más pestañas"
+            style={{position:'absolute', right:0, top:0, bottom:0, zIndex:2, width:32, border:'none', cursor:'pointer', background:'linear-gradient(270deg, white 45%, rgba(255,255,255,0))', display:'flex', alignItems:'center', justifyContent:'flex-end', color:'#1B2F5E', fontSize:16, fontWeight:900, paddingRight:2}}
+          >
+            ›
+          </button>
+        )}
       </div>
 
       <div
@@ -8102,61 +8144,83 @@ useEffect(() => {
           <>
             <div style={s.card}>
               <h2 style={s.sectionTitle}>Servicio técnico (mantenimiento)</h2>
-              <div style={{fontSize:12, color:'#9aa3bc', marginBottom:14, lineHeight:1.5}}>
-                {(() => {
-                  const iso = settings[MAINTENANCE_ACTIVATES_AT_KEY];
-                  if (!iso) return 'Estado actual: inactivo — la página funciona con normalidad.';
-                  const activatesAt = new Date(iso);
-                  if (Number.isNaN(activatesAt.getTime())) return 'Estado actual: inactivo — la página funciona con normalidad.';
-                  const isActive = activatesAt.getTime() <= Date.now();
-                  return isActive
-                    ? 'Estado actual: ACTIVO — la página muestra la pantalla de mantenimiento a todos los usuarios (excepto admin/operarios/producción).'
-                    : `Estado actual: programado — entra en mantenimiento a las ${formatAdminDateTime(iso)}.`;
-                })()}
-              </div>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
-                <div>
-                  <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Minutos de aviso antes de bloquear</div>
-                  <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Tiempo que ven los usuarios activos en el cartel antes de ser redirigidos.</div>
-                </div>
-                <div style={{display:'flex', alignItems:'center', gap:8}}>
-                  <input
-                    type="number"
-                    min="1"
-                    style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', width:78}}
-                    value={settings[MAINTENANCE_MINUTES_KEY] ?? String(DEFAULT_MAINTENANCE_MINUTES)}
-                    onChange={e => setSettings(prev => ({...prev, [MAINTENANCE_MINUTES_KEY]: e.target.value}))}
-                    onBlur={e => {
-                      const parsed = parseInt(e.target.value, 10);
-                      const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAINTENANCE_MINUTES;
-                      saveSetting(MAINTENANCE_MINUTES_KEY, String(minutes));
-                    }}
-                  />
-                  <span style={{fontSize:12, color:'#7d879f', fontWeight:700}}>min</span>
-                </div>
-              </div>
-              <div style={{display:'flex', flexWrap:'wrap', gap:10, padding:'14px 0 0'}}>
-                <button
-                  onClick={activateMaintenance}
-                  style={{background:'#1B2F5E', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer'}}
-                >
-                  Activar servicio técnico
-                </button>
-                <button
-                  onClick={activateMaintenanceInstant}
-                  style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.35)'}}
-                >
-                  Activar al instante
-                </button>
-                {!!settings[MAINTENANCE_ACTIVATES_AT_KEY] && (
-                  <button
-                    onClick={deactivateMaintenance}
-                    style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:600, cursor:'pointer'}}
-                  >
-                    Desactivar
-                  </button>
-                )}
-              </div>
+              {(() => {
+                const iso = settings[MAINTENANCE_ACTIVATES_AT_KEY];
+                const activatesAt = iso ? new Date(iso) : null;
+                const isScheduledOrActive = !!iso && activatesAt && !Number.isNaN(activatesAt.getTime());
+                const isActive = isScheduledOrActive && activatesAt.getTime() <= Date.now();
+
+                return (
+                  <>
+                    <div style={{
+                      display:'flex', alignItems:'center', gap:10, padding:'12px 16px', borderRadius:10, marginBottom:16,
+                      background: isActive ? '#fdecec' : (isScheduledOrActive ? '#fff6e5' : '#eef4ff'),
+                      border: `1.5px solid ${isActive ? '#e53e3e' : (isScheduledOrActive ? '#f0a92e' : '#c9dcff')}`,
+                    }}>
+                      <span style={{fontSize:20}}>{isActive ? '🔴' : (isScheduledOrActive ? '⏳' : '🟢')}</span>
+                      <div>
+                        <div style={{fontSize:13, fontWeight:800, color: isActive ? '#c53030' : (isScheduledOrActive ? '#b7791f' : '#1B2F5E')}}>
+                          {isActive
+                            ? 'ACTIVO — la página muestra la pantalla de mantenimiento (excepto admin/operarios/producción)'
+                            : (isScheduledOrActive
+                              ? `Programado — entra en mantenimiento a las ${formatAdminDateTime(iso)}`
+                              : 'Inactivo — la página funciona con normalidad')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'12px 0', borderBottom:'1px solid #eef0f6'}}>
+                      <div>
+                        <div style={{fontSize:13, fontWeight:600, color:'#2d3352'}}>Minutos de aviso antes de bloquear</div>
+                        <div style={{fontSize:11, color:'#9aa3bc', marginTop:1}}>Tiempo que ven los usuarios activos en el cartel antes de ser redirigidos.</div>
+                      </div>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <input
+                          type="number"
+                          min="1"
+                          style={{border:'1.5px solid #dde1ef', borderRadius:7, padding:'5px 10px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', width:78}}
+                          value={settings[MAINTENANCE_MINUTES_KEY] ?? String(DEFAULT_MAINTENANCE_MINUTES)}
+                          onChange={e => setSettings(prev => ({...prev, [MAINTENANCE_MINUTES_KEY]: e.target.value}))}
+                          onBlur={e => {
+                            const parsed = parseInt(e.target.value, 10);
+                            const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAINTENANCE_MINUTES;
+                            saveSetting(MAINTENANCE_MINUTES_KEY, String(minutes));
+                          }}
+                        />
+                        <span style={{fontSize:12, color:'#7d879f', fontWeight:700}}>min</span>
+                      </div>
+                    </div>
+                    <div style={{display:'flex', flexWrap:'wrap', gap:10, padding:'14px 0 0'}}>
+                      <button
+                        onClick={activateMaintenance}
+                        disabled={isScheduledOrActive}
+                        title={isScheduledOrActive ? 'Ya hay un mantenimiento programado o activo — desactivalo primero' : undefined}
+                        style={{background: isScheduledOrActive ? '#c7cede' : '#1B2F5E', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor: isScheduledOrActive ? 'not-allowed' : 'pointer'}}
+                      >
+                        Activar servicio técnico
+                      </button>
+                      <button
+                        onClick={activateMaintenanceInstant}
+                        disabled={isScheduledOrActive}
+                        title={isScheduledOrActive ? 'Ya hay un mantenimiento programado o activo — desactivalo primero' : undefined}
+                        style={isScheduledOrActive
+                          ? {background:'#e8c4c4', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'not-allowed'}
+                          : {background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.35)'}}
+                      >
+                        Activar al instante
+                      </button>
+                      {isScheduledOrActive && (
+                        <button
+                          onClick={deactivateMaintenance}
+                          style={{background:'linear-gradient(135deg, #16a34a, #15803d)', color:'white', border:'none', borderRadius:10, padding:'9px 18px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(22,163,74,0.35)'}}
+                        >
+                          Desactivar servicio técnico
+                        </button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             <div style={s.card}>

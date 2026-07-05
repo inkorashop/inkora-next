@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import ServiceUnavailable from './ServiceUnavailable';
@@ -18,6 +18,14 @@ export default function MaintenanceGate({ children }) {
   const [activatesAt, setActivatesAt] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [supabaseDown, setSupabaseDown] = useState(false);
+  // Si al CARGAR la pagina (mount) ya habia un mantenimiento programado o
+  // activo, esta carga cuenta como "usuario recien llegado / que recargo" y
+  // se bloquea directo, sin esperar a que se cumpla la cuenta regresiva. Si
+  // en cambio el mantenimiento se programa mientras la pestana ya estaba
+  // abierta (detectado en un poll posterior al primero), se muestra el
+  // cartel con cuenta regresiva y solo se bloquea cuando esta llega a cero.
+  const [freshLoadBlocked, setFreshLoadBlocked] = useState(false);
+  const firstFetchDoneRef = useRef(false);
 
   useEffect(() => {
     if (exempt) return;
@@ -33,9 +41,18 @@ export default function MaintenanceGate({ children }) {
           .from('settings')
           .select('value')
           .eq('key', 'maintenance_activates_at');
-        if (!cancelled) {
-          const val = data?.[0]?.value;
-          setActivatesAt(val ? new Date(val) : null);
+        if (cancelled) return;
+
+        const val = data?.[0]?.value;
+        const parsed = val ? new Date(val) : null;
+        setActivatesAt(parsed);
+
+        if (!firstFetchDoneRef.current) {
+          firstFetchDoneRef.current = true;
+          setFreshLoadBlocked(!!parsed);
+        } else if (!parsed) {
+          // Se desactivo desde Admin: se libera en vivo, sin recargar.
+          setFreshLoadBlocked(false);
         }
       } catch {
         // Si falla la lectura de settings, se conserva el ultimo estado conocido.
@@ -59,7 +76,7 @@ export default function MaintenanceGate({ children }) {
 
   const activatesAtMs = activatesAt ? activatesAt.getTime() : null;
 
-  if (activatesAtMs && now >= activatesAtMs) {
+  if (freshLoadBlocked || (activatesAtMs && now >= activatesAtMs)) {
     return <ServiceUnavailable variant="maintenance" />;
   }
 
