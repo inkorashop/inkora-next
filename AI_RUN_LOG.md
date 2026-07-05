@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v2)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v3)
+
+- Objetivo: Simplificar mas la pantalla de "pedido confirmado": sacar el boton/label de "Copiar" (tanto del texto de confirmacion como del codigo del pedido) sin perder que ambos se puedan copiar, y agrandar el titulo "Pedido confirmado!" para que se entienda de un vistazo que ya quedo confirmado.
+- Cambios: En `app/catalogo/page.js`: `successTitle` paso de 22px/700 a 30px/800. El codigo del pedido (`{orderCode}`) y el recuadro con el texto de WhatsApp ahora son clickeables directamente (todo el elemento, no un boton aparte): `cursor:pointer`, `title="Click para copiar"` como tooltip nativo, y feedback puramente visual (fondo/borde verde ~2s) via los estados `codeCopied` (nuevo) y `waCopied` (ya existia). Se elimino la fila con el label "TEXTO DE CONFIRMACION" y el boton "Copiar"/"Copiado".
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A (cambio de UI acordado explicitamente con el usuario, opcion "2" de las alternativas propuestas).
+- Pendiente/Riesgos: El tooltip nativo (`title`) no se ve en mobile (sin hover), pero el area clickeable es todo el elemento (no un icono chico), asi que sigue siendo facil de tocar aunque no se explique por adelantado — coincide con lo que el usuario eligio conscientemente.
 
 - Objetivo: (1) Terminar y desplegar un cambio de Codex (reorganizar pantalla de "pedido confirmado") que habia quedado sin commitear porque esa sesion corto por limite de uso; (2) evitar que las cards de diseno en Catalogo cambien de alto cuando aparece/desaparece el precio unitario segun la cantidad.
 - Cambios: (1) Se reviso el diff sin commitear que dejo Codex en `app/catalogo/page.js` y `AI_RUN_LOG.md`, se verifico que compilaba y lintaba limpio, y se completo el paso que faltaba (commit + push). (2) En `app/catalogo/page.js`, el bloque que muestra `$precio/u` debajo de la categoria de cada diseno devolvia `null` cuando el precio todavia no aplicaba (cantidad insuficiente para ese tramo), haciendo que esa card (y por extension toda la fila del grid) creciera verticalmente recien cuando el precio aparecia. Se cambio para que el `div` siempre se renderice con el mismo alto, alternando `visibility: hidden/visible` en vez de `null`, asi el espacio queda reservado desde el principio.

@@ -184,6 +184,7 @@ export default function Home() {
   const [success, setSuccess] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState({ items: [], total: 0, form: {} });
   const [waCopied, setWaCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
@@ -2262,7 +2263,13 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 <div style={s.successIcon}>✓</div>
                 <h3 style={s.successTitle}>Pedido confirmado!</h3>
                 <p>Codigo de tu pedido:</p>
-                <div style={s.successCode}>{orderCode}</div>
+                <div
+                  title="Click para copiar"
+                  onClick={() => { navigator.clipboard.writeText(orderCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }}
+                  style={{...s.successCode, cursor: 'pointer', borderRadius: 8, padding: '2px 10px', transition: 'background 0.2s, color 0.2s', background: codeCopied ? '#dcfce7' : 'transparent', color: codeCopied ? '#15803d' : s.successCode.color}}
+                >
+                  {orderCode}
+                </div>
                 <p>Te enviamos la confirmacion a tu email.</p>
                 <button
                   style={{marginTop:16, width:'100%', maxWidth:260, background:'#1B2F5E', border:'none', color:'white', borderRadius:10, padding:'12px 24px', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:'Barlow, sans-serif', boxShadow:'0 8px 20px rgba(27,47,94,0.16)'}}
@@ -2284,17 +2291,11 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                             WhatsApp
                           </a>
                         </div>
-                        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, margin:'2px 0 8px'}}>
-                          <span style={{fontSize:11, color:'#5a6380', fontWeight:800, textTransform:'uppercase', letterSpacing:0.5}}>Texto de confirmacion</span>
-                          <button
-                            type="button"
-                            onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
-                            style={{background: waCopied ? '#dcfce7' : 'white', border:'1.5px solid #bbf7d0', color: waCopied ? '#15803d' : '#18a36a', borderRadius:999, padding:'4px 10px', fontSize:11, fontWeight:800, cursor:'pointer', transition:'all 0.2s', fontFamily:'Barlow, sans-serif'}}
-                          >
-                            {waCopied ? 'Copiado' : 'Copiar'}
-                          </button>
-                        </div>
-                        <div style={{background:'white', border:'1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 12px', fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto'}}>
+                        <div
+                          title="Click para copiar"
+                          onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
+                          style={{marginTop:12, background: waCopied ? '#dcfce7' : 'white', border: waCopied ? '1.5px solid #18a36a' : '1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 12px', fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto', cursor:'pointer', transition:'background 0.2s, border 0.2s'}}
+                        >
                           {waText}
                         </div>
                       </div>
@@ -2488,7 +2489,7 @@ const styles = {
   btnPrimary: { flex: 2, background: '#1B2F5E', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' },
   successScreen: { textAlign: 'center', padding: '32px 24px', overflowX: 'hidden' },
   successIcon: { width: 64, height: 64, background: '#18a36a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28, color: 'white' },
-  successTitle: { fontSize: 22, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
+  successTitle: { fontSize: 30, fontWeight: 800, color: '#1B2F5E', marginBottom: 8 },
   successCode: { fontSize: 24, fontWeight: 700, color: '#2D6BE4', letterSpacing: 2, margin: '12px 0' },
   btnWaConfirm: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#25D366', color: 'white', border: 'none', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 16, textDecoration: 'none' },
   waFab: { position: 'fixed', zIndex: 150, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(37,211,102,0.4)', transition: 'transform 0.2s ease', textDecoration: 'none' },
