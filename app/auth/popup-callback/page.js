@@ -8,8 +8,16 @@ export default function PopupCallback() {
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_KEY
     );
+    let handled = false;
     supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      // El login ya se completo del lado del servidor (app/api/auth/google/callback)
+      // antes de que esta pagina cargue, asi que la sesion casi siempre llega
+      // como INITIAL_SESSION (sesion ya existente al iniciar el cliente) y no
+      // como SIGNED_IN (transicion en vivo). Solo esperar SIGNED_IN dejaba el
+      // popup colgado en "Iniciando sesion..." para siempre en ese caso, aunque
+      // la sesion ya estuviera creada.
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session && !handled) {
+        handled = true;
         if (session.user?.email) {
           localStorage.setItem('inkora_login_hint', session.user.email);
         }

@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 -03:00 - Claude Sonnet 5
+
+- Objetivo: El popup de "Iniciar sesion con Google" a veces se quedaba trabado en "Iniciando sesion..." para siempre, aunque la sesion ya se hubiera iniciado (confirmado: cerrando el popup a mano se veia todo ya logueado).
+- Cambios: Diagnostico primero (sin tocar codigo) y confirmacion del usuario antes de corregir. Causa: `app/auth/popup-callback/page.js` solo actuaba (mandar `postMessage` al opener + `window.close()`) ante el evento `SIGNED_IN` de `supabase.auth.onAuthStateChange`. Pero el login real ya se completa del lado del servidor en `app/api/auth/google/callback/route.js` (que llama a `signInWithIdToken` y deja la sesion en cookies) *antes* de que esta pagina cargue — asi que casi siempre lo que el cliente ve al iniciar es `INITIAL_SESSION` (sesion ya existente), no `SIGNED_IN` (transicion en vivo), y ese evento se ignoraba silenciosamente. Era una carrera dependiente de timing (por eso "a veces"). Fix: se acepta tambien `INITIAL_SESSION` (con sesion valida) ademas de `SIGNED_IN`, con una bandera `handled` para evitar doble ejecucion si llegaran a dispararse ambos eventos.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: Se confirmo que esta misma pagina de callback es compartida por el login de Google del catalogo publico, Admin y Operarios (los 3 usan `redirectTo: .../auth/popup-callback`), asi que la correccion cubre los 3 flujos con un solo cambio.
+- Pendiente/Riesgos: Ninguno esperado — el cambio es aditivo (agrega un caso mas al `if`, no saca ninguno) y la bandera `handled` previene cualquier efecto doble. Falta confirmacion del usuario probando en produccion que ya no se cuelga.
+
+---
+
 ## 2026-07-05 12:34 -03:00 - ChatGPT Codex
 
 - Objetivo: Explicar como se llama el espacio gris lateral de Admin > Disenos y hacer que al clickear ese margen/gutter se suelte la seleccion de disenos.
