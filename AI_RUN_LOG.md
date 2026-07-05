@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v7)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v8)
+
+- Objetivo: Rehacer el feedback de "copiado" (codigo del pedido y texto de WhatsApp) que el usuario no aprobaba: no le gustaba el difuminado del contenido ni que el aviso flotara arriba del elemento en vez de taparlo. Se propuso una alternativa (overlay que cubre el elemento) antes de tocar codigo, y el usuario la aprobo.
+- Cambios: En `app/catalogo/page.js` se reemplazo por completo el patron anterior (blur + toast flotando afuera con `bottom:100%`) por un overlay `position:absolute; inset:0` que cubre el elemento entero al copiar, con fondo verde solido (#18a36a), icono de check + texto centrado, animacion de fade+scale suave (`copied-overlay-pop`, reemplaza a la vieja `copied-toast-pop`). El icono de copiar en la esquina/al lado deja de alternar a check (queda fijo) ya que el overlay es ahora la unica señal de "copiado". Para el codigo del pedido (elemento chico) el texto del overlay es "¡Copiado!" corto para que entre sin achicarse; para el recuadro de WhatsApp (mas ancho) se mantiene "Copiado al portapapeles" completo.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A (rediseño acordado explicitamente tras propuesta discutida con el usuario antes de implementar).
+- Pendiente/Riesgos: Ninguno esperado.
 
 - Objetivo: El texto "Confirmar por WhatsApp" se cortaba en dos renglones dentro de su boton. El usuario pidio que ambos botones ("Listo" y "Confirmar por WhatsApp") sean del mismo tamano y se agranden lo necesario para que el texto entre en un renglon.
 - Cambios: En `app/catalogo/page.js` ambos botones pasan de `maxWidth:260`/`maxWidth:220` a `maxWidth:300` (mismo valor en los dos) y se agrega `whiteSpace:'nowrap'` para evitar el corte de linea de forma robusta independientemente del ancho final.

@@ -1552,8 +1552,8 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         .limit-toast-enter { animation: limit-toast-in 240ms ease-out, limit-toast-breathe 3.4s ease-in-out 280ms infinite; }
         .limit-toast-closing { animation: limit-toast-out 180ms ease-in forwards; }
         .limit-toast-bump { animation: limit-toast-bump 420ms cubic-bezier(.2,.8,.2,1), limit-toast-breathe 3.4s ease-in-out 420ms infinite; }
-        @keyframes copied-toast-pop { 0% { opacity: 0; transform: translate(-50%, 4px) scale(0.94); } 14% { opacity: 1; transform: translate(-50%, 0) scale(1); } 82% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -6px) scale(0.98); } }
-        .copied-toast { animation: copied-toast-pop 1300ms cubic-bezier(.2,.8,.2,1) forwards; }
+        @keyframes copied-overlay-pop { 0% { opacity: 0; transform: scale(0.96); } 15% { opacity: 1; transform: scale(1); } 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.02); } }
+        .copied-overlay { animation: copied-overlay-pop 1300ms cubic-bezier(.2,.8,.2,1) forwards; }
         input::placeholder { color: rgba(255,255,255,0.6); }
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
         .qty-input::placeholder { color: #9aa3bc; }
@@ -2268,21 +2268,16 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 <div
                   title="Click para copiar"
                   onClick={() => { navigator.clipboard.writeText(orderCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 1300); }}
-                  style={{...s.successCode, display: 'inline-block', position: 'relative', cursor: 'pointer', borderRadius: 8, padding: '2px 36px 2px 10px', transition: 'background 0.2s', background: codeCopied ? '#dcfce7' : 'transparent'}}
+                  style={{...s.successCode, display: 'inline-block', position: 'relative', cursor: 'pointer', borderRadius: 8, padding: '2px 36px 2px 10px', overflow: 'hidden'}}
                 >
-                  <span style={{filter: codeCopied ? 'blur(2px)' : 'none', opacity: codeCopied ? 0.55 : 1, transition: 'filter 0.25s ease, opacity 0.25s ease', color: codeCopied ? '#15803d' : s.successCode.color}}>
-                    {orderCode}
-                  </span>
-                  <span style={{position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', display: 'flex', opacity: codeCopied ? 1 : 0.6, color: codeCopied ? '#15803d' : s.successCode.color, transition: 'opacity 0.2s ease, color 0.2s ease'}}>
-                    {codeCopied ? (
-                      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                    )}
+                  <span>{orderCode}</span>
+                  <span style={{position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', display: 'flex', opacity: 0.6, color: s.successCode.color}}>
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                   </span>
                   {codeCopied && (
-                    <span className="copied-toast" style={{position: 'absolute', bottom: '100%', left: '50%', marginBottom: 8, background: '#1B2F5E', color: 'white', fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 8, whiteSpace: 'nowrap', boxShadow: '0 8px 20px rgba(0,0,0,0.22)', pointerEvents: 'none', zIndex: 6}}>
-                      Copiado al portapapeles
+                    <span className="copied-overlay" style={{position: 'absolute', inset: 0, background: '#18a36a', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14, fontWeight: 800, borderRadius: 8, pointerEvents: 'none'}}>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      ¡Copiado!
                     </span>
                   )}
                 </div>
@@ -2316,20 +2311,17 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         <div
                           title="Click para copiar"
                           onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 1300); }}
-                          style={{marginTop:12, position:'relative', background: waCopied ? '#dcfce7' : 'white', border: waCopied ? '1.5px solid #18a36a' : '1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 34px 10px 12px', cursor:'pointer', transition:'background 0.2s, border 0.2s'}}
+                          style={{marginTop:12, position:'relative', overflow:'hidden', background:'white', border:'1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 34px 10px 12px', cursor:'pointer'}}
                         >
-                          <div style={{fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto', filter: waCopied ? 'blur(2px)' : 'none', opacity: waCopied ? 0.55 : 1, transition:'filter 0.25s ease, opacity 0.25s ease'}}>
+                          <div style={{fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto'}}>
                             {waText}
                           </div>
-                          <span style={{position:'absolute', top:10, right:10, display:'flex', opacity: waCopied ? 1 : 0.6, color: waCopied ? '#15803d' : '#18a36a', transition:'opacity 0.2s ease, color 0.2s ease'}}>
-                            {waCopied ? (
-                              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                            ) : (
-                              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                            )}
+                          <span style={{position:'absolute', top:10, right:10, display:'flex', opacity:0.6, color:'#18a36a'}}>
+                            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                           </span>
                           {waCopied && (
-                            <span className="copied-toast" style={{position:'absolute', bottom:'100%', left:'50%', marginBottom:8, background:'#1B2F5E', color:'white', fontSize:11, fontWeight:700, padding:'6px 12px', borderRadius:8, whiteSpace:'nowrap', boxShadow:'0 8px 20px rgba(0,0,0,0.22)', pointerEvents:'none', zIndex:6}}>
+                            <span className="copied-overlay" style={{position:'absolute', inset:0, background:'#18a36a', color:'white', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontSize:14, fontWeight:800, borderRadius:10, pointerEvents:'none'}}>
+                              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                               Copiado al portapapeles
                             </span>
                           )}
