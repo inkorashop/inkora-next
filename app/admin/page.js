@@ -7423,25 +7423,30 @@ useEffect(() => {
                             <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === true ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
                         </div>
-                        <div style={{display:'flex', gap:4, flexWrap:'nowrap', justifyContent:'center'}}>
-                          <button
-                            disabled={hasBulkUserSelection}
-                            onClick={() => updateUserSeller(u.id, null)}
-                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background: !u.seller_id ? '#1B2F5E' : 'white', color: !u.seller_id ? 'white' : '#9aa3bc', opacity:hasBulkUserSelection ? 0.45 : 1}}
-                          >
-                            Sin vendedor
-                          </button>
-                          {sellers.filter(sel => sel.active).map(sel => (
-                            <button
-                              key={sel.id}
-                              disabled={hasBulkUserSelection}
-                              onClick={() => updateUserSeller(u.id, sel.id)}
-                              style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:600, cursor:hasBulkUserSelection ? 'not-allowed' : 'pointer', fontFamily:'Barlow, sans-serif', background: u.seller_id === sel.id ? '#1B2F5E' : 'white', color: u.seller_id === sel.id ? 'white' : '#5a6380', opacity:hasBulkUserSelection ? 0.45 : 1}}
-                            >
-                              {sel.name}
-                            </button>
+                        <select
+                          value={u.seller_id || 'none'}
+                          disabled={hasBulkUserSelection}
+                          onChange={e => updateUserSeller(u.id, e.target.value === 'none' ? null : e.target.value)}
+                          style={{
+                            ...s.input,
+                            width: 170,
+                            minWidth: 150,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            padding: '5px 9px',
+                            cursor: hasBulkUserSelection ? 'not-allowed' : 'pointer',
+                            opacity: hasBulkUserSelection ? 0.45 : 1,
+                            color: u.seller_id ? '#1B2F5E' : '#9aa3bc',
+                          }}
+                        >
+                          <option value="none">Sin vendedor</option>
+                          {u.seller_id && !sellers.some(sel => sel.id === u.seller_id) && (
+                            <option value={u.seller_id}>Vendedor no encontrado</option>
+                          )}
+                          {sellers.filter(sel => sel.active || sel.id === u.seller_id).map(sel => (
+                            <option key={sel.id} value={sel.id}>{sel.name}{sel.active ? '' : ' (inactivo)'}</option>
                           ))}
-                        </div>
+                        </select>
                       </div>
                       <div style={{display:'flex', gap:8, alignItems:'center', flexWrap:'nowrap', justifyContent:'flex-end', flex:'0 0 auto'}}>
                         {u.registration_source === 'admin_invite' && (

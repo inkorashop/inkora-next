@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 14:36 -03:00 - ChatGPT Codex
+
+- Objetivo: En Admin > Usuarios/Clientes cambiar la asignacion de vendedor por fila de varios botones a un desplegable; confirmar que clientes nuevos nacen con email de confirmacion de pedido desactivado; auditar registro/auth sin modificarlo.
+- Cambios: Se actualizo `app/admin/page.js` para reemplazar los botones inline de vendedor por un `<select>` por cliente. El desplegable mantiene la opcion "Sin vendedor", muestra vendedores activos y conserva el vendedor asignado aunque este inactivo o ya no exista para no falsear visualmente el estado.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables. Se revisaron `app/api/register/route.js`, `app/api/invite-user/route.js`, `components/AuthModal.js`, rutas Google/auth y SQL de perfiles.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. El arbol tracked estaba limpio antes de editar; quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`. Se confirmo que `send_confirmation_email` ya se crea en `false` desde API/SQL y que `/api/send-email` respeta el flag via `sendConfirmation`.
+- Pendiente/Riesgos: Probar manualmente en Admin > Usuarios que el desplegable cambie vendedor y respete seleccion multiple deshabilitada. Revisar en un turno aparte posibles mejoras de auth: manejo de error del popup Google con `prompt=none`, rate-limit/captcha para registro publico y unificar rutas de registro.
+
+---
+
 ## 2026-07-05 14:03 -03:00 - ChatGPT Codex
 
 - Objetivo: Implementar la correccion para que el click en el margen exterior/gutter gris de Admin > Disenos suelte la seleccion.
