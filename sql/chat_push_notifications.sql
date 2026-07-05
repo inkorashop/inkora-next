@@ -41,7 +41,22 @@ CREATE POLICY "chat_channel_member_settings_all" ON public.chat_channel_member_s
 -- Dispara un webhook HTTP por cada mensaje nuevo (via pg_net, la misma
 -- extension que usa el feature "Database Webhooks" del dashboard de
 -- Supabase). El endpoint valida CHAT_WEBHOOK_SECRET y manda los push reales.
+--
+-- Importante: el secret NO debe quedar hardcodeado en este archivo.
+-- Configurarlo en Supabase con `sql/chat_webhook_secret_rotation.sql`.
 CREATE EXTENSION IF NOT EXISTS pg_net;
+
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE TABLE IF NOT EXISTS private.app_secrets (
+  key        text PRIMARY KEY,
+  value      text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE private.app_secrets ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON ALL TABLES IN SCHEMA private FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.notify_chat_message_webhook()
 RETURNS trigger
@@ -49,12 +64,24 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_webhook_secret text;
 BEGIN
+  SELECT NULLIF(value, '')
+  INTO v_webhook_secret
+  FROM private.app_secrets
+  WHERE key = 'chat_webhook_secret';
+
+  IF v_webhook_secret IS NULL THEN
+    RAISE WARNING 'Falta configurar private.app_secrets.chat_webhook_secret; se omite webhook de chat.';
+    RETURN NEW;
+  END IF;
+
   PERFORM net.http_post(
     url := 'https://www.inkora.com.ar/api/webhooks/chat-message-created',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'x-webhook-secret', 'ffcf95806da6115bc979cf4494cc657e39a17ea2ceb16aed'
+      'x-webhook-secret', v_webhook_secret
     ),
     body := jsonb_build_object('record', to_jsonb(NEW))
   );

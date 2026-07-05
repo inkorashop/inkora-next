@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-05 20:53 -03:00 - ChatGPT Codex
+
+- Objetivo: Revisar y corregir la alerta de GitGuardian por un `Generic High Entropy Secret` expuesto en GitHub.
+- Cambios: Se confirmo que el candidato real era el `x-webhook-secret` hardcodeado en `sql/chat_push_notifications.sql` para el webhook de push del chat. Se elimino el secret real del SQL versionado. Ahora `notify_chat_message_webhook()` lee el valor desde `private.app_secrets` (schema privado, sin grants a `anon/authenticated`) y omite solo el webhook si falta configurar el secret, sin romper el insert del mensaje. Se agrego `sql/chat_webhook_secret_rotation.sql` como script de rotacion: crea/asegura la tabla privada, guarda el nuevo secret y recrea la funcion/trigger sin hardcodear el valor.
+- Verificacion: `rg` confirmo que el valor filtrado ya no aparece en archivos actuales del repo. `git diff --check` OK, solo aviso CRLF. No se ejecuto build porque el cambio fue SQL/documentacion, sin JS runtime.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. La ultima entrada relevante era de Claude sobre mantenimiento/402, sin conflicto. El arbol tenia solo los binarios sin trackear ya conocidos (`Inkora.PrintBridge.zip`, `Messi 2.3mf`).
+- Pendiente/Riesgos: Falta rotar el valor real en produccion: generar un secret nuevo, guardarlo como `CHAT_WEBHOOK_SECRET` en Vercel Production y ejecutar `sql/chat_webhook_secret_rotation.sql` en Supabase SQL Editor con ese mismo valor. No se cambio Vercel desde esta corrida para no desincronizarlo de Supabase y romper temporalmente las push del chat. El secret viejo debe considerarse comprometido aunque se haya quitado del archivo actual, porque sigue existiendo en el historial de Git.
+
 ## 2026-07-05 -03:00 - Claude Sonnet 5 (v16)
 
 - Objetivo: Corregir 5 detalles reportados por el usuario tras probar el sistema de mantenimiento/402 del turno anterior: (1) agregar el icono de WhatsApp al boton de la pantalla de mantenimiento/error; (2) el mensaje prellenado de WhatsApp no debe mencionar "problema tecnico" cuando es por mantenimiento; (3) al activarse para un usuario activo, la pagina se sentia como si "se reiniciara" en vez de solo aparecer el aviso; (4) confirmado un bug real: navegar de landing a catalogo (u otra seccion) disparaba el bloqueo instantaneo como si fuera una recarga, cuando no deberia; (5) pedido nuevo: si el usuario esta viendo la pantalla de mantenimiento y esta se desactiva, que se le recargue solo para que vea la pagina real actualizada.
