@@ -154,6 +154,17 @@ export async function POST(request) {
 
     const customTemplates = {};
 
+    // Deep link directo al detalle de este pedido en el panel de Admin
+    // (mismo esquema de URL que ya usa el propio Admin para linkear pedidos:
+    // tab=pedidos + modal=pedido + pedido=<order_code>). Si quien lo abre no
+    // tiene sesion de admin, el flujo normal de auth le va a pedir login.
+    const orderAdminUrl = `https://www.inkora.com.ar/admin?tab=pedidos&modal=pedido&pedido=${encodeURIComponent(orderCode)}`;
+    const viewOrderButton = `
+      <div style="text-align:center;padding:16px 24px;background:#f8faff;border:1px solid #dde1ef;border-top:none">
+        <a href="${orderAdminUrl}" style="display:inline-block;background:#2D6BE4;color:white;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 28px;border-radius:8px">Ver pedido</a>
+      </div>
+    `;
+
     const defaultAdminHtml = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
         <div style="background:#1B2F5E;padding:20px 24px;border-radius:8px 8px 0 0">
@@ -168,6 +179,7 @@ export async function POST(request) {
           ${safeNotes ? `<p style="margin:0 0 6px"><strong>Notas:</strong> ${safeNotes}</p>` : ''}
           <p style="margin:6px 0 0;font-size:12px;color:#9aa3bc"><strong>Fecha:</strong> ${fecha}</p>
         </div>
+        ${viewOrderButton}
         ${table}
         ${totalSection}
       </div>
