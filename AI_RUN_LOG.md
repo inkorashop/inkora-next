@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v6)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v7)
+
+- Objetivo: El texto "Confirmar por WhatsApp" se cortaba en dos renglones dentro de su boton. El usuario pidio que ambos botones ("Listo" y "Confirmar por WhatsApp") sean del mismo tamano y se agranden lo necesario para que el texto entre en un renglon.
+- Cambios: En `app/catalogo/page.js` ambos botones pasan de `maxWidth:260`/`maxWidth:220` a `maxWidth:300` (mismo valor en los dos) y se agrega `whiteSpace:'nowrap'` para evitar el corte de linea de forma robusta independientemente del ancho final.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A.
+- Pendiente/Riesgos: El usuario tambien pidio repensar (sin implementar todavia) la animacion de "Copiado al portapapeles": no le gusta el difuminado actual y quiere que el aviso aparezca tapando el elemento copiado (overlay), no flotando arriba de el. Queda pendiente proponer un diseno nuevo en el proximo turno, sin tocar codigo hasta que lo apruebe.
 
 - Objetivo: 3 ajustes finos sobre la pantalla de pedido confirmado: boton de WhatsApp un poco menos ancho que "Listo"; sacar el titulo/subtitulo "Confirmar por WhatsApp / Opcional, para avisarnos directo."; y que el feedback de copiado (toast + difuminado) dure un poco menos y difumine menos fuerte.
 - Cambios: En `app/catalogo/page.js`: se elimino el bloque de titulo+subtitulo sobre el boton de WhatsApp. El boton paso de `width:100%` a `maxWidth:220` centrado con `margin:'0 auto'` (mas angosto que el "Listo" que tiene `maxWidth:260`). El timeout de "copiado" (codigo y texto de WhatsApp) bajo de 2000ms a 1300ms, sincronizado con la animacion CSS `.copied-toast`; el difuminado bajo de `blur(4px)`/opacidad 0.4 a `blur(2px)`/opacidad 0.55 en ambos lugares.
