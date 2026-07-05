@@ -8,6 +8,16 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
+## 2026-07-05 14:03 -03:00 - ChatGPT Codex
+
+- Objetivo: Implementar la correccion para que el click en el margen exterior/gutter gris de Admin > Disenos suelte la seleccion.
+- Cambios: Se actualizo `app/admin/page.js` para conectar `clearDesignSelectionOutsideCards` tambien al wrapper general `s.wrap`, que cubre el fondo gris fuera de `.adm-content`. Se conserva el handler existente en `.adm-content` y la logica de click dentro de una card seleccionada sigue igual.
+- Verificacion: `node --check app\admin\page.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes/esperables.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. Se confirmo que el ultimo commit local era de Claude (`7ba7deb`) sobre el popup de Google y que el arbol tracked estaba limpio antes de editar; solo quedaron fuera de scope `Inkora.PrintBridge.zip` y `Messi 2.3mf`. Se contrasto el diagnostico anterior: `.adm-content` no cubria el gutter gris porque `s.content` mide 90% y queda centrado dentro de `s.wrap`.
+- Pendiente/Riesgos: Probar manualmente en produccion click en el gutter gris izquierdo/derecho de Admin > Disenos con una seleccion activa.
+
+---
+
 ## 2026-07-05 -03:00 - Claude Sonnet 5
 
 - Objetivo: El popup de "Iniciar sesion con Google" a veces se quedaba trabado en "Iniciando sesion..." para siempre, aunque la sesion ya se hubiera iniciado (confirmado: cerrando el popup a mano se veia todo ya logueado).

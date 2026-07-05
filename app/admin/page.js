@@ -5149,7 +5149,11 @@ useEffect(() => {
   return (
     <DesignsProvider designs={designs}>
     <PwaUpdateManager />
-    <div style={s.wrap} data-admin-theme={adminDarkMode ? 'dark' : 'light'}>
+    <div
+      style={s.wrap}
+      data-admin-theme={adminDarkMode ? 'dark' : 'light'}
+      onClick={clearDesignSelectionOutsideCards}
+    >
       {adminDarkMode && (
         <style dangerouslySetInnerHTML={{__html: `
           [data-admin-theme="dark"] input,
