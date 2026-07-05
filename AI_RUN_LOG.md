@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-05 18:51 -03:00 - ChatGPT Codex
+
+- Objetivo: Quitar la edicion de plantillas de email desde Admin y dejar una pestaña solo de vista previa de los formatos de emails.
+- Cambios: Se reemplazo `components/EmailsTab.js` por un visor de solo lectura con previews de pedido interno, confirmacion de pedido al cliente, confirmacion de cuenta y reset de contrasena. En `app/api/send-email/route.js` se dejo de cargar plantillas custom desde `settings`, para que los emails de pedido usen el formato fijo del codigo aunque existan configuraciones viejas guardadas.
+- Verificacion: `node --check components/EmailsTab.js` OK; `node --check app/api/send-email/route.js` OK; `git diff --check` OK con aviso CRLF; `npm.cmd run build` OK con warnings preexistentes.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. La ultima entrada relevante era de Claude sobre ajustes visuales en Catalogo, sin conflicto con Emails. Se detecto que `components/EmailsTab.js` existia localmente pero no estaba trackeado, por eso se incluye como archivo nuevo de este turno.
+- Pendiente/Riesgos: Probar manualmente Admin > Emails en desktop/mobile y confirmar que la vista comunica correctamente que los emails de Supabase Auth se administran fuera del admin.
+
 Formato obligatorio:
 
 ## 2026-07-05 -03:00 - Claude Sonnet 5 (v10)

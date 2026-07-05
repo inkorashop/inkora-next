@@ -1,39 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib/order-pricing';
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-}
-
-async function loadEmailTemplates() {
-  try {
-    const sb = getAdminClient();
-    if (!sb) return {};
-    const { data } = await sb.from('settings').select('key,value').in('key', [
-      'email_template_admin', 'email_template_client',
-      'email_subject_admin', 'email_subject_client',
-    ]);
-    if (!data) return {};
-    return Object.fromEntries(data.map(r => [r.key, r.value]));
-  } catch { return {}; }
-}
-
-function applyTemplate(html, vars) {
-  return html
-    .replace(/\{\{orderCode\}\}/g, vars.orderCode || '')
-    .replace(/\{\{customerName\}\}/g, vars.customerName || '')
-    .replace(/\{\{customerEmail\}\}/g, vars.customerEmail || '')
-    .replace(/\{\{customerPhone\}\}/g, vars.customerPhone || '')
-    .replace(/\{\{sellerName\}\}/g, vars.sellerName || '')
-    .replace(/\{\{notes\}\}/g, vars.notes || '')
-    .replace(/\{\{fecha\}\}/g, vars.fecha || '')
-    .replace(/\{\{itemsTable\}\}/g, vars.itemsTable || '')
-    .replace(/\{\{totalSection\}\}/g, vars.totalSection || '');
-}
 
 function escapeCSV(value) {
   if (value === null || value === undefined) return '';
@@ -155,7 +121,7 @@ export async function POST(request) {
       totalSection,
     };
 
-    const customTemplates = await loadEmailTemplates();
+    const customTemplates = {};
 
     const defaultAdminHtml = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#2d3352">
