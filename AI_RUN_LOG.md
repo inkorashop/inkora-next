@@ -8,7 +8,13 @@ Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
 Formato obligatorio:
 
-## 2026-07-05 -03:00 - Claude Sonnet 5 (v5)
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v6)
+
+- Objetivo: 3 ajustes finos sobre la pantalla de pedido confirmado: boton de WhatsApp un poco menos ancho que "Listo"; sacar el titulo/subtitulo "Confirmar por WhatsApp / Opcional, para avisarnos directo."; y que el feedback de copiado (toast + difuminado) dure un poco menos y difumine menos fuerte.
+- Cambios: En `app/catalogo/page.js`: se elimino el bloque de titulo+subtitulo sobre el boton de WhatsApp. El boton paso de `width:100%` a `maxWidth:220` centrado con `margin:'0 auto'` (mas angosto que el "Listo" que tiene `maxWidth:260`). El timeout de "copiado" (codigo y texto de WhatsApp) bajo de 2000ms a 1300ms, sincronizado con la animacion CSS `.copied-toast`; el difuminado bajo de `blur(4px)`/opacidad 0.4 a `blur(2px)`/opacidad 0.55 en ambos lugares.
+- Verificacion: `npx eslint`/`npx next build` sin errores.
+- Auditoria: N/A (ajustes de diseno acordados explicitamente).
+- Pendiente/Riesgos: Ninguno esperado.
 
 - Objetivo: 4 ajustes sobre la pantalla de pedido confirmado: (1) icono de copiar mas visible y cambiado al iconico "dos cuadraditos superpuestos"; (2) los textos "Codigo de tu pedido:" y "Te enviamos la confirmacion a tu email." menos protagonicos (gris); (3) boton de "Confirmar por WhatsApp" mas grande, centrado en su seccion, con el icono de WhatsApp; (4) el texto de email de confirmacion solo debe aparecer si el pedido realmente va a mandar ese email.
 - Cambios: En `app/catalogo/page.js`: se reemplazo el icono tipo "clipboard con broche" por el icono estandar de copiar (dos rectangulos superpuestos), subiendo tamano (15→19px) y opacidad en reposo (0.4→0.6), en los dos lugares (codigo de pedido y recuadro de WhatsApp). Los dos textos secundarios pasan a `color:'#9aa3bc'`. El boton de WhatsApp se reescribio: `width:100%`, centrado, `padding` mas grande, `fontSize:15`, y el path SVG real de WhatsApp (el mismo que ya se usaba en el boton flotante) adentro. El texto "Te enviamos la confirmacion..." ahora esta condicionado a `profile?.send_confirmation_email !== false` — el mismo flag que ya se usa para decidir si `/api/send-email` manda el mail al cliente (`sendConfirmation: profile?.send_confirmation_email !== false` en la funcion de envio), asi el texto nunca miente sobre si se mando o no el email.

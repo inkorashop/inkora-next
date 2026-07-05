@@ -1553,7 +1553,7 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
         .limit-toast-closing { animation: limit-toast-out 180ms ease-in forwards; }
         .limit-toast-bump { animation: limit-toast-bump 420ms cubic-bezier(.2,.8,.2,1), limit-toast-breathe 3.4s ease-in-out 420ms infinite; }
         @keyframes copied-toast-pop { 0% { opacity: 0; transform: translate(-50%, 4px) scale(0.94); } 14% { opacity: 1; transform: translate(-50%, 0) scale(1); } 82% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -6px) scale(0.98); } }
-        .copied-toast { animation: copied-toast-pop 2000ms cubic-bezier(.2,.8,.2,1) forwards; }
+        .copied-toast { animation: copied-toast-pop 1300ms cubic-bezier(.2,.8,.2,1) forwards; }
         input::placeholder { color: rgba(255,255,255,0.6); }
         .desktop-search-input::placeholder { color: rgba(255,255,255,0.5); }
         .qty-input::placeholder { color: #9aa3bc; }
@@ -2267,10 +2267,10 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                 <p style={{color:'#9aa3bc', fontSize:13}}>Codigo de tu pedido:</p>
                 <div
                   title="Click para copiar"
-                  onClick={() => { navigator.clipboard.writeText(orderCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); }}
+                  onClick={() => { navigator.clipboard.writeText(orderCode); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 1300); }}
                   style={{...s.successCode, display: 'inline-block', position: 'relative', cursor: 'pointer', borderRadius: 8, padding: '2px 36px 2px 10px', transition: 'background 0.2s', background: codeCopied ? '#dcfce7' : 'transparent'}}
                 >
-                  <span style={{filter: codeCopied ? 'blur(4px)' : 'none', opacity: codeCopied ? 0.4 : 1, transition: 'filter 0.25s ease, opacity 0.25s ease', color: codeCopied ? '#15803d' : s.successCode.color}}>
+                  <span style={{filter: codeCopied ? 'blur(2px)' : 'none', opacity: codeCopied ? 0.55 : 1, transition: 'filter 0.25s ease, opacity 0.25s ease', color: codeCopied ? '#15803d' : s.successCode.color}}>
                     {orderCode}
                   </span>
                   <span style={{position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', display: 'flex', opacity: codeCopied ? 1 : 0.6, color: codeCopied ? '#15803d' : s.successCode.color, transition: 'opacity 0.2s ease, color 0.2s ease'}}>
@@ -2300,16 +2300,12 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                   return (
                     <div style={{marginTop:22, borderTop:'1.5px solid #eef0f6', paddingTop:18, textAlign:'left'}}>
                       <div style={{background:'#f8fdf9', border:'1.5px solid #c7f4d8', borderRadius:12, padding:16}}>
-                        <div style={{textAlign:'center', marginBottom:12}}>
-                          <div style={{fontSize:13, fontWeight:800, color:'#15803d'}}>Confirmar por WhatsApp</div>
-                          <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>Opcional, para avisarnos directo.</div>
-                        </div>
                         <a
                           href={"https://wa.me/" + waNumber + "?text=" + encodeURIComponent(waText)}
                           target="_blank"
                           rel="noreferrer"
                           onClick={closeModal}
-                          style={{...s.btnWaConfirm, width:'100%', justifyContent:'center', marginTop:0, padding:'13px 20px', borderRadius:11, background:'#25D366', color:'white', border:'none', fontSize:15, fontWeight:800, boxShadow:'0 8px 20px rgba(37,211,102,0.30)'}}
+                          style={{...s.btnWaConfirm, display:'flex', width:'100%', maxWidth:220, margin:'0 auto', justifyContent:'center', padding:'13px 20px', borderRadius:11, background:'#25D366', color:'white', border:'none', fontSize:15, fontWeight:800, boxShadow:'0 8px 20px rgba(37,211,102,0.30)'}}
                         >
                           <svg viewBox="0 0 24 24" width="20" height="20" fill="white">
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -2319,10 +2315,10 @@ const waNumber = rawWA.startsWith('549') ? rawWA : `549${rawWA}`;
                         </a>
                         <div
                           title="Click para copiar"
-                          onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000); }}
+                          onClick={() => { navigator.clipboard.writeText(waText); setWaCopied(true); setTimeout(() => setWaCopied(false), 1300); }}
                           style={{marginTop:12, position:'relative', background: waCopied ? '#dcfce7' : 'white', border: waCopied ? '1.5px solid #18a36a' : '1.5px dashed #bbf7d0', borderRadius:10, padding:'10px 34px 10px 12px', cursor:'pointer', transition:'background 0.2s, border 0.2s'}}
                         >
-                          <div style={{fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto', filter: waCopied ? 'blur(4px)' : 'none', opacity: waCopied ? 0.4 : 1, transition:'filter 0.25s ease, opacity 0.25s ease'}}>
+                          <div style={{fontSize:11, color:'#2d3352', whiteSpace:'pre-wrap', lineHeight:1.55, fontFamily:'monospace', maxHeight:190, overflowY:'auto', filter: waCopied ? 'blur(2px)' : 'none', opacity: waCopied ? 0.55 : 1, transition:'filter 0.25s ease, opacity 0.25s ease'}}>
                             {waText}
                           </div>
                           <span style={{position:'absolute', top:10, right:10, display:'flex', opacity: waCopied ? 1 : 0.6, color: waCopied ? '#15803d' : '#18a36a', transition:'opacity 0.2s ease, color 0.2s ease'}}>
