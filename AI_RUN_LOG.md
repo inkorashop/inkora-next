@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-05 19:42 -03:00 - ChatGPT Codex
+
+- Objetivo: Mejorar el responsive mobile de Produccion, confirmar que la PWA respete el orden de tabs configurado en Admin y que las tabs principales tengan iconos con menos separacion en mobile.
+- Cambios: En `components/ProductionTab.js` se ajusto Produccion para mobile: contenedor con altura/overflow flexible, sub-tabs con scroll horizontal compacto, tarjetas superiores de acceso/bridge en columna cuando corresponde, header del pedido y controles sin solaparse, resumen en grilla 2x2 y tabla de tareas con ancho minimo para evitar columnas pisadas. Se audito `app/admin/page.js` y ya estaba en `HEAD` con iconos SVG simples en tabs principales, menor espaciado mobile y sincronizacion del orden de tabs via `settings.admin_tab_order` + migracion desde `localStorage`.
+- Verificacion: `npx.cmd eslint app/admin/page.js components/ProductionTab.js --quiet` OK. `npm.cmd run build` OK, con warnings preexistentes de `<img>` y dependencias de hooks en archivos no relacionados.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`; el arbol solo tenia sin trackear `Inkora.PrintBridge.zip` y `Messi 2.3mf`. Se reviso la entrada anterior de Claude sobre emails y no habia conflicto con Produccion/Admin tabs.
+- Pendiente/Riesgos: Validar visualmente en un celular/PWA real que el scroll horizontal de la tabla de tareas sea comodo; no se tocaron las cantidades ni la logica de impresion.
+
 ## 2026-07-05 -03:00 - Claude Sonnet 5 (v13)
 
 - Objetivo: Agregar un boton "Ver pedido" al email de notificacion interna (el que llega a inkorashop@gmail.com por cada pedido nuevo) que lleve directo al detalle de ese pedido en Admin. Si quien lo abre no tiene sesion de admin, el login normal de la app se encarga de pedirselo (no hizo falta nada especial para eso).

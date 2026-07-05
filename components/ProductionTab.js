@@ -1749,7 +1749,7 @@ export default function ProductionTab({
         : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 10, height: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', minHeight: 0 }}>
       {errorMessage && (
         <div style={{ background: '#fff5f5', border: '1.5px solid #fecaca', color: '#b91c1c', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>
           {errorMessage}
@@ -1757,7 +1757,7 @@ export default function ProductionTab({
       )}
 
       {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflowX: 'auto', overflowY: 'hidden', alignSelf: isMobile ? 'stretch' : 'flex-start', flexShrink: 0, WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         {[
           ['produce', 'Producir'],
           ['orders', 'Pedidos'],
@@ -1766,7 +1766,7 @@ export default function ProductionTab({
           ['operators', 'Operarios'],
         ].map(([id, label]) => (
           <button key={id} onClick={() => changeSubTab(id)}
-            style={{ border: 'none', padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef' }}>
+            style={{ border: 'none', padding: isMobile ? '6px 10px' : '5px 14px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef', flex: '0 0 auto', whiteSpace: 'nowrap' }}>
             {label}
           </button>
         ))}
@@ -1774,7 +1774,7 @@ export default function ProductionTab({
 
       {activeSubTab === 'produce' && (
         <>
-          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ background: 'white', border: '1.5px solid #dde1ef', borderRadius: 10, padding: isMobile ? '8px 10px' : '5px 10px', display: 'flex', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5 }}>Acceso operarios</div>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>inkora.com.ar/produccion</div>
@@ -1782,16 +1782,16 @@ export default function ProductionTab({
             <button
               type="button"
               onClick={shareOperatorAccessLink}
-              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: operatorLinkFeedback ? '#e8f7ef' : '#f8faff', color: operatorLinkFeedback ? '#15803d' : '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap' }}
+              style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: operatorLinkFeedback ? '#e8f7ef' : '#f8faff', color: operatorLinkFeedback ? '#15803d' : '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', width: isMobile ? '100%' : 'auto' }}
             >
               {operatorLinkFeedback || 'Compartir acceso'}
             </button>
           </div>
 
           {/* ── Impresora (izq) + Bridge (der) ── */}
-          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: 'white', border: `1.5px solid ${bridgeTone.border}`, borderRadius: 10, padding: isMobile ? '8px 10px' : '5px 10px', display: 'flex', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? 8 : 8, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
             {/* Left: Impresora */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Impresora</div>
               {bridgeStatus.state === 'connected' && bridgePrinters.length > 0 ? (
                 <>
@@ -1843,10 +1843,10 @@ export default function ProductionTab({
             </div>
 
             {/* Divider */}
-            <span style={{ width: 1, height: 18, background: '#dde1ef', flexShrink: 0, margin: '0 2px' }} />
+            <span style={{ width: isMobile ? '100%' : 1, height: isMobile ? 1 : 18, background: '#dde1ef', flexShrink: 0, margin: isMobile ? '0' : '0 2px' }} />
 
             {/* Right: Bridge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 0 }}>Bridge</div>
               <span style={{ background: bridgeTone.bg, color: bridgeTone.color, border: `1px solid ${bridgeTone.border}`, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
                 {bridgeTone.label}
@@ -1950,9 +1950,9 @@ export default function ProductionTab({
             </div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: isMobile && !selectedProductionOrderId ? 'none' : 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: isMobile && !selectedProductionOrderId ? 'none' : 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ padding: isMobile ? '10px 12px' : '7px 12px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: isMobile ? 8 : 10, alignItems: isMobile ? 'stretch' : 'flex-start', flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {isMobile && (
@@ -1960,7 +1960,7 @@ export default function ProductionTab({
                     )}
                     <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
                   </div>
-                  <h2 style={{ fontSize: 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2 }}>
+                  <h2 style={{ fontSize: isMobile ? 18 : 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2, lineHeight: 1.05, wordBreak: 'break-word' }}>
                     {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : '—'}
                   </h2>
                   {selectedOrderRow && (
@@ -1981,19 +1981,19 @@ export default function ProductionTab({
                     </div>
                   )}
                   {/* Always render both lines so header height is constant across orders */}
-                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.itemsSummary || ''}>{selectedOrderRow?.itemsSummary || ''}</div>
-                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.notes || ''}>{selectedOrderRow?.notes || ''}</div>
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, whiteSpace: isMobile ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.itemsSummary || ''}>{selectedOrderRow?.itemsSummary || ''}</div>
+                  <div style={{ fontSize: 11, color: '#8b95b3', marginTop: 1, fontStyle: 'italic', whiteSpace: isMobile ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minHeight: '1.3em' }} title={selectedOrderRow?.notes || ''}>{selectedOrderRow?.notes || ''}</div>
                 </div>
                 {selectedOrderRow && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: isMobile ? 'stretch' : 'flex-end', alignItems: 'center', flexShrink: 0, width: isMobile ? '100%' : 'auto' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3', width: isMobile ? '100%' : 'auto' }}>
                       {orderPdfStatus.message}
                     </span>
                     <button
                       type="button"
                       onClick={() => matchSelectedOrderPdfs({ scan: true })}
                       disabled={orderPdfBusy || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
                     >
                       {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
                     </button>
@@ -2002,7 +2002,7 @@ export default function ProductionTab({
                         type="button"
                         onClick={printAllOrderTasks}
                         disabled={Object.values(printingTasks).some(Boolean) || !bridgeToken.trim()}
-                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif' }}
+                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
                       >
                         Imprimir todo
                       </button>
@@ -2011,7 +2011,7 @@ export default function ProductionTab({
                       value={selectedOrderRow.operator_id || ''}
                       onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
                       disabled={Boolean(assigningOperatorIds[selectedOrderRow.id])}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: 160, minWidth: 160 }}
+                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: isMobile ? '100%' : 160, minWidth: isMobile ? 0 : 160, flex: isMobile ? '1 1 100%' : '0 0 auto' }}
                     >
                       <option value="">Sin operario</option>
                       {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
@@ -2026,7 +2026,7 @@ export default function ProductionTab({
             ) : (
               <>
                 {/* Summary totals */}
-                <div style={{ display: 'flex', gap: 6, padding: '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 6, padding: isMobile ? '8px' : '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
                   {[
                     { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
                     { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
@@ -2035,9 +2035,9 @@ export default function ProductionTab({
                   ].map(({ label, value, color, bg, border, showBar }) => {
                     const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
                     return (
-                      <div key={label} style={{ flex: 1, background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: '4px 8px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', opacity: 0.75 }}>{label}</span>
+                      <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '7px 9px' : '4px 8px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
+                          <span style={{ fontSize: isMobile ? 9 : 9, fontWeight: 900, color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
                           <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1 }}>{value}</span>
                           {showBar && <span style={{ fontSize: 10, fontWeight: 700, color, opacity: 0.55 }}>{pct}%</span>}
                         </div>
@@ -2049,8 +2049,8 @@ export default function ProductionTab({
                   })}
                 </div>
 
-                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ width: '100%', minWidth: isMobile ? 820 : 0, borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       {/* Producto */}<col style={{ width: 95 }} />
                       {/* Diseño  */}<col />
