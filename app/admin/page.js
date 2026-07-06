@@ -9532,7 +9532,9 @@ useEffect(() => {
             supabase={supabase}
             products={products}
             sellers={sellers}
+            users={users}
             orders={activeOrders}
+            carts={carts}
             activeSubtab={trackingSubtab}
             onChangeSubtab={setTrackingSubtab}
           />
@@ -10281,9 +10283,10 @@ function VersionSnapshotViewerModal({ viewer, onClose }) {
   );
 }
 
-function StatsTab({ supabase, sellers, orders = [] }) {
+function StatsTab({ supabase, sellers, users = [], orders = [], carts = [] }) {
   const [loading, setLoading] = React.useState(true);
   const [sellerFilter, setSellerFilter] = React.useState('all');
+  const [clientFilter, setClientFilter] = React.useState('all');
   const [datePreset, setDatePreset] = React.useState('all');
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
@@ -10324,20 +10327,57 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   }, [supabase]);
 
   const [from, to] = getDateRange();
+  const sellerById = new Map((sellers || []).map(s => [s.id, s]));
+  const userById = new Map((users || []).map(u => [u.id, u]));
+
+  function getOrderClientKey(order) {
+    const email = String(order?.customer_email || '').trim().toLowerCase();
+    const name = String(order?.customer_name || '').trim().toLowerCase();
+    return email || name || 'sin_cliente';
+  }
+
+  function getOrderClientLabel(order) {
+    const name = String(order?.customer_name || '').trim();
+    const email = String(order?.customer_email || '').trim();
+    if (name && email) return `${name} · ${email}`;
+    return name || email || 'Sin cliente';
+  }
+
+  function getCartClientKey(cart) {
+    const user = userById.get(cart?.user_id);
+    const email = String(cart?.user_email || cart?.customer_email || user?.email || '').trim().toLowerCase();
+    const name = String(cart?.user_name || cart?.customer_name || user?.name || '').trim().toLowerCase();
+    return email || name || 'sin_cliente';
+  }
+
+  const clientOptions = Object.values((orders || []).reduce((acc, order) => {
+    const key = getOrderClientKey(order);
+    if (!acc[key]) acc[key] = { key, label: getOrderClientLabel(order), count: 0 };
+    acc[key].count += 1;
+    return acc;
+  }, {})).sort((a, b) => a.label.localeCompare(b.label, 'es'));
+
+  function passesEntityFilters(order) {
+    if (sellerFilter !== 'all' && (order.seller_id || null) !== (sellerFilter === 'none' ? null : sellerFilter)) return false;
+    if (clientFilter !== 'all' && getOrderClientKey(order) !== clientFilter) return false;
+    return true;
+  }
 
   const filtered = orders.filter(o => {
-    if (sellerFilter !== 'all' && (o.seller_id || null) !== (sellerFilter === 'none' ? null : sellerFilter)) return false;
+    if (!passesEntityFilters(o)) return false;
     if (from && new Date(o.created_at) < from) return false;
     if (to && new Date(o.created_at) > to) return false;
     return true;
   });
 
   const totalOrders = filtered.length;
-  const totalRevenue = filtered.reduce((s, o) => s + (Number(o.total) || 0), 0);
-  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const allItems = filtered.flatMap(o => Array.isArray(o.items) ? o.items : []);
+  const validOrders = filtered.filter(o => o.status !== 'cancelled');
+  const cancelledOrders = filtered.length - validOrders.length;
+  const totalRevenue = validOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const avgTicket = validOrders.length > 0 ? totalRevenue / validOrders.length : 0;
+  const allItems = validOrders.flatMap(o => Array.isArray(o.items) ? o.items : []);
   const totalUnits = allItems.reduce((s, i) => s + (Number(i.qty) || 0), 0);
-  const avgUnitsPerOrder = totalOrders > 0 ? totalUnits / totalOrders : 0;
+  const avgUnitsPerOrder = validOrders.length > 0 ? totalUnits / validOrders.length : 0;
 
   const byStatus = { pending: 0, confirmed: 0, in_production: 0, ready: 0, cancelled: 0 };
   filtered.forEach(o => { if (byStatus[o.status] !== undefined) byStatus[o.status]++; });
@@ -10346,7 +10386,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
   const designMap = {};
 
-  filtered.forEach(order => {
+  validOrders.forEach(order => {
     const orderItems = Array.isArray(order.items) ? order.items : [];
 
     orderItems.forEach(item => {
@@ -10370,8 +10410,10 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   const productMap = {};
   allItems.forEach(i => {
     const name = i.productName || 'Sin producto';
-    if (!productMap[name]) productMap[name] = { name, qty: 0 };
+    if (!productMap[name]) productMap[name] = { name, qty: 0, revenue: 0 };
     productMap[name].qty += Number(i.qty) || 0;
+    const pricing = getOrderItemPricing(i);
+    productMap[name].revenue += pricing.hasPrice ? Number(pricing.subtotal) || 0 : 0;
   });
   const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty);
 
@@ -10387,6 +10429,61 @@ function StatsTab({ supabase, sellers, orders = [] }) {
 
   const uniqueEmails = new Set(filtered.map(o => o.customer_email).filter(Boolean));
   const recurringEmails = [...uniqueEmails].filter(e => filtered.filter(o => o.customer_email === e).length > 1);
+  const recurringRate = uniqueEmails.size > 0 ? (recurringEmails.length / uniqueEmails.size) * 100 : 0;
+
+  const sourceStats = Object.values(filtered.reduce((acc, order) => {
+    const source = order.source || 'web';
+    const label = source === 'admin' ? 'Admin' : source === 'web' ? 'Web' : source;
+    if (!acc[source]) acc[source] = { key: source, label, orders: 0, revenue: 0 };
+    acc[source].orders += 1;
+    if (order.status !== 'cancelled') acc[source].revenue += Number(order.total) || 0;
+    return acc;
+  }, {})).sort((a, b) => b.orders - a.orders);
+
+  const sellerStats = Object.values(filtered.reduce((acc, order) => {
+    const key = order.seller_id || 'none';
+    const seller = sellerById.get(order.seller_id);
+    if (!acc[key]) acc[key] = { key, name: seller?.name || 'Sin vendedor', orders: 0, validOrders: 0, revenue: 0, units: 0 };
+    acc[key].orders += 1;
+    if (order.status !== 'cancelled') {
+      acc[key].validOrders += 1;
+      acc[key].revenue += Number(order.total) || 0;
+      acc[key].units += (Array.isArray(order.items) ? order.items : []).reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    }
+    return acc;
+  }, {})).map(row => ({
+    ...row,
+    avgTicket: row.validOrders > 0 ? row.revenue / row.validOrders : 0,
+  })).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+
+  function summarizeRange(start, end) {
+    const rangeOrders = (orders || []).filter(order => {
+      if (!passesEntityFilters(order)) return false;
+      const created = new Date(order.created_at);
+      return created >= start && created < end;
+    });
+    const rangeValidOrders = rangeOrders.filter(order => order.status !== 'cancelled');
+    return {
+      orders: rangeOrders.length,
+      revenue: rangeValidOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+    };
+  }
+
+  function pctChange(current, previous) {
+    if (previous === 0) return current === 0 ? '0%' : '+100%';
+    const value = ((current - previous) / previous) * 100;
+    return `${value >= 0 ? '+' : ''}${Math.round(value)}%`;
+  }
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const fourteenDaysAgo = new Date(now); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const last7 = summarizeRange(sevenDaysAgo, now);
+  const prev7 = summarizeRange(fourteenDaysAgo, sevenDaysAgo);
+  const last30 = summarizeRange(thirtyDaysAgo, now);
+  const prev30 = summarizeRange(sixtyDaysAgo, thirtyDaysAgo);
 
   const filteredActivity = activityEvents.filter(e => {
     if (from && new Date(e.created_at) < from) return false;
@@ -10445,10 +10542,41 @@ function StatsTab({ supabase, sellers, orders = [] }) {
     acc[page] = (acc[page] || 0) + 1;
     return acc;
   }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const catalogVisits = filteredActivity.filter(e => e.event_type === 'page_view' || e.event_type === 'catalog_view' || String(e.page || '').includes('catalogo')).length;
   const searchCount = filteredActivity.filter(e => e.event_type === 'design_search').length;
   const cartAdds = filteredActivity.filter(e => e.event_type === 'cart_add').length;
   const checkoutStarts = filteredActivity.filter(e => e.event_type === 'checkout_start').length;
   const confirmedOrders = filteredActivity.filter(e => e.event_type === 'order_confirm').length;
+  const visitToCartRate = catalogVisits > 0 ? (cartAdds / catalogVisits) * 100 : 0;
+  const checkoutToOrderRate = checkoutStarts > 0 ? (confirmedOrders / checkoutStarts) * 100 : 0;
+
+  function cartItemValue(item) {
+    const qty = Number(item?.qty) || 0;
+    const subtotal = Number(item?.subtotal ?? item?.total ?? 0);
+    if (subtotal > 0) return subtotal;
+    const unit = Number(item?.pricePerUnit ?? item?.price_per_unit ?? item?.price ?? 0);
+    return unit * qty;
+  }
+
+  const filteredCarts = (carts || []).filter(cart => {
+    const items = Array.isArray(cart.items) ? cart.items : [];
+    if (!items.some(item => Number(item?.qty) > 0)) return false;
+    if (clientFilter !== 'all' && getCartClientKey(cart) !== clientFilter) return false;
+    const cartDate = new Date(cart.updated_at || cart.created_at || 0);
+    if (from && cartDate < from) return false;
+    if (to && cartDate > to) return false;
+    return true;
+  });
+  const cartItems = filteredCarts.flatMap(cart => Array.isArray(cart.items) ? cart.items : []);
+  const cartUnits = cartItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0);
+  const cartEstimatedValue = cartItems.reduce((sum, item) => sum + cartItemValue(item), 0);
+  const abandonedProducts = Object.values(cartItems.reduce((acc, item) => {
+    const name = item?.productName || item?.product_name || 'Sin producto';
+    if (!acc[name]) acc[name] = { name, qty: 0, value: 0 };
+    acc[name].qty += Number(item?.qty) || 0;
+    acc[name].value += cartItemValue(item);
+    return acc;
+  }, {})).sort((a, b) => b.qty - a.qty).slice(0, 6);
 
   const formatDuration = (ms) => {
     const mins = Math.floor(ms / 60000);
@@ -10471,6 +10599,14 @@ function StatsTab({ supabase, sellers, orders = [] }) {
             <option value="all">Todos</option>
             <option value="none">Sin vendedor</option>
             {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Cliente</div>
+          <select value={clientFilter} onChange={e => setClientFilter(e.target.value)}
+            style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '6px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', maxWidth: 260 }}>
+            <option value="all">Todos</option>
+            {clientOptions.map(client => <option key={client.key} value={client.key}>{client.label} ({client.count})</option>)}
           </select>
         </div>
         <div>
@@ -10505,18 +10641,75 @@ function StatsTab({ supabase, sellers, orders = [] }) {
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         {[
           { label: 'Pedidos', value: totalOrders },
-          { label: 'Facturación total', value: '$' + totalRevenue.toLocaleString('es-AR') },
-          { label: 'Ticket promedio', value: '$' + Math.round(avgTicket).toLocaleString('es-AR') },
+          { label: 'Pedidos válidos', value: validOrders.length },
+          { label: 'Cancelados', value: cancelledOrders },
+          { label: 'Facturación válida', value: formatOrderMoney(totalRevenue) },
+          { label: 'Ticket promedio', value: formatOrderMoney(Math.round(avgTicket)) },
           { label: 'Unidades totales', value: totalUnits.toLocaleString('es-AR') },
           { label: 'Prom. unidades/pedido', value: avgUnitsPerOrder.toFixed(1) },
           { label: 'Clientes únicos', value: uniqueEmails.size },
           { label: 'Clientes recurrentes', value: recurringEmails.length },
+          { label: '% recurrentes', value: `${Math.round(recurringRate)}%` },
         ].map(({ label, value }) => (
           <div key={label} style={metricCard}>
             <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: '#1B2F5E' }}>{value}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+        {[
+          { label: 'Últimos 7 días', current: last7, previous: prev7 },
+          { label: 'Últimos 30 días', current: last30, previous: prev30 },
+        ].map(({ label, current, previous }) => (
+          <div key={label} style={card}>
+            <div style={{ fontSize: 11, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#1B2F5E' }}>{current.orders}</div>
+                <div style={{ fontSize: 11, color: '#5a6380', fontWeight: 700 }}>pedidos <span style={{ color: current.orders >= previous.orders ? '#15803d' : '#dc2626' }}>{pctChange(current.orders, previous.orders)}</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#1B2F5E' }}>{formatOrderMoney(current.revenue)}</div>
+                <div style={{ fontSize: 11, color: '#5a6380', fontWeight: 700 }}>facturación <span style={{ color: current.revenue >= previous.revenue ? '#15803d' : '#dc2626' }}>{pctChange(current.revenue, previous.revenue)}</span></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Pedidos por fuente</div>
+          {sourceStats.length === 0 ? <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sourceStats.map(source => (
+                <div key={source.key} style={{ display: 'grid', gridTemplateColumns: '1fr 58px 92px', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ color: '#2d3352', fontWeight: 800 }}>{source.label}</span>
+                  <span style={{ color: '#1B2F5E', fontWeight: 900, textAlign: 'right' }}>{source.orders}</span>
+                  <span style={{ color: '#15803d', fontWeight: 800, textAlign: 'right' }}>{formatOrderMoney(source.revenue)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 14 }}>Vendedores</div>
+          {sellerStats.length === 0 ? <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin datos</div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sellerStats.map(row => (
+                <div key={row.key} style={{ display: 'grid', gridTemplateColumns: '1fr 54px 92px 92px', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ color: '#2d3352', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                  <span style={{ color: '#5a6380', textAlign: 'right' }}>{row.orders} ped.</span>
+                  <span style={{ color: '#15803d', fontWeight: 800, textAlign: 'right' }}>{formatOrderMoney(row.revenue)}</span>
+                  <span style={{ color: '#1B2F5E', fontWeight: 800, textAlign: 'right' }}>{formatOrderMoney(Math.round(row.avgTicket))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -10537,9 +10730,12 @@ function StatsTab({ supabase, sellers, orders = [] }) {
                 { label: 'Eventos', value: filteredActivity.length },
                 { label: 'Tiempo total', value: formatDuration(totalConnectionMs) },
                 { label: 'Prom. conexión', value: formatDuration(avgConnectionMs) },
+                { label: 'Visitas catálogo', value: catalogVisits },
                 { label: 'Búsquedas', value: searchCount },
                 { label: 'Agregados carrito', value: cartAdds },
                 { label: 'Checkout → pedido', value: `${confirmedOrders}/${checkoutStarts}` },
+                { label: 'Visita → carrito', value: `${Math.round(visitToCartRate)}%` },
+                { label: '% checkout cerrado', value: `${Math.round(checkoutToOrderRate)}%` },
               ].map(({ label, value }) => (
                 <div key={label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 8, padding: '10px 12px', minWidth: 0 }}>
                   <div style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
@@ -10576,6 +10772,40 @@ function StatsTab({ supabase, sellers, orders = [] }) {
             </div>
           </>
         )}
+      </div>
+
+      <div style={{ ...card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', marginBottom: 10 }}>Carritos abandonados</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+            {[
+              { label: 'Carritos', value: filteredCarts.length },
+              { label: 'Unidades', value: cartUnits.toLocaleString('es-AR') },
+              { label: 'Valor estimado', value: formatOrderMoney(cartEstimatedValue) },
+            ].map(item => (
+              <div key={item.label} style={{ background: '#f7f8fc', border: '1px solid #eef0f6', borderRadius: 8, padding: '9px 10px' }}>
+                <div style={{ fontSize: 10, color: '#9aa3bc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4 }}>{item.label}</div>
+                <div style={{ fontSize: 18, color: '#1B2F5E', fontWeight: 900, marginTop: 2 }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#5a6380', marginBottom: 10 }}>Productos más abandonados</div>
+          {abandonedProducts.length === 0 ? (
+            <div style={{ color: '#9aa3bc', fontSize: 13 }}>Sin carritos para este filtro.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {abandonedProducts.map(product => (
+                <div key={product.name} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 92px', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                  <span style={{ color: '#2d3352', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</span>
+                  <span style={{ color: '#1B2F5E', fontWeight: 900, textAlign: 'right' }}>{product.qty}u</span>
+                  <span style={{ color: '#15803d', fontWeight: 800, textAlign: 'right' }}>{formatOrderMoney(product.value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={card}>
@@ -10620,7 +10850,10 @@ function StatsTab({ supabase, sellers, orders = [] }) {
                       <div style={{ height: 4, background: '#2D6BE4', borderRadius: 2, width: `${(d.qty / topDesigns[0].qty) * 100}%` }} />
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E', minWidth: 30, textAlign: 'right' }}>{d.qty}u</span>
+                  <div style={{ minWidth: 78, textAlign: 'right' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E' }}>{d.qty}u</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#15803d' }}>{formatOrderMoney(d.revenue)}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -10640,7 +10873,10 @@ function StatsTab({ supabase, sellers, orders = [] }) {
                       <div style={{ height: 4, background: '#8b5cf6', borderRadius: 2, width: `${(p.qty / topProducts[0].qty) * 100}%` }} />
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1B2F5E', minWidth: 30, textAlign: 'right' }}>{p.qty}u</span>
+                  <div style={{ minWidth: 78, textAlign: 'right' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E' }}>{p.qty}u</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#15803d' }}>{formatOrderMoney(p.revenue)}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -10653,7 +10889,7 @@ function StatsTab({ supabase, sellers, orders = [] }) {
   );
 }
 
-function TrackingTab({ supabase, products, sellers, orders, activeSubtab, onChangeSubtab }) {
+function TrackingTab({ supabase, products, sellers, users, orders, carts, activeSubtab, onChangeSubtab }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -10684,7 +10920,7 @@ function TrackingTab({ supabase, products, sellers, orders, activeSubtab, onChan
       {activeSubtab === 'activity' ? (
         <HeatmapTab supabase={supabase} products={products} />
       ) : (
-        <StatsTab supabase={supabase} sellers={sellers} orders={orders} />
+        <StatsTab supabase={supabase} sellers={sellers} users={users} orders={orders} carts={carts} />
       )}
     </div>
   );

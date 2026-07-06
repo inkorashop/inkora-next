@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-06 09:35 -03:00 - ChatGPT Codex
+
+- Objetivo: Mejorar Admin > Seguimiento > Estadisticas con metricas realmente utiles, sin agregar filtro Activos/Archivados/Todos, y agregando filtro por cliente.
+- Cambios: En `app/admin/page.js` se amplio `StatsTab`: filtro por cliente, facturacion valida excluyendo pedidos cancelados, pedidos validos/cancelados, porcentaje de clientes recurrentes, comparativas ultimos 7/30 dias contra el periodo anterior, pedidos por fuente, ranking por vendedor, embudo basico de actividad, resumen de carritos abandonados y productos mas abandonados. Los rankings de productos/disenos ahora muestran unidades y monto. `TrackingTab` ahora pasa `users` y `carts` a Estadisticas para poder cruzar cliente/carritos.
+- Verificacion: `npx.cmd eslint app/admin/page.js --quiet` OK. `git diff --check` OK, solo aviso CRLF. `npm.cmd run build` OK; quedaron warnings preexistentes de `<img>` y dependencias de hooks en archivos no relacionados.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md` y `git status --short`. La ultima entrada relevante era de Claude sobre modales/carritos; se contrasto que esta tarea toca principalmente `StatsTab` en `app/admin/page.js`. El arbol solo tenia sin trackear `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: No se agrego SQL. Las estadisticas siguen usando solo `activeOrders`, como antes y como pidio el usuario al excluir el filtro de activos/archivados/todos. El valor estimado de carritos depende de que los items del carrito tengan precio unitario/subtotal guardado.
+
 ## 2026-07-06 -03:00 - Claude Sonnet 5 (v20)
 
 - Objetivo: El usuario reporto (con captura) que el modal de confirmacion del nuevo boton "Enviar recordatorio" (Admin > Carritos) mostraba texto de "¿Confirmar eliminación?" con boton rojo "Eliminar" — bug real: se reutilizo el modal generico `askConfirm` de Admin sin notar que tenia el titulo y el label del boton hardcodeados para borrado. Pidio revisar ese bug y "todo lo relacionado". Ademas, en paralelo, pidio una mejora general: que TODAS las ventanas/modales de admin y de la web publica se puedan cerrar con click afuera o con Escape.
