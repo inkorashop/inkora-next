@@ -73,14 +73,14 @@ const adminOrderActions = `
   <div style="text-align:center;padding:16px 24px;background:#f8faff;border:1px solid #dde1ef;border-top:none">
     <a href="#" style="display:inline-block;background:#2D6BE4;color:white;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;margin:4px;vertical-align:middle">
       <span style="display:inline-block;width:20px;height:20px;border-radius:999px;background:white;vertical-align:middle;margin-right:7px;text-align:center;line-height:20px">
-        <img src="https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png" alt="" width="14" height="14" style="display:inline-block;vertical-align:middle;border:0;max-width:14px;max-height:14px" />
+        <img src="https://www.inkora.com.ar/icons/icon-192.png" alt="" width="14" height="14" style="display:inline-block;vertical-align:middle;border:0;max-width:14px;max-height:14px" />
       </span>
       <span style="vertical-align:middle">Ir al pedido</span>
     </a>
-    <a href="#" style="display:inline-block;background:white;color:#1B2F5E;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;border:1.5px solid #2D6BE4;margin:4px;vertical-align:middle">
-      <span style="display:inline-block;position:relative;width:16px;height:16px;vertical-align:middle;margin-right:7px">
-        <span style="display:block;position:absolute;left:5px;top:2px;width:9px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px"></span>
-        <span style="display:block;position:absolute;left:1px;top:5px;width:9px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
+    <a href="#" style="display:inline-block;background:white;color:#1B2F5E;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;border:1.5px solid #1B2F5E;margin:4px;vertical-align:middle">
+      <span style="display:inline-block;position:relative;width:18px;height:18px;vertical-align:middle;margin-right:8px">
+        <span style="display:block;position:absolute;left:6px;top:2px;width:8px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
+        <span style="display:block;position:absolute;left:2px;top:6px;width:8px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
       </span>
       <span style="vertical-align:middle">Copiar pedido</span>
     </a>

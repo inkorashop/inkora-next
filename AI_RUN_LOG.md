@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-06 11:22 -03:00 - ChatGPT Codex
+
+- Objetivo: Ajustar los botones del email interno de nuevo pedido: usar el logo de INKORA del recurso publico del sitio y mejorar el icono/texto de "Copiar pedido"; revisar si se puede copiar directamente desde el email.
+- Cambios: En `app/api/send-email/route.js` se cambio el icono del boton "Ir al pedido" para usar `https://www.inkora.com.ar/icons/icon-192.png` en vez del logo del bucket. Se ajusto el boton "Copiar pedido" para mantener el texto exacto y mostrar un icono de dos cuadrados superpuestos mas reconocible. Se replico el mismo HTML visual en `components/EmailsTab.js` para que la preview coincida.
+- Verificacion: `node --check` OK en `app/api/send-email/route.js` y `components/EmailsTab.js`. `npx.cmd eslint app/api/send-email/route.js components/EmailsTab.js --quiet` OK. `git diff --check` OK, solo aviso CRLF. `npm.cmd run build` OK; quedaron warnings preexistentes de `<img>` y deps de hooks en archivos no relacionados.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md`, el skill de email y `git status --short`. La ultima entrada propia era la mejora de estadisticas ya commiteada/deployada. El arbol solo tenia sin trackear `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: No se puede copiar al portapapeles directamente desde un email de forma confiable porque los clientes de correo bloquean JavaScript; el boton sigue abriendo `/copiar-pedido`, que intenta copiar automaticamente y deja respaldo manual.
+
 ## 2026-07-06 09:35 -03:00 - ChatGPT Codex
 
 - Objetivo: Mejorar Admin > Seguimiento > Estadisticas con metricas realmente utiles, sin agregar filtro Activos/Archivados/Todos, y agregando filtro por cliente.

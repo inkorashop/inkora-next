@@ -3,7 +3,7 @@ import { formatOrderMoney, getOrderItemPricing, getOrderItemsTotal } from '@/lib
 import { buildWhatsAppConfirmationMessage } from '@/lib/order-confirmation-message';
 import { notifyOpsError } from '@/lib/error-alert';
 
-const INKORA_LOGO_URL = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
+const INKORA_LOGO_URL = 'https://www.inkora.com.ar/icons/icon-192.png';
 
 function escapeCSV(value) {
   if (value === null || value === undefined) return '';
@@ -174,10 +174,10 @@ export async function POST(request) {
           </span>
           <span style="vertical-align:middle">Ir al pedido</span>
         </a>
-        <a href="${escapeHtml(copyOrderUrl)}" style="display:inline-block;background:white;color:#1B2F5E;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;border:1.5px solid #2D6BE4;margin:4px;vertical-align:middle">
-          <span style="display:inline-block;position:relative;width:16px;height:16px;vertical-align:middle;margin-right:7px">
-            <span style="display:block;position:absolute;left:5px;top:2px;width:9px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px"></span>
-            <span style="display:block;position:absolute;left:1px;top:5px;width:9px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
+        <a href="${escapeHtml(copyOrderUrl)}" style="display:inline-block;background:white;color:#1B2F5E;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;border:1.5px solid #1B2F5E;margin:4px;vertical-align:middle">
+          <span style="display:inline-block;position:relative;width:18px;height:18px;vertical-align:middle;margin-right:8px">
+            <span style="display:block;position:absolute;left:6px;top:2px;width:8px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
+            <span style="display:block;position:absolute;left:2px;top:6px;width:8px;height:10px;border:1.7px solid #1B2F5E;border-radius:2px;background:white"></span>
           </span>
           <span style="vertical-align:middle">Copiar pedido</span>
         </a>
