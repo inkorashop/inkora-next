@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_COLOR } from '@/lib/order-status';
@@ -25,10 +25,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('perfil');
 
+  const pendingCartReminderOffRef = useRef(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
     if (tab === 'mispedidos' || tab === 'pedidos') setActiveTab('pedidos');
+    pendingCartReminderOffRef.current = params.get('cart_reminder_off') === '1';
   }, []);
 
   function switchTab(key) {
@@ -43,6 +46,7 @@ export default function Dashboard() {
   const [phone, setPhone] = useState('');
 const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile] = useState(false);
+  const [cartReminderEnabled, setCartReminderEnabled] = useState(true);
 
   // Password
   const [newPassword, setNewPassword] = useState('');
@@ -70,11 +74,32 @@ const [savingProfile, setSavingProfile] = useState(false);
     if (data) {
       setName(data.name || '');
       setPhone(data.phone || '');
+      const reminderEnabled = data.cart_reminder_email_enabled !== false;
+      setCartReminderEnabled(reminderEnabled);
+
+      // Vino desde el link "No volver a recibir" del email de recordatorio
+      // de carrito: se desactiva solo, con una demora chica para que se
+      // alcance a ver la animacion del switch en vez de aparecer ya apagado.
+      if (pendingCartReminderOffRef.current && reminderEnabled) {
+        pendingCartReminderOffRef.current = false;
+        setTimeout(() => {
+          toggleCartReminder(false, userId);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('cart_reminder_off');
+          window.history.replaceState(null, '', url.toString());
+        }, 1000);
+      }
     }
     setLoading(false);
     loadOrders(email);
     supabase.from('settings').select('value').eq('key', 'show_order_status').single()
       .then(({ data }) => { if (data) setShowOrderStatus(data.value !== 'false'); });
+  }
+
+  async function toggleCartReminder(value, userId = user?.id) {
+    if (!userId) return;
+    setCartReminderEnabled(value);
+    await supabase.from('profiles').update({ cart_reminder_email_enabled: value }).eq('id', userId);
   }
 
   async function loadOrders(email) {
@@ -197,6 +222,32 @@ const [savingProfile, setSavingProfile] = useState(false);
               >
                 {savingProfile ? 'Guardando...' : savedProfile ? '✓ Guardado' : 'Guardar cambios'}
               </button>
+            </div>
+
+            {/* Preferencias de email */}
+            <div style={{ background: 'white', borderRadius: 12, border: '1.5px solid #dde1ef', padding: 24, marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1B2F5E', marginBottom: 18 }}>Preferencias de email</h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#2d3352' }}>Recordatorios de carrito</div>
+                  <div style={{ fontSize: 12, color: '#9aa3bc', marginTop: 2 }}>
+                    {cartReminderEnabled
+                      ? 'Podemos avisarte por email si dejás un pedido a medio armar.'
+                      : 'No vas a recibir emails para retomar un carrito.'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: cartReminderEnabled ? '#1B2F5E' : '#9aa3bc' }}>
+                    {cartReminderEnabled ? 'Activado' : 'Desactivado'}
+                  </span>
+                  <div
+                    onClick={() => toggleCartReminder(!cartReminderEnabled)}
+                    style={{ width: 36, height: 20, borderRadius: 10, background: cartReminderEnabled ? '#1B2F5E' : '#dde1ef', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'absolute', top: 2, left: cartReminderEnabled ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Cambiar contraseña */}

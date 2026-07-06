@@ -3391,6 +3391,7 @@ useEffect(() => {
           ...u,
           seller_id: u.seller_id || null,
           send_confirmation_email: u.send_confirmation_email === true,
+          cart_reminder_email_enabled: u.cart_reminder_email_enabled !== false,
         };
         const override = overrides[u.id];
         return override ? { ...normalized, ...override } : normalized;
@@ -4534,6 +4535,21 @@ useEffect(() => {
     } catch (error) {
       alert(`No se pudo guardar email de pedido: ${error.message}`);
     }
+  }
+
+  async function sendCartReminder(userId) {
+    const res = await fetch('/api/admin/send-cart-reminder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.error) {
+      throw new Error(data?.error || 'No se pudo enviar el recordatorio');
+    }
+    const user = users.find(u => u.id === userId);
+    trackAdminActivity('cart_reminder_sent', { user_id: userId, user_email: user?.email }, 'carts');
+    return data;
   }
 
   async function updateSelectedUsersSeller(sellerId) {
@@ -7246,6 +7262,8 @@ useEffect(() => {
             getCartUser={getCartUser}
             getCartTotalItems={getCartTotalItems}
             summarizeItems={summarizeItems}
+            askConfirm={askConfirm}
+            onSendReminder={sendCartReminder}
           />
         )}
 
@@ -7675,6 +7693,20 @@ useEffect(() => {
                           >
                             <div style={{ position: 'absolute', top: 2, left: u.send_confirmation_email === true ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                           </div>
+                        </div>
+                        <div
+                          title="El cliente controla esto desde su cuenta o el email de recordatorio; el admin solo puede ver el estado."
+                          style={{display:'flex', alignItems:'center', gap:6}}
+                        >
+                          <span style={{fontSize:11, color:'#9aa3bc', fontWeight:600, lineHeight:1.15, maxWidth:64, textAlign:'right'}}>Email retomar pedido</span>
+                          <span style={{
+                            fontSize:10, fontWeight:800, padding:'4px 9px', borderRadius:999, whiteSpace:'nowrap',
+                            background: u.cart_reminder_email_enabled !== false ? '#eef4ff' : '#fdecec',
+                            color: u.cart_reminder_email_enabled !== false ? '#1B2F5E' : '#c53030',
+                            border: `1px solid ${u.cart_reminder_email_enabled !== false ? '#c9dcff' : '#f5b8b8'}`,
+                          }}>
+                            {u.cart_reminder_email_enabled !== false ? 'Activado' : 'Desactivado'}
+                          </span>
                         </div>
                         <select
                           value={u.seller_id || 'none'}
@@ -9790,7 +9822,27 @@ useEffect(() => {
   );
 }
 
-function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCartTotalItems, summarizeItems }) {
+function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCartTotalItems, summarizeItems, askConfirm, onSendReminder }) {
+  const [sendingReminderIds, setSendingReminderIds] = useState(new Set());
+  const [sentReminderIds, setSentReminderIds] = useState(new Set());
+
+  function handleSendReminder(userId, email) {
+    askConfirm(`¿Enviar un email recordatorio a ${email || 'este cliente'} para que retome su carrito?`, async () => {
+      setSendingReminderIds(prev => new Set(prev).add(userId));
+      try {
+        await onSendReminder(userId);
+        setSentReminderIds(prev => new Set(prev).add(userId));
+        setTimeout(() => {
+          setSentReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
+        }, 2500);
+      } catch (err) {
+        alert(err.message || 'No se pudo enviar el recordatorio');
+      } finally {
+        setSendingReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
+      }
+    });
+  }
+
   const activeCarts = [...(carts || [])].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
   const totalUnits = activeCarts.reduce((sum, cart) => sum + getCartTotalItems(cart), 0);
   const totalDesigns = activeCarts.reduce((sum, cart) => sum + (Array.isArray(cart.items) ? cart.items.length : 0), 0);
@@ -9934,6 +9986,27 @@ function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCar
                       <span>Total</span>
                       <span>{amount > 0 ? `$${amount.toLocaleString('es-AR')}` : `${units}u.`}</span>
                     </div>
+                    {!isAnonymous && (() => {
+                      const reminderEnabled = user?.cart_reminder_email_enabled !== false;
+                      const isSending = sendingReminderIds.has(cart.user_id);
+                      const wasSent = sentReminderIds.has(cart.user_id);
+                      return (
+                        <button
+                          disabled={!reminderEnabled || isSending}
+                          title={!reminderEnabled ? 'El cliente desactivo los recordatorios de carrito' : undefined}
+                          onClick={() => handleSendReminder(cart.user_id, user?.email)}
+                          style={{
+                            width:'100%', marginTop:10, border:'none', borderRadius:8, padding:'9px 12px',
+                            fontSize:12, fontWeight:800, fontFamily:'Barlow, sans-serif',
+                            cursor: (!reminderEnabled || isSending) ? 'not-allowed' : 'pointer',
+                            background: !reminderEnabled ? '#f0f1f5' : (wasSent ? '#18a36a' : '#2D6BE4'),
+                            color: !reminderEnabled ? '#9aa3bc' : 'white',
+                          }}
+                        >
+                          {!reminderEnabled ? 'Recordatorios desactivados' : isSending ? 'Enviando...' : wasSent ? '✓ Enviado' : 'Enviar recordatorio'}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               );
