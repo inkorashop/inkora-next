@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-05 -03:00 - Claude Sonnet 5 (v18)
+
+- Objetivo: En la pantalla de "Pedido confirmado", el overlay de "¡Copiado!" del codigo de pedido usaba el mismo verde que el de WhatsApp; el usuario pidio diferenciarlos, dejando el codigo de pedido en azul y el de WhatsApp en verde (sin tocar).
+- Cambios: En `app/catalogo/page.js`, el overlay `.copied-overlay` del codigo de pedido (linea ~2261) paso de `rgba(24,163,106,0.6)` (verde) a `rgba(45,107,228,0.6)` (el mismo azul `#2D6BE4` ya usado en el resto del sitio para acciones primarias). El overlay de "Copiado al portapapeles" del recuadro de WhatsApp (linea ~2306) se dejo sin cambios, sigue en verde.
+- Verificacion: `npx eslint app/catalogo/page.js` sin errores (solo el warning preexistente de `cachedUrl`). `npx next build` OK.
+- Auditoria: N/A, cambio de un solo color en un archivo.
+- Pendiente/Riesgos: Ninguno esperado.
+
 ## 2026-07-05 -03:00 - Claude Sonnet 5 (v17)
 
 - Objetivo: El usuario pidio que Codex hiciera los cambios de "Ir al pedido" + "Copiar pedido" (ver entrada de abajo), pero Codex no pudo commitear ni deployar por un limite de permisos de escritura en `.git` de su entorno. Se pidio revisar, verificar y completar el commit + deploy de ese trabajo (que estaba correcto pero sin subir).
