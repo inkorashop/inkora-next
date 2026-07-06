@@ -643,7 +643,17 @@ useEffect(() => {
   const adminSearchCycleRef = useRef({ tab: null, index: -1 });
   const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
 
-  function askConfirm(message, onConfirm, opts = {}) { setConfirmModal({ open: true, message, onConfirm, requireHold: !!opts.requireHold }); }
+  function askConfirm(message, onConfirm, opts = {}) {
+    setConfirmModal({
+      open: true,
+      message,
+      onConfirm,
+      requireHold: !!opts.requireHold,
+      title: opts.title || '¿Confirmar eliminación?',
+      confirmLabel: opts.confirmLabel || 'Eliminar',
+      tone: opts.tone || 'danger',
+    });
+  }
   function closeConfirm() { setConfirmModal({ open: false, message: '', onConfirm: null }); }
 
   // Designs
@@ -1020,6 +1030,26 @@ useEffect(() => {
       document.body.style.paddingRight = originalPaddingRight;
     };
   }, [versionSnapshotViewer.open]);
+
+  // Escape cierra el modal/panel abierto en este momento, priorizando el mas
+  // "de encima" (ej. un confirmModal disparado desde adentro de otro modal).
+  useEffect(() => {
+    function handleModalsEscape(e) {
+      if (e.key !== 'Escape') return;
+      if (confirmModal.open) { closeConfirm(); return; }
+      if (designPreviewImage) { setDesignPreviewImage(null); return; }
+      if (showImpersonatorPanel) { setShowImpersonatorPanel(false); return; }
+      if (inviteLinksModal) { setInviteLinksModal(null); return; }
+      if (infoTagsModal) { setInfoTagsModal(null); return; }
+      if (userScaleModal) { setUserScaleModal(null); return; }
+      if (orderDetail) { setOrderDetail(null); return; }
+      if (versionSnapshotViewer.open) { setVersionSnapshotViewer({ open: false, snapshot: null, data: null, loading: false, error: '' }); return; }
+      if (allScalesModalOpen) { setAllScalesModalOpen(false); return; }
+    }
+    window.addEventListener('keydown', handleModalsEscape);
+    return () => window.removeEventListener('keydown', handleModalsEscape);
+  }, [confirmModal.open, designPreviewImage, showImpersonatorPanel, inviteLinksModal, infoTagsModal, userScaleModal, orderDetail, versionSnapshotViewer.open, allScalesModalOpen]);
+
   const [addingTier, setAddingTier] = useState(null);
   const savingNewTierKeysRef = useRef({});
 
@@ -3099,13 +3129,17 @@ useEffect(() => {
   function overwriteAllPendingConflicts() {
     const count = pendingFiles.filter(entry => entry.nameExists && entry.existingDesignId && !entry.sizeError).length;
     if (count === 0) return;
-    askConfirm(`¿Sobrescribir ${count} diseño${count !== 1 ? 's' : ''} existente${count !== 1 ? 's' : ''}? Esta acción reemplaza los archivos de esos diseños.`, () => {
-      setPendingFiles(prev => prev.map(entry => (
-        entry.nameExists && entry.existingDesignId && !entry.sizeError
-          ? { ...entry, overwriteExisting: true }
-          : entry
-      )));
-    });
+    askConfirm(
+      `¿Sobrescribir ${count} diseño${count !== 1 ? 's' : ''} existente${count !== 1 ? 's' : ''}? Esta acción reemplaza los archivos de esos diseños.`,
+      () => {
+        setPendingFiles(prev => prev.map(entry => (
+          entry.nameExists && entry.existingDesignId && !entry.sizeError
+            ? { ...entry, overwriteExisting: true }
+            : entry
+        )));
+      },
+      { title: '¿Sobrescribir diseños?', confirmLabel: 'Sobrescribir' }
+    );
   }
 
   function removePending(index) {
@@ -9554,16 +9588,26 @@ useEffect(() => {
 
       {/* MODAL CONFIRMAR */}
       {confirmModal.open && (
-        <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
+        <div
+          style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}
+          onClick={e => { if (e.target === e.currentTarget) closeConfirm(); }}
+        >
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
-            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>¿Confirmar eliminación?</div>
+            <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>{confirmModal.title}</div>
             <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}>{confirmModal.message}</div>
             <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
               <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={closeConfirm}>Cancelar</button>
               {confirmModal.requireHold ? (
                 <HoldButton onConfirm={() => { confirmModal.onConfirm(); closeConfirm(); }} />
               ) : (
-                <button style={{background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}} onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}>Eliminar</button>
+                <button
+                  style={confirmModal.tone === 'primary'
+                    ? {background:'#1B2F5E', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(27,47,94,0.3)'}
+                    : {background:'linear-gradient(135deg, #e53e3e, #c53030)', color:'white', border:'none', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(229,62,62,0.4)'}}
+                  onClick={() => { confirmModal.onConfirm(); closeConfirm(); }}
+                >
+                  {confirmModal.confirmLabel}
+                </button>
               )}
             </div>
           </div>
@@ -9827,20 +9871,24 @@ function CartsTab({ carts, users, loading, error, onRefresh, getCartUser, getCar
   const [sentReminderIds, setSentReminderIds] = useState(new Set());
 
   function handleSendReminder(userId, email) {
-    askConfirm(`¿Enviar un email recordatorio a ${email || 'este cliente'} para que retome su carrito?`, async () => {
-      setSendingReminderIds(prev => new Set(prev).add(userId));
-      try {
-        await onSendReminder(userId);
-        setSentReminderIds(prev => new Set(prev).add(userId));
-        setTimeout(() => {
-          setSentReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
-        }, 2500);
-      } catch (err) {
-        alert(err.message || 'No se pudo enviar el recordatorio');
-      } finally {
-        setSendingReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
-      }
-    });
+    askConfirm(
+      `¿Enviar un email recordatorio a ${email || 'este cliente'} para que retome su carrito?`,
+      async () => {
+        setSendingReminderIds(prev => new Set(prev).add(userId));
+        try {
+          await onSendReminder(userId);
+          setSentReminderIds(prev => new Set(prev).add(userId));
+          setTimeout(() => {
+            setSentReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
+          }, 2500);
+        } catch (err) {
+          alert(err.message || 'No se pudo enviar el recordatorio');
+        } finally {
+          setSendingReminderIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
+        }
+      },
+      { title: '¿Enviar recordatorio?', confirmLabel: 'Enviar', tone: 'primary' }
+    );
   }
 
   const activeCarts = [...(carts || [])].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
@@ -11490,6 +11538,15 @@ function HeatmapTab({ supabase, products }) {
   const [activitySubtab, setActivitySubtab] = React.useState('heatmap');
   const { presence, ACTIVE_THRESHOLD, tick } = usePresence(supabase);
 
+  React.useEffect(() => {
+    if (!confirmReset) return;
+    function handleEscape(e) {
+      if (e.key === 'Escape') setConfirmReset(false);
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [confirmReset]);
+
   function heatmapProductLabel(product) {
     if (!product) return '';
     if (product.id === 'all') return product.name;
@@ -11697,8 +11754,11 @@ function HeatmapTab({ supabase, products }) {
       )}
 
       {confirmReset && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(17,32,64,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setConfirmReset(false)}
+        >
+          <div style={{ background: 'white', borderRadius: 16, border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)', padding: '28px 28px 24px', width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 16 }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#1B2F5E' }}>¿Resetear todos los clicks?</div>
             <div style={{ fontSize: 13, color: '#5a6380', lineHeight: 1.5 }}>Esta acción va a eliminar <strong>todos los {events.length} clicks registrados</strong> permanentemente. No se puede deshacer.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>

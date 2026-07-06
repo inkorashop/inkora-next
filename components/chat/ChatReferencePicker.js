@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import SafeImage from '@/components/SafeImage';
 import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
@@ -12,6 +12,14 @@ const TITLES = {
 
 export default function ChatReferencePicker({ type, orders = [], designs = [], onSelect, onClose }) {
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    function handleEscape(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();

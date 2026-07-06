@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser';
 import { signInWithGoogle } from '@/lib/auth';
 
@@ -53,7 +53,7 @@ function translateError(msg) {
     m.includes('invalid email or password') ||
     m.includes('email and password') ||
     m.includes('wrong password')
-  ) return 'Email o contrasena incorrectos.';
+  ) return 'Email o contraseña incorrectos.';
   if (
     m.includes('user already registered') ||
     m.includes('already been registered') ||
@@ -63,7 +63,7 @@ function translateError(msg) {
     m.includes('password should be at least') ||
     m.includes('password must be at least') ||
     m.includes('at least 6')
-  ) return 'La contrasena debe tener al menos 6 caracteres.';
+  ) return 'La contraseña debe tener al menos 6 caracteres.';
   if (
     m.includes('unable to validate email') ||
     m.includes('invalid email')
@@ -91,6 +91,14 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [message, setMessage] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const isDark = typeof window !== 'undefined' ? localStorage.getItem('inkora_theme') === 'light' : false;
+
+  useEffect(() => {
+    function handleEscape(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   function switchMode(nextMode) {
     setMode(nextMode);
@@ -323,7 +331,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-                  placeholder={mode === 'register' ? 'Contrasena - minimo 6 caracteres' : '******'}
+                  placeholder={mode === 'register' ? 'Contraseña - minimo 6 caracteres' : '******'}
                 />
               </div>
               {message && <div style={styles.messageBox}>{message}</div>}
@@ -338,14 +346,14 @@ export default function AuthModal({ onClose, onSuccess }) {
             <>
               <p style={{ ...styles.hint, color: hintColor }}>No tenes cuenta? <button style={{ ...styles.linkBtn, color: linkColor }} onClick={() => switchMode('register')}>Registrate gratis</button></p>
               <p style={{ ...styles.hint, color: hintColor, marginTop: 4 }}>
-                <button style={{ ...styles.linkBtn, color: hintColor, textDecoration: 'underline' }} onClick={() => switchMode('reset')}>Olvidaste tu contrasena?</button>
+                <button style={{ ...styles.linkBtn, color: hintColor, textDecoration: 'underline' }} onClick={() => switchMode('reset')}>Olvidaste tu contraseña?</button>
               </p>
             </>
           )}
 
           {mode === 'reset' && !resetSent && (
             <div>
-              <p style={{ ...styles.hint, color: hintColor, marginBottom: 12, textAlign: 'left' }}>Ingresa tu email y te mandamos un link para resetear tu contrasena.</p>
+              <p style={{ ...styles.hint, color: hintColor, marginBottom: 12, textAlign: 'left' }}>Ingresa tu email y te mandamos un link para resetear tu contraseña.</p>
               <div style={styles.formGroup}>
                 <input style={inputStyle} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="tu@email.com" onKeyDown={e => { if (e.key === 'Enter') handleReset(); }} />
               </div>
@@ -363,7 +371,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           {mode === 'reset' && resetSent && (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>Email</div>
-              <p style={{ color: hintColor, fontSize: 14, lineHeight: 1.5 }}>Te mandamos un email con el link para resetear tu contrasena. Revisa tu bandeja de entrada.</p>
+              <p style={{ color: hintColor, fontSize: 14, lineHeight: 1.5 }}>Te mandamos un email con el link para resetear tu contraseña. Revisa tu bandeja de entrada.</p>
               <button style={{ ...styles.linkBtn, color: linkColor, marginTop: 16, display: 'block', margin: '16px auto 0' }} onClick={() => switchMode('login')}>Volver al inicio</button>
             </div>
           )}

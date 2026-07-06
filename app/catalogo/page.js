@@ -203,6 +203,20 @@ export default function Home() {
     };
   }, []);
 
+  // Escape cierra lo que este abierto en este momento, de mas "encima" a menos.
+  useEffect(() => {
+    function handleEscape(e) {
+      if (e.key !== 'Escape') return;
+      if (clearConfirmOpen) { setClearConfirmOpen(false); return; }
+      if (infoTagsPopup) { setInfoTagsPopup(null); return; }
+      if (modalOpen) { closeModal(); return; }
+      if (cartPanelOpen) { setCartPanelOpen(false); return; }
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearConfirmOpen, infoTagsPopup, modalOpen, cartPanelOpen]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || isMobile) return;
 

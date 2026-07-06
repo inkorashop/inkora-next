@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function ChatNewChannelModal({ directory, onCreate, onClose, creating }) {
   const [name, setName] = useState('');
   const [selected, setSelected] = useState(new Set());
+
+  useEffect(() => {
+    function handleEscape(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   const members = [...directory.values()].sort((a, b) => a.name.localeCompare(b.name));
 

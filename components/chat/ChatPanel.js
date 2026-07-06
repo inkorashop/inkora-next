@@ -303,6 +303,7 @@ export default function ChatPanel({
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key !== 'Escape') return;
+      if (lightboxImage) { setLightboxImage(null); return; }
       if (muteMenuChannelId) { setMuteMenuChannelId(null); return; }
       if (openMenuId) { setOpenMenuId(null); return; }
       if (mentionQuery) { setMentionQuery(null); return; }
@@ -314,7 +315,7 @@ export default function ChatPanel({
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [muteMenuChannelId, openMenuId, mentionQuery, slashQuery, editingId, replyTo, pendingReference, pendingImage]);
+  }, [lightboxImage, muteMenuChannelId, openMenuId, mentionQuery, slashQuery, editingId, replyTo, pendingReference, pendingImage]);
 
   function openChannel(channel) {
     setActiveChannel(channel.id);
