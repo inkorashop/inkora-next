@@ -9,6 +9,7 @@ import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
 import { useTrack } from '@/hooks/useTrack';
 import { buildOrderItemsSnapshot, formatOrderMoney, getOrderItemsTotal } from '@/lib/order-pricing';
+import { buildWhatsAppConfirmationMessage } from '@/lib/order-confirmation-message';
 import { toSlug } from '@/lib/slug';
 import {
   filterCategoriesForVisibility,
@@ -52,42 +53,6 @@ function useWindowWidth() {
 function is3dModelUrl(url) {
   if (!url) return false;
   return /\.(3mf|glb|gltf|obj)/i.test(url.split('?')[0]);
-}
-
-// Agrupa los items por producto (respetando el orden en que el cliente los
-// eligio dentro de cada grupo, y el orden en que aparecio cada producto por
-// primera vez) y agrega un recuento por producto al final cuando hay mas de uno.
-function buildWhatsAppConfirmationMessage(orderCode, customerName, items, total) {
-  const productOrder = [];
-  const groups = new Map();
-  (items || []).forEach(item => {
-    const product = item.productName || '—';
-    if (!groups.has(product)) {
-      groups.set(product, []);
-      productOrder.push(product);
-    }
-    groups.get(product).push(item);
-  });
-
-  const multipleProducts = productOrder.length > 1;
-  const itemsText = productOrder.map(product => {
-    const lines = groups.get(product).map(i => `- ${i.name} x ${i.qty}`).join('\n');
-    return multipleProducts ? `*${product}*\n${lines}` : lines;
-  }).join('\n\n');
-
-  let message = `Hola INKORA! Quiero confirmar mi pedido\nCodigo: ${orderCode}\nNombre: ${customerName}\nItems:\n${itemsText}`;
-
-  if (multipleProducts) {
-    const summary = productOrder.map(product => {
-      const qty = groups.get(product).reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
-      return `- ${product}: ${qty} unidades`;
-    }).join('\n');
-    message += `\n\nResumen por producto:\n${summary}`;
-  }
-
-  if (total > 0) message += `\nTotal: $${total.toLocaleString('es-AR')}`;
-
-  return message;
 }
 
 function productUrlSlug(product) {
