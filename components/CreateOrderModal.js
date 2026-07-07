@@ -641,17 +641,36 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     for (const item of items) processItem(item);
   }
 
-  function processVoiceFinal(text) {
-    // Mobile Chrome restarts the recognition session every few seconds even with
-    // continuous=true; each restart can re-finalize the word still being spoken,
-    // duplicating it. Drop an exact repeat of the immediately previous chunk.
-    const normalized = text.trim().toLowerCase();
+  function processVoiceFinal(rawText) {
+    // Mobile Chrome/Android restarts the recognition session every few seconds
+    // even with continuous=true (that's the repeated mic "beep"). Instead of
+    // sending only the newly-heard word on each restart, it often re-finalizes
+    // the whole in-progress utterance, one word longer each time: "Argentina" →
+    // "Argentina 1" → "Argentina 1 por" → "Argentina 1 por 10". Treated as
+    // independent chunks that gets concatenated as-is, so it duplicated the
+    // earlier words in both the transcript log and the parsed design name.
+    // Detect that growth and keep only the genuinely new tail; an exact repeat
+    // (no growth at all) is dropped entirely.
+    const raw = rawText.trim();
+    if (!raw) return;
     const now = Date.now();
-    if (normalized && normalized === lastFinalRef.current.text && now - lastFinalRef.current.at < 8000) {
-      lastFinalRef.current = { text: normalized, at: now };
+    const last = lastFinalRef.current;
+    const fresh = now - last.at < 8000;
+    const lowerRaw  = raw.toLowerCase();
+    const lowerLast = last.text.toLowerCase();
+
+    let text = raw;
+    if (fresh && lowerLast && lowerRaw === lowerLast) {
+      lastFinalRef.current = { text: raw, at: now };
       return;
     }
-    lastFinalRef.current = { text: normalized, at: now };
+    if (fresh && lowerLast && lowerRaw.startsWith(lowerLast + ' ')) {
+      text = raw.slice(last.text.length).trim();
+      lastFinalRef.current = { text: raw, at: now };
+      if (!text) return;
+    } else {
+      lastFinalRef.current = { text: raw, at: now };
+    }
 
     const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
     voiceTranscriptRef.current = transcript;
