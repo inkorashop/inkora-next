@@ -1,0 +1,13 @@
+{
+  "name": "inkora-backup-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Programa local para disparar/ver el backup de Supabase a mano o de forma automatica. No forma parte del sitio de Next.js (no se despliega a Vercel).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

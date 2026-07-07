@@ -1,0 +1,136 @@
+/* Mismos colores/tipografía que el resto de Inkora (ver components/CreateOrderModal.js):
+   navy #1B2F5E, azul primario #2D6BE4, gris #5a6380, bordes #dde1ef, fuente Barlow.
+   Se usa un stack de fuentes de sistema en vez de bajar Barlow de internet, para que
+   esta ventana abra al instante incluso sin conexión. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #f7f8fc;
+  color: #1B2F5E;
+  overflow-x: hidden;
+}
+
+.wrap {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand-mark { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #1B2F5E; }
+.brand-sub { font-size: 12px; font-weight: 600; color: #9aa3bc; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dot-idle { background: #c0c5d4; }
+.dot-running { background: #d97706; animation: pulse 1.1s ease-in-out infinite; }
+.dot-ok { background: #15803d; }
+.dot-error { background: #b91c1c; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.card {
+  background: white;
+  border: 1.5px solid #dde1ef;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.card-label {
+  font-size: 10px; font-weight: 700; color: #9aa3bc;
+  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px;
+}
+.big { font-size: 17px; font-weight: 800; color: #1B2F5E; line-height: 1.25; }
+.muted { font-size: 12px; color: #5a6380; margin-top: 3px; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.stat {
+  background: white;
+  border: 1.5px solid #dde1ef;
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.stat-value { font-size: 16px; font-weight: 800; color: #2D6BE4; }
+.stat-label { font-size: 10px; font-weight: 700; color: #9aa3bc; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 3px; }
+
+.btn-primary {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; border: none; border-radius: 10px;
+  background: #2D6BE4; color: white;
+  font-size: 13.5px; font-weight: 700; font-family: inherit;
+  padding: 12px 14px; cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.btn-primary:hover { background: #245bc4; }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { background: #c0c5d4; cursor: default; transform: none; }
+
+.btn-secondary {
+  border: 1.5px solid #dde1ef; border-radius: 8px; background: white; color: #1B2F5E;
+  font-size: 12.5px; font-weight: 700; font-family: inherit;
+  padding: 8px 14px; cursor: pointer;
+}
+.btn-secondary:hover { background: #f0f4ff; border-color: #2D6BE4; color: #2D6BE4; }
+
+.progress-box {
+  background: white; border: 1.5px solid #dde1ef; border-radius: 12px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.progress-bar {
+  height: 6px; border-radius: 4px; background: #eef1f8; overflow: hidden; position: relative;
+}
+.progress-fill {
+  position: absolute; inset: 0; width: 40%;
+  background: linear-gradient(90deg, #2D6BE4, #7ea3f5);
+  border-radius: 4px;
+  animation: indeterminate 1.3s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+.progress-line { font-size: 12.5px; font-weight: 700; color: #1B2F5E; }
+.progress-log {
+  font-size: 10.5px; color: #9aa3bc; font-family: 'Cascadia Code', Consolas, monospace;
+  max-height: 90px; overflow-y: auto; line-height: 1.6;
+  border-top: 1px solid #f0f2f8; padding-top: 6px;
+}
+
+.done-box {
+  background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px;
+  padding: 16px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+}
+.done-icon {
+  width: 36px; height: 36px; border-radius: 50%; background: #15803d; color: white;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
+}
+.done-title { font-size: 14px; font-weight: 800; color: #15803d; }
+.done-path {
+  font-size: 10.5px; color: #4d7c0f; font-family: Consolas, monospace;
+  word-break: break-all; background: white; border-radius: 6px; padding: 6px 8px; margin: 6px 0;
+  border: 1px solid #bbf7d0;
+}
+.done-actions { margin-top: 4px; }
+.auto-close { font-size: 11px; color: #4d7c0f; font-weight: 700; margin-top: 8px; }
+
+.error-box {
+  background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 14px 16px;
+}
+.error-title { font-size: 12.5px; font-weight: 800; color: #b91c1c; margin-bottom: 4px; }
+.error-msg { font-size: 11.5px; color: #991b1b; word-break: break-word; }
+
+.hidden { display: none !important; }

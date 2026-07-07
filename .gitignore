@@ -51,3 +51,6 @@ android-app/keystore.properties
 
 # binarios de pg_dump vendorizados localmente (no hace falta versionarlos)
 /tools/pg-bin/
+
+# dependencias del programita local de backups (tools/backup-app), no del sitio
+tools/backup-app/node_modules/

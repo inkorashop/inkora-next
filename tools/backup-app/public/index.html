@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Inkora · Backups</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <div class="brand">
+        <span class="brand-mark">INKORA</span>
+        <span class="brand-sub">Backups</span>
+      </div>
+      <span id="dot" class="dot dot-idle" title="Estado"></span>
+    </header>
+
+    <section class="card">
+      <div class="card-label">Último backup</div>
+      <div id="lastDate" class="big">Cargando…</div>
+      <div id="lastMeta" class="muted"></div>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <div id="statTables" class="stat-value">—</div>
+        <div class="stat-label">Tablas</div>
+      </div>
+      <div class="stat">
+        <div id="statRows" class="stat-value">—</div>
+        <div class="stat-label">Filas (aprox.)</div>
+      </div>
+      <div class="stat">
+        <div id="statSize" class="stat-value">—</div>
+        <div class="stat-label">Tamaño BD</div>
+      </div>
+    </section>
+
+    <button id="btnRun" class="btn-primary" type="button">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Hacer backup ahora
+    </button>
+
+    <section id="progressBox" class="progress-box hidden">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div id="progressLine" class="progress-line">Iniciando…</div>
+      <div id="progressLog" class="progress-log"></div>
+    </section>
+
+    <section id="doneBox" class="done-box hidden">
+      <div class="done-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
+      </div>
+      <div class="done-title">Backup completado</div>
+      <div id="donePath" class="done-path"></div>
+      <div class="done-actions">
+        <button id="btnOpenFolder" class="btn-secondary" type="button">Abrir carpeta</button>
+      </div>
+      <div id="autoCloseNote" class="auto-close hidden">Cerrando en <span id="autoCloseSecs">10</span>s…</div>
+    </section>
+
+    <section id="errorBox" class="error-box hidden">
+      <div class="error-title">Ocurrió un error</div>
+      <div id="errorMsg" class="error-msg"></div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
