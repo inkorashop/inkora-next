@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-07 20:26 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario corrigio un supuesto del turno anterior (20:19): el "1" pegado en "Argentina 1" (nombre de diseno cargado por voz) NO es un artefacto del reconocedor de voz — es el nombre real de ese diseno en el catalogo (este negocio numera variantes de disenos). Pidio crear documentacion de como funciona la carga de pedidos por voz, para que esto no se repita.
+- Cambios: Nuevo archivo `VOICE_ORDER_FEATURE.md` en la raiz (mismo patron que `CHAT_FEATURE_PLAN.md`): explica la gramatica de comandos de voz (namespaces "pedido guardar"/"microfono cerrar", campos reconocidos, como se separan diseno+cantidad), el matching contra disenos reales (`fuzzyMatchDesigns`, threshold 0.68), las limitaciones conocidas de Android (beep cada ~5s, reinicio del reconocimiento) y el patron de refs para comandos de voz (`handleSaveRef`/`handleCloseRef`). Arranca explicitamente con la regla "un nombre de diseno raro dictado por voz puede ser real, verificar contra el catalogo antes de asumir bug de transcripcion" citando este mismo incidente como motivo. Se agrego un puntero a este archivo en `CONTEXT.md`, seccion nueva "Features implementadas con documentacion propia" (junto a la seccion ya existente de planes pendientes).
+- Verificacion: Cambio de documentacion unicamente, sin tocar codigo. No aplica build/lint.
+- Auditoria: Se releyeron las dos entradas anteriores de esta bitacora (19:15 y 20:19) para no repetir la misma suposicion incorrecta en la documentacion nueva.
+- Pendiente/Riesgos: Ninguno. Nota para el futuro: si vuelve a aparecer un reporte de "nombre de diseno raro" cargado por voz, primero verificar contra la tabla `designs` real antes de asumir cualquier cosa sobre el reconocimiento de voz.
+
 ## 2026-07-07 20:19 -03:00 - Claude Sonnet 5
 
 - Objetivo: El usuario probo en el celular el fix de "transcripcion repetida" del turno anterior y mando una captura mostrando que el bug seguia: el "Dictado" mostraba `Argentina Argentina 1 Argentina 1 por Argentina 1 por 10  siguiente abejita abejita 1 ...` y el diseno cargado quedaba con el nombre "Argentina 1" (con un "1" de mas) en vez de "Argentina".
