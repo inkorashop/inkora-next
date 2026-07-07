@@ -45,3 +45,9 @@ android-app/keystore/
 android-app/**/*.jks
 android-app/**/*.keystore
 android-app/keystore.properties
+
+# backups de Supabase (datos reales — nunca subir, ver BACKUPS.md)
+/backups/
+
+# binarios de pg_dump vendorizados localmente (no hace falta versionarlos)
+/tools/pg-bin/

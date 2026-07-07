@@ -101,6 +101,7 @@ Prompt corto recomendado para el usuario:
 
 ## Features implementadas con documentacion propia
 - `VOICE_ORDER_FEATURE.md`: como funciona la carga de pedidos por voz en Admin > Nuevo pedido (gramatica de comandos, campos reconocidos, matching de disenos, limitaciones conocidas de Android). Leer antes de diagnosticar cualquier reporte de bug sobre esta funcion — un nombre de diseno "raro" dictado por voz puede ser el nombre real de un diseno del catalogo, no un error de transcripcion.
+- `BACKUPS.md`: backup diario automatico (tarea programada de Windows local, no en la nube) del schema `public` de Supabase via `pg_dump` vendorizado en `tools/pg-bin/`. Los dumps van a `backups/supabase/` y el binario a `tools/pg-bin/`, ambos excluidos por `.gitignore` a proposito (nunca deben subirse a git, contienen datos reales). No recrear esta automatizacion desde cero sin leer primero ese archivo.
 
 ## Realtime / Admin
 - Hay scripts SQL relacionados con realtime y actividad admin: sql/admin_realtime.sql, sql/admin_activity_events.sql, sql/admin_version_snapshots.sql y sql/user_activity_events.sql.
