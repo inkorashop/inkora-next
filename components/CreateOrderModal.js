@@ -279,6 +279,15 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   const voiceLastDateFieldRef = useRef('deliveryDate');
   const knownCustomerNamesRef = useRef([]);
   const voiceRestartCountRef  = useRef(0); // consecutive fast restarts without speech
+  // Mirror the latest handleSave/handleClose so voice commands never call a stale
+  // closure — the SpeechRecognition callbacks are wired up once (on start/resume)
+  // and would otherwise keep reading rows/customerName/etc. from that render.
+  const handleSaveRef  = useRef(null);
+  const handleCloseRef = useRef(null);
+  // Dedup: mobile Chrome restarts the recognition session every few seconds even
+  // with continuous=true, and each restart can re-finalize the word still being
+  // spoken, producing "Argentina Argentina Argentina..." in the transcript.
+  const lastFinalRef = useRef({ text: '', at: 0 });
 
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
@@ -523,6 +532,11 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     } finally { setSaving(false); }
   }
 
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+    handleCloseRef.current = handleClose;
+  });
+
   // ── Voice helpers ─────────────────────────────────────────────────────────────
 
   function stopRecognition() {
@@ -628,6 +642,17 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function processVoiceFinal(text) {
+    // Mobile Chrome restarts the recognition session every few seconds even with
+    // continuous=true; each restart can re-finalize the word still being spoken,
+    // duplicating it. Drop an exact repeat of the immediately previous chunk.
+    const normalized = text.trim().toLowerCase();
+    const now = Date.now();
+    if (normalized && normalized === lastFinalRef.current.text && now - lastFinalRef.current.at < 8000) {
+      lastFinalRef.current = { text: normalized, at: now };
+      return;
+    }
+    lastFinalRef.current = { text: normalized, at: now };
+
     const transcript = voiceTranscriptRef.current + (voiceTranscriptRef.current ? ' ' : '') + text;
     voiceTranscriptRef.current = transcript;
     setVoiceTranscript(transcript);
@@ -654,12 +679,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
       stopRecognition();
       voiceStateRef.current = 'idle';
       setVoiceState('idle');
-      if (pendingOrderSave) setTimeout(handleSave, 50);
+      if (pendingOrderSave) setTimeout(() => handleSaveRef.current?.(), 50);
     } else if (pendingOrderCancel) {
       stopRecognition();
       voiceStateRef.current = 'idle';
       setVoiceState('idle');
-      handleClose();
+      // Delayed like the save path above: React batches the setState calls made
+      // just above (customer/date/rows/etc.) into a render that hasn't happened
+      // yet, so handleCloseRef.current is still last render's stale closure if
+      // called synchronously here.
+      setTimeout(() => handleCloseRef.current?.(), 50);
     } else if (pendingOrderClear) {
       stopRecognition();
       voiceStateRef.current = 'idle';
