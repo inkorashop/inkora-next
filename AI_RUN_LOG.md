@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-07 15:51 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir en produccion la superposicion de los encabezados "A producir" e "Impreso" en la tabla de produccion.
+- Cambios: En `components/ProductionTab.js` y `app/operarios/page.js` se agrego ancho minimo a la tabla, se amplio la columna "A producir" y se protegieron los encabezados con `overflow: hidden`/`textOverflow: ellipsis` para evitar que invadan columnas vecinas en paneles angostos.
+- Verificacion: `node --check components\ProductionTab.js` OK; `node --check app\operarios\page.js` OK; `npx.cmd eslint components\ProductionTab.js app\operarios\page.js --quiet` OK; `git diff --check` OK con solo aviso CRLF; `npm.cmd run build` OK con warnings preexistentes de `<img>` y deps de hooks; `vercel.cmd deploy --prod --yes` OK, deploy `dpl_FwWiCVxgFK53KkYsEdEUDTygYYWv` READY y aliasado a `https://www.inkora.com.ar`.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md`, el skill Next.js y `git status --short`. La ultima entrada relevante era de emails y no conflictuaba; el arbol solo tenia sin trackear `Inkora.PrintBridge.zip` y `Messi 2.3mf` antes del cambio.
+- Pendiente/Riesgos: No se probo visualmente con sesion admin real; el fix esta publicado en produccion y deberia mostrarse al refrescar la pagina.
+
 ## 2026-07-06 11:22 -03:00 - ChatGPT Codex
 
 - Objetivo: Ajustar los botones del email interno de nuevo pedido: usar el logo de INKORA del recurso publico del sitio y mejorar el icono/texto de "Copiar pedido"; revisar si se puede copiar directamente desde el email.

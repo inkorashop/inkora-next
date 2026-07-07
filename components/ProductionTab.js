@@ -2050,11 +2050,11 @@ export default function ProductionTab({
                 </div>
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable', WebkitOverflowScrolling: 'touch' }}>
-                  <table style={{ width: '100%', minWidth: isMobile ? 820 : 0, borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                  <table style={{ width: '100%', minWidth: isMobile ? 860 : 880, borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                     <colgroup>
                       {/* Producto */}<col style={{ width: 95 }} />
                       {/* Diseño  */}<col />
-                      {/* A prod  */}<col style={{ width: 46 }} />
+                      {/* A prod  */}<col style={{ width: 72 }} />
                       {/* Impreso: StockCell(90) + gap(3) + =N button(38) + padding(10) = 141 */}
                       <col style={{ width: 145 }} />
                       {/* Troquelado: same */}
@@ -2068,7 +2068,7 @@ export default function ProductionTab({
                     <thead>
                       <tr>
                         {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
-                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
+                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
