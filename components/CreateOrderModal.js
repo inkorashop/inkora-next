@@ -289,6 +289,24 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   // spoken, producing "Argentina Argentina Argentina..." in the transcript.
   const lastFinalRef = useRef({ text: '', at: 0 });
 
+  // Which engine is currently listening ('webspeech' | 'vosk' | null) — lets voice
+  // commands ("pedido guardar", "microfono cerrar") tear down the right one instead
+  // of always assuming the Web Speech API engine.
+  const activeEngineRef = useRef(null);
+
+  // ── Vosk dictation state (runs fully on-device, no OS speech-recognition
+  // session to restart — being tried out alongside the Web Speech API button
+  // above to compare both) ──────────────────────────────────────────────────────
+  const [voskState,      setVoskState]      = useState('idle'); // 'idle'|'loading'|'recording'
+  const [voskSupported,  setVoskSupported]  = useState(false);
+  const [voskError,      setVoskError]      = useState('');
+  const voskStateRef      = useRef('idle');
+  const voskModelRef      = useRef(null); // loaded Vosk Model, kept warm across start/stop
+  const voskRecognizerRef = useRef(null);
+  const voskAudioCtxRef   = useRef(null);
+  const voskStreamRef     = useRef(null);
+  const voskNodesRef      = useRef(null); // { source, processor, silentGain }
+
   // Auto-save draft
   const draftIdRef = useRef(initialValues?.id || null);
   useEffect(() => {
@@ -317,11 +335,16 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
+      setVoskSupported(!!(navigator.mediaDevices?.getUserMedia && (window.AudioContext || window.webkitAudioContext)));
     }
     return () => {
       // Set idle first so onend (fired by abort) does not restart recognition.
       voiceStateRef.current = 'idle';
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch {} recognitionRef.current = null; }
+      voskStateRef.current = 'idle';
+      stopVoskInternal();
+      try { voskModelRef.current?.terminate(); } catch {}
+      voskModelRef.current = null;
     };
   }, []);
 
@@ -695,25 +718,35 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
 
     if (pendingStop || pendingOrderSave) {
       if (remaining.trim()) { processBufferFlush(remaining); voiceBufferRef.current = ''; setVoiceBuffer(''); }
-      stopRecognition();
-      voiceStateRef.current = 'idle';
-      setVoiceState('idle');
+      stopActiveEngine();
       if (pendingOrderSave) setTimeout(() => handleSaveRef.current?.(), 50);
     } else if (pendingOrderCancel) {
-      stopRecognition();
-      voiceStateRef.current = 'idle';
-      setVoiceState('idle');
+      stopActiveEngine();
       // Delayed like the save path above: React batches the setState calls made
       // just above (customer/date/rows/etc.) into a render that hasn't happened
       // yet, so handleCloseRef.current is still last render's stale closure if
       // called synchronously here.
       setTimeout(() => handleCloseRef.current?.(), 50);
     } else if (pendingOrderClear) {
+      stopActiveEngine();
+      setVoiceConfirmClear(true);
+    }
+  }
+
+  // Voice commands ("pedido guardar"/"cancelar"/"cerrar"/"borrar") stop whichever
+  // engine is actually listening — Web Speech API or Vosk — instead of always
+  // assuming the Web Speech one.
+  function stopActiveEngine() {
+    if (activeEngineRef.current === 'vosk') {
+      stopVoskInternal();
+      voskStateRef.current = 'idle';
+      setVoskState('idle');
+    } else {
       stopRecognition();
       voiceStateRef.current = 'idle';
       setVoiceState('idle');
-      setVoiceConfirmClear(true);
     }
+    activeEngineRef.current = null;
   }
 
   function createRecognition() {
@@ -791,12 +824,13 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function startVoice() {
+    activeEngineRef.current = 'webspeech';
     voiceStateRef.current = 'recording';
     setVoiceState('recording');
     setVoiceError('');
     voiceRestartCountRef.current = 0;
     const rec = createRecognition();
-    if (!rec) { voiceStateRef.current = 'idle'; setVoiceState('idle'); return; }
+    if (!rec) { voiceStateRef.current = 'idle'; setVoiceState('idle'); activeEngineRef.current = null; return; }
     recognitionRef.current = rec;
     try { rec.start(); } catch {}
   }
@@ -809,6 +843,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
   }
 
   function resumeVoice() {
+    activeEngineRef.current = 'webspeech';
     voiceStateRef.current = 'recording';
     setVoiceState('recording');
     const rec = createRecognition();
@@ -827,12 +862,17 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     voiceStateRef.current = 'idle';
     setVoiceState('idle');
     setVoiceInterim('');
+    activeEngineRef.current = null;
   }
 
   function clearVoice() {
     voiceStateRef.current = 'idle';
     stopRecognition();
     setVoiceState('idle');
+    voskStateRef.current = 'idle';
+    stopVoskInternal();
+    setVoskState('idle');
+    activeEngineRef.current = null;
     voiceBufferRef.current = '';
     voiceTranscriptRef.current = '';
     setVoiceBuffer('');
@@ -852,6 +892,102 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     clearVoice();
   }
 
+  // ── Vosk helpers ──────────────────────────────────────────────────────────────
+  // Runs fully on-device (WebAssembly, no server/network dependency once the
+  // model is loaded) — no OS-level "speech recognition session" is ever created,
+  // so there's no restart cycle and no mic beep. Reuses processVoiceFinal for the
+  // actual parsing/field-filling so both engines are compared apples-to-apples.
+
+  async function loadVoskModel() {
+    if (voskModelRef.current) return voskModelRef.current;
+    const { createModel } = await import('vosk-browser');
+    const model = await createModel('/models/vosk-model-small-es-0.42.tar.gz');
+    voskModelRef.current = model;
+    return model;
+  }
+
+  function stopVoskInternal() {
+    try { voskNodesRef.current?.processor?.disconnect(); } catch {}
+    try { voskNodesRef.current?.source?.disconnect(); } catch {}
+    try { voskNodesRef.current?.silentGain?.disconnect(); } catch {}
+    voskNodesRef.current = null;
+    try { voskStreamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
+    voskStreamRef.current = null;
+    try { voskAudioCtxRef.current?.close(); } catch {}
+    voskAudioCtxRef.current = null;
+    try { voskRecognizerRef.current?.remove(); } catch {}
+    voskRecognizerRef.current = null;
+  }
+
+  async function startVosk() {
+    activeEngineRef.current = 'vosk';
+    voskStateRef.current = 'loading';
+    setVoskState('loading');
+    setVoskError('');
+    try {
+      const model = await loadVoskModel();
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      const audioContext = new AudioContextCtor();
+      const recognizer = new model.KaldiRecognizer(audioContext.sampleRate);
+      recognizer.setWords(false);
+      recognizer.on('result', (message) => {
+        if (message.result?.text) processVoiceFinal(message.result.text);
+      });
+      recognizer.on('partialresult', (message) => {
+        setVoiceInterim(message.result?.partial || '');
+      });
+
+      const source = audioContext.createMediaStreamSource(mediaStream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      // ScriptProcessorNode only fires onaudioprocess while connected through to
+      // the destination; route it through a silent gain so it doesn't also echo
+      // the mic back out the speakers.
+      const silentGain = audioContext.createGain();
+      silentGain.gain.value = 0;
+      processor.onaudioprocess = (event) => {
+        try { recognizer.acceptWaveform(event.inputBuffer); } catch {}
+      };
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioContext.destination);
+
+      voskRecognizerRef.current = recognizer;
+      voskAudioCtxRef.current = audioContext;
+      voskStreamRef.current = mediaStream;
+      voskNodesRef.current = { source, processor, silentGain };
+
+      voskStateRef.current = 'recording';
+      setVoskState('recording');
+    } catch (err) {
+      stopVoskInternal();
+      voskStateRef.current = 'idle';
+      setVoskState('idle');
+      activeEngineRef.current = null;
+      const msgs = {
+        NotAllowedError: 'Permiso de micrófono denegado. Habilitá el mic en Chrome.',
+        NotFoundError:   'No se encontró ningún micrófono.',
+      };
+      setVoskError(msgs[err?.name] || err?.message || 'No se pudo iniciar Vosk');
+    }
+  }
+
+  function stopVosk() {
+    if (voiceBufferRef.current.trim()) {
+      processBufferFlush(voiceBufferRef.current);
+      voiceBufferRef.current = '';
+      setVoiceBuffer('');
+    }
+    stopVoskInternal();
+    voskStateRef.current = 'idle';
+    setVoskState('idle');
+    setVoiceInterim('');
+    activeEngineRef.current = null;
+  }
+
   return (
     <div onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 8000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -866,13 +1002,14 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
         {/* Body — no outer scroll; design rows scroll internally */}
         <div style={{ flex: 1, minHeight: 0, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
 
-          {/* ── Voice bar — always at top ──────────────────────────────────── */}
-          {voiceSupported && (
+          {/* ── Voice bar — always at top. Web Speech API on the left, Vosk (on-device,
+              being tried out for comparison) on the right ─────────────────────── */}
+          {(voiceSupported || voskSupported) && (
             <div style={{ flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {voiceState === 'idle' ? (
-                  <button type="button" onClick={startVoice} title="Carga por voz"
-                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#5a6380', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {voiceSupported && (voiceState === 'idle' ? (
+                  <button type="button" onClick={startVoice} disabled={voskState !== 'idle'} title="Carga por voz (Web Speech API)"
+                    style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#5a6380', cursor: voskState !== 'idle' ? 'not-allowed' : 'pointer', opacity: voskState !== 'idle' ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                   </button>
                 ) : (
@@ -897,6 +1034,11 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                       style={{ border: '1.5px solid #fecaca', borderRadius: 6, padding: '5px 7px', background: '#fff5f5', color: '#b91c1c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2"/></svg>
                     </button>
+                  </>
+                ))}
+
+                {(voiceBuffer.trim() || voiceInterim.trim()) && (voiceState !== 'idle' || voskState !== 'idle') && (
+                  <>
                     {voiceBuffer.trim() && (
                       <span style={{ fontSize: 11, background: '#fef9c3', color: '#92400e', borderRadius: 4, padding: '2px 7px', border: '1px solid #fde68a', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {voiceBuffer}
@@ -909,11 +1051,43 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                     )}
                   </>
                 )}
+
+                {voskSupported && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {voskState === 'idle' ? (
+                      <button type="button" onClick={startVosk} disabled={voiceState !== 'idle'} title="Carga por voz (Vosk, en el dispositivo — prueba)"
+                        style={{ border: '1.5px solid #ddd6fe', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#7c3aed', cursor: voiceState !== 'idle' ? 'not-allowed' : 'pointer', opacity: voiceState !== 'idle' ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'center' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                        <span style={{ fontSize: 9, fontWeight: 800 }}>V</span>
+                      </button>
+                    ) : voskState === 'loading' ? (
+                      <span style={{ fontSize: 11, color: '#7c3aed', fontStyle: 'italic' }}>Cargando modelo Vosk…</span>
+                    ) : (
+                      <>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block', flexShrink: 0 }} />
+                        <button type="button" onClick={stopVosk} title="Detener Vosk"
+                          style={{ border: '1.5px solid #ddd6fe', borderRadius: 6, padding: '5px 7px', background: 'white', color: '#7c3aed', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                        </button>
+                        <button type="button" onClick={clearVoice} title="Cancelar dictado"
+                          style={{ border: '1.5px solid #fecaca', borderRadius: 6, padding: '5px 7px', background: '#fff5f5', color: '#b91c1c', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2"/></svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               {voiceError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 7, padding: '6px 10px', marginTop: 6 }}>
                   <span style={{ fontSize: 11, color: '#92400e', flex: 1 }}>{voiceError}</span>
                   <button type="button" onClick={() => setVoiceError('')} style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                </div>
+              )}
+              {voskError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 7, padding: '6px 10px', marginTop: 6 }}>
+                  <span style={{ fontSize: 11, color: '#6d28d9', flex: 1 }}>{voskError}</span>
+                  <button type="button" onClick={() => setVoskError('')} style={{ border: 'none', background: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
                 </div>
               )}
               {voiceConfirmClear && (

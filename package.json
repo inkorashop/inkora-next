@@ -19,6 +19,7 @@
     "react": "^18",
     "react-dom": "^18",
     "three": "^0.184.0",
+    "vosk-browser": "^0.0.8",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

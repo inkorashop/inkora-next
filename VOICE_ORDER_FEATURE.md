@@ -2,6 +2,8 @@
 
 Estado: **implementado y en produccion**. Este documento existe porque una IA anterior, al ver un nombre de diseño dictado por voz con un número pegado (ej. "Argentina 1"), asumió sin verificar que era un artefacto de reconocimiento de voz — y no lo era: **"Argentina 1" es (o puede ser) el nombre real de un diseño en el catálogo**, porque este negocio numera variantes de diseños. Leer este archivo antes de tocar el código o de diagnosticar un reporte de bug en esta función, para no repetir ese error.
 
+Desde 2026-07-07 hay **dos motores de reconocimiento de voz en paralelo, para comparar** (ver sección "Segundo motor: Vosk" más abajo): el botón de la izquierda usa la Web Speech API (nativa del navegador, lo único que existía antes); el botón de la derecha ("V", violeta) usa **Vosk corriendo en el propio dispositivo** (WebAssembly, sin depender de ningún servicio de Android ni de un servidor). Los dos alimentan exactamente el mismo parser (`parseVoiceFull`) y el mismo formulario — la única diferencia real entre ambos botones es cómo se captura/transcribe el audio.
+
 Contexto general del repo: leer primero `AGENTS.md` (protocolo) y `CONTEXT.md` (contexto estable del proyecto).
 
 ## Regla número uno antes de diagnosticar cualquier bug acá
@@ -57,6 +59,31 @@ Ver `FIELD_RULES` en `lib/voice-order-parser.js`. Los triggers se buscan solo al
 
 Por eso `handleSave` y `handleClose` (los comandos "pedido guardar"/"pedido cancelar") se invocan a través de `handleSaveRef.current()` / `handleCloseRef.current()`, refs que se actualizan en un `useEffect` sin dependencias (corre después de cada render, igual que `designsRef`/`knownCustomerNamesRef` que ya existían para lo mismo). **Cualquier función nueva que se dispare desde un comando de voz debe seguir este mismo patrón** (ref actualizado por efecto, no la función capturada directo del closure), o va a heredar el mismo bug.
 
+## Segundo motor: Vosk (en el dispositivo, botón "V" a la derecha)
+
+Se agregó un segundo motor para poder comparar contra la Web Speech API en el mismo formulario. Motivación: en Android, la Web Speech API depende del servicio nativo de reconocimiento de voz, que reinicia solo cada pocos segundos (ver limitación de arriba) y eso genera el beep repetido. Vosk corre **enteramente en el navegador vía WebAssembly** (librería `vosk-browser`, npm), sin invocar ningún servicio de reconocimiento del sistema operativo — captura el audio crudo con `getUserMedia`/`AudioContext` y lo transcribe localmente, así que en teoría no debería tener ese problema de reinicios/beep. Esto todavía no está confirmado con una prueba real en un celular — es justamente lo que este botón permite probar.
+
+### Piezas nuevas
+
+- **Dependencia**: `vosk-browser` (`package.json`). Se importa con `await import('vosk-browser')` de forma perezosa DENTRO de `startVosk()` — nunca en el top-level del archivo — para que su bundle (~5.7MB, incluye el WASM de Kaldi embebido) NO se cargue en el chunk principal del admin. Confirmado con el build: la ruta `/admin` casi no cambió de tamaño (+1KB) porque webpack lo separa en un chunk aparte que solo se pide cuando el usuario aprieta el botón.
+- **Modelo de español**: `public/models/vosk-model-small-es-0.42.tar.gz` (~38MB, modelo liviano oficial de [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models), licencia Apache 2.0). Se sirve como archivo estático de Next.js en `/models/vosk-model-small-es-0.42.tar.gz`. **Importante sobre el formato**: `vosk-browser` exige que el `.tar.gz` tenga una carpeta de nivel superior llamada exactamente `model/` (no `vosk-model-small-es-0.42/`, que es como viene el `.zip` original de alphacephei) — hay que renombrar la carpeta antes de re-empaquetar. Si en el futuro hay que actualizar/cambiar de modelo, repetir: descargar el `.zip`, descomprimir, `mv <carpeta-original> model`, `tar -czf nuevo-nombre.tar.gz model`.
+- **`components/CreateOrderModal.js`**: nuevas funciones `loadVoskModel` (carga y cachea el modelo en `voskModelRef`, una sola vez por sesión del modal), `startVosk`/`stopVosk`/`stopVoskInternal` (arman/desarman el pipeline de audio: `getUserMedia` → `AudioContext` → `ScriptProcessorNode` → `recognizer.acceptWaveform()`), y estado paralelo (`voskState`, `voskError`, refs `voskModelRef`/`voskRecognizerRef`/`voskAudioCtxRef`/`voskStreamRef`/`voskNodesRef`).
+- **El `ScriptProcessorNode` se conecta a través de un `GainNode` con volumen 0 antes de `audioContext.destination`**, no directo. Es necesario para que `onaudioprocess` se dispare de forma confiable (el nodo necesita estar conectado hasta el destino final del grafo de audio), pero conectarlo directo haría que el propio micrófono se escuche por los parlantes (eco/feedback) — el gain en 0 lo deja mudo.
+
+### Cómo se comparte todo lo demás con la Web Speech API
+
+Los resultados finales de Vosk (evento `result` del `KaldiRecognizer`) se mandan al **mismo** `processVoiceFinal(text)` que ya usaba la Web Speech API — mismo parser, mismo log de "Dictado", mismo matching de diseños, mismos comandos de voz ("pedido guardar", etc.). Así la comparación entre los dos botones es solo sobre la calidad/comportamiento de la transcripción, no sobre dos implementaciones distintas del resto del formulario.
+
+Como los comandos de voz ("pedido guardar"/"cancelar"/"cerrar") necesitan saber CUÁL de los dos motores hay que detener, se agregó `activeEngineRef` (`'webspeech'` | `'vosk'` | `null`) y un helper `stopActiveEngine()` que reemplaza las llamadas directas a `stopRecognition()` que había antes dentro de `processVoiceFinal`. Cualquier motor nuevo que se agregue en el futuro debe registrarse ahí también.
+
+Los dos botones **se deshabilitan mutuamente** mientras el otro está grabando (no tiene sentido ni es seguro correr ambos pipelines de audio a la vez sobre el mismo micrófono).
+
+### Pendiente de esta primera versión (a propósito, para no sobre-invertir antes de ver si vale la pena)
+
+- No tiene pausa/reanudar (solo iniciar/detener) — la Web Speech API sí la tiene.
+- No se probó todavía en un dispositivo Android real (ni en desktop) — se armó, se verificó que compila y que el chunk se separa correctamente, pero falta la prueba end-to-end con micrófono real.
+- El modelo se recarga (fetch + init WASM) cada vez que se abre el modal de nuevo, porque `voskModelRef` se limpia al desmontar. Si el tiempo de carga molesta en el uso real, se puede mover el caché a un nivel más arriba (fuera del modal) para que persista mientras dure la sesión de la pestaña.
+
 ## Historial de fixes relevantes
 
-Ver `AI_RUN_LOG.md`, entradas del 2026-07-07 (19:15 y 20:19) para el detalle turno a turno de los bugs corregidos: closure obsoleto en guardar/cancelar, año perdido en fechas sin conector "del"/"de", cantidades compuestas ("treinta y dos"), y transcripción creciente/duplicada en Android.
+Ver `AI_RUN_LOG.md`, entradas del 2026-07-07 (19:15 y 20:19) para el detalle turno a turno de los bugs corregidos: closure obsoleto en guardar/cancelar, año perdido en fechas sin conector "del"/"de", cantidades compuestas ("treinta y dos"), y transcripción creciente/duplicada en Android. La entrada más reciente (Vosk) tiene su propio detalle de implementación arriba.
