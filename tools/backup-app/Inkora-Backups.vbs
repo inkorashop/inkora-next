@@ -1,20 +1,19 @@
-' Lanza el programita de backups de Inkora: arranca el servidor local (oculto,
-' sin ventana de consola) y despues abre una ventanita tipo app (sin barra de
-' direcciones ni pestañas) apuntando a esa pagina.
+' Lanza el panel de backups de Inkora: arranca el servidor local (oculto, sin
+' ventana de consola) y despues abre una ventanita tipo app (sin barra de
+' direcciones ni pestañas), del tamaño de un cuarto de la pantalla.
 '
-' Uso normal (doble clic / acceso directo):        launch.vbs
-' Uso automatico (desde la tarea programada 3 AM):  launch.vbs autorun
+' Uso normal (doble clic / acceso directo):        Inkora-Backups.vbs
+' Uso automatico (desde la tarea programada):       Inkora-Backups.vbs autorun
 
 Option Explicit
 
-Dim shell, fso, scriptDir, projectRoot, appDir, nodeExe, browserExe, autorunArg, url, args
-Dim candidates, i
+Dim shell, fso, scriptDir, appDir, nodeExe, browserExe, autorunArg, url, args
+Dim candidates, i, winWidth, winHeight, winLeft, winTop
 
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
-projectRoot = fso.GetParentFolderName(fso.GetParentFolderName(scriptDir))
 appDir = scriptDir
 
 ' ── Ubicar node.exe ──────────────────────────────────────────────────────────
@@ -42,6 +41,13 @@ End If
 
 url = "http://localhost:4173/" & autorunArg
 
+' Tamaño de arranque de respaldo (el propio app.js la redimensiona a 1/4 de la
+' pantalla real apenas carga, via window.resizeTo/moveTo — mas rapido y
+' confiable que consultar la resolucion por WMI, que puede llegar a colgarse
+' en maquinas virtuales/sesiones remotas).
+winWidth = 960 : winHeight = 540
+winLeft = 200 : winTop = 120
+
 ' ── Arrancar el servidor local, oculto ────────────────────────────────────────
 shell.CurrentDirectory = appDir
 shell.Run """" & nodeExe & """ server.js", 0, False
@@ -50,7 +56,7 @@ WScript.Sleep 1000
 
 ' ── Abrir la ventana ──────────────────────────────────────────────────────────
 If browserExe <> "" Then
-  args = "--app=" & url & " --window-size=420,660 --window-position=200,120"
+  args = "--app=" & url & " --window-size=" & winWidth & "," & winHeight & " --window-position=" & winLeft & "," & winTop
   shell.Run """" & browserExe & """ " & args, 1, False
 Else
   ' No se encontro Edge ni Chrome: al menos abrir en el navegador por defecto

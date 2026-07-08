@@ -54,3 +54,6 @@ android-app/keystore.properties
 
 # dependencias del programita local de backups (tools/backup-app), no del sitio
 tools/backup-app/node_modules/
+
+# config del programita: rutas/frecuencias especificas de esta PC, no versionar
+tools/backup-app/config.json

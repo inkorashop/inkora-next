@@ -1,7 +1,7 @@
 /* Mismos colores/tipografía que el resto de Inkora (ver components/CreateOrderModal.js):
-   navy #1B2F5E, azul primario #2D6BE4, gris #5a6380, bordes #dde1ef, fuente Barlow.
-   Se usa un stack de fuentes de sistema en vez de bajar Barlow de internet, para que
-   esta ventana abra al instante incluso sin conexión. */
+   navy #1B2F5E, azul primario #2D6BE4, gris #5a6380, bordes #dde1ef.
+   Fuente de sistema (no Barlow de internet) para que la ventana abra al instante
+   incluso sin conexión. */
 
 * { box-sizing: border-box; }
 
@@ -13,66 +13,82 @@ body {
   overflow-x: hidden;
 }
 
-.wrap {
-  padding: 18px 20px 20px;
+.hdr {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px 10px;
+}
+.logo { width: 26px; height: 26px; border-radius: 6px; }
+.brand { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-mark { font-size: 14px; font-weight: 800; letter-spacing: 1px; color: #1B2F5E; }
+.brand-sub { font-size: 11px; font-weight: 600; color: #9aa3bc; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+
+.section {
+  background: white;
+  border: 1.5px solid #dde1ef;
+  border-radius: 14px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
-.hdr {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 4px;
-}
-
-.brand { display: flex; align-items: baseline; gap: 8px; }
-.brand-mark { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #1B2F5E; }
-.brand-sub { font-size: 12px; font-weight: 600; color: #9aa3bc; }
+.section-hdr { display: flex; align-items: center; justify-content: space-between; }
+.section-title { margin: 0; font-size: 13.5px; font-weight: 800; color: #1B2F5E; text-transform: uppercase; letter-spacing: 0.4px; }
 
 .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .dot-idle { background: #c0c5d4; }
 .dot-running { background: #d97706; animation: pulse 1.1s ease-in-out infinite; }
 .dot-ok { background: #15803d; }
 .dot-error { background: #b91c1c; }
-
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.card {
-  background: white;
-  border: 1.5px solid #dde1ef;
-  border-radius: 12px;
-  padding: 14px 16px;
-}
-.card-label {
-  font-size: 10px; font-weight: 700; color: #9aa3bc;
-  text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px;
-}
-.big { font-size: 17px; font-weight: 800; color: #1B2F5E; line-height: 1.25; }
-.muted { font-size: 12px; color: #5a6380; margin-top: 3px; }
+.card { background: #f8faff; border: 1.5px solid #eef1f8; border-radius: 10px; padding: 10px 12px; }
+.card-label { font-size: 9.5px; font-weight: 700; color: #9aa3bc; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+.big { font-size: 15px; font-weight: 800; color: #1B2F5E; line-height: 1.25; }
+.muted { font-size: 11px; color: #5a6380; }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stats-row:empty { display: none; }
+.stat { background: #f8faff; border: 1.5px solid #eef1f8; border-radius: 8px; padding: 7px 4px; text-align: center; }
+.stat-value { font-size: 13.5px; font-weight: 800; color: #2D6BE4; }
+.stat-label { font-size: 9px; font-weight: 700; color: #9aa3bc; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+
+.next-run { display: flex; flex-direction: column; gap: 4px; }
+.next-run-row { display: flex; align-items: center; justify-content: space-between; }
+.next-run-label { font-size: 10.5px; font-weight: 700; color: #5a6380; }
+.next-bar { height: 5px; border-radius: 3px; background: #eef1f8; overflow: hidden; }
+.next-fill { height: 100%; background: #9db8f2; border-radius: 3px; transition: width 0.3s ease; }
+
+.settings { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #f0f2f8; padding-top: 8px; }
+.setting-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.setting-label { color: #9aa3bc; font-weight: 700; flex-shrink: 0; width: 78px; }
+.freq-select {
+  flex: 1; font-family: inherit; font-size: 11px; color: #1B2F5E;
+  border: 1.5px solid #dde1ef; border-radius: 6px; padding: 4px 6px; background: white;
 }
-.stat {
-  background: white;
-  border: 1.5px solid #dde1ef;
-  border-radius: 10px;
-  padding: 10px 6px;
-  text-align: center;
+.path-row .path-value {
+  flex: 1; font-size: 10px; color: #5a6380; font-family: Consolas, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.stat-value { font-size: 16px; font-weight: 800; color: #2D6BE4; }
-.stat-label { font-size: 10px; font-weight: 700; color: #9aa3bc; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 3px; }
+.btn-mini {
+  border: 1.5px solid #dde1ef; border-radius: 6px; background: white; color: #5a6380;
+  font-size: 10px; font-weight: 700; font-family: inherit; padding: 3px 8px; cursor: pointer; flex-shrink: 0;
+}
+.btn-mini:hover { border-color: #2D6BE4; color: #2D6BE4; }
 
 .btn-primary {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; border: none; border-radius: 10px;
   background: #2D6BE4; color: white;
-  font-size: 13.5px; font-weight: 700; font-family: inherit;
-  padding: 12px 14px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; font-family: inherit;
+  padding: 10px 14px; cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
 }
 .btn-primary:hover { background: #245bc4; }
@@ -81,56 +97,43 @@ body {
 
 .btn-secondary {
   border: 1.5px solid #dde1ef; border-radius: 8px; background: white; color: #1B2F5E;
-  font-size: 12.5px; font-weight: 700; font-family: inherit;
-  padding: 8px 14px; cursor: pointer;
+  font-size: 11px; font-weight: 700; font-family: inherit;
+  padding: 6px 10px; cursor: pointer;
 }
 .btn-secondary:hover { background: #f0f4ff; border-color: #2D6BE4; color: #2D6BE4; }
 
-.progress-box {
-  background: white; border: 1.5px solid #dde1ef; border-radius: 12px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
-}
-.progress-bar {
-  height: 6px; border-radius: 4px; background: #eef1f8; overflow: hidden; position: relative;
-}
-.progress-fill {
-  position: absolute; inset: 0; width: 40%;
-  background: linear-gradient(90deg, #2D6BE4, #7ea3f5);
-  border-radius: 4px;
-  animation: indeterminate 1.3s ease-in-out infinite;
-}
-@keyframes indeterminate {
-  0% { left: -40%; }
-  100% { left: 100%; }
-}
-.progress-line { font-size: 12.5px; font-weight: 700; color: #1B2F5E; }
+.progress-box { background: #f8faff; border: 1.5px solid #eef1f8; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.progress-bar { height: 7px; border-radius: 4px; background: #eef1f8; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #2D6BE4, #7ea3f5); border-radius: 4px; transition: width 0.25s ease; }
+.progress-fill.indeterminate { width: 40%; animation: indeterminate 1.3s ease-in-out infinite; }
+@keyframes indeterminate { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.progress-pct { font-size: 10.5px; font-weight: 800; text-align: right; }
+.progress-line { font-size: 11.5px; font-weight: 700; color: #1B2F5E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .progress-log {
-  font-size: 10.5px; color: #9aa3bc; font-family: 'Cascadia Code', Consolas, monospace;
-  max-height: 90px; overflow-y: auto; line-height: 1.6;
-  border-top: 1px solid #f0f2f8; padding-top: 6px;
+  font-size: 9.5px; color: #9aa3bc; font-family: Consolas, monospace;
+  max-height: 70px; overflow-y: auto; line-height: 1.5;
+  border-top: 1px solid #f0f2f8; padding-top: 5px;
 }
 
-.done-box {
-  background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px;
-  padding: 16px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+.done-box { background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; }
+.done-icon { width: 30px; height: 30px; border-radius: 50%; background: #15803d; color: white; display: flex; align-items: center; justify-content: center; margin-bottom: 3px; }
+.done-title { font-size: 12.5px; font-weight: 800; color: #15803d; }
+.done-path, .done-drive {
+  font-size: 9.5px; color: #4d7c0f; font-family: Consolas, monospace;
+  word-break: break-all; background: white; border-radius: 6px; padding: 5px 7px; margin: 3px 0;
+  border: 1px solid #bbf7d0; width: 100%;
 }
-.done-icon {
-  width: 36px; height: 36px; border-radius: 50%; background: #15803d; color: white;
-  display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
-}
-.done-title { font-size: 14px; font-weight: 800; color: #15803d; }
-.done-path {
-  font-size: 10.5px; color: #4d7c0f; font-family: Consolas, monospace;
-  word-break: break-all; background: white; border-radius: 6px; padding: 6px 8px; margin: 6px 0;
-  border: 1px solid #bbf7d0;
-}
-.done-actions { margin-top: 4px; }
-.auto-close { font-size: 11px; color: #4d7c0f; font-weight: 700; margin-top: 8px; }
+.done-drive:empty { display: none; }
+.done-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
 
-.error-box {
-  background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 12px; padding: 14px 16px;
+.error-box { background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 10px; padding: 10px 12px; }
+.error-title { font-size: 11.5px; font-weight: 800; color: #b91c1c; margin-bottom: 3px; }
+.error-msg { font-size: 10.5px; color: #991b1b; word-break: break-word; }
+
+.auto-close {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  background: #1B2F5E; color: white; font-size: 11.5px; font-weight: 700;
+  padding: 8px 16px; border-radius: 20px; box-shadow: 0 4px 16px rgba(27,47,94,0.25);
 }
-.error-title { font-size: 12.5px; font-weight: 800; color: #b91c1c; margin-bottom: 4px; }
-.error-msg { font-size: 11.5px; color: #991b1b; word-break: break-word; }
 
 .hidden { display: none !important; }

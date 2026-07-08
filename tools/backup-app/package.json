@@ -8,6 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "pg": "^8.13.1"
   }
 }

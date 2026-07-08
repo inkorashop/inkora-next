@@ -4,67 +4,99 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Inkora · Backups</title>
+<link rel="icon" href="/logo.png" />
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="hdr">
-      <div class="brand">
-        <span class="brand-mark">INKORA</span>
-        <span class="brand-sub">Backups</span>
-      </div>
-      <span id="dot" class="dot dot-idle" title="Estado"></span>
-    </header>
+  <header class="hdr">
+    <img class="logo" src="/logo.png" alt="Inkora" />
+    <div class="brand">
+      <span class="brand-mark">INKORA</span>
+      <span class="brand-sub">Panel de backups</span>
+    </div>
+  </header>
 
-    <section class="card">
-      <div class="card-label">Último backup</div>
-      <div id="lastDate" class="big">Cargando…</div>
-      <div id="lastMeta" class="muted"></div>
+  <main class="grid" id="grid"></main>
+
+  <template id="sectionTemplate">
+    <section class="section">
+      <div class="section-hdr">
+        <h2 class="section-title"></h2>
+        <span class="dot dot-idle"></span>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Último backup</div>
+        <div class="last-date big">Cargando…</div>
+        <div class="last-meta muted"></div>
+      </div>
+
+      <div class="stats-row"></div>
+
+      <div class="next-run">
+        <div class="next-run-row">
+          <span class="next-run-label">Próxima automática</span>
+          <span class="next-run-text muted"></span>
+        </div>
+        <div class="next-bar"><div class="next-fill"></div></div>
+      </div>
+
+      <div class="settings">
+        <div class="setting-row">
+          <span class="setting-label">Frecuencia</span>
+          <select class="freq-select">
+            <option value="1">Todos los días</option>
+            <option value="3">Cada 3 días</option>
+            <option value="7">Cada semana</option>
+            <option value="14">Cada 2 semanas</option>
+            <option value="30">Cada mes</option>
+          </select>
+        </div>
+        <div class="setting-row path-row">
+          <span class="setting-label">Carpeta local</span>
+          <span class="path-value local-path"></span>
+          <button type="button" class="btn-mini browse-local">Cambiar</button>
+        </div>
+        <div class="setting-row path-row">
+          <span class="setting-label">Carpeta en Drive</span>
+          <span class="path-value drive-path"></span>
+          <button type="button" class="btn-mini browse-drive">Cambiar</button>
+        </div>
+      </div>
+
+      <button type="button" class="btn-primary btn-run">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="btn-run-label">Hacer copia ahora</span>
+      </button>
+
+      <div class="progress-box hidden">
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <div class="progress-pct muted"></div>
+        <div class="progress-line"></div>
+        <div class="progress-log"></div>
+      </div>
+
+      <div class="done-box hidden">
+        <div class="done-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
+        </div>
+        <div class="done-title">Backup completado</div>
+        <div class="done-path"></div>
+        <div class="done-drive"></div>
+        <div class="done-actions">
+          <button type="button" class="btn-secondary open-local">Abrir carpeta local</button>
+          <button type="button" class="btn-secondary open-drive hidden">Abrir carpeta Drive</button>
+        </div>
+      </div>
+
+      <div class="error-box hidden">
+        <div class="error-title">Ocurrió un error</div>
+        <div class="error-msg"></div>
+      </div>
     </section>
+  </template>
 
-    <section class="stats">
-      <div class="stat">
-        <div id="statTables" class="stat-value">—</div>
-        <div class="stat-label">Tablas</div>
-      </div>
-      <div class="stat">
-        <div id="statRows" class="stat-value">—</div>
-        <div class="stat-label">Filas (aprox.)</div>
-      </div>
-      <div class="stat">
-        <div id="statSize" class="stat-value">—</div>
-        <div class="stat-label">Tamaño BD</div>
-      </div>
-    </section>
-
-    <button id="btnRun" class="btn-primary" type="button">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Hacer backup ahora
-    </button>
-
-    <section id="progressBox" class="progress-box hidden">
-      <div class="progress-bar"><div class="progress-fill"></div></div>
-      <div id="progressLine" class="progress-line">Iniciando…</div>
-      <div id="progressLog" class="progress-log"></div>
-    </section>
-
-    <section id="doneBox" class="done-box hidden">
-      <div class="done-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
-      </div>
-      <div class="done-title">Backup completado</div>
-      <div id="donePath" class="done-path"></div>
-      <div class="done-actions">
-        <button id="btnOpenFolder" class="btn-secondary" type="button">Abrir carpeta</button>
-      </div>
-      <div id="autoCloseNote" class="auto-close hidden">Cerrando en <span id="autoCloseSecs">10</span>s…</div>
-    </section>
-
-    <section id="errorBox" class="error-box hidden">
-      <div class="error-title">Ocurrió un error</div>
-      <div id="errorMsg" class="error-msg"></div>
-    </section>
-  </div>
+  <div id="autoCloseNote" class="auto-close hidden">Cerrando en <span id="autoCloseSecs">10</span>s…</div>
 
   <script src="/app.js"></script>
 </body>

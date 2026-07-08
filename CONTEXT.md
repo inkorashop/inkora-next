@@ -101,7 +101,7 @@ Prompt corto recomendado para el usuario:
 
 ## Features implementadas con documentacion propia
 - `VOICE_ORDER_FEATURE.md`: como funciona la carga de pedidos por voz en Admin > Nuevo pedido (gramatica de comandos, campos reconocidos, matching de disenos, limitaciones conocidas de Android). Leer antes de diagnosticar cualquier reporte de bug sobre esta funcion — un nombre de diseno "raro" dictado por voz puede ser el nombre real de un diseno del catalogo, no un error de transcripcion.
-- `BACKUPS.md`: backup diario automatico (tarea programada de Windows local, no en la nube) del schema `public` de Supabase via `pg_dump` vendorizado en `tools/pg-bin/`. Los dumps van a `backups/supabase/` y el binario a `tools/pg-bin/`, ambos excluidos por `.gitignore` a proposito (nunca deben subirse a git, contienen datos reales). No recrear esta automatizacion desde cero sin leer primero ese archivo.
+- `BACKUPS.md`: backup automatico local (tarea programada de Windows, no en la nube) de la base de datos de Supabase (`pg_dump`, diario) y del codigo del proyecto (zip liviano, semanal), con copia opcional a Google Drive de escritorio (carpeta local sincronizada, sin API ni OAuth). Panel visual con estetica Inkora en `tools/backup-app/` (acceso directo "Inkora Backups" en el Escritorio). Todo lo que contiene datos reales o es especifico de esta PC (`backups/`, `tools/pg-bin/`, `tools/backup-app/config.json`, `tools/backup-app/node_modules/`) esta excluido por `.gitignore` a proposito. No recrear esta automatizacion desde cero sin leer primero ese archivo.
 
 ## Realtime / Admin
 - Hay scripts SQL relacionados con realtime y actividad admin: sql/admin_realtime.sql, sql/admin_activity_events.sql, sql/admin_version_snapshots.sql y sql/user_activity_events.sql.
