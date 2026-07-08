@@ -295,7 +295,7 @@ function NoteCell({ row, onSave }) {
 // FIX: StockCell ahora recibe qty_produced como prop separada para evitar que el re-render
 // resetee el input mientras el usuario todavía está editando.
 // El truco es: si está editando, no sincronizamos desde afuera.
-function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1 }) {
+function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1, requiredQty }) {
   const [val, setVal] = useState(stockInputValue(qtyProduced));
   const editingRef = useRef(false);
   const saveTimerRef = useRef(null);
@@ -393,6 +393,9 @@ function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1 }) {
     e.target.select();
   };
 
+  const currentVal = val === '' ? 0 : Number(val);
+  const isComplete = Number.isFinite(requiredQty) && requiredQty > 0 && currentVal >= requiredQty;
+
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, width: 90 }}>
       <button
@@ -418,7 +421,7 @@ function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1 }) {
           if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') { editingRef.current = false; setVal(stockInputValue(latestQtyRef.current)); e.currentTarget.blur(); }
         }}
-        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: 'white' }}
+        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: isComplete ? '#18a36a' : '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: 'white' }}
       />
       <button
         type="button"
@@ -2175,6 +2178,7 @@ export default function ProductionTab({
                                 onDelta={(delta, next) => adjustProductionTaskCounter(task, 'printed_qty', delta, next)}
                                 onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
                                 step={2}
+                                requiredQty={task.required_qty}
                               />
                               <button
                                 type="button"
@@ -2193,6 +2197,7 @@ export default function ProductionTab({
                                 onSave={qty => saveProductionTask(task, { produced_qty: qty })}
                                 onDelta={(delta, next) => adjustProductionTaskCounter(task, 'produced_qty', delta, next)}
                                 onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
+                                requiredQty={task.required_qty}
                               />
                               <button
                                 type="button"
