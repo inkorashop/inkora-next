@@ -143,22 +143,39 @@ function handlePostConfig(req, res) {
 // ── /api/browse-folder: selector nativo de carpetas de Windows ──────────────────
 
 function handleBrowseFolder(req, res) {
+  // El dialogo se cuelga de una ventana "dueña" invisible pero TopMost + con
+  // SetForegroundWindow forzado, para que no quede tapado detras de la ventana
+  // del panel (que tambien esta siempre-encima) ni detras de otras ventanas.
   const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -Name Win32 -Namespace Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);'
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.StartPosition = 'CenterScreen'
+$owner.Size = New-Object System.Drawing.Size(0,0)
+$owner.FormBorderStyle = 'None'
+$owner.Show()
+[Native.Win32]::SetForegroundWindow($owner.Handle) | Out-Null
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = "Elegir carpeta de destino"
 $dialog.ShowNewFolderButton = $true
-$result = $dialog.ShowDialog()
+$result = $dialog.ShowDialog($owner)
+$owner.Close()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }
 `;
   const child = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command', psScript]);
   let out = '';
+  let done = false;
+  const finish = (status, data) => { if (done) return; done = true; clearTimeout(timer); sendJson(res, status, data); };
+  const timer = setTimeout(() => {
+    try { child.kill(); } catch {}
+    finish(200, { path: null, error: 'timeout' });
+  }, 120000);
   child.stdout.on('data', d => { out += d.toString(); });
-  child.on('close', () => {
-    const selected = out.trim();
-    sendJson(res, 200, { path: selected || null });
-  });
-  child.on('error', err => sendJson(res, 500, { error: err.message }));
+  child.on('close', () => finish(200, { path: out.trim() || null }));
+  child.on('error', err => finish(500, { error: err.message }));
 }
 
 // ── /api/run-backup: dump de la base de datos ────────────────────────────────

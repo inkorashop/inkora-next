@@ -99,8 +99,8 @@ function wireSection(def, section) {
     loadStatus();
   });
 
-  browseLocal.addEventListener('click', () => pickFolder(def.kind, 'localDir'));
-  browseDrive.addEventListener('click', () => pickFolder(def.kind, 'driveDir'));
+  browseLocal.addEventListener('click', () => pickFolder(def.kind, 'localDir', browseLocal));
+  browseDrive.addEventListener('click', () => pickFolder(def.kind, 'driveDir', browseDrive));
 
   openLocal.addEventListener('click', () => fetch(`/api/open-folder?dir=${def.kind}&target=local`));
   openDrive.addEventListener('click', () => fetch(`/api/open-folder?dir=${def.kind}&target=drive`));
@@ -108,15 +108,27 @@ function wireSection(def, section) {
   btnRun.addEventListener('click', () => runBackup(def, section));
 }
 
-async function pickFolder(kind, field) {
-  const res = await fetch('/api/browse-folder', { method: 'POST' });
-  const data = await res.json();
-  if (!data.path) return; // el usuario canceló
-  await fetch('/api/config', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [kind]: { [field]: data.path } }),
-  });
-  loadStatus();
+async function pickFolder(kind, field, btn) {
+  // Feedback inmediato: el selector de Windows puede tardar en aparecer (o
+  // abrirse detrás de esta ventana), así que el botón muestra que está
+  // esperando en vez de no reaccionar y parecer roto.
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.title = 'Buscá la ventana del explorador (puede abrirse detrás)…';
+  try {
+    const res = await fetch('/api/browse-folder', { method: 'POST' });
+    const data = await res.json();
+    if (!data.path) return; // el usuario canceló o hubo timeout
+    await fetch('/api/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [kind]: { [field]: data.path } }),
+    });
+    loadStatus();
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.title = 'Elegir carpeta';
+  }
 }
 
 function resetPanels(section) {

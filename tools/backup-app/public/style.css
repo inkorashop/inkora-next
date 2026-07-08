@@ -83,6 +83,16 @@ body {
 }
 .btn-mini:hover { border-color: #2D6BE4; color: #2D6BE4; }
 
+.btn-icon {
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid #dde1ef; border-radius: 6px; background: white; color: #5a6380;
+  width: 22px; height: 22px; padding: 0; cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.btn-icon:hover { border-color: #2D6BE4; color: #2D6BE4; background: #f0f4ff; }
+.btn-icon:disabled { opacity: 0.5; cursor: default; }
+.btn-icon.loading { animation: pulse 1s ease-in-out infinite; }
+
 .btn-primary {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; border: none; border-radius: 10px;
