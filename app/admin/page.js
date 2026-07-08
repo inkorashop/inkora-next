@@ -115,6 +115,81 @@ function normalizeAdminTabOrder(value) {
   }
 }
 
+// ── Permisos de pestañas/subpestañas por usuario (admin_tab_visibility) ──
+// 'config' queda siempre visible solo para admins y no es configurable: si se
+// pudiera restringir, un admin podría auto-excluirse y perder la única forma
+// de revertirlo desde la UI.
+const ADMIN_TAB_VISIBILITY_SETTING_KEY = 'admin_tab_visibility';
+const ADMIN_NON_CONFIGURABLE_TABS = new Set(['config']);
+const ADMIN_SUBTAB_GROUPS = {
+  users: ['clients', 'operators', 'admins'],
+  production: ['produce', 'orders', 'stock', 'log', 'operators'],
+  tracking: ['activity', 'stats'],
+};
+const ADMIN_SUBTAB_LABELS = {
+  clients: 'Clientes',
+  operators: 'Operarios',
+  admins: 'Admins',
+  produce: 'Producir',
+  orders: 'Pedidos',
+  stock: 'Stock',
+  log: 'Historial',
+  activity: 'Actividad',
+  stats: 'Estadísticas',
+};
+
+function parseTabVisibilityConfig(value) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function visibilityEntryUsers(entry) {
+  return entry && Array.isArray(entry.users) ? entry.users : null;
+}
+
+// defaultVisible = true (pestañas: default admins, subpestañas: default "sin restricción extra")
+function isEntryAllowed(entry, viewerKey, defaultVisible) {
+  const users = visibilityEntryUsers(entry);
+  if (users === null) return defaultVisible;
+  return viewerKey ? users.includes(viewerKey) : false;
+}
+
+function resolveTabVisible(config, tabId, viewerKey, viewerRole) {
+  if (tabId === 'config') return viewerRole === 'admin';
+  return isEntryAllowed(config?.[tabId], viewerKey, viewerRole === 'admin');
+}
+
+function resolveSubtabVisible(config, tabId, subtabId, viewerKey, viewerRole) {
+  if (!resolveTabVisible(config, tabId, viewerKey, viewerRole)) return false;
+  return isEntryAllowed(config?.[tabId]?.subtabs?.[subtabId], viewerKey, true);
+}
+
+function getVisibleAdminTabs(config, order, viewerKey, viewerRole) {
+  return (order || ADMIN_TABS).filter(id => resolveTabVisible(config, id, viewerKey, viewerRole));
+}
+
+function getVisibleAdminSubtabs(config, tabId, viewerKey, viewerRole) {
+  return (ADMIN_SUBTAB_GROUPS[tabId] || []).filter(sub => resolveSubtabVisible(config, tabId, sub, viewerKey, viewerRole));
+}
+
+function viewerKeyFor(role, email) {
+  return role && email ? `${role}:${String(email).trim().toLowerCase()}` : null;
+}
+
+function tabVisibilityRowKey(tabId, subtabId) {
+  return subtabId ? `${tabId}::${subtabId}` : tabId;
+}
+
+function parseTabVisibilityRowKey(key) {
+  const [tabId, subtabId] = String(key).split('::');
+  return subtabId ? { tabId, subtabId } : { tabId };
+}
+
 function AdminTabIcon({ id }) {
   const paths = ADMIN_TAB_ICONS[id] || ADMIN_TAB_ICONS.products;
   return (
@@ -517,6 +592,7 @@ export default function Admin() {
   const isMobile = useIsMobile();
   const [screen, setScreen] = useState('checking'); // 'login' | 'checking' | 'denied' | 'panel'
   const [currentUser, setCurrentUser] = useState(null);
+  const [viewerRole, setViewerRole] = useState(null); // 'admin' | 'operator' | null
   const [impersonatedIdentity, setImpersonatedIdentity] = useState(() => {
     try { const s = sessionStorage.getItem('inkora_impersonate'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -617,6 +693,9 @@ useEffect(() => {
   const tabOrderSyncedRef = useRef(false);
   const [draggingTab, setDraggingTab] = useState(null);
   const [draggingConfigTab, setDraggingConfigTab] = useState(null);
+  // Permisos de pestañas/subpestañas: selección para carga masiva + modal de edición
+  const [tabVisibilityBulkSelection, setTabVisibilityBulkSelection] = useState(() => new Set());
+  const [tabVisibilityDraft, setTabVisibilityDraft] = useState(null);
   const [sellers, setSellers] = useState([]);
   const [newSeller, setNewSeller] = useState({ name: '', email: '', phone: '' });
   const [savingSeller, setSavingSeller] = useState(false);
@@ -819,6 +898,27 @@ useEffect(() => {
         if (!error) setSettings(prev => ({ ...prev, [ADMIN_TAB_ORDER_SETTING_KEY]: serialized }));
       });
   }, [settingsLoaded, settings]);
+
+  // Si mientras el panel ya está abierto cambian los permisos (ej. un admin
+  // edita la configuración de pestañas en vivo) y la pestaña/subpestaña activa
+  // deja de estar permitida para este viewer, saltar a la primera permitida.
+  useEffect(() => {
+    if (screen !== 'panel' || !viewerRole) return;
+    const visibilityConfig = parseTabVisibilityConfig(settings[ADMIN_TAB_VISIBILITY_SETTING_KEY]);
+    const viewerKey = viewerKeyFor(viewerRole, currentUser);
+    const allowedTabs = getVisibleAdminTabs(visibilityConfig, tabOrder, viewerKey, viewerRole);
+    if (activeTab && !allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0] || null);
+    }
+    const correctSubtab = (tabId, current, setter) => {
+      const allowedSubtabs = getVisibleAdminSubtabs(visibilityConfig, tabId, viewerKey, viewerRole);
+      if (allowedSubtabs.length && !allowedSubtabs.includes(current)) setter(allowedSubtabs[0]);
+    };
+    correctSubtab('users', usersSubtab, setUsersSubtab);
+    correctSubtab('production', productionSubtab, setProductionSubtab);
+    correctSubtab('tracking', trackingSubtab, setTrackingSubtab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, viewerRole, currentUser, settings[ADMIN_TAB_VISIBILITY_SETTING_KEY], tabOrder, activeTab, usersSubtab, productionSubtab, trackingSubtab]);
   // Always covers the full filtered set (not just the current selection) so
   // that selecting/deselecting rows never discards already-fetched size data
   // and never re-triggers a slow storage listing just to narrow the scope.
@@ -1921,12 +2021,52 @@ useEffect(() => {
     if (!panelIsVisible) setScreen('checking');
 
     const { data } = await supabase.from('admins').select('email').eq('email', email).single();
-    if (data) {
-      setCurrentUser(email);
-      if (!panelIsVisible) setScreen('panel');
-    } else {
+    let role = data ? 'admin' : null;
+
+    if (!role) {
+      // Same RPC que usa /operarios: "reclama" el registro de operario para
+      // esta cuenta de Google (idempotente) o tira error si no está habilitado.
+      const { data: operatorRow, error: operatorError } = await supabase.rpc('claim_production_operator');
+      if (!operatorError && operatorRow) role = 'operator';
+    }
+
+    if (!role) {
       setCurrentUser(null);
+      setViewerRole(null);
       setScreen('denied');
+      return;
+    }
+
+    setCurrentUser(email);
+    setViewerRole(role);
+
+    // Traer settings (incluye permisos de pestañas) ANTES de mostrar el panel,
+    // para que un operario nunca vea -ni por un instante- una pestaña que no
+    // le corresponde.
+    const { data: settingsRows } = await supabase.from('settings').select('*');
+    const settingsMap = {};
+    (settingsRows || []).forEach(row => { settingsMap[row.key] = row.value; });
+    setSettings(prev => ({ ...prev, ...settingsMap }));
+    setSettingsLoaded(true);
+
+    if (!panelIsVisible) {
+      const visibilityConfig = parseTabVisibilityConfig(settingsMap[ADMIN_TAB_VISIBILITY_SETTING_KEY]);
+      const viewerKey = viewerKeyFor(role, email);
+      const order = normalizeAdminTabOrder(settingsMap[ADMIN_TAB_ORDER_SETTING_KEY]) || tabOrderRef.current || ADMIN_TABS;
+      const allowedTabs = getVisibleAdminTabs(visibilityConfig, order, viewerKey, role);
+
+      if (!activeTab || !allowedTabs.includes(activeTab)) {
+        setActiveTab(allowedTabs[0] || null);
+      }
+      const correctSubtab = (tabId, current, setter) => {
+        const allowedSubtabs = getVisibleAdminSubtabs(visibilityConfig, tabId, viewerKey, role);
+        if (allowedSubtabs.length && !allowedSubtabs.includes(current)) setter(allowedSubtabs[0]);
+      };
+      correctSubtab('users', usersSubtab, setUsersSubtab);
+      correctSubtab('production', productionSubtab, setProductionSubtab);
+      correctSubtab('tracking', trackingSubtab, setTrackingSubtab);
+
+      setScreen('panel');
     }
   }
 
@@ -5057,6 +5197,108 @@ useEffect(() => {
     ? products.find(p => p.id === productManageModal.productId)
     : null;
 
+  // ── Permisos de pestañas/subpestañas ──
+  const tabVisibilitySettingRaw = settings[ADMIN_TAB_VISIBILITY_SETTING_KEY];
+  const tabVisibilityConfig = React.useMemo(
+    () => parseTabVisibilityConfig(tabVisibilitySettingRaw),
+    [tabVisibilitySettingRaw]
+  );
+  const viewerKey = viewerKeyFor(viewerRole, currentUser);
+  const visibleTabIds = React.useMemo(
+    () => getVisibleAdminTabs(tabVisibilityConfig, tabOrder, viewerKey, viewerRole),
+    [tabVisibilityConfig, tabOrder, viewerKey, viewerRole]
+  );
+  const visibleUsersSubtabs = React.useMemo(
+    () => getVisibleAdminSubtabs(tabVisibilityConfig, 'users', viewerKey, viewerRole),
+    [tabVisibilityConfig, viewerKey, viewerRole]
+  );
+  const visibleProductionSubtabs = React.useMemo(
+    () => getVisibleAdminSubtabs(tabVisibilityConfig, 'production', viewerKey, viewerRole),
+    [tabVisibilityConfig, viewerKey, viewerRole]
+  );
+  const visibleTrackingSubtabs = React.useMemo(
+    () => getVisibleAdminSubtabs(tabVisibilityConfig, 'tracking', viewerKey, viewerRole),
+    [tabVisibilityConfig, viewerKey, viewerRole]
+  );
+  const pickableTabVisibilityUsers = React.useMemo(() => {
+    const adminUsers = admins.map(a => ({ key: `admin:${String(a.email || '').toLowerCase()}`, label: a.name ? `${a.name} (${a.email})` : a.email, group: 'admin' }));
+    const operatorUsers = operators.filter(o => o.active !== false).map(o => ({ key: `operator:${String(o.email || '').toLowerCase()}`, label: o.name ? `${o.name} (${o.email})` : o.email, group: 'operator' }));
+    return [...adminUsers, ...operatorUsers];
+  }, [admins, operators]);
+
+  function tabVisibilityEntryFor(tabId, subtabId) {
+    return subtabId ? tabVisibilityConfig?.[tabId]?.subtabs?.[subtabId] : tabVisibilityConfig?.[tabId];
+  }
+
+  function tabVisibilitySummary(tabId, subtabId) {
+    const users = visibilityEntryUsers(tabVisibilityEntryFor(tabId, subtabId));
+    if (users === null) return subtabId ? 'Sin restricción propia' : 'Todos los admins';
+    if (users.length === 0) return 'Nadie';
+    return `${users.length} seleccionado${users.length === 1 ? '' : 's'}`;
+  }
+
+  function toggleTabVisibilityBulkRow(key) {
+    setTabVisibilityBulkSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  function openTabVisibilityEditor(targets, title) {
+    const first = targets[0];
+    const existingUsers = visibilityEntryUsers(tabVisibilityEntryFor(first.tabId, first.subtabId));
+    const initialSelected = existingUsers
+      ? new Set(existingUsers)
+      : new Set(admins.map(a => `admin:${String(a.email || '').toLowerCase()}`));
+    setTabVisibilityDraft({ targets, title, selected: initialSelected });
+  }
+
+  function toggleTabVisibilityDraftUser(key) {
+    setTabVisibilityDraft(prev => {
+      if (!prev) return prev;
+      const next = new Set(prev.selected);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...prev, selected: next };
+    });
+  }
+
+  function saveTabVisibilityDraft() {
+    if (!tabVisibilityDraft) return;
+    const usersArr = Array.from(tabVisibilityDraft.selected);
+    const next = { ...tabVisibilityConfig };
+    tabVisibilityDraft.targets.forEach(({ tabId, subtabId }) => {
+      if (subtabId) {
+        next[tabId] = { ...next[tabId], subtabs: { ...next[tabId]?.subtabs, [subtabId]: { users: usersArr } } };
+      } else {
+        next[tabId] = { ...next[tabId], users: usersArr };
+      }
+    });
+    saveSetting(ADMIN_TAB_VISIBILITY_SETTING_KEY, JSON.stringify(next));
+    setTabVisibilityDraft(null);
+    if (tabVisibilityDraft.targets.length > 1) setTabVisibilityBulkSelection(new Set());
+  }
+
+  function resetTabVisibilityDraftToDefault() {
+    if (!tabVisibilityDraft) return;
+    const next = { ...tabVisibilityConfig };
+    tabVisibilityDraft.targets.forEach(({ tabId, subtabId }) => {
+      if (subtabId) {
+        if (next[tabId]?.subtabs?.[subtabId]) {
+          const subtabs = { ...next[tabId].subtabs };
+          delete subtabs[subtabId];
+          next[tabId] = { ...next[tabId], subtabs };
+        }
+      } else if (next[tabId]) {
+        const { users, ...rest } = next[tabId];
+        next[tabId] = rest;
+      }
+    });
+    saveSetting(ADMIN_TAB_VISIBILITY_SETTING_KEY, JSON.stringify(next));
+    setTabVisibilityDraft(null);
+    if (tabVisibilityDraft.targets.length > 1) setTabVisibilityBulkSelection(new Set());
+  }
+
   function goToProductionOrder(orderId) {
     setActiveTab('production');
     setProductionSubtab('produce');
@@ -5068,7 +5310,7 @@ useEffect(() => {
       ['clients', `Clientes (${users.length})`],
       ['operators', `Operarios (${operators.length})`],
       ['admins', `Admins (${admins.length})`],
-    ];
+    ].filter(([id]) => visibleUsersSubtabs.includes(id));
     return (
       <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
         {tabs.map(([id, label]) => (
@@ -5417,6 +5659,19 @@ useEffect(() => {
     </div>
   );
 
+  if (screen === 'panel' && viewerRole === 'operator' && visibleTabIds.length === 0) return (
+    <div style={s.loginWrap}>
+      {sessionBar}
+      <div style={s.loginBox}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={LOGO} alt="INKORA" style={{height: 50, marginBottom: 16}} />
+        <div style={{background: '#fff7ed', color: '#c2410c', borderRadius: 8, padding: '12px 20px', fontSize: 14, fontWeight: 700, textAlign: 'center'}}>Todavía no tenés pestañas asignadas</div>
+        <p style={{fontSize: 13, color: '#5a6380', textAlign: 'center', margin: '4px 0 8px'}}>Pedile a un admin que te asigne acceso desde Configuración.</p>
+        <button style={s.btnPrimary} onClick={handleSignOut}>Cerrar sesión</button>
+      </div>
+    </div>
+  );
+
   // ── PANEL ──
   return (
     <DesignsProvider designs={designs}>
@@ -5672,7 +5927,7 @@ useEffect(() => {
         )}
         <div ref={tabsScrollRef} style={s.tabBarInner} className="adm-tabs">
           {(() => {
-            return tabOrder.map(id => (
+            return tabOrder.filter(id => visibleTabIds.includes(id)).map(id => (
               <button
                 key={id}
                 draggable
@@ -8456,6 +8711,155 @@ useEffect(() => {
             </div>
 
             <div style={s.card}>
+              <h2 style={s.sectionTitle}>Permisos de pestañas</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>
+                Elegí qué admins y operarios ven cada pestaña y subpestaña. Si no tocás una, sigue visible para todos los admins (los operarios no ven nada acá salvo que se los asignes explícitamente). Si se oculta una pestaña entera, sus subpestañas quedan ocultas también. “Configuración” siempre queda visible solo para admins.
+              </p>
+
+              {tabVisibilityBulkSelection.size > 0 && (
+                <div style={{display:'flex', alignItems:'center', gap:10, background:'#eef4ff', border:'1.5px solid #cfe0ff', borderRadius:8, padding:'8px 12px', marginBottom:10, flexWrap:'wrap'}}>
+                  <span style={{fontSize:12, fontWeight:800, color:'#1B2F5E'}}>{tabVisibilityBulkSelection.size} seleccionada{tabVisibilityBulkSelection.size === 1 ? '' : 's'}</span>
+                  <button
+                    type="button"
+                    onClick={() => openTabVisibilityEditor(
+                      Array.from(tabVisibilityBulkSelection).map(parseTabVisibilityRowKey),
+                      `${tabVisibilityBulkSelection.size} seleccionada${tabVisibilityBulkSelection.size === 1 ? '' : 's'}`
+                    )}
+                    style={{border:'none', borderRadius:7, padding:'6px 12px', fontSize:12, fontWeight:800, cursor:'pointer', background:'#1B2F5E', color:'white'}}
+                  >
+                    Asignar usuarios…
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTabVisibilityBulkSelection(new Set())}
+                    style={{border:'none', background:'none', color:'#5a6380', fontSize:12, fontWeight:700, cursor:'pointer'}}
+                  >
+                    Cancelar selección
+                  </button>
+                </div>
+              )}
+
+              <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                {tabOrder.filter(id => !ADMIN_NON_CONFIGURABLE_TABS.has(id)).map(tabId => (
+                  <div key={tabId} style={{border:'1.5px solid #dde1ef', borderRadius:8, overflow:'hidden'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:'white'}}>
+                      <input
+                        type="checkbox"
+                        checked={tabVisibilityBulkSelection.has(tabId)}
+                        onChange={() => toggleTabVisibilityBulkRow(tabId)}
+                        style={{width:16, height:16, cursor:'pointer', flexShrink:0}}
+                      />
+                      <AdminTabIcon id={tabId} />
+                      <span style={{fontSize:13, fontWeight:700, color:'#2d3352'}}>{ADMIN_TAB_DISPLAY_LABELS[tabId] || tabId}</span>
+                      <span style={{marginLeft:'auto', fontSize:11, color:'#8b95b3', fontWeight:700, whiteSpace:'nowrap'}}>{tabVisibilitySummary(tabId)}</span>
+                      <button
+                        type="button"
+                        onClick={() => openTabVisibilityEditor([{ tabId }], ADMIN_TAB_DISPLAY_LABELS[tabId] || tabId)}
+                        style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'5px 10px', fontSize:11, fontWeight:800, cursor:'pointer', background:'#f8faff', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                      >
+                        Editar
+                      </button>
+                    </div>
+                    {(ADMIN_SUBTAB_GROUPS[tabId] || []).map(subtabId => {
+                      const key = tabVisibilityRowKey(tabId, subtabId);
+                      return (
+                        <div key={key} style={{display:'flex', alignItems:'center', gap:10, padding:'8px 12px 8px 36px', background:'#fbfcff', borderTop:'1px solid #f0f2f8'}}>
+                          <input
+                            type="checkbox"
+                            checked={tabVisibilityBulkSelection.has(key)}
+                            onChange={() => toggleTabVisibilityBulkRow(key)}
+                            style={{width:15, height:15, cursor:'pointer', flexShrink:0}}
+                          />
+                          <span style={{fontSize:12, color:'#5a6380', fontWeight:600}}>{ADMIN_SUBTAB_LABELS[subtabId] || subtabId}</span>
+                          <span style={{marginLeft:'auto', fontSize:11, color:'#9aa3bc', fontWeight:700, whiteSpace:'nowrap'}}>{tabVisibilitySummary(tabId, subtabId)}</span>
+                          <button
+                            type="button"
+                            onClick={() => openTabVisibilityEditor([{ tabId, subtabId }], `${ADMIN_TAB_DISPLAY_LABELS[tabId] || tabId} › ${ADMIN_SUBTAB_LABELS[subtabId] || subtabId}`)}
+                            style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 9px', fontSize:11, fontWeight:800, cursor:'pointer', background:'white', color:'#1B2F5E', whiteSpace:'nowrap'}}
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {tabVisibilityDraft && (
+              <div
+                style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:350, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}
+                onClick={e => { if (e.target === e.currentTarget) setTabVisibilityDraft(null); }}
+              >
+                <div style={{background:'white', borderRadius:12, padding:20, width:'100%', maxWidth:440, maxHeight:'80vh', display:'flex', flexDirection:'column', gap:12}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
+                    <h3 style={{fontSize:15, fontWeight:800, color:'#1B2F5E', margin:0}}>¿Quién ve “{tabVisibilityDraft.title}”?</h3>
+                    <button type="button" onClick={() => setTabVisibilityDraft(null)} style={{border:'none', background:'none', fontSize:20, lineHeight:1, cursor:'pointer', color:'#9aa3bc'}}>×</button>
+                  </div>
+
+                  <div style={{display:'flex', gap:8}}>
+                    <button
+                      type="button"
+                      onClick={() => setTabVisibilityDraft(prev => ({ ...prev, selected: new Set(pickableTabVisibilityUsers.map(u => u.key)) }))}
+                      style={{fontSize:11, fontWeight:700, color:'#1B2F5E', background:'#eef4ff', border:'1.5px solid #cfe0ff', borderRadius:6, padding:'5px 10px', cursor:'pointer'}}
+                    >
+                      Seleccionar todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTabVisibilityDraft(prev => ({ ...prev, selected: new Set() }))}
+                      style={{fontSize:11, fontWeight:700, color:'#5a6380', background:'#f8faff', border:'1.5px solid #dde1ef', borderRadius:6, padding:'5px 10px', cursor:'pointer'}}
+                    >
+                      Ninguno
+                    </button>
+                  </div>
+
+                  <div style={{overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:14, paddingRight:4}}>
+                    <div>
+                      <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Admins</div>
+                      {pickableTabVisibilityUsers.filter(u => u.group === 'admin').length === 0 && (
+                        <p style={{fontSize:12, color:'#9aa3bc', margin:0}}>No hay admins cargados.</p>
+                      )}
+                      {pickableTabVisibilityUsers.filter(u => u.group === 'admin').map(u => (
+                        <label key={u.key} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 4px', fontSize:13, color:'#2d3352', cursor:'pointer'}}>
+                          <input type="checkbox" checked={tabVisibilityDraft.selected.has(u.key)} onChange={() => toggleTabVisibilityDraftUser(u.key)} style={{width:15, height:15, cursor:'pointer'}} />
+                          {u.label}
+                        </label>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Operarios</div>
+                      {pickableTabVisibilityUsers.filter(u => u.group === 'operator').length === 0 && (
+                        <p style={{fontSize:12, color:'#9aa3bc', margin:0}}>No hay operarios cargados.</p>
+                      )}
+                      {pickableTabVisibilityUsers.filter(u => u.group === 'operator').map(u => (
+                        <label key={u.key} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 4px', fontSize:13, color:'#2d3352', cursor:'pointer'}}>
+                          <input type="checkbox" checked={tabVisibilityDraft.selected.has(u.key)} onChange={() => toggleTabVisibilityDraftUser(u.key)} style={{width:15, height:15, cursor:'pointer'}} />
+                          {u.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, borderTop:'1px solid #f0f2f8', paddingTop:12}}>
+                    <button type="button" onClick={resetTabVisibilityDraftToDefault} style={{fontSize:12, fontWeight:700, color:'#b91c1c', background:'none', border:'none', cursor:'pointer', padding:0}}>
+                      Quitar restricción
+                    </button>
+                    <div style={{display:'flex', gap:8}}>
+                      <button type="button" onClick={() => setTabVisibilityDraft(null)} style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:700, cursor:'pointer', background:'white', color:'#5a6380'}}>
+                        Cancelar
+                      </button>
+                      <button type="button" onClick={saveTabVisibilityDraft} style={{border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:800, cursor:'pointer', background:'#1B2F5E', color:'white'}}>
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={s.card}>
               <h2 style={s.sectionTitle}>Dashboard <span style={{fontSize:11, color:'#9aa3bc', fontWeight:400}}>inkora.com.ar/dashboard</span></h2>
               <div style={{display:'flex', flexDirection:'column', gap:0}}>
                 <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0'}}>
@@ -9537,6 +9941,7 @@ useEffect(() => {
             carts={carts}
             activeSubtab={trackingSubtab}
             onChangeSubtab={setTrackingSubtab}
+            allowedSubtabs={visibleTrackingSubtabs}
           />
         )}
 
@@ -9556,6 +9961,7 @@ useEffect(() => {
               renderOrdersPanel={renderProductionOrdersPanel}
               renderOperatorsPanel={renderOperatorsPanel}
               designPdfMatches={designPdfMatches}
+              allowedSubtabs={visibleProductionSubtabs}
             />
           </div>
         )}
@@ -10889,15 +11295,16 @@ function StatsTab({ supabase, sellers, users = [], orders = [], carts = [] }) {
   );
 }
 
-function TrackingTab({ supabase, products, sellers, users, orders, carts, activeSubtab, onChangeSubtab }) {
+function TrackingTab({ supabase, products, sellers, users, orders, carts, activeSubtab, onChangeSubtab, allowedSubtabs }) {
   const isMobile = useIsMobile();
+  const trackingSubtabs = [
+    ['activity', 'Actividad'],
+    ['stats', 'Estadísticas'],
+  ].filter(([id]) => !allowedSubtabs || allowedSubtabs.includes(id));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        {[
-          ['activity', 'Actividad'],
-          ['stats', 'Estadísticas'],
-        ].map(([id, label]) => (
+        {trackingSubtabs.map(([id, label]) => (
           <button
             key={id}
             onClick={() => onChangeSubtab(id)}
@@ -10917,7 +11324,9 @@ function TrackingTab({ supabase, products, sellers, users, orders, carts, active
         ))}
       </div>
 
-      {activeSubtab === 'activity' ? (
+      {trackingSubtabs.length === 0 ? (
+        <p style={{ fontSize: 13, color: '#9aa3bc' }}>No tenés acceso a ninguna vista de Seguimiento.</p>
+      ) : activeSubtab === 'activity' ? (
         <HeatmapTab supabase={supabase} products={products} />
       ) : (
         <StatsTab supabase={supabase} sellers={sellers} users={users} orders={orders} carts={carts} />

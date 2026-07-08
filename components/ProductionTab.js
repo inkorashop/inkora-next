@@ -469,6 +469,7 @@ export default function ProductionTab({
   renderOrdersPanel,
   renderOperatorsPanel,
   designPdfMatches = {},
+  allowedSubtabs = null,
 }) {
   const isMobile = useIsMobile();
   const [internalActiveSubTab, setInternalActiveSubTab] = useState('produce');
@@ -1764,7 +1765,7 @@ export default function ProductionTab({
           ['stock', 'Stock'],
           ['log', 'Historial'],
           ['operators', 'Operarios'],
-        ].map(([id, label]) => (
+        ].filter(([id]) => !allowedSubtabs || allowedSubtabs.includes(id)).map(([id, label]) => (
           <button key={id} onClick={() => changeSubTab(id)}
             style={{ border: 'none', padding: isMobile ? '6px 10px' : '5px 14px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef', flex: '0 0 auto', whiteSpace: 'nowrap' }}>
             {label}
