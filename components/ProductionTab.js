@@ -1759,13 +1759,9 @@ export default function ProductionTab({
 
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflowX: 'auto', overflowY: 'hidden', alignSelf: isMobile ? 'stretch' : 'flex-start', flexShrink: 0, WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-        {[
-          ['produce', 'Producir'],
-          ['orders', 'Pedidos'],
-          ['stock', 'Stock'],
-          ['log', 'Historial'],
-          ['operators', 'Operarios'],
-        ].filter(([id]) => !allowedSubtabs || allowedSubtabs.includes(id)).map(([id, label]) => (
+        {(allowedSubtabs || ['produce', 'orders', 'stock', 'log', 'operators'])
+          .map(id => [id, PRODUCTION_SUBTAB_LABELS[id] || id])
+          .map(([id, label]) => (
           <button key={id} onClick={() => changeSubTab(id)}
             style={{ border: 'none', padding: isMobile ? '6px 10px' : '5px 14px', fontSize: isMobile ? 11 : 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', background: activeSubTab === id ? '#1B2F5E' : 'white', color: activeSubTab === id ? 'white' : '#9aa3bc', borderRight: '1.5px solid #dde1ef', flex: '0 0 auto', whiteSpace: 'nowrap' }}>
             {label}
