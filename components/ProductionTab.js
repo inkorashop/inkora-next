@@ -28,6 +28,7 @@ import {
   applyBridgeUpdate,
   getBridgeUpdateStatus,
 } from '../lib/print-bridge-client';
+import { parseColumnWidths, clampColumnWidth } from '../lib/admin-preferences';
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
@@ -70,6 +71,33 @@ const PRODUCTION_SUBTAB_LABELS = {
   operators: 'Operarios',
 };
 const LIVE_TASK_REFRESH_MS = 2500;
+
+export const PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY = 'production_order_detail_column_widths';
+const PRODUCTION_ORDER_DETAIL_MIN_WIDTH = 50;
+const PRODUCTION_ORDER_DETAIL_MAX_WIDTH = 480;
+// Comentarios de ancho original (StockCell + botones + padding) documentados
+// donde estaban antes de hacerse arrastrables, más abajo en el <colgroup>.
+const PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS = {
+  product: 95,
+  design: 280,
+  toproduce: 72,
+  printed: 145,
+  diecut: 145,
+  waste: 100,
+  notes: 105,
+  print: 115,
+};
+const PRODUCTION_ORDER_DETAIL_COLUMN_LABELS = {
+  product: 'Producto',
+  design: 'Diseño',
+  toproduce: 'A producir',
+  printed: 'Impreso',
+  diecut: 'Troquelado',
+  waste: 'Desperdicio',
+  notes: 'Observaciones',
+  print: 'Imprimir',
+};
+const PRODUCTION_ORDER_DETAIL_COLUMN_ORDER = ['product', 'design', 'toproduce', 'printed', 'diecut', 'waste', 'notes', 'print'];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -470,6 +498,8 @@ export default function ProductionTab({
   renderOperatorsPanel,
   designPdfMatches = {},
   allowedSubtabs = null,
+  orderDetailColumnWidths,
+  onSaveOrderDetailColumnWidths,
 }) {
   const isMobile = useIsMobile();
   const [internalActiveSubTab, setInternalActiveSubTab] = useState('produce');
@@ -478,6 +508,46 @@ export default function ProductionTab({
     setInternalActiveSubTab(id);
     onChangeSubtab?.(id);
   };
+
+  const [columnWidths, setColumnWidths] = useState(
+    () => parseColumnWidths(orderDetailColumnWidths, PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS)
+  );
+  const columnWidthsRef = useRef(columnWidths);
+  useEffect(() => { columnWidthsRef.current = columnWidths; }, [columnWidths]);
+  const columnWidthsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (columnWidthsLoadedRef.current || orderDetailColumnWidths === undefined) return;
+    columnWidthsLoadedRef.current = true;
+    setColumnWidths(parseColumnWidths(orderDetailColumnWidths, PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS));
+  }, [orderDetailColumnWidths]);
+  const [resizingColumn, setResizingColumn] = useState(null);
+
+  function startColumnResize(e, columnKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.touches ? e.touches[0].clientX : e.clientX;
+    const startWidth = columnWidthsRef.current[columnKey] ?? PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS[columnKey] ?? 100;
+    setResizingColumn(columnKey);
+
+    function onMove(moveEvent) {
+      if (moveEvent.touches) moveEvent.preventDefault();
+      const clientX = moveEvent.touches ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const next = clampColumnWidth(startWidth + (clientX - startX), PRODUCTION_ORDER_DETAIL_MIN_WIDTH, PRODUCTION_ORDER_DETAIL_MAX_WIDTH);
+      setColumnWidths(prev => ({ ...prev, [columnKey]: next }));
+    }
+    function onEnd() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      setResizingColumn(null);
+      onSaveOrderDetailColumnWidths?.(columnWidthsRef.current);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+  }
   const [internalSelectedOrderId, setInternalSelectedOrderId] = useState('');
   const selectedProductionOrderId = selectedOrderId ?? internalSelectedOrderId;
   const selectProductionOrder = (id) => {
@@ -2047,25 +2117,30 @@ export default function ProductionTab({
                 </div>
 
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable', WebkitOverflowScrolling: 'touch' }}>
-                  <table style={{ width: '100%', minWidth: isMobile ? 860 : 880, borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                  <table style={{
+                    width: Math.max(
+                      PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.reduce((sum, key) => sum + (columnWidths[key] ?? PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS[key]), 0),
+                      isMobile ? 860 : 880
+                    ),
+                    borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed',
+                  }}>
                     <colgroup>
-                      {/* Producto */}<col style={{ width: 95 }} />
-                      {/* Diseño  */}<col />
-                      {/* A prod  */}<col style={{ width: 72 }} />
-                      {/* Impreso: StockCell(90) + gap(3) + =N button(38) + padding(10) = 141 */}
-                      <col style={{ width: 145 }} />
-                      {/* Troquelado: same */}
-                      <col style={{ width: 145 }} />
-                      {/* Desperdicio: StockCell(90) + padding(10) = 100 */}
-                      <col style={{ width: 100 }} />
-                      {/* Observaciones */}<col style={{ width: 105 }} />
-                      {/* Imprimir: input(38) + gap(3) + button(~60) + padding(10) = 111 */}
-                      <col style={{ width: 115 }} />
+                      {PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.map(key => (
+                        <col key={key} style={{ width: columnWidths[key] ?? PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS[key] }} />
+                      ))}
                     </colgroup>
                     <thead>
                       <tr>
-                        {['Producto', 'Diseño', 'A producir', 'Impreso', 'Troquelado', 'Desperdicio', 'Observaciones', 'Imprimir'].map((h, i) => (
-                          <th key={h} style={{ textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(i === 7 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>{h}</th>
+                        {PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.map((key, i) => (
+                          <th key={key} style={{ position: 'relative', textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(i === PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.length - 1 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>
+                            {PRODUCTION_ORDER_DETAIL_COLUMN_LABELS[key]}
+                            <span
+                              onMouseDown={e => startColumnResize(e, key)}
+                              onTouchStart={e => startColumnResize(e, key)}
+                              title="Arrastrá para cambiar el ancho"
+                              style={{ position: 'absolute', top: 0, bottom: 0, right: -3, width: 7, cursor: 'col-resize', zIndex: 3, background: resizingColumn === key ? '#2D6BE4' : 'transparent' }}
+                            />
+                          </th>
                         ))}
                       </tr>
                     </thead>

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import ModelViewer from '@/components/ModelViewer';
-import ProductionTab from '@/components/ProductionTab';
+import ProductionTab, { PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY } from '@/components/ProductionTab';
 import { DesignsProvider } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
 import CreateOrderModal from '@/components/CreateOrderModal';
@@ -44,6 +44,7 @@ import {
   scanBridgePdfs,
   matchBridgeDesignPdfs,
 } from '@/lib/print-bridge-client';
+import { adminPreferenceKey } from '@/lib/admin-preferences';
 
 const DESIGN_FORMAT_OPTIONS = [
   { value: 'jpg', label: '.jpg', accept: 'image/jpeg,.jpg,.jpeg' },
@@ -3453,14 +3454,9 @@ useEffect(() => {
     return sellers.find(s => s.id === id)?.name || 'Vendedor';
   }
 
-  function adminPreferenceKey(baseKey) {
-    const safeEmail = String(currentUser || 'anon').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    return `${baseKey}_${safeEmail || 'anon'}`;
-  }
-
   function scaleSellerFilterSettingKey() {
     return settings.admin_scale_seller_filter_individual !== 'false'
-      ? adminPreferenceKey('admin_scale_seller_filter')
+      ? adminPreferenceKey('admin_scale_seller_filter', currentUser)
       : 'admin_scale_seller_filter_global';
   }
 
@@ -10082,6 +10078,8 @@ useEffect(() => {
               renderOperatorsPanel={renderOperatorsPanel}
               designPdfMatches={designPdfMatches}
               allowedSubtabs={visibleProductionSubtabs}
+              orderDetailColumnWidths={settings[adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser)]}
+              onSaveOrderDetailColumnWidths={widths => saveSetting(adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser), JSON.stringify(widths))}
             />
           </div>
         )}
