@@ -24,6 +24,7 @@ public sealed class PrintJob
     public string OrderCode { get; set; } = "";
     public string Status { get; set; } = "queued";
     public string Error { get; set; } = "";
+    public string Warning { get; set; } = "";
     public int? PagesPrinted { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.Now;
     public DateTimeOffset? StartedAt { get; set; }

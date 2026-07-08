@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using Inkora.PrintBridge.Models;
 
@@ -6,6 +7,10 @@ namespace Inkora.PrintBridge.Services;
 
 public sealed class PrintJobService
 {
+    // Portable, sin instalador: misma release que usa build-release.ps1 cuando no
+    // encuentra un SumatraPDF.exe local para vendorizar.
+    private const string SumatraDownloadUrl = "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64.exe";
+
     private readonly PdfCatalogService _pdfCatalogService;
     private readonly PrinterService _printerService;
     private readonly DevModeService _devModeService;
@@ -13,6 +18,7 @@ public sealed class PrintJobService
     private readonly object _lock = new();
     private readonly List<PrintJob> _jobs = [];
     private readonly List<string> _sumatraProbePaths = [];
+    private bool _selfHealAttempted;
 
     public string? SumatraPdfPath { get; private set; }
     public IReadOnlyList<string> SumatraProbePaths => _sumatraProbePaths;
@@ -34,6 +40,43 @@ public sealed class PrintJobService
         if (SumatraPdfPath is not null && File.Exists(SumatraPdfPath)) return;
         SumatraPdfPath = null;
         DetectSumatraPdf();
+
+        // Auto-reparacion: si desaparecio (ej. antivirus lo puso en cuarentena
+        // despues de una actualizacion), intentar re-descargarlo una vez por
+        // proceso antes de resignarse al fallback de copias separadas.
+        if (SumatraPdfPath is null && !_selfHealAttempted)
+        {
+            _selfHealAttempted = true;
+            TryDownloadSumatra();
+            DetectSumatraPdf();
+        }
+    }
+
+    private void TryDownloadSumatra()
+    {
+        try
+        {
+            _logService.Info($"SumatraPDF no encontrado. Auto-reparacion: descargando desde {SumatraDownloadUrl}");
+            var installDir = GetStableInstallDirectory();
+            Directory.CreateDirectory(installDir);
+            var destination = Path.Combine(installDir, "SumatraPDF.exe");
+            var tempFile = destination + $".download-{Environment.ProcessId}";
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            var bytes = http.GetByteArrayAsync(SumatraDownloadUrl).GetAwaiter().GetResult();
+            if (bytes.Length < 1_000_000)
+            {
+                throw new InvalidOperationException($"Descarga invalida ({bytes.Length} bytes).");
+            }
+
+            File.WriteAllBytes(tempFile, bytes);
+            File.Move(tempFile, destination, true);
+            _logService.Info($"SumatraPDF auto-reparado en: {destination} ({bytes.Length} bytes).");
+        }
+        catch (Exception ex)
+        {
+            _logService.Error($"Auto-reparacion de SumatraPDF fallo: {ex.Message}");
+        }
     }
 
     private void DetectSumatraPdf()
@@ -217,8 +260,11 @@ public sealed class PrintJobService
             {
                 if (job.Copies > 1)
                 {
-                    throw new InvalidOperationException(
-                        $"SumatraPDF no esta disponible. Para respetar {job.Copies} copias como un unico trabajo confiable, instala o empaqueta SumatraPDF.exe junto al Bridge.");
+                    job.Warning =
+                        $"SumatraPDF no disponible: se imprimieron {job.Copies} copias como trabajos separados en vez de un unico trabajo. " +
+                        "Revisa que SumatraPDF.exe siga junto al Bridge (el antivirus puede haberlo puesto en cuarentena).";
+                    _logService.Error(
+                        $"SumatraPDF no disponible para {job.Id}. Fallback a {job.Copies} trabajos shell-printto separados.");
                 }
                 PrintWithShellVerb(job);
             }
@@ -503,6 +549,7 @@ public sealed class PrintJobService
                     j.OrderCode,
                     j.Status,
                     j.Error,
+                    j.Warning,
                     j.CreatedAt,
                     j.StartedAt,
                     j.CompletedAt
