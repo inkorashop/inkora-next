@@ -1,25 +1,19 @@
 import { execSync } from 'node:child_process';
 
-// Version "semver-like" derivada del numero de commits (1.0.<n>), para que
-// se lea como una version real en vez de un hash de git, sin necesitar que
-// alguien la actualice a mano en cada cambio. El hash real queda disponible
-// aparte (NEXT_PUBLIC_APP_COMMIT) para quien lo necesite en un tooltip.
+// Version "semver-like" (1.<dias>.<minutos del dia>) derivada de la hora de
+// build, no del historial de git: se probo contando commits (git rev-list
+// --count) pero Vercel clona el repo en modo shallow para el build y el
+// intento de pedir el historial completo (git fetch --unshallow) fallo ahi
+// tambien (probablemente sin credenciales del remoto para ese comando
+// arbitrario) devolviendo numeros chicos sin sentido ("1.0.10"). Esta cuenta
+// no depende de git en absoluto, asi que no le puede volver a pasar eso.
+const BUILD_EPOCH_MS = Date.parse('2026-01-01T00:00:00Z');
+
 function getBuildVersion() {
-  try {
-    // Vercel clona con --depth limitado: si el repo quedo shallow, el conteo
-    // de commits da un numero chico y sin sentido (visto en produccion: "10"
-    // en vez de ~700). Se pide el historial completo antes de contar.
-    try {
-      const isShallow = execSync('git rev-parse --is-shallow-repository').toString().trim() === 'true';
-      if (isShallow) execSync('git fetch --unshallow --quiet', { stdio: 'ignore' });
-    } catch {
-      // Sin red o sin remoto configurado: seguimos con el historial que haya.
-    }
-    const count = execSync('git rev-list --count HEAD').toString().trim();
-    return `1.0.${count}`;
-  } catch {
-    return 'dev';
-  }
+  const elapsedMinutes = Math.floor((Date.now() - BUILD_EPOCH_MS) / 60000);
+  const days = Math.floor(elapsedMinutes / 1440);
+  const minutesOfDay = elapsedMinutes % 1440;
+  return `1.${days}.${minutesOfDay}`;
 }
 
 function getBuildCommit() {
