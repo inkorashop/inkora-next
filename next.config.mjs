@@ -6,6 +6,15 @@ import { execSync } from 'node:child_process';
 // aparte (NEXT_PUBLIC_APP_COMMIT) para quien lo necesite en un tooltip.
 function getBuildVersion() {
   try {
+    // Vercel clona con --depth limitado: si el repo quedo shallow, el conteo
+    // de commits da un numero chico y sin sentido (visto en produccion: "10"
+    // en vez de ~700). Se pide el historial completo antes de contar.
+    try {
+      const isShallow = execSync('git rev-parse --is-shallow-repository').toString().trim() === 'true';
+      if (isShallow) execSync('git fetch --unshallow --quiet', { stdio: 'ignore' });
+    } catch {
+      // Sin red o sin remoto configurado: seguimos con el historial que haya.
+    }
     const count = execSync('git rev-list --count HEAD').toString().trim();
     return `1.0.${count}`;
   } catch {
