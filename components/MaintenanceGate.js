@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { FORCE_REFRESH_CHANNEL, FORCE_REFRESH_EVENT } from '@/lib/force-refresh';
 import ServiceUnavailable from './ServiceUnavailable';
 
 // Rutas de uso interno: nunca se bloquean ni muestran el aviso de
@@ -101,6 +102,20 @@ export default function MaintenanceGate({ children }) {
       clearInterval(id);
       window.removeEventListener('inkora:supabase-402', on402);
     };
+  }, [exempt]);
+
+  // Refresh forzado en vivo (Configuración > Actualizar usuarios): a
+  // diferencia del mantenimiento, esto no bloquea nada, solo recarga al
+  // instante a quien ya tenga la pagina abierta.
+  useEffect(() => {
+    if (exempt) return;
+    const channel = supabase.channel(FORCE_REFRESH_CHANNEL);
+    channel
+      .on('broadcast', { event: FORCE_REFRESH_EVENT }, ({ payload }) => {
+        if (payload?.audience === 'site') window.location.reload();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [exempt]);
 
   if (exempt) return children;

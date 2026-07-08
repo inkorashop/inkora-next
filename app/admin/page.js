@@ -45,6 +45,7 @@ import {
   matchBridgeDesignPdfs,
 } from '@/lib/print-bridge-client';
 import { adminPreferenceKey } from '@/lib/admin-preferences';
+import { FORCE_REFRESH_CHANNEL, FORCE_REFRESH_EVENT, broadcastForceRefresh } from '@/lib/force-refresh';
 
 const DESIGN_FORMAT_OPTIONS = [
   { value: 'jpg', label: '.jpg', accept: 'image/jpeg,.jpg,.jpeg' },
@@ -431,6 +432,55 @@ function GoogleIcon() {
   );
 }
 
+function AdminVersionBadge() {
+  const version = process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
+  const commit = process.env.NEXT_PUBLIC_APP_COMMIT || '';
+  const buildTime = process.env.NEXT_PUBLIC_APP_BUILD_TIME || '';
+  const [latestVersion, setLatestVersion] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled) setLatestVersion(data.version);
+      } catch {
+        // Sin conexion momentanea: no romper el header por esto.
+      }
+    }
+    check();
+    const id = setInterval(check, 60000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const buildTimeLabel = buildTime
+    ? new Date(buildTime).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const isOutdated = Boolean(latestVersion) && latestVersion !== version;
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 10, flexShrink: 0 }}>
+      <span
+        title={`Commit ${commit}`}
+        style={{ fontSize: 10, opacity: 0.5, color: 'white', letterSpacing: 0.3, whiteSpace: 'nowrap' }}
+      >
+        v{version}{buildTimeLabel && ` · ${buildTimeLabel}`}
+      </span>
+      {isOutdated && (
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          title="Hay una version mas nueva publicada. Click para actualizar."
+          style={{ border: '1px solid rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.14)', color: 'white', borderRadius: 999, padding: '2px 8px', fontSize: 9, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          Nueva versión · Actualizar
+        </button>
+      )}
+    </span>
+  );
+}
+
 function CopyIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -729,6 +779,8 @@ useEffect(() => {
   const subtabOrderRef = useRef(subtabOrder);
   const subtabOrderSyncedRef = useRef(false);
   const [draggingConfigSubtab, setDraggingConfigSubtab] = useState(null); // { tabId, subtabId } | null
+  const [forceRefreshTarget, setForceRefreshTarget] = useState('');
+  const [forceRefreshStatus, setForceRefreshStatus] = useState(null); // { key, ok } | null
   const [sellers, setSellers] = useState([]);
   const [newSeller, setNewSeller] = useState({ name: '', email: '', phone: '' });
   const [savingSeller, setSavingSeller] = useState(false);
@@ -1366,6 +1418,21 @@ useEffect(() => {
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh forzado en vivo (Configuración > Actualizar usuarios): no bloquea
+  // nada, solo recarga al instante a quien ya tenga /admin abierto.
+  useEffect(() => {
+    if (screen !== 'panel') return;
+    const myEmail = String(currentUser || '').trim().toLowerCase();
+    const channel = supabase.channel(FORCE_REFRESH_CHANNEL);
+    channel
+      .on('broadcast', { event: FORCE_REFRESH_EVENT }, ({ payload }) => {
+        if (payload?.audience !== 'admin') return;
+        if (payload.target === 'all' || payload.target === myEmail) window.location.reload();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [screen, currentUser]);
 
   const panelLoadedRef = useRef(false);
 
@@ -5264,8 +5331,8 @@ useEffect(() => {
     [tabVisibilityConfig, subtabOrder, viewerKey, viewerRole]
   );
   const pickableTabVisibilityUsers = React.useMemo(() => {
-    const adminUsers = admins.map(a => ({ key: `admin:${String(a.email || '').toLowerCase()}`, label: a.name ? `${a.name} (${a.email})` : a.email, group: 'admin' }));
-    const operatorUsers = operators.filter(o => o.active !== false).map(o => ({ key: `operator:${String(o.email || '').toLowerCase()}`, label: o.name ? `${o.name} (${o.email})` : o.email, group: 'operator' }));
+    const adminUsers = admins.map(a => ({ key: `admin:${String(a.email || '').toLowerCase()}`, email: String(a.email || '').toLowerCase(), label: a.name ? `${a.name} (${a.email})` : a.email, group: 'admin' }));
+    const operatorUsers = operators.filter(o => o.active !== false).map(o => ({ key: `operator:${String(o.email || '').toLowerCase()}`, email: String(o.email || '').toLowerCase(), label: o.name ? `${o.name} (${o.email})` : o.email, group: 'operator' }));
     return [...adminUsers, ...operatorUsers];
   }, [admins, operators]);
 
@@ -5395,6 +5462,17 @@ useEffect(() => {
     saveSetting(ADMIN_TAB_VISIBILITY_SETTING_KEY, JSON.stringify(next));
     setTabVisibilityDraft(null);
     if (tabVisibilityDraft.targets.length > 1) setTabVisibilityBulkSelection(new Set());
+  }
+
+  async function handleForceRefresh(key, audience, target) {
+    setForceRefreshStatus(null);
+    try {
+      await broadcastForceRefresh(supabase, { audience, target });
+      setForceRefreshStatus({ key, ok: true });
+    } catch {
+      setForceRefreshStatus({ key, ok: false });
+    }
+    setTimeout(() => setForceRefreshStatus(prev => (prev?.key === key ? null : prev)), 3000);
   }
 
   function goToProductionOrder(orderId) {
@@ -5918,12 +5996,10 @@ useEffect(() => {
       <header style={s.header}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} alt="INKORA" style={{height: 36, filter: 'brightness(0) invert(1)'}} />
-        {process.env.NEXT_PUBLIC_APP_VERSION && (
-          <span style={{ fontSize: 9, opacity: 0.35, letterSpacing: 0.5, color: 'white', flexShrink: 0, marginRight: 6 }}>v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
-        )}
         <span style={s.headerTitle} className="adm-header-title">
           Panel de Administración
         </span>
+        <AdminVersionBadge />
         <button
   type="button"
   onClick={() => setAdminDarkMode(v => !v)}
@@ -8900,6 +8976,74 @@ useEffect(() => {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <h2 style={s.sectionTitle}>Actualizar usuarios</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginBottom:12}}>
+                Fuerza un refresh instantáneo a quien ya tenga la página abierta (activos e inactivos) para que tomen la última versión. No activa el modo mantenimiento ni corta el acceso.
+              </p>
+
+              <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                  <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:120}}>Sitio (catálogo, etc.)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleForceRefresh('site-all', 'site', 'all')}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:800, cursor:'pointer', background:'#f8faff', color:'#1B2F5E'}}
+                  >
+                    Actualizar a todos los usuarios
+                  </button>
+                  {forceRefreshStatus?.key === 'site-all' && (
+                    <span style={{fontSize:11, fontWeight:700, color: forceRefreshStatus.ok ? '#18a36a' : '#b91c1c'}}>
+                      {forceRefreshStatus.ok ? '✓ Enviado' : 'Error al enviar'}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                  <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:120}}>Panel de admin</span>
+                  <button
+                    type="button"
+                    onClick={() => handleForceRefresh('admin-all', 'admin', 'all')}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:800, cursor:'pointer', background:'#f8faff', color:'#1B2F5E'}}
+                  >
+                    Actualizar a todos en el panel
+                  </button>
+                  {forceRefreshStatus?.key === 'admin-all' && (
+                    <span style={{fontSize:11, fontWeight:700, color: forceRefreshStatus.ok ? '#18a36a' : '#b91c1c'}}>
+                      {forceRefreshStatus.ok ? '✓ Enviado' : 'Error al enviar'}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                  <span style={{fontSize:12, fontWeight:700, color:'#2d3352', minWidth:120}}>Usuario puntual</span>
+                  <select
+                    value={forceRefreshTarget}
+                    onChange={e => setForceRefreshTarget(e.target.value)}
+                    style={{border:'1.5px solid #dde1ef', borderRadius:8, padding:'7px 10px', fontSize:12, fontFamily:'Barlow, sans-serif', color:'#2d3352', minWidth:240}}
+                  >
+                    <option value="">Elegir admin u operario…</option>
+                    {pickableTabVisibilityUsers.map(u => (
+                      <option key={u.key} value={u.email}>{u.label} ({u.group === 'admin' ? 'admin' : 'operario'})</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!forceRefreshTarget}
+                    onClick={() => handleForceRefresh('admin-user', 'admin', forceRefreshTarget)}
+                    style={{border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:800, cursor: forceRefreshTarget ? 'pointer' : 'not-allowed', background: forceRefreshTarget ? '#1B2F5E' : '#dde1ef', color:'white', opacity: forceRefreshTarget ? 1 : 0.7}}
+                  >
+                    Actualizar a este usuario
+                  </button>
+                  {forceRefreshStatus?.key === 'admin-user' && (
+                    <span style={{fontSize:11, fontWeight:700, color: forceRefreshStatus.ok ? '#18a36a' : '#b91c1c'}}>
+                      {forceRefreshStatus.ok ? '✓ Enviado' : 'Error al enviar'}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
