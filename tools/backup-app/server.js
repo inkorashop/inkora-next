@@ -143,6 +143,14 @@ function handlePostConfig(req, res) {
 // ── /api/browse-folder: selector nativo de carpetas de Windows ──────────────────
 
 function handleBrowseFolder(req, res) {
+  // Se usa OpenFileDialog (no FolderBrowserDialog) para conseguir el selector
+  // MODERNO de Windows (con la barra de Accesos rapidos/OneDrive/Este equipo,
+  // igual al Explorador real) en vez del dialogo clasico tipo arbol de los 90 —
+  // FolderBrowserDialog.AutoUpgradeEnabled deberia dar ese mismo look pero en
+  // la practica no siempre lo hace bien desde powershell.exe. Truco conocido y
+  // seguro (sin interop COM a mano): OpenFileDialog SIEMPRE usa el dialogo
+  // moderno, y forzando "seleccionar cualquier nombre de archivo" + quedarnos
+  // solo con la carpeta contenedora, se comporta como selector de carpetas.
   // El dialogo se cuelga de una ventana "dueña" invisible pero TopMost + con
   // SetForegroundWindow forzado, para que no quede tapado detras de la ventana
   // del panel (que tambien esta siempre-encima) ni detras de otras ventanas.
@@ -158,12 +166,17 @@ $owner.Size = New-Object System.Drawing.Size(0,0)
 $owner.FormBorderStyle = 'None'
 $owner.Show()
 [Native.Win32]::SetForegroundWindow($owner.Handle) | Out-Null
-$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = "Elegir carpeta de destino"
-$dialog.ShowNewFolderButton = $true
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = "Elegir carpeta de destino"
+$dialog.ValidateNames = $false
+$dialog.CheckFileExists = $false
+$dialog.CheckPathExists = $true
+$dialog.FileName = "Seleccionar esta carpeta"
 $result = $dialog.ShowDialog($owner)
 $owner.Close()
-if ($result -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  Write-Output ([System.IO.Path]::GetDirectoryName($dialog.FileName))
+}
 `;
   const child = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command', psScript]);
   let out = '';
