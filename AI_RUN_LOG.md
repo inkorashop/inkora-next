@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-09 11:30 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario mandó una captura de la pestaña Diseños mostrando la pastilla que indica el peso original/optimizado de la miniatura ("159 KB->...") cortada, sin llegar a mostrar el peso optimizado.
+- Cambios: `app/admin/page.js`, `pillStyle` dentro del render de esa pastilla (fila de diseños): `width:76` → `width:112`. Con `whiteSpace:'nowrap'` + `textOverflow:'ellipsis'`, el texto completo (`"<original> KB-><optimizado> KB"`, ej. "159 KB->109 KB") no entraba en 76px y se cortaba con "…"; 112px cubre con margen los casos de 4 cifras (ej. "1.234 KB->987 KB").
+- Verificacion: `CI=true npm run build` OK sin errores nuevos. Cambio de una sola línea (un valor de ancho), sin tocar la lógica de cálculo de tamaños.
+- Auditoria: N/A, cambio aislado de estilo.
+- Pendiente/Riesgos: No se pudo confirmar visualmente en un navegador real (mismo límite del entorno); a confirmar por el usuario que ahora se ve completo.
+
 ## 2026-07-09 11:20 -03:00 - Claude Sonnet 5
 
 - Objetivo: El usuario reportó que el fix de refresh forzado de este mismo día (agregar `self:true` al canal que escucha) NO alcanzó: "cualquiera de los botones... no pasa nada, tampoco una animación del botón ni nada" — es decir, ni siquiera aparecía el "✓ Enviado"/"Error al enviar" que ya existía en el código.

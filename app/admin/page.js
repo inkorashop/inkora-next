@@ -7354,7 +7354,7 @@ useEffect(() => {
                     </button>
                     {(() => {
                       const status = optimizationStatus[d.id];
-                      const pillStyle = {fontSize:10, fontWeight:800, borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:76, textAlign:'center', flexShrink:0};
+                      const pillStyle = {fontSize:10, fontWeight:800, borderRadius:4, padding:'1px 6px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:112, textAlign:'center', flexShrink:0};
                       if (status?.state === 'working' || status?.state === 'error') {
                         return <span style={{...pillStyle, color: status.state === 'error' ? '#b91c1c' : '#2D6BE4'}}>{status.message}</span>;
                       }
