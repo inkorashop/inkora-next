@@ -124,14 +124,14 @@ function normalizeAdminTabOrder(value) {
 const ADMIN_TAB_VISIBILITY_SETTING_KEY = 'admin_tab_visibility';
 const ADMIN_SUBTAB_ORDER_SETTING_KEY = 'admin_subtab_order';
 const ADMIN_SUBTAB_GROUPS = {
-  users: ['clients', 'operators', 'admins'],
+  users: ['clients', 'admins'],
   production: ['produce', 'orders', 'stock', 'log', 'operators'],
   tracking: ['activity', 'stats'],
 };
 const ADMIN_SUBTAB_LABELS = {
   clients: 'Clientes',
   operators: 'Operarios',
-  admins: 'Admins',
+  admins: 'Equipo',
   produce: 'Producir',
   orders: 'Pedidos',
   stock: 'Stock',
@@ -161,11 +161,16 @@ function isEntryAllowed(entry, viewerKey, defaultVisible) {
   return viewerKey ? users.includes(viewerKey) : false;
 }
 
+// Los admins siempre ven todo: las restricciones de "Pestañas y permisos"
+// solo aplican a operarios. Evita ademas que un admin pueda auto-excluirse
+// por accidente de una pestaña (incluida Configuración).
 function resolveTabVisible(config, tabId, viewerKey, viewerRole) {
-  return isEntryAllowed(config?.[tabId], viewerKey, viewerRole === 'admin');
+  if (viewerRole === 'admin') return true;
+  return isEntryAllowed(config?.[tabId], viewerKey, false);
 }
 
 function resolveSubtabVisible(config, tabId, subtabId, viewerKey, viewerRole) {
+  if (viewerRole === 'admin') return true;
   if (!resolveTabVisible(config, tabId, viewerKey, viewerRole)) return false;
   return isEntryAllowed(config?.[tabId]?.subtabs?.[subtabId], viewerKey, true);
 }
@@ -701,8 +706,10 @@ useEffect(() => {
   const SLUG_TRACKING_SUBTABS = { actividad: 'activity', estadisticas: 'stats' };
   const ORDER_VIEW_SLUGS = { active: 'activos', archived: 'archivados' };
   const SLUG_ORDER_VIEWS = { activos: 'active', archivados: 'archived' };
-  const USERS_SUBTAB_SLUGS = { clients: 'clientes', operators: 'operarios', admins: 'admins' };
-  const SLUG_USERS_SUBTABS = { clientes: 'clients', usuarios: 'clients', operarios: 'operators', admins: 'admins' };
+  const USERS_SUBTAB_SLUGS = { clients: 'clientes', admins: 'admins' };
+  // 'operarios' queda mapeado a 'admins' (la subpestaña unificada) para no
+  // romper bookmarks viejos a la ex-subpestaña separada de Operarios.
+  const SLUG_USERS_SUBTABS = { clientes: 'clients', usuarios: 'clients', operarios: 'admins', admins: 'admins' };
   const PRODUCTION_SUBTAB_SLUGS = { produce: 'producir', orders: 'pedidos', stock: 'stock', log: 'historial', operators: 'operarios' };
   const SLUG_PRODUCTION_SUBTABS = { producir: 'produce', pedidos: 'orders', stock: 'stock', historial: 'log', operarios: 'operators' };
   const VISIBILITY_TAB_SLUGS = { products: 'productos', variants: 'variantes', categories: 'categorias', designs: 'diseños' };
@@ -934,8 +941,10 @@ useEffect(() => {
   const [admins, setAdmins] = useState([]);
   const [adminPresence, setAdminPresence] = useState([]);
   const [, setPresenceTick] = useState(0);
-  const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [addingAdmin, setAddingAdmin] = useState(false);
+  // Admins + operarios unificados (Usuarios > Equipo)
+  const [newStaffForm, setNewStaffForm] = useState({ role: 'operator', name: '', email: '', phone: '' });
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [staffFormResult, setStaffFormResult] = useState(null);
   const [quickPrintOpen, setQuickPrintOpen] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState(null);
@@ -5277,15 +5286,68 @@ useEffect(() => {
     );
   }
 
-  async function addAdmin() {
-    const email = newAdminEmail.trim().toLowerCase();
-    if (!email) return;
-    setAddingAdmin(true);
-    await supabase.from('admins').insert({ email });
-    trackAdminActivity('admin_create', { email }, 'admins');
-    setNewAdminEmail('');
-    setAddingAdmin(false);
-    loadAdmins();
+  async function addStaffMember() {
+    const email = newStaffForm.email.trim().toLowerCase();
+    const name = newStaffForm.name.trim();
+    const phone = newStaffForm.phone.trim();
+    if (!email) { setStaffFormResult({ error: 'Falta el email.' }); return; }
+    setAddingStaff(true);
+    setStaffFormResult(null);
+    try {
+      if (newStaffForm.role === 'admin') {
+        await supabase.from('admins').insert({ email, name: name || null });
+        trackAdminActivity('admin_create', { email }, 'admins');
+        await loadAdmins();
+      } else {
+        if (!name) { setStaffFormResult({ error: 'Completá el nombre para crear un operario.' }); return; }
+        const res = await fetch('/api/admin/operators', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone, email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { setStaffFormResult({ error: data.error || 'No se pudo crear el operario.' }); return; }
+        trackAdminActivity('operator_create', { operator_email: email, operator_name: name }, 'users');
+        await loadOperators();
+      }
+      setStaffFormResult({ success: true });
+      setNewStaffForm(prev => ({ role: prev.role, name: '', email: '', phone: '' }));
+    } finally {
+      setAddingStaff(false);
+    }
+  }
+
+  // Admins tienen permiso para todo siempre; operarios quedan sujetos a las
+  // restricciones de "Pestañas y permisos". Cambiar el rol mueve a la persona
+  // entre las tablas admins/production_operators (nunca se borra el registro
+  // de operario, se marca inactivo, para no perder el historial de tareas
+  // que tenia asignadas si despues vuelve a ser operario).
+  async function setStaffRole(person, newRole) {
+    if (person.role === newRole) return;
+    if (person.email === currentUser) { alert('No podés cambiar tu propio rol.'); return; }
+    if (newRole === 'admin') {
+      await supabase.from('admins').insert({ email: person.email, name: person.name || null });
+      trackAdminActivity('staff_role_change', { email: person.email, from: 'operator', to: 'admin' }, 'users');
+      if (person.raw?.id) {
+        await supabase.from('production_operators').update({ active: false, updated_at: new Date().toISOString() }).eq('id', person.raw.id);
+      }
+    } else {
+      const existing = operators.find(op => op.email === person.email);
+      if (existing) {
+        await supabase.from('production_operators').update({ active: true, name: person.name || existing.name, updated_at: new Date().toISOString() }).eq('id', existing.id);
+      } else {
+        const res = await fetch('/api/admin/operators', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: person.name || person.email, phone: '', email: person.email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.error || 'No se pudo convertir a operario.'); return; }
+      }
+      await supabase.from('admins').delete().eq('email', person.email);
+      trackAdminActivity('staff_role_change', { email: person.email, from: 'admin', to: 'operator' }, 'users');
+    }
+    await Promise.all([loadAdmins(), loadOperators()]);
   }
 
   async function deleteAdmin(email) {
@@ -5334,6 +5396,12 @@ useEffect(() => {
     const adminUsers = admins.map(a => ({ key: `admin:${String(a.email || '').toLowerCase()}`, email: String(a.email || '').toLowerCase(), label: a.name ? `${a.name} (${a.email})` : a.email, group: 'admin' }));
     const operatorUsers = operators.filter(o => o.active !== false).map(o => ({ key: `operator:${String(o.email || '').toLowerCase()}`, email: String(o.email || '').toLowerCase(), label: o.name ? `${o.name} (${o.email})` : o.email, group: 'operator' }));
     return [...adminUsers, ...operatorUsers];
+  }, [admins, operators]);
+
+  const staffList = React.useMemo(() => {
+    const adminRows = admins.map(a => ({ role: 'admin', email: a.email, name: a.name || '', seller_id: a.seller_id || '', phone: '', active: true, raw: a }));
+    const operatorRows = operators.map(o => ({ role: 'operator', email: o.email, name: o.name || '', seller_id: '', phone: o.phone || '', active: o.active !== false, raw: o }));
+    return [...adminRows, ...operatorRows].sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, 'es'));
   }, [admins, operators]);
 
   function tabVisibilityEntryFor(tabId, subtabId) {
@@ -5406,10 +5474,9 @@ useEffect(() => {
   function openTabVisibilityEditor(targets, title) {
     const first = targets[0];
     const existingUsers = visibilityEntryUsers(tabVisibilityEntryFor(first.tabId, first.subtabId));
-    const initialSelected = existingUsers
-      ? new Set(existingUsers)
-      : new Set(admins.map(a => `admin:${String(a.email || '').toLowerCase()}`));
-    setTabVisibilityDraft({ targets, title, selected: initialSelected });
+    // Los admins ven todo siempre (ver resolveTabVisible): esta lista solo
+    // controla operarios, asi que sin config previa arranca vacia (nadie).
+    setTabVisibilityDraft({ targets, title, selected: new Set(existingUsers || []) });
   }
 
   function toggleTabVisibilityDraftUser(key) {
@@ -5424,13 +5491,6 @@ useEffect(() => {
   function saveTabVisibilityDraft() {
     if (!tabVisibilityDraft) return;
     const usersArr = Array.from(tabVisibilityDraft.selected);
-    const excludesSelfFromConfig = viewerKey && !usersArr.includes(viewerKey) &&
-      tabVisibilityDraft.targets.some(t => t.tabId === 'config' && !t.subtabId);
-    if (excludesSelfFromConfig && !window.confirm(
-      'Te vas a sacar el acceso a "Configuración" a vos mismo. Si seguís, la única forma de revertirlo va a ser editando la tabla settings directamente en Supabase. ¿Confirmás?'
-    )) {
-      return;
-    }
     const next = { ...tabVisibilityConfig };
     tabVisibilityDraft.targets.forEach(({ tabId, subtabId }) => {
       if (subtabId) {
@@ -5482,7 +5542,7 @@ useEffect(() => {
   }
 
   function renderUsersSubtabs() {
-    const countFor = { clients: users.length, operators: operators.length, admins: admins.length };
+    const countFor = { clients: users.length, admins: staffList.length };
     const tabs = visibleUsersSubtabs.map(id => [id, `${ADMIN_SUBTAB_LABELS[id] || id} (${countFor[id] ?? 0})`]);
     return (
       <div style={{ display: 'flex', gap: 0, background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 16 }}>
@@ -8554,75 +8614,136 @@ useEffect(() => {
           </>
         )}
 
-        {/* == OPERARIOS == */}
-        {activeTab === 'users' && usersSubtab === 'operators' && renderOperatorsPanel()}
-
-        {/* == ADMINS == */}
+        {/* == ADMINS Y OPERARIOS (unificado) == */}
         {activeTab === 'users' && usersSubtab === 'admins' && (
           <>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Agregar administrador</h2>
-              <div style={{display:'flex', gap:10, alignItems:'flex-end'}}>
-                <div style={{...s.formGroup, flex:1, marginBottom:0}}>
-                  <label style={s.label}>Email</label>
-                  <input style={s.input} type="email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addAdmin(); }} placeholder="usuario@email.com" />
+              <h2 style={s.sectionTitle}>Agregar admin u operario</h2>
+              <div style={{display:'grid', gridTemplateColumns: isMobile ? '1fr' : 'auto minmax(160px,1fr) minmax(200px,1fr) minmax(140px,1fr) auto', gap:10, alignItems:'end'}}>
+                <div style={{...s.formGroup, marginBottom:0}}>
+                  <label style={s.label}>Rol</label>
+                  <select
+                    value={newStaffForm.role}
+                    onChange={e => setNewStaffForm(prev => ({ ...prev, role: e.target.value }))}
+                    style={s.input}
+                  >
+                    <option value="operator">Operario</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
-                <button style={{...s.btnPrimary, opacity: newAdminEmail.trim() && !addingAdmin ? 1 : 0.5, whiteSpace:'nowrap'}} disabled={!newAdminEmail.trim() || addingAdmin} onClick={addAdmin}>
-                  {addingAdmin ? 'Guardando...' : '+ Agregar'}
+                <div style={{...s.formGroup, marginBottom:0}}>
+                  <label style={s.label}>Nombre{newStaffForm.role === 'admin' ? ' (opcional)' : ''}</label>
+                  <input style={s.input} value={newStaffForm.name} onChange={e => setNewStaffForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre completo" />
+                </div>
+                <div style={{...s.formGroup, marginBottom:0}}>
+                  <label style={s.label}>Email</label>
+                  <input style={s.input} type="email" value={newStaffForm.email} onChange={e => setNewStaffForm(prev => ({ ...prev, email: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') addStaffMember(); }} placeholder="usuario@email.com" />
+                </div>
+                {newStaffForm.role === 'operator' && (
+                  <div style={{...s.formGroup, marginBottom:0}}>
+                    <label style={s.label}>Teléfono</label>
+                    <input style={s.input} value={newStaffForm.phone} onChange={e => setNewStaffForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="Opcional" />
+                  </div>
+                )}
+                <button style={{...s.btnPrimary, opacity: newStaffForm.email.trim() && !addingStaff ? 1 : 0.5, whiteSpace:'nowrap', height:38}} disabled={!newStaffForm.email.trim() || addingStaff} onClick={addStaffMember}>
+                  {addingStaff ? 'Guardando...' : '+ Agregar'}
                 </button>
               </div>
+              {staffFormResult?.error && <div style={{marginTop:10, background:'#fff5f5', border:'1.5px solid #fecaca', color:'#b91c1c', borderRadius:8, padding:'9px 11px', fontSize:12, fontWeight:700}}>{staffFormResult.error}</div>}
+              {staffFormResult?.success && <div style={{marginTop:10, background:'#e8f7ef', border:'1.5px solid #bbf7d0', color:'#15803d', borderRadius:8, padding:'9px 11px', fontSize:12, fontWeight:700}}>Agregado correctamente.</div>}
             </div>
             <div style={s.card}>
-              <h2 style={s.sectionTitle}>Administradores ({admins.length})</h2>
-              {admins.length === 0 && <p style={s.emptyMsg}>No hay administradores.</p>}
-              {admins.map(a => {
-                const status = getAdminPresence(a.email);
-                const activeTabs = [...new Set(status.activeSessions.map(p => p.tab).filter(Boolean))];
+              <h2 style={s.sectionTitle}>Admins y operarios ({staffList.length})</h2>
+              <p style={{fontSize:12, color:'#9aa3bc', marginTop:-6, marginBottom:12}}>Los admins tienen acceso a todo siempre. Los operarios quedan sujetos a lo que se configure en Configuración → Pestañas y permisos.</p>
+              {staffList.length === 0 && <p style={s.emptyMsg}>No hay admins ni operarios todavía.</p>}
+              {staffList.map(person => {
+                const status = person.role === 'admin' ? getAdminPresence(person.email) : null;
+                const activeTabs = status ? [...new Set(status.activeSessions.map(p => p.tab).filter(Boolean))] : [];
                 const tabLabel = activeTabs.length > 0
                   ? activeTabs.map(tab => ADMIN_TAB_LABELS[tab] || tab).join(', ')
-                  : status.latest?.tab ? ADMIN_TAB_LABELS[status.latest.tab] || status.latest.tab : 'Sin actividad reciente';
+                  : status?.latest?.tab ? ADMIN_TAB_LABELS[status.latest.tab] || status.latest.tab : 'Sin actividad reciente';
 
                 return (
-                  <div key={a.email} style={{...s.productRow, flexDirection:'column', alignItems:'stretch', gap:6}}>
-                    <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0}}>
-                      <span style={{...s.adminStatusDot, background: status.isActive ? '#18a36a' : '#c4c9d9'}} />
+                  <div key={person.email} style={{...s.productRow, flexDirection:'column', alignItems:'stretch', gap:6}}>
+                    <div style={{display:'flex', alignItems:'center', gap:10, minWidth:0, flexWrap:'wrap'}}>
+                      {person.role === 'admin' && <span style={{...s.adminStatusDot, background: status.isActive ? '#18a36a' : '#c4c9d9'}} />}
                       <div style={{minWidth:0, flex:1}}>
                         <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
-                          <span style={s.productName}>{a.email}</span>
-                          {a.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
-                          <span style={{background: status.isActive ? '#e8f5e9' : '#f0f2f8', color: status.isActive ? '#15803d' : '#9aa3bc', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:800}}>
-                            {status.isActive ? 'Activo' : 'Inactivo'}
-                          </span>
-                          {a.seller_id && <span style={{background:'#fef9c3', color:'#92400e', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>Vendedor</span>}
+                          <span style={s.productName}>{person.name || person.email}</span>
+                          {person.email === currentUser && <span style={{background:'#e8eef9', color:'#2D6BE4', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>vos</span>}
+                          {person.role === 'admin' ? (
+                            <span style={{background: status.isActive ? '#e8f5e9' : '#f0f2f8', color: status.isActive ? '#15803d' : '#9aa3bc', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:800}}>
+                              {status.isActive ? 'Activo' : 'Inactivo'}
+                            </span>
+                          ) : (
+                            <span style={{background: person.active ? '#e8f7ef' : '#fee2e2', color: person.active ? '#15803d' : '#b91c1c', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:800}}>
+                              {person.active ? 'Activo' : 'Deshabilitado'}
+                            </span>
+                          )}
+                          {person.seller_id && <span style={{background:'#fef9c3', color:'#92400e', borderRadius:10, padding:'1px 8px', fontSize:11, fontWeight:700}}>Vendedor</span>}
                         </div>
                         <div style={{fontSize:11, color:'#9aa3bc', marginTop:2}}>
-                          {status.isActive ? `Ahora en: ${tabLabel}` : `Ultima vez: ${timeAgo(status.latest?.updated_at)}${status.latest?.tab ? ` en ${tabLabel}` : ''}`}
+                          {person.email}
+                          {person.role === 'admin' && ` — ${status.isActive ? `Ahora en: ${tabLabel}` : `Última vez: ${timeAgo(status.latest?.updated_at)}${status.latest?.tab ? ` en ${tabLabel}` : ''}`}`}
                         </div>
                       </div>
-                      <TrashBtn onClick={() => setDeleteConfirmEmail(a.email)} />
+                      <select
+                        value={person.role}
+                        onChange={e => setStaffRole(person, e.target.value)}
+                        disabled={person.email === currentUser}
+                        title={person.email === currentUser ? 'No podés cambiar tu propio rol' : 'Cambiar rol'}
+                        style={{border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontWeight:700, fontFamily:'Barlow, sans-serif', color:'#1B2F5E', background: person.email === currentUser ? '#f7f8fc' : 'white'}}
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="operator">Operario</option>
+                      </select>
+                      {person.role === 'operator' && (
+                        <button type="button" onClick={() => toggleOperator(person.raw)} style={{...s.editBtn, color: person.active ? '#e53e3e' : '#18a36a'}}>
+                          {person.active ? 'Deshabilitar' : 'Habilitar'}
+                        </button>
+                      )}
+                      {person.role === 'admin' && <TrashBtn onClick={() => setDeleteConfirmEmail(person.email)} />}
                     </div>
-                    <div style={{display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:8, paddingLeft:22}}>
+                    <div style={{display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:8, paddingLeft: person.role === 'admin' ? 22 : 0}}>
                       <div>
                         <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Nombre</div>
                         <input
-                          defaultValue={a.name || ''}
-                          onBlur={e => { const v = e.target.value.trim(); if (v !== (a.name || '')) updateAdmin(a.email, { name: v || null }); }}
+                          defaultValue={person.name}
+                          onBlur={e => {
+                            const v = e.target.value.trim();
+                            if (v === person.name) return;
+                            if (person.role === 'admin') updateAdmin(person.email, { name: v || null });
+                            else supabase.from('production_operators').update({ name: v || person.email, updated_at: new Date().toISOString() }).eq('id', person.raw.id).then(() => loadOperators());
+                          }}
                           onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                           placeholder="Sin nombre"
                           style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
                         />
                       </div>
-                      <div>
-                        <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Vendedor asociado</div>
-                        <select
-                          value={a.seller_id || ''}
-                          onChange={e => updateAdmin(a.email, { seller_id: e.target.value || null })}
-                          style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
-                        >
-                          <option value="">— No es vendedor</option>
-                          {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                      </div>
+                      {person.role === 'admin' ? (
+                        <div>
+                          <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Vendedor asociado</div>
+                          <select
+                            value={person.seller_id || ''}
+                            onChange={e => updateAdmin(person.email, { seller_id: e.target.value || null })}
+                            style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
+                          >
+                            <option value="">— No es vendedor</option>
+                            {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{fontSize:10, fontWeight:700, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.4, marginBottom:3}}>Teléfono</div>
+                          <input
+                            defaultValue={person.phone}
+                            onBlur={e => { const v = e.target.value.trim(); if (v !== person.phone) supabase.from('production_operators').update({ phone: v || null, updated_at: new Date().toISOString() }).eq('id', person.raw.id).then(() => loadOperators()); }}
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                            placeholder="Sin teléfono"
+                            style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'4px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box'}}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -9054,14 +9175,15 @@ useEffect(() => {
               >
                 <div style={{background:'white', borderRadius:12, padding:20, width:'100%', maxWidth:440, maxHeight:'80vh', display:'flex', flexDirection:'column', gap:12}}>
                   <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:10}}>
-                    <h3 style={{fontSize:15, fontWeight:800, color:'#1B2F5E', margin:0}}>¿Quién ve “{tabVisibilityDraft.title}”?</h3>
+                    <h3 style={{fontSize:15, fontWeight:800, color:'#1B2F5E', margin:0}}>¿Qué operarios ven “{tabVisibilityDraft.title}”?</h3>
                     <button type="button" onClick={() => setTabVisibilityDraft(null)} style={{border:'none', background:'none', fontSize:20, lineHeight:1, cursor:'pointer', color:'#9aa3bc'}}>×</button>
                   </div>
+                  <p style={{fontSize:11, color:'#9aa3bc', margin:0, marginTop:-8}}>Los admins ven todo siempre, no hace falta seleccionarlos acá.</p>
 
                   <div style={{display:'flex', gap:8}}>
                     <button
                       type="button"
-                      onClick={() => setTabVisibilityDraft(prev => ({ ...prev, selected: new Set(pickableTabVisibilityUsers.map(u => u.key)) }))}
+                      onClick={() => setTabVisibilityDraft(prev => ({ ...prev, selected: new Set(pickableTabVisibilityUsers.filter(u => u.group === 'operator').map(u => u.key)) }))}
                       style={{fontSize:11, fontWeight:700, color:'#1B2F5E', background:'#eef4ff', border:'1.5px solid #cfe0ff', borderRadius:6, padding:'5px 10px', cursor:'pointer'}}
                     >
                       Seleccionar todos
@@ -9077,19 +9199,6 @@ useEffect(() => {
 
                   <div style={{overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:14, paddingRight:4}}>
                     <div>
-                      <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Admins</div>
-                      {pickableTabVisibilityUsers.filter(u => u.group === 'admin').length === 0 && (
-                        <p style={{fontSize:12, color:'#9aa3bc', margin:0}}>No hay admins cargados.</p>
-                      )}
-                      {pickableTabVisibilityUsers.filter(u => u.group === 'admin').map(u => (
-                        <label key={u.key} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 4px', fontSize:13, color:'#2d3352', cursor:'pointer'}}>
-                          <input type="checkbox" checked={tabVisibilityDraft.selected.has(u.key)} onChange={() => toggleTabVisibilityDraftUser(u.key)} style={{width:15, height:15, cursor:'pointer'}} />
-                          {u.label}
-                        </label>
-                      ))}
-                    </div>
-                    <div>
-                      <div style={{fontSize:11, fontWeight:900, color:'#9aa3bc', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6}}>Operarios</div>
                       {pickableTabVisibilityUsers.filter(u => u.group === 'operator').length === 0 && (
                         <p style={{fontSize:12, color:'#9aa3bc', margin:0}}>No hay operarios cargados.</p>
                       )}
@@ -10222,6 +10331,7 @@ useEffect(() => {
               renderOperatorsPanel={renderOperatorsPanel}
               designPdfMatches={designPdfMatches}
               allowedSubtabs={visibleProductionSubtabs}
+              viewerRole={viewerRole}
               orderDetailColumnWidths={settings[adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser)]}
               onSaveOrderDetailColumnWidths={widths => saveSetting(adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser), JSON.stringify(widths))}
             />

@@ -501,6 +501,7 @@ export default function ProductionTab({
   renderOperatorsPanel,
   designPdfMatches = {},
   allowedSubtabs = null,
+  viewerRole = 'admin',
   orderDetailColumnWidths,
   onSaveOrderDetailColumnWidths,
 }) {
@@ -1360,6 +1361,12 @@ export default function ProductionTab({
 
   async function syncOrderTasks(orderId) {
     if (!orderId) return [];
+    // Preparar un pedido (materializar sus items como tareas) es una accion de
+    // admin (admin_sync_order_production_tasks lo exige server-side); un
+    // operario nunca deberia necesitar esto, sus pedidos ya llegan preparados
+    // y asignados. Sin este corte, un operario dispara el RPC igual, el
+    // servidor lo rechaza, y ve un error de "no se pudo preparar" sin sentido.
+    if (viewerRole !== 'admin') return [];
     setErrorMessage('');
     setSyncingOrderIds(prev => ({ ...prev, [orderId]: true }));
     try {
@@ -1768,34 +1775,42 @@ export default function ProductionTab({
     return acc;
   }, {});
 
-  const produceOrderRows = (orders || []).map(order => {
-    const taskRows = tasksByOrder[order.id] || [];
-    const itemRows = taskRows.length > 0 ? taskRows : getOrderProductionItems(order);
-    const status = getProductionStatus(itemRows);
-    const operatorIds = [...new Set(itemRows.map(row => row.operator_id).filter(Boolean))];
-    const operatorId = operatorIds.length === 1 ? operatorIds[0] : '';
-    const operatorName = operatorId
-      ? operators.find(op => op.id === operatorId)?.name || itemRows.find(row => row.operator_id === operatorId)?.operator_name || 'Operario'
-      : '';
-    return {
-      id: order.id,
-      order,
-      order_code: order.order_code,
-      created_at: order.created_at,
-      delivery_date: order.delivery_date || null,
-      source: order.source || 'web',
-      customer_name: order.customer_name,
-      seller_name: sellers.find(seller => seller.id === order.seller_id)?.name || 'Sin vendedor',
-      notes: order.notes || '',
-      itemsSummary: summarizeOrderProducts(order.items),
-      items: itemRows,
-      productionStatus: status,
-      operator_id: operatorId,
-      operator_name: operatorName,
-      producedTotal: itemRows.reduce((sum, row) => sum + toQty(row.produced_qty), 0),
-      requiredTotal: itemRows.reduce((sum, row) => sum + toQty(row.required_qty), 0),
-    };
-  });
+  // Un operario solo debe ver, en la columna de pedidos, los que ya tienen al
+  // menos una tarea asignada a el (tasksByOrder ya viene filtrado server-side
+  // por get_operator_production_tasks). El fallback getOrderProductionItems
+  // (pedidos todavia sin "preparar") solo tiene sentido para admins, que son
+  // quienes pueden prepararlos y asignarlos.
+  const produceOrderRows = (orders || [])
+    .filter(order => viewerRole === 'admin' || (tasksByOrder[order.id]?.length > 0))
+    .map(order => {
+      const taskRows = tasksByOrder[order.id] || [];
+      const itemRows = taskRows.length > 0 ? taskRows : getOrderProductionItems(order);
+      const status = getProductionStatus(itemRows);
+      const operatorIds = [...new Set(itemRows.map(row => row.operator_id).filter(Boolean))];
+      const operatorId = operatorIds.length === 1 ? operatorIds[0] : '';
+      const operatorName = operatorId
+        ? operators.find(op => op.id === operatorId)?.name || itemRows.find(row => row.operator_id === operatorId)?.operator_name || 'Operario'
+        : '';
+      return {
+        id: order.id,
+        order,
+        order_code: order.order_code,
+        created_at: order.created_at,
+        delivery_date: order.delivery_date || null,
+        source: order.source || 'web',
+        customer_name: order.customer_name,
+        seller_name: sellers.find(seller => seller.id === order.seller_id)?.name || 'Sin vendedor',
+        notes: order.notes || '',
+        itemsSummary: summarizeOrderProducts(order.items),
+        items: itemRows,
+        productionStatus: status,
+        operator_id: operatorId,
+        operator_name: operatorName,
+        producedTotal: itemRows.reduce((sum, row) => sum + toQty(row.produced_qty), 0),
+        requiredTotal: itemRows.reduce((sum, row) => sum + toQty(row.required_qty), 0),
+      };
+    })
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const selectedOrderRow = produceOrderRows.find(row => row.id === selectedProductionOrderId) || produceOrderRows[0] || null;
   const selectedOrder = selectedOrderRow?.order || null;
@@ -2077,15 +2092,17 @@ export default function ProductionTab({
                         Imprimir todo
                       </button>
                     )}
-                    <select
-                      value={selectedOrderRow.operator_id || ''}
-                      onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
-                      disabled={Boolean(assigningOperatorIds[selectedOrderRow.id])}
-                      style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: isMobile ? '100%' : 160, minWidth: isMobile ? 0 : 160, flex: isMobile ? '1 1 100%' : '0 0 auto' }}
-                    >
-                      <option value="">Sin operario</option>
-                      {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
-                    </select>
+                    {viewerRole === 'admin' && (
+                      <select
+                        value={selectedOrderRow.operator_id || ''}
+                        onChange={e => assignOrderOperator(selectedOrderRow.id, e.target.value)}
+                        disabled={Boolean(assigningOperatorIds[selectedOrderRow.id])}
+                        style={{ border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: '#1B2F5E', fontFamily: 'Barlow, sans-serif', width: isMobile ? '100%' : 160, minWidth: isMobile ? 0 : 160, flex: isMobile ? '1 1 100%' : '0 0 auto' }}
+                      >
+                        <option value="">Sin operario</option>
+                        {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
+                      </select>
+                    )}
                   </div>
                 )}
               </div>
