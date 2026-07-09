@@ -1441,7 +1441,12 @@ useEffect(() => {
   useEffect(() => {
     if (screen !== 'panel') return;
     const myEmail = String(currentUser || '').trim().toLowerCase();
-    const channel = supabase.channel(FORCE_REFRESH_CHANNEL);
+    // self: true es necesario porque quien envia el broadcast (boton en esta
+    // misma pagina) y este listener comparten la misma conexion Realtime (un
+    // solo cliente supabase por pestaña): sin esto, Supabase no entrega a un
+    // socket sus propios mensajes, entonces el admin que aprieta "actualizar
+    // a todos" nunca veia su propia pestaña refrescarse.
+    const channel = supabase.channel(FORCE_REFRESH_CHANNEL, { config: { broadcast: { self: true } } });
     channel
       .on('broadcast', { event: FORCE_REFRESH_EVENT }, ({ payload }) => {
         if (payload?.audience !== 'admin') return;
@@ -6133,7 +6138,7 @@ useEffect(() => {
 
       {/* Impersonation banner */}
       {isImpersonating && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 280, background: '#92400e', color: '#fef3c7', padding: '6px 18px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', borderBottom: '2px solid #f59e0b' }}>
+        <div style={{ position: 'sticky', top: 46, zIndex: 280, background: '#92400e', color: '#fef3c7', padding: '6px 18px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif', borderBottom: '2px solid #f59e0b' }}>
           <span>🎭 Simulando como:</span>
           <span style={{ background: '#78350f', borderRadius: 6, padding: '2px 10px', border: '1.5px solid #f59e0b' }}>{impersonatedIdentity.name || impersonatedIdentity.email || '?'}</span>
           <span style={{ fontWeight: 400, opacity: 0.8 }}>({impersonatedIdentity.type === 'admin' ? 'Admin' : impersonatedIdentity.type === 'operator' ? 'Operario' : 'Usuario'})</span>
@@ -6159,7 +6164,7 @@ useEffect(() => {
         </div>
       )}
 
-      <div style={{...s.tabBar, position: 'relative'}}>
+      <div style={s.tabBar}>
         {tabScrollState.left && (
           <button
             onClick={() => scrollAdminTabs(-1)}
@@ -12817,10 +12822,10 @@ const styles = {
   loginTitle: { fontSize: 20, fontWeight: 700, color: '#1B2F5E', marginBottom: 8 },
   btnGoogle: { display: 'flex', alignItems: 'center', gap: 10, background: 'white', color: '#2d3352', border: '1.5px solid #dde1ef', borderRadius: 10, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', width: '100%', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' },
   wrap: { minHeight: '100vh', background: '#f7f8fc', fontFamily: "'Barlow', sans-serif" },
-  header: { background: '#1B2F5E', padding: '0 20px', height: 46, display: 'flex', alignItems: 'center', gap: 12 },
+  header: { background: '#1B2F5E', padding: '0 20px', height: 46, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 300 },
   headerTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 12, letterSpacing: 2, flex: 1 },
   btnLogout: { background: 'rgba(255,255,255,0.15)', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' },
-  tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef', position: 'sticky', top: 0, zIndex: 120, boxShadow: '0 5px 16px rgba(27,47,94,0.08)' },
+  tabBar: { background: 'white', borderBottom: '1.5px solid #dde1ef', position: 'sticky', top: 46, zIndex: 120, boxShadow: '0 5px 16px rgba(27,47,94,0.08)' },
   tabBarInner: { width: '100%', maxWidth: '100%', margin: 0, padding: '0 8px', display: 'flex', gap: 2, overflowX: 'auto', scrollbarWidth: 'none' },
   tab: { background: 'none', border: 'none', padding: '10px 8px', fontSize: 12, fontWeight: 600, color: '#9aa3bc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent:'center', gap: 4, flex:'none', whiteSpace:'nowrap' },
   tabActive: { color: '#1B2F5E', boxShadow: 'inset 0 -3px 0 #1B2F5E' },
