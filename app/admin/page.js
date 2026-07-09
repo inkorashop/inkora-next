@@ -169,10 +169,18 @@ function resolveTabVisible(config, tabId, viewerKey, viewerRole) {
   return isEntryAllowed(config?.[tabId], viewerKey, false);
 }
 
+// Si NINGUNA subpestaña de esta pestaña tiene configuración propia todavía,
+// una subpestaña sin tocar hereda el acceso de la pestaña (modo simple). Pero
+// en cuanto se configura UNA subpestaña puntual (para cualquier usuario), esa
+// pestaña entra en "modo granular": el resto de sus subpestañas pasa a
+// default oculto hasta configurarse explícitamente, para no dejar accesos
+// abiertos por accidente (subpestañas que ni se sabía que había que tocar).
 function resolveSubtabVisible(config, tabId, subtabId, viewerKey, viewerRole) {
   if (viewerRole === 'admin') return true;
   if (!resolveTabVisible(config, tabId, viewerKey, viewerRole)) return false;
-  return isEntryAllowed(config?.[tabId]?.subtabs?.[subtabId], viewerKey, true);
+  const subtabsConfig = config?.[tabId]?.subtabs;
+  const hasAnySubtabConfigured = Object.values(subtabsConfig || {}).some(entry => visibilityEntryUsers(entry) !== null);
+  return isEntryAllowed(subtabsConfig?.[subtabId], viewerKey, !hasAnySubtabConfigured);
 }
 
 function getVisibleAdminTabs(config, order, viewerKey, viewerRole) {
@@ -5410,9 +5418,14 @@ useEffect(() => {
 
   function tabVisibilitySummary(tabId, subtabId) {
     const users = visibilityEntryUsers(tabVisibilityEntryFor(tabId, subtabId));
-    if (users === null) return subtabId ? 'Sin restricción propia' : 'Todos los admins';
-    if (users.length === 0) return 'Nadie';
-    return `${users.length} seleccionado${users.length === 1 ? '' : 's'}`;
+    if (users !== null) {
+      if (users.length === 0) return 'Nadie';
+      return `${users.length} seleccionado${users.length === 1 ? '' : 's'}`;
+    }
+    if (!subtabId) return 'Todos los admins';
+    const subtabsConfig = tabVisibilityConfig?.[tabId]?.subtabs;
+    const hasAnySubtabConfigured = Object.values(subtabsConfig || {}).some(entry => visibilityEntryUsers(entry) !== null);
+    return hasAnySubtabConfigured ? 'Nadie (sin configurar)' : 'Hereda de la pestaña';
   }
 
   function toggleTabVisibilityBulkRow(key) {
