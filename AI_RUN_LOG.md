@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-09 10:55 -03:00 - Claude Sonnet 5
+
+- Objetivo: Ajuste de UX sobre la feature recien implementada (diseños extra en un pedido): el usuario pidió que el botón "+ Agregar diseño", tanto en "Ver pedido" como en Producción, no sea un botón aparte arriba de la tabla, sino la ÚLTIMA FILA de la tabla de items/tareas.
+- Cambios: En `app/admin/page.js` (modal "Ver pedido") y `components/ProductionTab.js` (tabla de tareas de Producción), se sacó el botón + panel que estaban por fuera de la tabla, y se agregó una `<tr>` final dentro del `<tbody>` (con `colSpan` a todas las columnas) que muestra el botón "+ Agregar diseño" (estilo borde punteado, como una fila de "agregar") o, al hacer click, el mismo `AddExtraDesignForm` de siempre pero ocupando esa fila. No se tocó la lógica de datos ni el resto del diseño (resaltado por vista, tooltip, desglose del resumen) — solo dónde vive el disparador.
+- Verificacion: `CI=true npm run build` OK sin errores nuevos. Diff revisado, acotado a mover el botón/panel de lugar en ambos archivos.
+- Auditoria: Se releyó la entrada anterior (mismo día, implementación completa de la feature) para tocar solo la UI del disparador sin afectar la RPC ni el modelo de datos ya aplicado.
+- Pendiente/Riesgos: Mismo límite de siempre — no se pudo ver en un navegador real. Falta confirmación visual del usuario en producción.
+
 ## 2026-07-09 10:40 -03:00 - Claude Sonnet 5
 
 - Objetivo: Implementar la feature discutida (y explicitamente pausada) en el turno anterior: permitir agregar un diseño extra a un pedido ya existente, desde "Ver pedido" (admin) y desde Producción (admin y operario), con el desglose "100 + 10" y un tooltip de auditoría (quién y cuándo). El usuario confirmó el diseño completo en 4 puntos de esta conversación (resaltado solo en la vista donde se agregó — fusionado en la otra; permisos via vistas existentes, sin flag nuevo; el desglose "+" solo en el resumen de arriba, la columna por fila queda normal; agregó de paso el pedido del tooltip "i" hover) y dio el visto bueno explícito a implementar todo.

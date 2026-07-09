@@ -10292,28 +10292,7 @@ useEffect(() => {
               {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
             </div>
             <div>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
-                <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5}}>Items</div>
-                {!addingExtraDesign && (
-                  <button
-                    type="button"
-                    onClick={() => setAddingExtraDesign(true)}
-                    style={{border:'1.5px solid #18a36a', borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:800, cursor:'pointer', background:'#e8f7ef', color:'#15803d'}}
-                  >
-                    + Agregar diseño
-                  </button>
-                )}
-              </div>
-              {addingExtraDesign && (
-                <div style={{marginBottom:10}}>
-                  <AddExtraDesignForm
-                    busy={addingExtraDesignBusy}
-                    error={addingExtraDesignError}
-                    onCancel={() => setAddingExtraDesign(false)}
-                    onSubmit={addExtraDesignToOrder}
-                  />
-                </div>
-              )}
+              <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
               {getOrderPriceWarning(orderDetail) && (
                 <div style={{
                   background: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#fff7ed' : '#fee2e2',
@@ -10368,6 +10347,26 @@ useEffect(() => {
                       </tr>
                     );
                   })}
+                  <tr>
+                    <td colSpan={4} style={{padding: addingExtraDesign ? '8px 4px' : 0}}>
+                      {addingExtraDesign ? (
+                        <AddExtraDesignForm
+                          busy={addingExtraDesignBusy}
+                          error={addingExtraDesignError}
+                          onCancel={() => setAddingExtraDesign(false)}
+                          onSubmit={addExtraDesignToOrder}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setAddingExtraDesign(true)}
+                          style={{width:'100%', border:'1.5px dashed #b7ebcf', borderRadius:7, padding:'7px 8px', fontSize:12, fontWeight:800, cursor:'pointer', background:'#f0fdf4', color:'#15803d', textAlign:'center'}}
+                        >
+                          + Agregar diseño
+                        </button>
+                      )}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

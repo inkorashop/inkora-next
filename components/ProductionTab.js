@@ -2131,15 +2131,6 @@ export default function ProductionTab({
                         {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
                       </select>
                     )}
-                    {!addingExtraDesign && (
-                      <button
-                        type="button"
-                        onClick={() => setAddingExtraDesign(true)}
-                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
-                      >
-                        + Agregar diseño
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
@@ -2149,16 +2140,6 @@ export default function ProductionTab({
               <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
             ) : (
               <>
-                {addingExtraDesign && (
-                  <div style={{ padding: isMobile ? '0 8px' : '0 8px 4px' }}>
-                    <AddExtraDesignForm
-                      busy={addingExtraDesignBusy}
-                      error={addingExtraDesignError}
-                      onCancel={() => setAddingExtraDesign(false)}
-                      onSubmit={addExtraDesignToOrder}
-                    />
-                  </div>
-                )}
                 {/* Summary totals */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 6, padding: isMobile ? '8px' : '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
                   {(() => {
@@ -2393,6 +2374,26 @@ export default function ProductionTab({
                         </tr>
                         );
                       })}
+                      <tr>
+                        <td colSpan={PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.length} style={{ padding: addingExtraDesign ? '8px 5px' : 4 }}>
+                          {addingExtraDesign ? (
+                            <AddExtraDesignForm
+                              busy={addingExtraDesignBusy}
+                              error={addingExtraDesignError}
+                              onCancel={() => setAddingExtraDesign(false)}
+                              onSubmit={addExtraDesignToOrder}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAddingExtraDesign(true)}
+                              style={{ width: '100%', border: '1.5px dashed #b7ebcf', borderRadius: 7, padding: '6px 8px', fontSize: 12, fontWeight: 800, cursor: 'pointer', background: '#f0fdf4', color: '#15803d', textAlign: 'center', fontFamily: 'Barlow, sans-serif' }}
+                            >
+                              + Agregar diseño
+                            </button>
+                          )}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
