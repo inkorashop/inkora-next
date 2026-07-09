@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-09 14:05 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario confirmó que Ctrl+N le sigue abriendo pestaña nueva del navegador y pidió mantener Alt+N funcionando mientras tanto.
+- Cambios: `app/admin/page.js` — se restauró el handler de Alt+N (que el turno anterior había reemplazado en vez de sumar) y se dejó el de Ctrl+N igual al lado, comentado explicando por qué no puede funcionar. Título del botón flotante vuelto a "Crear pedido (Alt+N)".
+- Verificacion: `CI=true npm run build` OK.
+- Auditoria: N/A, cambio puntual sobre el turno anterior.
+- Pendiente/Riesgos: Ctrl+N no se puede interceptar desde JS de pagina en navegadores normales (Chrome/Firefox/Edge lo reservan a nivel de navegador para "ventana nueva", ni preventDefault ni stopPropagation lo evitan) — se le explicó al usuario en el chat, no es arreglable desde este código. Si en el futuro quiere un atajo con Ctrl que sí funcione, Ctrl+Alt+N es una alternativa viable (no reservada por los navegadores).
+
 ## 2026-07-09 13:40 -03:00 - Claude Sonnet 5
 
 - Objetivo: Lista grande de 9 pedidos del usuario (mas uno de "pie de pagina web" explicitamente pausado, "aun no hagas cambios") repartidos en dos bloques: Producción y Carga de Pedido Rápido (CreateOrderModal).

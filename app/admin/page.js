@@ -1148,6 +1148,16 @@ useEffect(() => {
 
   useEffect(() => {
     function handleGlobalKey(e) {
+      if (e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        setActiveDraftId(null);
+        setShowCreateOrder(true);
+      }
+      // Ctrl+N/Cmd+N: el navegador lo reserva para "ventana nueva" y no deja
+      // que ninguna pagina lo intercepte (ni con preventDefault ni
+      // stopPropagation) — se deja este handler igual por si en algun
+      // navegador/config no estuviera reservado, pero en Chrome/Firefox/Edge
+      // normales no va a evitar que abra pestana nueva. Ver AI_RUN_LOG.md.
       if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         e.stopPropagation();
@@ -10594,7 +10604,7 @@ useEffect(() => {
       {visibleTabIds.includes('orders') && (
         <button
           onClick={() => { setActiveDraftId(null); setShowCreateOrder(true); }}
-          title="Crear pedido (Ctrl+N)"
+          title="Crear pedido (Alt+N)"
           style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
         >+</button>
       )}
