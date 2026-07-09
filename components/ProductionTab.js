@@ -1,6 +1,8 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DesignThumb from '@/components/DesignThumb';
+import InfoTooltip from '@/components/InfoTooltip';
+import AddExtraDesignForm from '@/components/AddExtraDesignForm';
 import { useDesigns } from '@/contexts/DesignsContext';
 import { fuzzyMatchDesigns, scoreColor, scoreBg } from '@/lib/fuzzy-match';
 import PrintQueueOverlay from '@/components/PrintQueueOverlay';
@@ -620,6 +622,13 @@ export default function ProductionTab({
   const silentTaskRefreshRef = useRef(false);
   const [syncingOrderIds, setSyncingOrderIds] = useState({});
   const [assigningOperatorIds, setAssigningOperatorIds] = useState({});
+  const [addingExtraDesign, setAddingExtraDesign] = useState(false);
+  const [addingExtraDesignBusy, setAddingExtraDesignBusy] = useState(false);
+  const [addingExtraDesignError, setAddingExtraDesignError] = useState('');
+  useEffect(() => {
+    setAddingExtraDesign(false);
+    setAddingExtraDesignError('');
+  }, [selectedProductionOrderId]);
   const [printHistory, setPrintHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
   });
@@ -1432,6 +1441,25 @@ export default function ProductionTab({
     }
   }
 
+  async function addExtraDesignToOrder({ design, qty }) {
+    if (!selectedProductionOrderId) return;
+    setAddingExtraDesignBusy(true);
+    setAddingExtraDesignError('');
+    const { error } = await supabase.rpc('add_order_extra_design', {
+      p_order_id: selectedProductionOrderId,
+      p_design_id: design.id,
+      p_qty: qty,
+      p_added_via: 'produccion',
+    });
+    setAddingExtraDesignBusy(false);
+    if (error) {
+      setAddingExtraDesignError(formatProductionError(error, 'No se pudo agregar el diseño.'));
+      return;
+    }
+    await loadProductionTasks();
+    setAddingExtraDesign(false);
+  }
+
   function ensureTaskSaveState(taskId) {
     if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = {};
     const state = taskSaveStateRef.current[taskId];
@@ -2103,6 +2131,15 @@ export default function ProductionTab({
                         {activeOperators.map(op => <option key={op.id} value={op.id}>{op.name || op.email}</option>)}
                       </select>
                     )}
+                    {!addingExtraDesign && (
+                      <button
+                        type="button"
+                        onClick={() => setAddingExtraDesign(true)}
+                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
+                      >
+                        + Agregar diseño
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2112,14 +2149,32 @@ export default function ProductionTab({
               <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '48px 16px' }}>Elegí un pedido de la lista para empezar.</p>
             ) : (
               <>
+                {addingExtraDesign && (
+                  <div style={{ padding: isMobile ? '0 8px' : '0 8px 4px' }}>
+                    <AddExtraDesignForm
+                      busy={addingExtraDesignBusy}
+                      error={addingExtraDesignError}
+                      onCancel={() => setAddingExtraDesign(false)}
+                      onSubmit={addExtraDesignToOrder}
+                    />
+                  </div>
+                )}
                 {/* Summary totals */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 6, padding: isMobile ? '8px' : '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
-                  {[
-                    { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
-                    { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
-                    { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047', showBar: true },
-                    { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5', showBar: true },
-                  ].map(({ label, value, color, bg, border, showBar }) => {
+                  {(() => {
+                    const addedToRequired = selectedOrderTasks
+                      .filter(t => t.added_via === 'produccion')
+                      .reduce((sum, t) => sum + (t.added_qty || 0), 0);
+                    const requiredDisplay = addedToRequired > 0
+                      ? `${summaryTotals.required - addedToRequired} + ${addedToRequired}`
+                      : String(summaryTotals.required);
+                    return [
+                      { label: 'A producir', value: requiredDisplay, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
+                      { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
+                      { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047', showBar: true },
+                      { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5', showBar: true },
+                    ];
+                  })().map(({ label, value, color, bg, border, showBar }) => {
                     const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
                     return (
                       <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '7px 9px' : '4px 8px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -2176,6 +2231,14 @@ export default function ProductionTab({
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
                               <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
+                              {task.added_via === 'produccion' && (
+                                <InfoTooltip content={
+                                  <>
+                                    <div>Agregado {task.added_at ? new Date(task.added_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                                    <div>por {task.added_by_name || task.added_by_email || '—'}</div>
+                                  </>
+                                } />
+                              )}
                               {orderPdfStatus.state === 'ready' && (
                                 <span
                                   title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}

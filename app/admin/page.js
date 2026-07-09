@@ -13,6 +13,8 @@ import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import ChatPanel from '@/components/chat/ChatPanel';
 import PwaUpdateManager from '@/components/PwaUpdateManager';
 import ChatPushToggle from '@/components/ChatPushToggle';
+import InfoTooltip from '@/components/InfoTooltip';
+import AddExtraDesignForm from '@/components/AddExtraDesignForm';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
 import { toSlug as slugify } from '@/lib/slug';
 import {
@@ -1116,6 +1118,13 @@ useEffect(() => {
   const [notificationsError, setNotificationsError] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
   const [orderDetail, setOrderDetail] = useState(null);
+  const [addingExtraDesign, setAddingExtraDesign] = useState(false);
+  const [addingExtraDesignBusy, setAddingExtraDesignBusy] = useState(false);
+  const [addingExtraDesignError, setAddingExtraDesignError] = useState('');
+  useEffect(() => {
+    setAddingExtraDesign(false);
+    setAddingExtraDesignError('');
+  }, [orderDetail?.id]);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [ordersView, setOrdersView] = useState(initialOrdersView); // 'active' | 'archived'
   const [expandedOrderNotes, setExpandedOrderNotes] = useState(new Set());
@@ -4554,6 +4563,29 @@ useEffect(() => {
       .order('created_at', { ascending: false });
 
     if (data) setOrders(data);
+  }
+
+  async function addExtraDesignToOrder({ design, qty }) {
+    if (!orderDetail) return;
+    setAddingExtraDesignBusy(true);
+    setAddingExtraDesignError('');
+    const { error } = await supabase.rpc('add_order_extra_design', {
+      p_order_id: orderDetail.id,
+      p_design_id: design.id,
+      p_qty: qty,
+      p_added_via: 'pedido',
+    });
+    setAddingExtraDesignBusy(false);
+    if (error) {
+      setAddingExtraDesignError(error.message || 'No se pudo agregar el diseño.');
+      return;
+    }
+    const { data: refreshedOrder } = await supabase.from('orders').select('*').eq('id', orderDetail.id).single();
+    if (refreshedOrder) {
+      setOrderDetail(refreshedOrder);
+      setOrders(prev => prev.map(o => (o.id === refreshedOrder.id ? refreshedOrder : o)));
+    }
+    setAddingExtraDesign(false);
   }
 
   async function loadCarts() {
@@ -10260,7 +10292,28 @@ useEffect(() => {
               {orderDetail.notes && <div style={{gridColumn:'1/-1'}}><span style={{color:'#9aa3bc', fontSize:11, fontWeight:600, textTransform:'uppercase'}}>Notas</span><div style={{fontWeight:500, color:'#5a6380'}}>{orderDetail.notes}</div></div>}
             </div>
             <div>
-              <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5, marginBottom:8}}>Items</div>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+                <div style={{fontSize:12, fontWeight:700, color:'#5a6380', textTransform:'uppercase', letterSpacing:0.5}}>Items</div>
+                {!addingExtraDesign && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingExtraDesign(true)}
+                    style={{border:'1.5px solid #18a36a', borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:800, cursor:'pointer', background:'#e8f7ef', color:'#15803d'}}
+                  >
+                    + Agregar diseño
+                  </button>
+                )}
+              </div>
+              {addingExtraDesign && (
+                <div style={{marginBottom:10}}>
+                  <AddExtraDesignForm
+                    busy={addingExtraDesignBusy}
+                    error={addingExtraDesignError}
+                    onCancel={() => setAddingExtraDesign(false)}
+                    onSubmit={addExtraDesignToOrder}
+                  />
+                </div>
+              )}
               {getOrderPriceWarning(orderDetail) && (
                 <div style={{
                   background: orderHasStoredPriceMismatch(orderDetail) && canInferSingleProductUnitPrice(orderDetail) ? '#fff7ed' : '#fee2e2',
@@ -10287,13 +10340,22 @@ useEffect(() => {
                 <tbody>
                   {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => {
                     const pricing = getOrderItemPricing(item, orderDetail);
+                    const addedHere = item.added_via === 'pedido';
 
                     return (
-                      <tr key={i}>
+                      <tr key={i} style={addedHere ? {background:'#f0fdf4'} : undefined}>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13}}>
                           <div style={{display:'flex', alignItems:'center', gap:6}}>
                             <DesignThumb designId={item.design_id} name={item.name || item.designName} size={26} />
                             <span>{item.name || item.designName || '—'}</span>
+                            {addedHere && (
+                              <InfoTooltip content={
+                                <>
+                                  <div>Agregado {item.added_at ? new Date(item.added_at).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</div>
+                                  <div>por {item.added_by_name || item.added_by || '—'}</div>
+                                </>
+                              } />
+                            )}
                           </div>
                         </td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
