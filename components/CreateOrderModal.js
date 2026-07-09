@@ -44,10 +44,22 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
   const inputRef = useRef(null);
   const dropRef  = useRef(null);
 
+  // Texto de cantidad como buffer propio (no directo desde row.qty): un
+  // <input type="number"> controlado por un numero se re-normaliza en cada
+  // tecla, lo que en algunos navegadores hacia que el segundo digito
+  // tipeado reemplazara al primero en vez de sumarse. Con un buffer de
+  // texto propio, se tipea libre y solo se limpia (no-digitos, tope 9999)
+  // antes de mandarlo al padre.
+  const [qtyVal, setQtyVal] = useState(String(row.qty ?? 0));
+
   useEffect(() => {
     const next = row.type === 'linked' ? row.name : row.text;
     setInputVal(next);
   }, [row.type, row.name, row.text]);
+
+  useEffect(() => {
+    setQtyVal(String(row.qty ?? 0));
+  }, [row.qty]);
 
   useEffect(() => {
     if (editing) { inputRef.current?.focus(); inputRef.current?.select(); }
@@ -148,7 +160,8 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
               fontWeight: linked ? 700 : 400, color: linked ? '#1B2F5E' : '#5a6380',
               fontStyle: linked ? 'normal' : 'italic', fontFamily: 'Barlow, sans-serif', minWidth: 0 }} />
         ) : (
-          <div style={{ flex: 1, overflow: 'hidden', minHeight: 18, padding: '2px 0', display: 'flex', alignItems: 'center' }}>
+          <div onClick={e => { e.stopPropagation(); onStartEdit(index); }}
+            style={{ flex: 1, overflow: 'hidden', minHeight: 18, padding: '2px 0', display: 'flex', alignItems: 'center', cursor: 'text' }}>
             <span onClick={e => { e.stopPropagation(); onStartEdit(index); }}
               style={{ fontSize: 12, fontWeight: linked ? 700 : 400,
                 color: linked ? '#1B2F5E' : suggested ? '#92400e' : (isLast && rows.length === 1 ? '#c0c5d4' : '#9aa3bc'),
@@ -174,9 +187,13 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
             {d}
           </button>
         ))}
-        <input ref={qtyInputRef} type="number" min={0} max={9999}
-          value={row.qty}
-          onChange={e => onChange(index, { qty: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+        <input ref={qtyInputRef} type="text" inputMode="numeric" pattern="[0-9]*"
+          value={qtyVal}
+          onChange={e => {
+            const digits = e.target.value.replace(/[^0-9]/g, '');
+            setQtyVal(digits);
+            onChange(index, { qty: digits === '' ? 0 : Math.min(9999, parseInt(digits, 10)) });
+          }}
           onFocus={e => { e.target.select(); onFocusQty(index); }}
           onKeyDown={handleQtyKeyDown}
           style={{ width: 34, textAlign: 'center', border: `1.5px solid ${suggested ? '#fde68a' : '#dde1ef'}`, borderRadius: 5, padding: '2px 2px', fontSize: 12, fontWeight: 700, fontFamily: 'Barlow, sans-serif' }}

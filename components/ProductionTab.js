@@ -504,6 +504,8 @@ export default function ProductionTab({
   designPdfMatches = {},
   allowedSubtabs = null,
   viewerRole = 'admin',
+  currentSellerId = null,
+  currentUserEmail = '',
   orderDetailColumnWidths,
   onSaveOrderDetailColumnWidths,
 }) {
@@ -625,9 +627,11 @@ export default function ProductionTab({
   const [addingExtraDesign, setAddingExtraDesign] = useState(false);
   const [addingExtraDesignBusy, setAddingExtraDesignBusy] = useState(false);
   const [addingExtraDesignError, setAddingExtraDesignError] = useState('');
+  const [orderTaskSearch, setOrderTaskSearch] = useState('');
   useEffect(() => {
     setAddingExtraDesign(false);
     setAddingExtraDesignError('');
+    setOrderTaskSearch('');
   }, [selectedProductionOrderId]);
   const [printHistory, setPrintHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
@@ -1015,7 +1019,7 @@ export default function ProductionTab({
     const token = bridgeToken.trim();
     if (!token) return;
 
-    const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
+    const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.printed_qty));
     const sheets = customSheets ?? Math.ceil(remaining / 2);
     const taskId = task.id || pdfKey;
     setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
@@ -1701,6 +1705,8 @@ export default function ProductionTab({
         qty: Math.abs(delta),
         type: delta >= 0 ? 'add' : 'subtract',
         note: 'Edición inline',
+        actor_email: currentUserEmail || null,
+        actor_name: operators.find(o => o.email === currentUserEmail)?.name || currentUserEmail || null,
       });
       if (logResult.error) throw logResult.error;
       await loadStockLog();
@@ -1809,7 +1815,9 @@ export default function ProductionTab({
   // (pedidos todavia sin "preparar") solo tiene sentido para admins, que son
   // quienes pueden prepararlos y asignarlos.
   const produceOrderRows = (orders || [])
-    .filter(order => viewerRole === 'admin' || (tasksByOrder[order.id]?.length > 0))
+    .filter(order => viewerRole === 'admin'
+      || (tasksByOrder[order.id]?.length > 0)
+      || (currentSellerId && order.seller_id === currentSellerId))
     .map(order => {
       const taskRows = tasksByOrder[order.id] || [];
       const itemRows = taskRows.length > 0 ? taskRows : getOrderProductionItems(order);
@@ -2073,8 +2081,16 @@ export default function ProductionTab({
                     )}
                     <div style={{ fontSize: 10, fontWeight: 900, color: '#9aa3bc', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>Detalle</div>
                   </div>
-                  <h2 style={{ fontSize: isMobile ? 18 : 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2, lineHeight: 1.05, wordBreak: 'break-word' }}>
+                  <h2 style={{ fontSize: isMobile ? 18 : 14, fontWeight: 900, color: '#1B2F5E', margin: 0, letterSpacing: 0.2, lineHeight: 1.05, wordBreak: 'break-word', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {selectedOrderRow ? (selectedOrderRow.order_code || 'Pedido seleccionado') : '—'}
+                    {selectedOrder?.created_by_email && (
+                      <InfoTooltip content={
+                        <>
+                          <div>Cargado {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                          <div>por {selectedOrder.created_by_name || selectedOrder.created_by_email}</div>
+                        </>
+                      } />
+                    )}
                   </h2>
                   {selectedOrderRow && (
                     <div style={{ fontSize: 11, color: '#5a6380', marginTop: 2, lineHeight: 1.5, overflow: 'hidden' }}>
@@ -2172,6 +2188,16 @@ export default function ProductionTab({
                   })}
                 </div>
 
+                <div style={{ padding: isMobile ? '0 8px' : '0 8px 4px' }}>
+                  <input
+                    type="text"
+                    value={orderTaskSearch}
+                    onChange={e => setOrderTaskSearch(e.target.value)}
+                    placeholder="Buscar diseño en este pedido…"
+                    style={{ width: isMobile ? '100%' : 240, border: '1.5px solid #dde1ef', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}
+                  />
+                </div>
+
                 <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, minHeight: 0, scrollbarGutter: 'stable', WebkitOverflowScrolling: 'touch' }}>
                   <table style={{
                     width: Math.max(
@@ -2201,7 +2227,9 @@ export default function ProductionTab({
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedOrderTasks.map(task => {
+                      {selectedOrderTasks
+                        .filter(task => !orderTaskSearch.trim() || (task.design_name || '').toLowerCase().includes(orderTaskSearch.trim().toLowerCase()))
+                        .map(task => {
                         const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
                         const pdfMatch = orderPdfMatches[pdfKey];
                         const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
@@ -2294,7 +2322,7 @@ export default function ProductionTab({
                               const isPrinting = printingTasks[taskId];
                               const feedback = printFeedback[taskId];
                               const hasPdf = pdfMatch?.found;
-                              const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
+                              const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.printed_qty));
                               const defaultSheets = Math.ceil(Math.max(1, remaining) / 2);
                               const sheets = printQtyOverrides[taskId] ?? defaultSheets;
                               const disabled = !hasPdf || isPrinting || !bridgeToken.trim() || bridgeStatus.state !== 'connected';
@@ -2946,7 +2974,7 @@ export default function ProductionTab({
               <div style={{ padding: '10px 16px', borderBottom: '1.5px solid #dde1ef' }}>
                 <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1B2F5E', margin: 0 }}>Movimientos de stock</h2>
               </div>
-              <div style={{ padding: 16, overflowX: 'auto' }}>
+              <div style={{ padding: 16, overflowX: 'auto', overflowY: 'auto', maxHeight: 480 }}>
                 {stockLog.length === 0 ? (
                   <p style={{ color: '#9aa3bc', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>Sin movimientos registrados.</p>
                 ) : isMobile ? (
@@ -2957,7 +2985,12 @@ export default function ProductionTab({
                           <span style={{ fontWeight: 600, color: '#1B2F5E', fontSize: 13 }}>{log.design_name}</span>
                           <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{log.type === 'add' ? '+' : '−'}{log.qty}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 3 }}>{formatDate(log.created_at)}{log.note ? ` · ${log.note}` : ''}</div>
+                        <div style={{ fontSize: 11, color: '#9aa3bc', marginTop: 3 }}>
+                          {formatDate(log.created_at)}{log.order_code ? ` · Pedido ${log.order_code}` : log.note ? ` · ${log.note}` : ''}
+                        </div>
+                        {(log.actor_name || log.actor_email) && (
+                          <div style={{ fontSize: 11, color: '#9aa3bc' }}>por {log.actor_name || log.actor_email}</div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2965,7 +2998,7 @@ export default function ProductionTab({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['Diseño', 'Tipo', 'Cantidad', 'Nota', 'Fecha'].map(h => (
+                        {['Diseño', 'Tipo', 'Cantidad', 'Pedido', 'Usuario', 'Nota', 'Fecha'].map(h => (
                           <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 700, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #dde1ef' }}>{h}</th>
                         ))}
                       </tr>
@@ -2978,6 +3011,8 @@ export default function ProductionTab({
                             <span style={{ color: log.type === 'add' ? '#18a36a' : '#e53e3e', fontWeight: 700 }}>{log.type === 'add' ? '+ Entrada' : '− Salida'}</span>
                           </td>
                           <td style={{ padding: '6px 10px', fontWeight: 700, color: log.type === 'add' ? '#18a36a' : '#e53e3e' }}>{log.qty}</td>
+                          <td style={{ padding: '6px 10px', color: '#5a6380' }}>{log.order_code || '—'}</td>
+                          <td style={{ padding: '6px 10px', color: '#5a6380' }}>{log.actor_name || log.actor_email || '—'}</td>
                           <td style={{ padding: '6px 10px', color: '#5a6380' }}>{log.note || '—'}</td>
                           <td style={{ padding: '6px 10px', color: '#9aa3bc', whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
                         </tr>

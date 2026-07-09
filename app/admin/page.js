@@ -1148,8 +1148,9 @@ useEffect(() => {
 
   useEffect(() => {
     function handleGlobalKey(e) {
-      if (e.altKey && e.key === 'n') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
+        e.stopPropagation();
         setActiveDraftId(null);
         setShowCreateOrder(true);
       }
@@ -5267,9 +5268,10 @@ useEffect(() => {
   }
 
   async function createAdminOrder({ order_code, source, status, customer_name, created_at, delivery_date, seller_id, items, _operator_id, notes }) {
+    const creatorRecord = (admins || []).find(a => a.email === currentUser);
     const { data: order, error } = await supabase
       .from('orders')
-      .insert({ order_code, source, status, customer_name: customer_name || '', customer_phone: '', customer_email: '', created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, total: 0, notes: notes || '' })
+      .insert({ order_code, source, status, customer_name: customer_name || '', customer_phone: '', customer_email: '', created_at, delivery_date: delivery_date || null, seller_id: seller_id || null, items, total: 0, notes: notes || '', created_by_email: currentUser || null, created_by_name: creatorRecord?.name || currentUser || null })
       .select('*')
       .single();
     if (error) throw new Error(error.message);
@@ -5437,6 +5439,12 @@ useEffect(() => {
     () => getVisibleAdminSubtabs(tabVisibilityConfig, subtabOrder, 'tracking', viewerKey, viewerRole),
     [tabVisibilityConfig, subtabOrder, viewerKey, viewerRole]
   );
+  const currentViewerSellerId = React.useMemo(() => {
+    const email = String(currentUser || '').trim().toLowerCase();
+    if (!email) return null;
+    return (sellers || []).find(s => String(s.email || '').trim().toLowerCase() === email)?.id || null;
+  }, [sellers, currentUser]);
+
   const pickableTabVisibilityUsers = React.useMemo(() => {
     const adminUsers = admins.map(a => ({ key: `admin:${String(a.email || '').toLowerCase()}`, email: String(a.email || '').toLowerCase(), label: a.name ? `${a.name} (${a.email})` : a.email, group: 'admin' }));
     const operatorUsers = operators.filter(o => o.active !== false).map(o => ({ key: `operator:${String(o.email || '').toLowerCase()}`, email: String(o.email || '').toLowerCase(), label: o.name ? `${o.name} (${o.email})` : o.email, group: 'operator' }));
@@ -10280,7 +10288,17 @@ useEffect(() => {
         <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={() => setOrderDetail(null)}>
           <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:520, maxHeight:'80vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:14}} onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-              <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>Pedido {orderDetail.order_code}</div>
+              <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E', display:'flex', alignItems:'center', gap:6}}>
+                Pedido {orderDetail.order_code}
+                {orderDetail.created_by_email && (
+                  <InfoTooltip content={
+                    <>
+                      <div>Cargado {orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'}</div>
+                      <div>por {orderDetail.created_by_name || orderDetail.created_by_email}</div>
+                    </>
+                  } />
+                )}
+              </div>
               <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={() => setOrderDetail(null)}>✕</button>
             </div>
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'6px 16px', fontSize:13}}>
@@ -10411,6 +10429,8 @@ useEffect(() => {
               designPdfMatches={designPdfMatches}
               allowedSubtabs={visibleProductionSubtabs}
               viewerRole={viewerRole}
+              currentSellerId={currentViewerSellerId}
+              currentUserEmail={currentUser}
               orderDetailColumnWidths={settings[adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser)]}
               onSaveOrderDetailColumnWidths={widths => saveSetting(adminPreferenceKey(PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY, currentUser), JSON.stringify(widths))}
             />
@@ -10570,12 +10590,14 @@ useEffect(() => {
         </div>
       )}
 
-      {/* FLOATING + BUTTON */}
-      <button
-        onClick={() => { setActiveDraftId(null); setShowCreateOrder(true); }}
-        title="Crear pedido (Alt+N)"
-        style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
-      >+</button>
+      {/* FLOATING + BUTTON — extension de la pestaña Pedidos, no aparece si no se puede ver esa pestaña */}
+      {visibleTabIds.includes('orders') && (
+        <button
+          onClick={() => { setActiveDraftId(null); setShowCreateOrder(true); }}
+          title="Crear pedido (Ctrl+N)"
+          style={{position:'fixed', bottom:28, right:28, zIndex:290, width:52, height:52, borderRadius:'50%', background:'linear-gradient(135deg, #2D6BE4, #1B2F5E)', color:'white', border:'none', fontSize:26, fontWeight:300, cursor:'pointer', boxShadow:'0 4px 20px rgba(27,47,94,0.35)', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1}}
+        >+</button>
+      )}
 
       {/* CREATE ORDER MODAL */}
       {showCreateOrder && (() => {
