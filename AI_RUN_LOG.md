@@ -6,6 +6,19 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-10 10:20 -03:00 - Claude Sonnet 5
+
+- Objetivo: Segunda tanda de pulido visual en la tabla de detalle de pedido de Producción, a partir de una captura de pantalla (4 puntos), más un pedido aparte de cerrar-al-clickear-afuera en el buscador inline de diseños agregados.
+- Cambios (`components/ProductionTab.js` salvo que se indique otra cosa):
+  1. Botón de imprimir del panel de Impresión Rápida (side panel, distinto de la columna "Imprimir" ya arreglada en la entrada anterior): se sacó el texto "Impr.", queda solo el ícono — el usuario aclaró explícitamente que era "la tercera columna (impresión rápida)", una ubicación separada del botón por fila.
+  2. Pastilla del nombre de archivo PDF vinculado: se agregó `marginLeft:'auto'` para que quede alineada a la derecha dentro de la celda del diseño (antes quedaba pegada al nombre del diseño, a la izquierda).
+  3. Input editable de "A producir" (para diseños agregados): `textAlign` de `'center'` a `'left'` y padding ajustado, para que el número quede alineado con los números no editables de la misma columna (que se muestran en texto plano, alineados a la izquierda).
+  4. `StockCell` (impreso/troquelado/desperdicio): las 3 piezas (botón `-`, input numérico, botón `+`) tenían cada una su propio borde/radio — ahora comparten un solo contenedor con un único borde/radio (`overflow:hidden`), y los botones internos perdieron su borde propio (quedó un separador fino `borderRight`/`borderLeft` entre secciones). El botón "=N" (que arma cada llamador aparte, fuera de `StockCell`) no se tocó, como pidió explícitamente el usuario.
+  5. Buscador inline de diseño (al hacer clic en el nombre de un diseño agregado para cambiarlo, tanto en Producción como en el modal "Ver pedido" de `app/admin/page.js`): antes solo cerraba con Escape, el botón "Cancelar", o al elegir un resultado — se agregó un listener de `mousedown` a nivel de documento (mismo patrón que ya usa `CreateOrderModal.js` para su propio dropdown) que cierra el picker si el clic cae afuera de él. Si no se había escrito ni elegido nada, cerrar así deja todo como estaba antes (no hay guardado parcial posible, la edición solo ocurre al elegir una coincidencia o al perder foco del input de cantidad).
+- Verificacion: `CI=true npm run build` OK sin errores nuevos (mismos warnings preexistentes de siempre, no relacionados). Diff acotado a `components/ProductionTab.js` y `app/admin/page.js`, revisado a mano. Se confirmó que los 4 call sites de `StockCell` (impreso, troquelado, desperdicio, y stock inline de `produccion` en la vista de Diseños) no necesitaron ningún cambio propio — el consolidado es 100% interno al componente.
+- Auditoria: Se releyó la entrada anterior (mismo día, 08:41) para no repetir el reordenamiento de columnas ni el trabajo de `InfoTooltip`, y se confirmó el patrón de "click afuera" existente en `CreateOrderModal.js` antes de replicarlo, en vez de inventar uno nuevo.
+- Pendiente/Riesgos: No se pudo probar en un navegador real (mismo límite de siempre) — el consolidado visual de `StockCell` y el cierre por clic afuera se verificaron solo por lectura de código/diff.
+
 ## 2026-07-10 09:15 -03:00 - Claude Sonnet 5
 
 - Objetivo: El usuario preguntó si las imágenes de diseño de Admin, los llaveros 3D del catálogo, el carrito, y el modelo 3D en sí usaban la función de disk cache (`SafeImage`/`/api/asset`). Se investigó y se encontraron 2 huecos reales (Admin y el modelo 3D); pidió arreglarlos ("si").

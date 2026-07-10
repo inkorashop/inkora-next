@@ -398,14 +398,16 @@ function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1, requiredQ
   const currentVal = val === '' ? 0 : Number(val);
   const isComplete = Number.isFinite(requiredQty) && requiredQty > 0 && currentVal >= requiredQty;
 
+  const isZero = (val === '' ? 0 : Number(val)) <= 0;
+
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, width: 90 }}>
+    <div style={{ display: 'inline-flex', alignItems: 'stretch', width: 90, border: '1.5px solid #dde1ef', borderRadius: 6, overflow: 'hidden', background: 'white' }}>
       <button
         type="button"
         onClick={() => adjust(-step)}
-        disabled={(val === '' ? 0 : Number(val)) <= 0}
+        disabled={isZero}
         title={`Restar ${step}`}
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #fecaca', background: (val === '' ? 0 : Number(val)) <= 0 ? '#f7f8fc' : '#fef2f2', color: (val === '' ? 0 : Number(val)) <= 0 ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: (val === '' ? 0 : Number(val)) <= 0 ? 'not-allowed' : 'pointer' }}
+        style={{ width: 22, border: 'none', borderRight: '1.5px solid #dde1ef', background: isZero ? '#f7f8fc' : '#fef2f2', color: isZero ? '#c4c9d9' : '#e53e3e', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: isZero ? 'not-allowed' : 'pointer' }}
       >
         -
       </button>
@@ -423,13 +425,13 @@ function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1, requiredQ
           if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') { editingRef.current = false; setVal(stockInputValue(latestQtyRef.current)); e.currentTarget.blur(); }
         }}
-        style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 4px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: isComplete ? '#18a36a' : '#2d3352', width: 44, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: 'white' }}
+        style={{ border: 'none', padding: '3px 2px', fontFamily: 'Barlow, sans-serif', fontSize: 13, fontWeight: 700, color: isComplete ? '#18a36a' : '#2d3352', flex: 1, minWidth: 0, textAlign: 'center', outline: 'none', boxSizing: 'border-box', background: 'transparent' }}
       />
       <button
         type="button"
         onClick={() => adjust(step)}
         title={`Sumar ${step}`}
-        style={{ width: 24, height: 24, borderRadius: 6, border: '1.5px solid #bbf7d0', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: 'pointer' }}
+        style={{ width: 22, border: 'none', borderLeft: '1.5px solid #dde1ef', background: '#f0fdf4', color: '#18a36a', fontSize: 14, fontWeight: 800, lineHeight: 1, cursor: 'pointer' }}
       >
         +
       </button>
@@ -631,6 +633,15 @@ export default function ProductionTab({
   const [editingAddedDesignTaskId, setEditingAddedDesignTaskId] = useState(null);
   const [addedDesignSearch, setAddedDesignSearch] = useState('');
   const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
+  const editingDesignPickerRef = useRef(null);
+  useEffect(() => {
+    if (!editingAddedDesignTaskId) return;
+    function onOutside(e) {
+      if (!editingDesignPickerRef.current?.contains(e.target)) setEditingAddedDesignTaskId(null);
+    }
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [editingAddedDesignTaskId]);
   useEffect(() => {
     setAddingExtraDesign(false);
     setAddingExtraDesignError('');
@@ -2247,14 +2258,14 @@ export default function ProductionTab({
                               {orderPdfStatus.state === 'ready' && (
                                 <span
                                   title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
-                                  style={{ flex: '0 1 auto', minWidth: 0, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                  style={{ flex: '0 1 auto', minWidth: 0, marginLeft: 'auto', border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                 >
                                   {pdfMatch?.found ? pdfMatch.fileName : '—'}
                                 </span>
                               )}
                             </div>
                             {isEditingDesign && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240 }}>
+                              <div ref={editingDesignPickerRef} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240 }}>
                                 <input
                                   autoFocus
                                   type="text"
@@ -2293,7 +2304,7 @@ export default function ProductionTab({
                                   if (next !== task.required_qty) editAddedDesign(task, { designId: task.design_id, qty: next });
                                 }}
                                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                                style={{ width: 44, textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 2px', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}
+                                style={{ width: 44, textAlign: 'left', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 0 3px 2px', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}
                               />
                             ) : (task.required_qty || 0)}
                           </td>
@@ -2617,12 +2628,9 @@ export default function ProductionTab({
                           style={{ border: 'none', borderRadius: 6, padding: '4px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}
                         >
                           {printing ? '...' : (
-                            <>
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
-                              </svg>
-                              Impr.
-                            </>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z" />
+                            </svg>
                           )}
                         </button>
                       </div>

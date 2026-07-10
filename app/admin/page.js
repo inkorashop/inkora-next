@@ -1151,6 +1151,15 @@ useEffect(() => {
   const [editingAddedDesignKey, setEditingAddedDesignKey] = useState(null);
   const [addedDesignSearch, setAddedDesignSearch] = useState('');
   const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
+  const editingDesignPickerRef = useRef(null);
+  useEffect(() => {
+    if (!editingAddedDesignKey) return;
+    function onOutside(e) {
+      if (!editingDesignPickerRef.current?.contains(e.target)) setEditingAddedDesignKey(null);
+    }
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [editingAddedDesignKey]);
   useEffect(() => {
     setAddingExtraDesign(false);
     setAddingExtraDesignError('');
@@ -10570,7 +10579,7 @@ useEffect(() => {
                             )}
                           </div>
                           {isEditingDesign && (
-                            <div style={{position:'absolute', top:'100%', left:0, zIndex:50, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, boxShadow:'0 8px 24px rgba(27,47,94,0.15)', padding:6, width:240}}>
+                            <div ref={editingDesignPickerRef} style={{position:'absolute', top:'100%', left:0, zIndex:50, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, boxShadow:'0 8px 24px rgba(27,47,94,0.15)', padding:6, width:240}}>
                               <input
                                 autoFocus
                                 type="text"
