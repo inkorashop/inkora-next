@@ -45,6 +45,7 @@ import {
   getBridgePdfRoots,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
+  getBridgePdfCatalog,
 } from '@/lib/print-bridge-client';
 import { adminPreferenceKey } from '@/lib/admin-preferences';
 import { FORCE_REFRESH_CHANNEL, FORCE_REFRESH_EVENT, broadcastForceRefresh } from '@/lib/force-refresh';
@@ -279,6 +280,26 @@ function formatSizeKb(kb) {
 function formatPlainKb(kb) {
   const value = Number(kb) || 0;
   return value > 0 ? `${Math.round(value).toLocaleString('es-AR')} KB` : '? KB';
+}
+
+// Cuando un diseno tiene un vinculo manual de PDF (fijado a mano en Disenos),
+// este reemplaza al match automatico por nombre, con la misma forma que
+// devuelve el Bridge (design-pdfs/match) para que el resto del codigo
+// (badges, tooltips, impresion en Produccion) no note la diferencia.
+function manualPdfMatchFor(design) {
+  if (!design?.manual_pdf_root_name || !design?.manual_pdf_relative_path) return null;
+  return {
+    id: design.id,
+    name: design.name,
+    found: true,
+    matchType: 'manual',
+    score: 100,
+    fileName: design.manual_pdf_file_name || design.manual_pdf_relative_path,
+    rootName: design.manual_pdf_root_name,
+    relativePath: design.manual_pdf_relative_path,
+    sizeBytes: 0,
+    lastWriteTime: null,
+  };
 }
 
 function fileToBase64(file) {
@@ -877,6 +898,11 @@ useEffect(() => {
   const [designPdfSummary, setDesignPdfSummary] = useState({ state: 'idle', message: 'Sin verificar', found: 0, missing: 0, pdfCount: 0, roots: [] });
   const [bridgePanelOpen, setBridgePanelOpen] = useState(false);
   const [designPdfFilter, setDesignPdfFilter] = useState('all'); // 'all' | 'linked' | 'unlinked'
+  const [pdfPickerDesignId, setPdfPickerDesignId] = useState(null);
+  const [pdfPickerSearch, setPdfPickerSearch] = useState('');
+  const [pdfCatalog, setPdfCatalog] = useState([]);
+  const [pdfCatalogState, setPdfCatalogState] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
+  const [pdfCatalogError, setPdfCatalogError] = useState('');
   const [optimizedThumbTargetKb, setOptimizedThumbTargetKb] = useState(() => {
     if (typeof window === 'undefined') return DEFAULT_OPTIMIZED_THUMB_KB;
     try {
@@ -2406,6 +2432,12 @@ useEffect(() => {
       (payload.matches || []).forEach(match => {
         nextMatches[match.id] = match;
       });
+      // Un vinculo manual (fijado a mano en Disenos) siempre gana sobre lo
+      // que haya encontrado el emparejamiento automatico por nombre.
+      designs.forEach(d => {
+        const manual = manualPdfMatchFor(d);
+        if (manual) nextMatches[d.id] = manual;
+      });
 
       setDesignPdfMatches(prev => ({ ...prev, ...nextMatches }));
       setDesignPdfSummary({
@@ -2428,6 +2460,60 @@ useEffect(() => {
     } finally {
       setDesignPdfBusy(false);
     }
+  }
+
+  async function openPdfPicker(designId) {
+    setPdfPickerDesignId(designId);
+    setPdfPickerSearch('');
+    const token = designPdfBridgeToken.trim();
+    const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+    if (!token) {
+      setPdfCatalogState('error');
+      setPdfCatalogError('Pegá el token del Bridge en "Vincular PDFs" antes de poder elegir un archivo puntual.');
+      return;
+    }
+    setPdfCatalogState('loading');
+    setPdfCatalogError('');
+    try {
+      const payload = await getBridgePdfCatalog(url, token);
+      setPdfCatalog(payload.pdfs || []);
+      setPdfCatalogState('ready');
+    } catch (error) {
+      setPdfCatalogState('error');
+      setPdfCatalogError(formatBridgeError(error));
+    }
+  }
+
+  function closePdfPicker() {
+    setPdfPickerDesignId(null);
+    setPdfPickerSearch('');
+  }
+
+  async function saveManualPdfLink(designId, file) {
+    const patch = {
+      manual_pdf_root_name: file.rootName,
+      manual_pdf_relative_path: file.relativePath,
+      manual_pdf_file_name: file.fileName,
+    };
+    const { error } = await supabase.from('designs').update(patch).eq('id', designId);
+    if (error) return;
+    setDesigns(prev => prev.map(d => d.id === designId ? { ...d, ...patch } : d));
+    setDesignPdfMatches(prev => ({ ...prev, [designId]: manualPdfMatchFor({ id: designId, ...patch }) }));
+    trackAdminActivity('design_manual_pdf_link', { design_id: designId, ...patch }, 'designs');
+    closePdfPicker();
+  }
+
+  async function clearManualPdfLink(designId) {
+    const patch = { manual_pdf_root_name: null, manual_pdf_relative_path: null, manual_pdf_file_name: null };
+    const { error } = await supabase.from('designs').update(patch).eq('id', designId);
+    if (error) return;
+    setDesigns(prev => prev.map(d => d.id === designId ? { ...d, ...patch } : d));
+    setDesignPdfMatches(prev => {
+      const next = { ...prev };
+      delete next[designId];
+      return next;
+    });
+    trackAdminActivity('design_manual_pdf_link_removed', { design_id: designId }, 'designs');
   }
 
   async function addDesignPdfRootFromAdmin() {
@@ -7394,7 +7480,7 @@ useEffect(() => {
                     })()}
                     {designPdfSummary.state === 'ready' && (
                       <span
-                        title={pdfLinkEnabled ? (pdfMatch?.found ? `PDF vinculado: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño') : undefined}
+                        title={pdfLinkEnabled ? (pdfMatch?.found ? `${pdfMatch.matchType === 'manual' ? 'Vinculado a mano' : 'PDF vinculado'}: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño') : undefined}
                         style={{
                           fontSize:10,
                           fontWeight: pdfLinkEnabled && !pdfMatch?.found ? 900 : 800,
@@ -7428,6 +7514,17 @@ useEffect(() => {
                     >
                       <LinkIcon />
                     </button>
+                    {pdfLinkEnabled && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); openPdfPicker(d.id); }}
+                        onDragStart={e => e.stopPropagation()}
+                        title={pdfMatch?.matchType === 'manual' ? 'Vinculado a mano — click para cambiar o quitar' : 'Elegir a mano qué PDF corresponde a este diseño'}
+                        style={{border:'1px solid', borderColor: pdfMatch?.matchType === 'manual' ? '#93c5fd' : '#dde1ef', background: pdfMatch?.matchType === 'manual' ? '#eef4ff' : '#f8faff', color: pdfMatch?.matchType === 'manual' ? '#1B2F5E' : '#9aa3bc', borderRadius:6, padding:4, display:'flex', alignItems:'center', cursor:'pointer', fontSize:12, fontWeight:900}}
+                      >
+                        🎯
+                      </button>
+                    )}
                     <button style={s.iconBtn} onClick={e => { e.stopPropagation(); toggleDesign(d.id, d.active); }}>{d.active ? <EyeOpen /> : <EyeOff />}</button>
                     <TrashBtn onClick={e => { e.stopPropagation(); deleteDesign(d.id); }} />
                   </div>
@@ -10292,6 +10389,69 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* MODAL VINCULAR PDF MANUALMENTE */}
+      {pdfPickerDesignId && (() => {
+        const targetDesign = designs.find(d => d.id === pdfPickerDesignId);
+        const currentManual = manualPdfMatchFor(targetDesign);
+        const q = pdfPickerSearch.trim().toLowerCase();
+        const filteredCatalog = q
+          ? pdfCatalog.filter(f => (f.fileName || '').toLowerCase().includes(q) || (f.relativePath || '').toLowerCase().includes(q))
+          : pdfCatalog;
+        return (
+          <div style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:20}} onClick={closePdfPicker}>
+            <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'22px 24px', width:'100%', maxWidth:480, maxHeight:'80vh', display:'flex', flexDirection:'column', gap:12}} onClick={e => e.stopPropagation()}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <div style={{fontSize:15, fontWeight:700, color:'#1B2F5E'}}>Vincular PDF — {targetDesign?.name}</div>
+                <button style={{background:'none', border:'none', fontSize:18, color:'#9aa3bc', cursor:'pointer', lineHeight:1}} onClick={closePdfPicker}>✕</button>
+              </div>
+
+              {currentManual && (
+                <div style={{background:'#eef4ff', border:'1px solid #93c5fd', borderRadius:8, padding:'8px 10px', fontSize:12, color:'#1B2F5E', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8}}>
+                  <span>Vinculado a mano: <strong>{currentManual.rootName}\{currentManual.relativePath}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => clearManualPdfLink(pdfPickerDesignId)}
+                    style={{border:'1px solid #fecaca', background:'#fff5f5', color:'#b91c1c', borderRadius:6, padding:'4px 8px', fontSize:11, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap'}}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              )}
+
+              <input
+                type="text"
+                autoFocus
+                value={pdfPickerSearch}
+                onChange={e => setPdfPickerSearch(e.target.value)}
+                placeholder="Buscar archivo…"
+                style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:8, padding:'8px 10px', fontSize:13, fontFamily:'Barlow, sans-serif', color:'#2d3352', boxSizing:'border-box'}}
+              />
+
+              <div style={{overflowY:'auto', flex:1, minHeight:0, display:'flex', flexDirection:'column', gap:4}}>
+                {pdfCatalogState === 'loading' && <p style={{color:'#9aa3bc', fontSize:13, textAlign:'center', padding:'24px 0'}}>Cargando catálogo del Bridge…</p>}
+                {pdfCatalogState === 'error' && <p style={{color:'#b91c1c', fontSize:12, textAlign:'center', padding:'24px 0'}}>{pdfCatalogError}</p>}
+                {pdfCatalogState === 'ready' && filteredCatalog.length === 0 && (
+                  <p style={{color:'#9aa3bc', fontSize:13, textAlign:'center', padding:'24px 0'}}>Sin resultados.</p>
+                )}
+                {pdfCatalogState === 'ready' && filteredCatalog.map(file => (
+                  <button
+                    key={`${file.rootName}/${file.relativePath}`}
+                    type="button"
+                    onClick={() => saveManualPdfLink(pdfPickerDesignId, file)}
+                    style={{textAlign:'left', border:'1px solid #f0f2f8', borderRadius:8, padding:'8px 10px', background:'white', cursor:'pointer', display:'flex', flexDirection:'column', gap:2}}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8faff'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                  >
+                    <span style={{fontSize:13, fontWeight:600, color:'#1B2F5E'}}>{file.fileName}</span>
+                    <span style={{fontSize:11, color:'#9aa3bc'}}>{file.rootName}\{file.relativePath}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL DETALLE PEDIDO */}
       {orderDetail && (

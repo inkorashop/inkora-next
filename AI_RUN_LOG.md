@@ -6,6 +6,16 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-09 14:45 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario pidió poder elegir a mano qué PDF corresponde a un diseño puntual (cuando el emparejamiento automático por nombre falla o elige mal), aclarando que debía vivir en Diseños y que Producción debía heredarlo sin cambios propios.
+- Cambios: Investigado antes de tocar código: un explorador de archivos nativo del navegador no sirve para esto (no da una referencia persistente a un archivo, solo su contenido una vez). En cambio, se encontró que el Bridge ya expone `/pdf-catalog` (lista completa de PDFs ya escaneados) con su función cliente lista (`getBridgePdfCatalog`), pero sin ningún consumidor — era la pieza que faltaba conectar.
+  **SQL** (`sql/design_manual_pdf_link.sql`, ya aplicada): 3 columnas nuevas en `designs` (`manual_pdf_root_name`, `manual_pdf_relative_path`, `manual_pdf_file_name`), globales por diseño (no por PC).
+  **Cliente** (`app/admin/page.js`): nuevo botón "🎯" al lado del ícono de vincular existente en cada fila de Diseños, abre un modal con buscador sobre el catálogo completo del Bridge. Nueva función `manualPdfMatchFor(design)` arma un objeto con la misma forma que devuelve el Bridge al matchear automático (mismo `found`/`fileName`/`rootName`/`relativePath`, con `matchType:'manual'` para distinguirlo) — clave para que nada más en el código note la diferencia. `refreshDesignPdfLinks` (la función existente que llama al Bridge) ahora pisa el resultado automático con el vínculo manual de cada diseño que lo tenga, antes de guardar el estado compartido `designPdfMatches`. Como ese estado es el mismo que ya se pasaba a `ProductionTab` sin cambios, Producción hereda el vínculo manual automáticamente — no se tocó `ProductionTab.js` para nada, tal como pidió el usuario.
+- Verificacion: Migración probada dentro de una transacción (columnas + un UPDATE de prueba, con rollback antes de aplicarla para real). `CI=true npm run build` OK sin errores nuevos. Se releyó el diff completo.
+- Auditoria: N/A, feature nueva y aislada.
+- Pendiente/Riesgos: No se pudo probar en un navegador real con el Bridge conectado de verdad (mismo límite de siempre). Documentado en `PDF_MANUAL_LINK_FEATURE.md` y enlazado desde `CONTEXT.md`.
+
 ## 2026-07-09 14:05 -03:00 - Claude Sonnet 5
 
 - Objetivo: El usuario confirmó que Ctrl+N le sigue abriendo pestaña nueva del navegador y pidió mantener Alt+N funcionando mientras tanto.
