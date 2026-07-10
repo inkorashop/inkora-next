@@ -99,7 +99,7 @@ const PRODUCTION_ORDER_DETAIL_COLUMN_LABELS = {
   notes: 'Observaciones',
   print: 'Imprimir',
 };
-const PRODUCTION_ORDER_DETAIL_COLUMN_ORDER = ['product', 'design', 'toproduce', 'printed', 'diecut', 'waste', 'notes', 'print'];
+const PRODUCTION_ORDER_DETAIL_COLUMN_ORDER = ['product', 'design', 'toproduce', 'print', 'printed', 'diecut', 'waste', 'notes'];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -628,10 +628,15 @@ export default function ProductionTab({
   const [addingExtraDesignBusy, setAddingExtraDesignBusy] = useState(false);
   const [addingExtraDesignError, setAddingExtraDesignError] = useState('');
   const [orderTaskSearch, setOrderTaskSearch] = useState('');
+  const [editingAddedDesignTaskId, setEditingAddedDesignTaskId] = useState(null);
+  const [addedDesignSearch, setAddedDesignSearch] = useState('');
+  const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
   useEffect(() => {
     setAddingExtraDesign(false);
     setAddingExtraDesignError('');
     setOrderTaskSearch('');
+    setEditingAddedDesignTaskId(null);
+    setAddedDesignSearch('');
   }, [selectedProductionOrderId]);
   const [printHistory, setPrintHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('inkora_print_history') || '[]'); } catch { return []; }
@@ -1066,22 +1071,6 @@ export default function ProductionTab({
     }
   }
 
-  async function printAllOrderTasks() {
-    if (!selectedOrder || selectedOrderTasks.length === 0) return;
-    const token = bridgeToken.trim();
-    if (!token) return;
-
-    const printable = selectedOrderTasks.filter(task => {
-      const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
-      return orderPdfMatches[pdfKey]?.found;
-    });
-
-    if (printable.length === 0) return;
-    for (const task of printable) {
-      await printSingleTask(task);
-    }
-  }
-
   async function loadPrintQueue() {
     const token = bridgeToken.trim();
     if (!token) return;
@@ -1462,6 +1451,27 @@ export default function ProductionTab({
     }
     await loadProductionTasks();
     setAddingExtraDesign(false);
+  }
+
+  // Edicion inline de una fila agregada (diseno y/o cantidad), sin boton
+  // guardar aparte: se dispara solo, al elegir un diseno nuevo del buscador
+  // o al salir del input de cantidad.
+  async function editAddedDesign(task, { designId, qty }) {
+    setSavingAddedEditIds(prev => ({ ...prev, [task.id]: true }));
+    const { error } = await supabase.rpc('edit_order_extra_design', {
+      p_order_id: task.order_id,
+      p_old_design_id: task.design_id,
+      p_new_design_id: designId,
+      p_new_qty: qty,
+    });
+    setSavingAddedEditIds(prev => ({ ...prev, [task.id]: false }));
+    if (error) {
+      setErrorMessage(formatProductionError(error, 'No se pudo editar el diseño agregado.'));
+      return;
+    }
+    setEditingAddedDesignTaskId(null);
+    setAddedDesignSearch('');
+    await loadProductionTasks();
   }
 
   function ensureTaskSaveState(taskId) {
@@ -2115,27 +2125,6 @@ export default function ProductionTab({
                 </div>
                 {selectedOrderRow && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: isMobile ? 'stretch' : 'flex-end', alignItems: 'center', flexShrink: 0, width: isMobile ? '100%' : 'auto' }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: orderPdfStatus.state === 'ready' ? '#15803d' : orderPdfStatus.state === 'error' ? '#b91c1c' : '#8b95b3', width: isMobile ? '100%' : 'auto' }}>
-                      {orderPdfStatus.message}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => matchSelectedOrderPdfs({ scan: true })}
-                      disabled={orderPdfBusy || !bridgeToken.trim()}
-                      style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '6px 10px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, cursor: orderPdfBusy || !bridgeToken.trim() ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
-                    >
-                      {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
-                    </button>
-                    {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
-                      <button
-                        type="button"
-                        onClick={printAllOrderTasks}
-                        disabled={Object.values(printingTasks).some(Boolean) || !bridgeToken.trim()}
-                        style={{ border: '1.5px solid #18a36a', borderRadius: 8, padding: '6px 10px', background: '#e8f7ef', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: Object.values(printingTasks).some(Boolean) ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', flex: isMobile ? '1 1 130px' : '0 0 auto' }}
-                      >
-                        Imprimir todo
-                      </button>
-                    )}
                     {viewerRole === 'admin' && (
                       <select
                         value={selectedOrderRow.operator_id || ''}
@@ -2158,20 +2147,12 @@ export default function ProductionTab({
               <>
                 {/* Summary totals */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 6, padding: isMobile ? '8px' : '6px 8px 4px', flexShrink: 0, alignItems: 'stretch' }}>
-                  {(() => {
-                    const addedToRequired = selectedOrderTasks
-                      .filter(t => t.added_via === 'produccion')
-                      .reduce((sum, t) => sum + (t.added_qty || 0), 0);
-                    const requiredDisplay = addedToRequired > 0
-                      ? `${summaryTotals.required - addedToRequired} + ${addedToRequired}`
-                      : String(summaryTotals.required);
-                    return [
-                      { label: 'A producir', value: requiredDisplay, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
-                      { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
-                      { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047', showBar: true },
-                      { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5', showBar: true },
-                    ];
-                  })().map(({ label, value, color, bg, border, showBar }) => {
+                  {[
+                    { label: 'A producir', value: summaryTotals.required, color: '#1B2F5E', bg: '#eef4ff', border: '#c7d7f7', showBar: false },
+                    { label: 'Impreso', value: summaryTotals.printed, color: '#15803d', bg: '#dcfce7', border: '#86efac', showBar: true },
+                    { label: 'Troquelado', value: summaryTotals.produced, color: '#b45309', bg: '#fef9c3', border: '#fde047', showBar: true },
+                    { label: 'Desperdicio', value: summaryTotals.waste, color: '#b91c1c', bg: '#fee2e2', border: '#fca5a5', showBar: true },
+                  ].map(({ label, value, color, bg, border, showBar }) => {
                     const pct = summaryTotals.required > 0 ? Math.round(value / summaryTotals.required * 100) : 0;
                     return (
                       <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 7, padding: isMobile ? '7px 9px' : '4px 8px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -2233,13 +2214,28 @@ export default function ProductionTab({
                         const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
                         const pdfMatch = orderPdfMatches[pdfKey];
                         const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
+                        const isEditableAdded = Boolean(task.added_via) && task.added_qty === task.required_qty;
+                        const isEditingDesign = editingAddedDesignTaskId === task.id;
+                        const designMatches = isEditingDesign && addedDesignSearch.trim()
+                          ? fuzzyMatchDesigns(addedDesignSearch, ctxDesigns, 8)
+                          : [];
                         return (
-                        <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8' }}>
+                        <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8', background: task.added_via === 'produccion' ? '#f3f4f6' : undefined }}>
                           <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
-                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden' }}>
+                          <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', position: 'relative' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
-                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
+                              {isEditableAdded ? (
+                                <span
+                                  onClick={() => { setEditingAddedDesignTaskId(task.id); setAddedDesignSearch(''); }}
+                                  title="Click para cambiar el diseño"
+                                  style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', borderBottom: '1px dashed #9aa3bc' }}
+                                >
+                                  {task.design_name}
+                                </span>
+                              ) : (
+                                <span style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
+                              )}
                               {task.added_via === 'produccion' && (
                                 <InfoTooltip content={
                                   <>
@@ -2251,72 +2247,57 @@ export default function ProductionTab({
                               {orderPdfStatus.state === 'ready' && (
                                 <span
                                   title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
-                                  style={{ flexShrink: 0, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                  style={{ flex: '0 1 auto', minWidth: 0, border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                 >
                                   {pdfMatch?.found ? pdfMatch.fileName : '—'}
                                 </span>
                               )}
                             </div>
+                            {isEditingDesign && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240 }}>
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={addedDesignSearch}
+                                  onChange={e => setAddedDesignSearch(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Escape') setEditingAddedDesignTaskId(null); }}
+                                  placeholder="Buscar diseño…"
+                                  style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: 'Barlow, sans-serif', boxSizing: 'border-box', marginBottom: designMatches.length ? 6 : 0 }}
+                                />
+                                {designMatches.map(({ design }) => (
+                                  <div
+                                    key={design.id}
+                                    onMouseDown={e => { e.preventDefault(); editAddedDesign(task, { designId: design.id, qty: task.required_qty }); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px', cursor: 'pointer', borderRadius: 6 }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    <DesignThumb designId={design.id} name={design.name} size={20} />
+                                    <span style={{ fontSize: 12, color: '#2d3352' }}>{design.name}</span>
+                                  </div>
+                                ))}
+                                <button type="button" onClick={() => setEditingAddedDesignTaskId(null)} style={{ marginTop: 6, border: 'none', background: 'none', color: '#9aa3bc', fontSize: 11, cursor: 'pointer', padding: 0 }}>Cancelar</button>
+                              </div>
+                            )}
                           </td>
-                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>{task.required_qty || 0}</td>
-                          <td style={{ padding: '4px 5px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <StockCell
-                                qtyProduced={task.printed_qty || 0}
-                                onSave={qty => saveProductionTask(task, { printed_qty: qty })}
-                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'printed_qty', delta, next)}
-                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
-                                step={2}
-                                requiredQty={task.required_qty}
+                          <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>
+                            {isEditableAdded ? (
+                              <input
+                                type="number"
+                                min={1}
+                                defaultValue={task.required_qty || 0}
+                                disabled={Boolean(savingAddedEditIds[task.id])}
+                                onFocus={e => e.target.select()}
+                                onBlur={e => {
+                                  const next = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                  if (next !== task.required_qty) editAddedDesign(task, { designId: task.design_id, qty: next });
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                style={{ width: 44, textAlign: 'center', border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 2px', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#2d3352' }}
                               />
-                              <button
-                                type="button"
-                                title={`Marcar ${printedEven} impreso`}
-                                onClick={() => saveProductionTask(task, { printed_qty: printedEven })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
-                              >
-                                ={printedEven}
-                              </button>
-                            </div>
+                            ) : (task.required_qty || 0)}
                           </td>
                           <td style={{ padding: '4px 5px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <StockCell
-                                qtyProduced={task.produced_qty || 0}
-                                onSave={qty => saveProductionTask(task, { produced_qty: qty })}
-                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'produced_qty', delta, next)}
-                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
-                                requiredQty={task.required_qty}
-                              />
-                              <button
-                                type="button"
-                                title={`Marcar ${task.required_qty} troquelado`}
-                                onClick={() => saveProductionTask(task, { produced_qty: task.required_qty })}
-                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
-                                >
-                                  ={task.required_qty}
-                                </button>
-                            </div>
-                          </td>
-                          <td style={{ padding: '4px 5px' }}>
-                            <StockCell
-                              qtyProduced={task.waste_qty || 0}
-                              onSave={qty => saveProductionTask(task, { waste_qty: qty })}
-                              onDelta={(delta, next) => adjustProductionTaskCounter(task, 'waste_qty', delta, next)}
-                              onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, waste_qty: qty } : t))}
-                            />
-                          </td>
-                          <td style={{ padding: '4px 5px' }}>
-                            <input
-                              defaultValue={task.note || ''}
-                              disabled={Boolean(savingTaskIds[task.id])}
-                              onBlur={e => saveProductionTask(task, { note: e.target.value })}
-                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                              placeholder="Agregar observación..."
-                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }}
-                            />
-                          </td>
-                          <td style={{ padding: '4px 5px', position: 'sticky', right: 0, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' }}>
                             {(() => {
                               const taskId = task.id || pdfKey;
                               const isPrinting = printingTasks[taskId];
@@ -2387,17 +2368,71 @@ export default function ProductionTab({
                                     {isPrinting ? (
                                       '...'
                                     ) : (
-                                      <>
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
-                                          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-                                        </svg>
-                                        Impr.
-                                      </>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                                        <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+                                      </svg>
                                     )}
                                   </button>
                                 </div>
                               );
                             })()}
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <StockCell
+                                qtyProduced={task.printed_qty || 0}
+                                onSave={qty => saveProductionTask(task, { printed_qty: qty })}
+                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'printed_qty', delta, next)}
+                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, printed_qty: qty } : t))}
+                                step={2}
+                                requiredQty={task.required_qty}
+                              />
+                              <button
+                                type="button"
+                                title={`Marcar ${printedEven} impreso`}
+                                onClick={() => saveProductionTask(task, { printed_qty: printedEven })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
+                              >
+                                ={printedEven}
+                              </button>
+                            </div>
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <StockCell
+                                qtyProduced={task.produced_qty || 0}
+                                onSave={qty => saveProductionTask(task, { produced_qty: qty })}
+                                onDelta={(delta, next) => adjustProductionTaskCounter(task, 'produced_qty', delta, next)}
+                                onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, produced_qty: qty } : t))}
+                                requiredQty={task.required_qty}
+                              />
+                              <button
+                                type="button"
+                                title={`Marcar ${task.required_qty} troquelado`}
+                                onClick={() => saveProductionTask(task, { produced_qty: task.required_qty })}
+                                style={{ border: '1px solid #b7ebcf', borderRadius: 5, background: '#e8f7ef', color: '#15803d', fontSize: 11, fontWeight: 900, cursor: 'pointer', padding: '2px 4px', lineHeight: 1, fontFamily: 'Barlow, sans-serif', flexShrink: 0, minWidth: 38, textAlign: 'center' }}
+                                >
+                                  ={task.required_qty}
+                                </button>
+                            </div>
+                          </td>
+                          <td style={{ padding: '4px 5px' }}>
+                            <StockCell
+                              qtyProduced={task.waste_qty || 0}
+                              onSave={qty => saveProductionTask(task, { waste_qty: qty })}
+                              onDelta={(delta, next) => adjustProductionTaskCounter(task, 'waste_qty', delta, next)}
+                              onChange={qty => setProductionTasks(prev => prev.map(t => t.id === task.id ? { ...t, waste_qty: qty } : t))}
+                            />
+                          </td>
+                          <td style={{ padding: '4px 5px', position: 'sticky', right: 0, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' }}>
+                            <input
+                              defaultValue={task.note || ''}
+                              disabled={Boolean(savingTaskIds[task.id])}
+                              onBlur={e => saveProductionTask(task, { note: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                              placeholder="Agregar observación..."
+                              style={{ border: '1.5px solid #dde1ef', borderRadius: 7, padding: '3px 5px', fontSize: 11, fontFamily: 'Barlow, sans-serif', width: '100%', boxSizing: 'border-box', color: '#2d3352' }}
+                            />
                           </td>
                         </tr>
                         );

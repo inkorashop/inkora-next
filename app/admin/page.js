@@ -16,6 +16,7 @@ import ChatPushToggle from '@/components/ChatPushToggle';
 import InfoTooltip from '@/components/InfoTooltip';
 import AddExtraDesignForm from '@/components/AddExtraDesignForm';
 import { getDesignDisplayImageUrl, getDesignOriginalImageUrl } from '@/lib/design-image-url';
+import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 import { toSlug as slugify } from '@/lib/slug';
 import {
   canInferSingleProductUnitPrice,
@@ -1147,9 +1148,14 @@ useEffect(() => {
   const [addingExtraDesign, setAddingExtraDesign] = useState(false);
   const [addingExtraDesignBusy, setAddingExtraDesignBusy] = useState(false);
   const [addingExtraDesignError, setAddingExtraDesignError] = useState('');
+  const [editingAddedDesignKey, setEditingAddedDesignKey] = useState(null);
+  const [addedDesignSearch, setAddedDesignSearch] = useState('');
+  const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
   useEffect(() => {
     setAddingExtraDesign(false);
     setAddingExtraDesignError('');
+    setEditingAddedDesignKey(null);
+    setAddedDesignSearch('');
   }, [orderDetail?.id]);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [ordersView, setOrdersView] = useState(initialOrdersView); // 'active' | 'archived'
@@ -4683,6 +4689,30 @@ useEffect(() => {
       setOrders(prev => prev.map(o => (o.id === refreshedOrder.id ? refreshedOrder : o)));
     }
     setAddingExtraDesign(false);
+  }
+
+  async function editAddedOrderDesign(item, { designId, qty }) {
+    if (!orderDetail) return;
+    const itemKey = item.design_id || item.designId || item.id;
+    setSavingAddedEditIds(prev => ({ ...prev, [itemKey]: true }));
+    const { error } = await supabase.rpc('edit_order_extra_design', {
+      p_order_id: orderDetail.id,
+      p_old_design_id: itemKey,
+      p_new_design_id: designId,
+      p_new_qty: qty,
+    });
+    setSavingAddedEditIds(prev => ({ ...prev, [itemKey]: false }));
+    if (error) {
+      setAddingExtraDesignError(error.message || 'No se pudo editar el diseño agregado.');
+      return;
+    }
+    setEditingAddedDesignKey(null);
+    setAddedDesignSearch('');
+    const { data: refreshedOrder } = await supabase.from('orders').select('*').eq('id', orderDetail.id).single();
+    if (refreshedOrder) {
+      setOrderDetail(refreshedOrder);
+      setOrders(prev => prev.map(o => (o.id === refreshedOrder.id ? refreshedOrder : o)));
+    }
   }
 
   async function loadCarts() {
@@ -10508,13 +10538,28 @@ useEffect(() => {
                   {(Array.isArray(orderDetail.items) ? orderDetail.items : []).map((item, i) => {
                     const pricing = getOrderItemPricing(item, orderDetail);
                     const addedHere = item.added_via === 'pedido';
+                    const itemKey = item.design_id || item.designId || item.id;
+                    const isEditingDesign = editingAddedDesignKey === itemKey;
+                    const designMatches = isEditingDesign && addedDesignSearch.trim()
+                      ? fuzzyMatchDesigns(addedDesignSearch, designs, 8)
+                      : [];
 
                     return (
                       <tr key={i} style={addedHere ? {background:'#f0fdf4'} : undefined}>
-                        <td style={{...s.td, padding:'5px 8px', fontSize:13}}>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, position:'relative'}}>
                           <div style={{display:'flex', alignItems:'center', gap:6}}>
                             <DesignThumb designId={item.design_id} name={item.name || item.designName} size={26} />
-                            <span>{item.name || item.designName || '—'}</span>
+                            {addedHere ? (
+                              <span
+                                onClick={() => { setEditingAddedDesignKey(itemKey); setAddedDesignSearch(''); }}
+                                title="Click para cambiar el diseño"
+                                style={{cursor:'pointer', borderBottom:'1px dashed #9aa3bc'}}
+                              >
+                                {item.name || item.designName || '—'}
+                              </span>
+                            ) : (
+                              <span>{item.name || item.designName || '—'}</span>
+                            )}
                             {addedHere && (
                               <InfoTooltip content={
                                 <>
@@ -10524,8 +10569,50 @@ useEffect(() => {
                               } />
                             )}
                           </div>
+                          {isEditingDesign && (
+                            <div style={{position:'absolute', top:'100%', left:0, zIndex:50, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, boxShadow:'0 8px 24px rgba(27,47,94,0.15)', padding:6, width:240}}>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={addedDesignSearch}
+                                onChange={e => setAddedDesignSearch(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Escape') setEditingAddedDesignKey(null); }}
+                                placeholder="Buscar diseño…"
+                                style={{width:'100%', border:'1.5px solid #dde1ef', borderRadius:6, padding:'5px 8px', fontSize:12, fontFamily:'Barlow, sans-serif', boxSizing:'border-box', marginBottom: designMatches.length ? 6 : 0}}
+                              />
+                              {designMatches.map(({ design }) => (
+                                <div
+                                  key={design.id}
+                                  onMouseDown={e => { e.preventDefault(); editAddedOrderDesign(item, { designId: design.id, qty: item.qty }); }}
+                                  style={{display:'flex', alignItems:'center', gap:6, padding:'5px 6px', cursor:'pointer', borderRadius:6}}
+                                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <DesignThumb designId={design.id} name={design.name} size={20} />
+                                  <span style={{fontSize:12, color:'#2d3352'}}>{design.name}</span>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => setEditingAddedDesignKey(null)} style={{marginTop:6, border:'none', background:'none', color:'#9aa3bc', fontSize:11, cursor:'pointer', padding:0}}>Cancelar</button>
+                            </div>
+                          )}
                         </td>
-                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>{item.qty}</td>
+                        <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
+                          {addedHere ? (
+                            <input
+                              type="number"
+                              min={1}
+                              defaultValue={item.qty}
+                              disabled={Boolean(savingAddedEditIds[itemKey])}
+                              onFocus={e => e.target.select()}
+                              onBlur={e => {
+                                const next = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                if (next !== item.qty) editAddedOrderDesign(item, { designId: itemKey, qty: next });
+                              }}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                              style={{width:48, textAlign:'center', border:'1.5px solid #dde1ef', borderRadius:6, padding:'3px 2px', fontSize:12, fontWeight:700, fontFamily:'Barlow, sans-serif', color:'#2d3352'}}
+                            />
+                          ) : item.qty}
+                        </td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>
                           {pricing.hasPrice ? formatOrderMoney(pricing.unitPrice) : '—'}
                         </td>
