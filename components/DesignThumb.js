@@ -2,6 +2,7 @@
 
 import { useDesigns } from '@/contexts/DesignsContext';
 import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
+import { normalizeAssetUrl } from '@/components/SafeImage';
 
 export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: nameProp, size = 32, style }) {
   const { designById, designByName, openLightbox } = useDesigns();
@@ -14,7 +15,8 @@ export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: na
     design = designByName.get(nameProp.toLowerCase()) ?? null;
   }
 
-  const imageUrl = imageUrlProp || getDesignDisplayImageUrl(design);
+  const rawImageUrl = imageUrlProp || getDesignDisplayImageUrl(design);
+  const imageUrl = rawImageUrl ? normalizeAssetUrl(rawImageUrl) : '';
   const name = nameProp || design?.name || '';
 
   if (!imageUrl) {

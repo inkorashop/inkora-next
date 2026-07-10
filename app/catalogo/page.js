@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js';
 import { supabase } from '@/lib/supabase';
 import AuthModal from '@/components/AuthModal';
-import SafeImage from '@/components/SafeImage';
+import SafeImage, { normalizeAssetUrl } from '@/components/SafeImage';
 import ModelViewer from '@/components/ModelViewer';
 import { useCart } from '@/contexts/CartContext';
 import Header from '@/components/Header';
@@ -82,10 +82,14 @@ function ModelViewerWithFallback({ url, autoRotate, modelConfig, imageUrl }) {
   );
 }
 
-function LazyModelViewer({ url, autoRotate, modelConfig, isHovered, imageUrl, forceActive = false }) {
+function LazyModelViewer({ url: rawUrl, autoRotate, modelConfig, isHovered, imageUrl, forceActive = false }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
   const [cachedUrl, setCachedUrl] = useState(null);
+  // Igual que las imagenes: pasa por el proxy propio (app/api/asset) en vez
+  // de pegarle directo a Supabase, que no manda un Cache-Control real para
+  // este archivo (el modelo 3D es justo el mas pesado de todo el catalogo).
+  const url = rawUrl ? normalizeAssetUrl(rawUrl) : rawUrl;
 
   useEffect(() => {
     const el = ref.current;

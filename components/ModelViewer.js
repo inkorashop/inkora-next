@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { normalizeAssetUrl } from '@/components/SafeImage';
 
 // ─── Global WebGL context pool ────────────────────────────────────────────────
 // Browsers limit WebGL contexts to ~16. This pool prevents overflow.
@@ -143,7 +144,12 @@ function applyBambuColorsToModel(model, colorData, THREE) {
 
 // ─── ModelViewer component ────────────────────────────────────────────────────
 
-export default function ModelViewer({ url, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null, oneShot = false }) {
+export default function ModelViewer({ url: rawUrl, autoRotate = false, hideHint = false, modelConfig = null, onCapture = null, onReady = null, oneShot = false }) {
+  // Los modelos 3D (.glb/.3mf) se sirven de Supabase Storage igual que las
+  // imagenes: normalizeAssetUrl los reescribe para pasar por el proxy propio
+  // (app/api/asset) que si manda un Cache-Control real, en vez de pegarle
+  // directo a Supabase (que no lo manda). Ver IMAGE_ASSET_CACHING.md.
+  const url = rawUrl ? normalizeAssetUrl(rawUrl) : rawUrl;
   const mountRef = useRef(null);
   const cleanupRef = useRef(null);
   const [status, setStatus] = useState('loading');

@@ -27,11 +27,16 @@ Esto confirma que hay dos capas de cache funcionando, sin depender de Supabase P
 1. **Navegador del visitante**: con `max-age=31536000, immutable`, un visitante que vuelve no vuelve a pedir la imagen en absoluto mientras no se le borre el cache local.
 2. **Edge de Vercel**: cachea la respuesta del proxy también — un visitante DISTINTO que pide la MISMA imagen la recibe desde el borde de Vercel, sin que nuestra función ni Supabase se enteren. El "HIT" es por nodo/región de Vercel (no instantáneo en todo el mundo a la vez), así que el primer visitante de cada región igual paga el costo una vez — eso es normal y esperable de cualquier CDN.
 
-## Cobertura confirmada (y el hueco conocido que queda)
+## Cobertura confirmada
 
 Se revisó con grep exhaustivo: **todo punto de render de imagen de cara al cliente usa `SafeImage`** (grilla del catálogo, carrito, landing, fallback de modelos 3D, chat) — `app/catalogo/page.js`, `app/page.js`, `components/chat/ChatPanel.js`, `components/chat/ChatReferencePicker.js`, `components/Header.js`. Se confirmó también que el 100% de las URLs guardadas en `designs.image_url`/`optimized_image_url`/`model_url` matchean el patrón que `normalizeAssetUrl()` sabe reescribir (ningún host distinto, ninguna con query string que fragmentaría la cache).
 
-**Hueco conocido, de bajo impacto**: `components/DesignThumb.js` (usado solo en el panel de Admin, para el staff, no para clientes) sigue usando `<img>` directo con la URL cruda de Supabase, sin pasar por `SafeImage`/el proxy. No se tocó porque el volumen de tráfico de admin es marginal comparado con el catálogo público — si en algún momento se quiere prolijidad total, se puede migrar `DesignThumb` a `SafeImage` también, pero no es una prioridad de egress.
+**Extendido (2026-07-10) a dos huecos que quedaban**, encontrados al preguntar puntualmente por ellos:
+
+- **`components/DesignThumb.js`** (usado en el panel de Admin — Diseños, y en cualquier lado que muestre una miniatura de diseño): usaba `<img>` directo con la URL cruda de Supabase. Ahora pasa `imageUrl` por `normalizeAssetUrl()` antes de usarla (tanto para el `<img src>` como para lo que se le pasa a `openLightbox`), sin necesidad de adoptar el componente `SafeImage` completo (no hacía falta su lógica de fallback/retry acá).
+- **El modelo 3D en sí** (`.glb`/`.3mf`): ni `components/ModelViewer.js` ni el precargador `LazyModelViewer` (`app/catalogo/page.js`) pasaban la URL por el proxy — se bajaban directo de Supabase con `Cache-Control: no-cache`, siendo el archivo más pesado de todo el catálogo. Se normaliza en dos puntos independientes (no es redundante, son dos fetches distintos): dentro de `ModelViewer` mismo (asi cualquier llamador, incluidos los del panel de Admin, lo hereda gratis sin tocar cada call site) y en el `fetch()` de precarga de `LazyModelViewer` (que corre ANTES de que el modelo se muestre, mientras la card solo es visible en pantalla).
+
+`/api/asset/[...path]/route.js` no necesitó ningún cambio — ya reenvía cualquier `Content-Type` que diga Supabase (no está limitado a imágenes), así que sirve archivos `.glb`/`.3mf` sin modificaciones.
 
 ## Cómo confirmarlo desde el navegador (DevTools)
 

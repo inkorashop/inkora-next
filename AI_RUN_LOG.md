@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-10 09:15 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario preguntó si las imágenes de diseño de Admin, los llaveros 3D del catálogo, el carrito, y el modelo 3D en sí usaban la función de disk cache (`SafeImage`/`/api/asset`). Se investigó y se encontraron 2 huecos reales (Admin y el modelo 3D); pidió arreglarlos ("si").
+- Cambios: `components/DesignThumb.js` — pasa `imageUrl` por `normalizeAssetUrl()` (de `components/SafeImage.js`) antes de usarla en el `<img>` y en `openLightbox`, sin adoptar el componente `SafeImage` completo. `components/ModelViewer.js` — normaliza el prop `url` una sola vez al principio del componente (`rawUrl` → `url`), asi todo llamador (Admin y catálogo por igual) lo hereda sin tocar cada call site. `app/catalogo/page.js` (`LazyModelViewer`) — normaliza también en su propio `fetch()` de precarga, que corre antes de que el modelo se muestre (fetch independiente del que hace `ModelViewer` internamente, no era redundante). `/api/asset/[...path]/route.js` no necesitó cambios (ya reenvía cualquier `Content-Type`, no está limitado a imágenes).
+- Verificacion: `CI=true npm run build` OK sin errores nuevos. Diff acotado (3 archivos, ~16 líneas).
+- Auditoria: Se releyó `IMAGE_ASSET_CACHING.md` (mismo día) para actualizar la sección de huecos conocidos en vez de dejarla desactualizada.
+- Pendiente/Riesgos: No se pudo probar en un navegador real (mismo límite de siempre) que el modelo 3D efectivamente cachee — se verificó por lectura de código que la URL que llega al fetch/loader ya es la del proxy, análogo a como se verificó (y sí funcionó en producción) para las imágenes.
+
 ## 2026-07-10 08:41 -03:00 - Claude Sonnet 5
 
 - Objetivo: Lista de 9 ajustes en la tabla de detalle de pedido de Producción (mas 3 elementos de header a quitar, pedidos por separado durante el mismo turno) — pulido visual, una verificación técnica puntual, y una feature nueva (edición inline de diseños agregados).
