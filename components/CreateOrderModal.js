@@ -34,7 +34,7 @@ const QTY_DELTAS = [-10, -2, 2, 10];
 const IMPORT_MATCH_THRESHOLD = 0.68;
 
 // ── Row component ─────────────────────────────────────────────────────────────
-function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
+function DesignRow({ row, index, focused, editing, rows, designs, productOrderById, usedDesignIds,
   onChange, onDelete, onKeyNav, isLast, selected, onSelect,
   onStartEdit, onEndEdit, onFocusQty, onFocusRow, qtyInputRef }) {
 
@@ -67,10 +67,10 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
 
   useEffect(() => {
     if (!editing || !inputVal.trim()) { setDropItems([]); setDropIdx(-1); return; }
-    const matches = fuzzyMatchDesigns(inputVal, designs, 8);
+    const matches = fuzzyMatchDesigns(inputVal, designs, 8, productOrderById);
     setDropItems(matches);
     setDropIdx(-1);
-  }, [inputVal, editing, designs]);
+  }, [inputVal, editing, designs, productOrderById]);
 
   useEffect(() => {
     if (!dropItems.length) return;
@@ -256,7 +256,7 @@ function DesignRow({ row, index, focused, editing, rows, designs, usedDesignIds,
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 export default function CreateOrderModal({ sellers = [], operators = [], currentAdminSellerId = null, initialValues = null, recentOrders = [], pdfEnabledIds = null, onSave, onClose, onDiscard }) {
-  const { designs } = useDesigns();
+  const { designs, productOrderById } = useDesigns();
 
   const [customerName, setCustomerName] = useState(initialValues?.customerName ?? '');
   const [date,         setDate]         = useState(initialValues?.date         ?? nowStr());
@@ -379,7 +379,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     const matchableDesigns = pdfSet ? designs.filter(d => pdfSet.has(String(d.id))) : designs;
     const items = parseOrderText(pasteText);
     return items.map(item => {
-      const matches = fuzzyMatchDesigns(item.name, matchableDesigns, 1);
+      const matches = fuzzyMatchDesigns(item.name, matchableDesigns, 1, productOrderById);
       const top = matches[0];
       return { ...item, match: top && top.score >= IMPORT_MATCH_THRESHOLD ? top : null };
     });
@@ -521,7 +521,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     const items = parseOrderText(text);
     if (!items.length) return;
     const preview = items.map(item => {
-      const matches = fuzzyMatchDesigns(item.name, matchableDesigns, 1);
+      const matches = fuzzyMatchDesigns(item.name, matchableDesigns, 1, productOrderById);
       const top = matches[0];
       return { ...item, match: top && top.score >= IMPORT_MATCH_THRESHOLD ? top : null };
     });
@@ -590,7 +590,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
     const pdfSet = pdfEnabledIds instanceof Set ? pdfEnabledIds
       : Array.isArray(pdfEnabledIds) ? new Set(pdfEnabledIds.map(String)) : null;
     const matchable = pdfSet ? allDesigns.filter(d => pdfSet.has(String(d.id))) : allDesigns;
-    const matches = fuzzyMatchDesigns(parsed.name, matchable, 1);
+    const matches = fuzzyMatchDesigns(parsed.name, matchable, 1, productOrderById);
     const top = matches[0];
     const row = (top && top.score >= IMPORT_MATCH_THRESHOLD)
       ? { id: Math.random().toString(36).slice(2), type: 'linked', design_id: top.design.id, name: top.design.name, productName: top.design.products?.name || '', text: '', qty: parsed.qty, suggested: true }
@@ -1248,7 +1248,7 @@ export default function CreateOrderModal({ sellers = [], operators = [], current
                   <DesignRow key={row.id} row={row} index={i}
                     focused={focusedRow === i && !selectedIndices.has(i)}
                     editing={editingRow === i}
-                    rows={rows} designs={designs} usedDesignIds={usedDesignIds}
+                    rows={rows} designs={designs} productOrderById={productOrderById} usedDesignIds={usedDesignIds}
                     onChange={changeRow} onDelete={deleteRow}
                     onKeyNav={handleKeyNav}
                     onStartEdit={idx => { setEditingRow(idx); setFocusedRow(idx); }}

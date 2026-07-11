@@ -10,7 +10,7 @@ import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 // stepper de cantidad. No decide el origen (pedido/produccion) ni llama a
 // Supabase: eso lo maneja quien lo use, via onSubmit.
 export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, error = '' }) {
-  const { designs } = useDesigns();
+  const { designs, productOrderById } = useDesigns();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState(1);
@@ -20,8 +20,8 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
 
   useEffect(() => {
     if (selected || !query.trim()) { setDropItems([]); return; }
-    setDropItems(fuzzyMatchDesigns(query, designs, 8));
-  }, [query, selected, designs]);
+    setDropItems(fuzzyMatchDesigns(query, designs, 8, productOrderById));
+  }, [query, selected, designs, productOrderById]);
 
   useEffect(() => {
     if (!dropItems.length) return;

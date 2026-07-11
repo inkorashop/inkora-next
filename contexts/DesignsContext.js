@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 const DesignsContext = createContext(null);
 
-export function DesignsProvider({ designs = [], children }) {
+export function DesignsProvider({ designs = [], products = [], children }) {
   const [lightbox, setLightbox] = useState(null); // { imageUrl, name } | null
 
   const designById = useMemo(() => {
@@ -18,6 +18,16 @@ export function DesignsProvider({ designs = [], children }) {
     for (const d of designs) if (d.name) m.set(d.name.toLowerCase(), d);
     return m;
   }, [designs]);
+
+  // Posicion de cada producto en el catalogo (mismo orden que ya usa la
+  // grilla), para que las sugerencias de busqueda difusa desempaten
+  // resultados con el mismo score priorizando el producto que aparece
+  // primero en el catalogo en vez del orden de llegada de `designs`.
+  const productOrderById = useMemo(() => {
+    const m = new Map();
+    products.forEach((p, i) => { if (p.id) m.set(p.id, i); });
+    return m;
+  }, [products]);
 
   const openLightbox = useCallback((imageUrl, name) => {
     setLightbox({ imageUrl, name: name || '' });
@@ -36,8 +46,8 @@ export function DesignsProvider({ designs = [], children }) {
   const overlayRef = useRef(null);
 
   const value = useMemo(() => ({
-    designs, designById, designByName, openLightbox,
-  }), [designs, designById, designByName, openLightbox]);
+    designs, designById, designByName, openLightbox, productOrderById,
+  }), [designs, designById, designByName, openLightbox, productOrderById]);
 
   return (
     <DesignsContext.Provider value={value}>

@@ -104,7 +104,7 @@ BEGIN
   ON CONFLICT (channel_id, email) DO NOTHING;
 END $$;
 
--- Espeja cada notificacion interna (pedido nuevo, cambio de contrasena) como
+-- Espeja cada notificacion interna (pedido nuevo, cambio de contraseña) como
 -- un mensaje normal en el canal "General" — se puede responder o clickear
 -- igual que cualquier otro mensaje del chat, sin sistema paralelo.
 CREATE OR REPLACE FUNCTION public.mirror_admin_notification_to_chat()

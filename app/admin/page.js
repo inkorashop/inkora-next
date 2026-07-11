@@ -826,6 +826,11 @@ useEffect(() => {
 
   // Products
   const [products, setProducts] = useState([]);
+  const productOrderById = React.useMemo(() => {
+    const m = new Map();
+    products.forEach((p, i) => { if (p.id) m.set(p.id, i); });
+    return m;
+  }, [products]);
   const [productDesignFormatsAvailable, setProductDesignFormatsAvailable] = useState(false);
   const [newProduct, setNewProduct] = useState(EMPTY_PRODUCT);
   const [savingProduct, setSavingProduct] = useState(false);
@@ -1151,6 +1156,7 @@ useEffect(() => {
   const [editingAddedDesignKey, setEditingAddedDesignKey] = useState(null);
   const [addedDesignSearch, setAddedDesignSearch] = useState('');
   const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
+  const [editingDesignPickerPos, setEditingDesignPickerPos] = useState(null);
   const editingDesignPickerRef = useRef(null);
   useEffect(() => {
     if (!editingAddedDesignKey) return;
@@ -6100,7 +6106,7 @@ useEffect(() => {
 
   // ── PANEL ──
   return (
-    <DesignsProvider designs={designs}>
+    <DesignsProvider designs={designs} products={products}>
     <PwaUpdateManager />
     <div
       style={s.wrap}
@@ -10550,7 +10556,7 @@ useEffect(() => {
                     const itemKey = item.design_id || item.designId || item.id;
                     const isEditingDesign = editingAddedDesignKey === itemKey;
                     const designMatches = isEditingDesign && addedDesignSearch.trim()
-                      ? fuzzyMatchDesigns(addedDesignSearch, designs, 8)
+                      ? fuzzyMatchDesigns(addedDesignSearch, designs, 8, productOrderById)
                       : [];
 
                     return (
@@ -10560,7 +10566,12 @@ useEffect(() => {
                             <DesignThumb designId={item.design_id} name={item.name || item.designName} size={26} />
                             {addedHere ? (
                               <span
-                                onClick={() => { setEditingAddedDesignKey(itemKey); setAddedDesignSearch(''); }}
+                                onClick={e => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setEditingDesignPickerPos({ top: rect.bottom + 4, left: rect.left });
+                                  setEditingAddedDesignKey(itemKey);
+                                  setAddedDesignSearch('');
+                                }}
                                 title="Click para cambiar el diseño"
                                 style={{cursor:'pointer', borderBottom:'1px dashed #9aa3bc'}}
                               >
@@ -10578,8 +10589,8 @@ useEffect(() => {
                               } />
                             )}
                           </div>
-                          {isEditingDesign && (
-                            <div ref={editingDesignPickerRef} style={{position:'absolute', top:'100%', left:0, zIndex:50, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, boxShadow:'0 8px 24px rgba(27,47,94,0.15)', padding:6, width:240}}>
+                          {isEditingDesign && editingDesignPickerPos && typeof document !== 'undefined' && createPortal(
+                            <div ref={editingDesignPickerRef} style={{position:'fixed', top: editingDesignPickerPos.top, left: editingDesignPickerPos.left, zIndex:9999, background:'white', border:'1.5px solid #dde1ef', borderRadius:8, boxShadow:'0 8px 24px rgba(27,47,94,0.15)', padding:6, width:240, maxHeight:280, overflowY:'auto'}}>
                               <input
                                 autoFocus
                                 type="text"
@@ -10602,7 +10613,8 @@ useEffect(() => {
                                 </div>
                               ))}
                               <button type="button" onClick={() => setEditingAddedDesignKey(null)} style={{marginTop:6, border:'none', background:'none', color:'#9aa3bc', fontSize:11, cursor:'pointer', padding:0}}>Cancelar</button>
-                            </div>
+                            </div>,
+                            document.body
                           )}
                         </td>
                         <td style={{...s.td, padding:'5px 8px', fontSize:13, textAlign:'right'}}>

@@ -1,5 +1,5 @@
 -- ============================================================
--- INKORA - Notificaciones internas y aviso de cambio de contrasena
+-- INKORA - Notificaciones internas y aviso de cambio de contraseña
 -- Ejecutar en Supabase SQL Editor.
 -- ============================================================
 

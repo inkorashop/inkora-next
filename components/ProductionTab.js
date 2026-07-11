@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import DesignThumb from '@/components/DesignThumb';
 import InfoTooltip from '@/components/InfoTooltip';
 import AddExtraDesignForm from '@/components/AddExtraDesignForm';
@@ -565,7 +566,7 @@ export default function ProductionTab({
     onSelectOrder?.(id);
   };
 
-  const { designs: ctxDesigns } = useDesigns();
+  const { designs: ctxDesigns, productOrderById } = useDesigns();
   // Persist linked items across tab switches (component unmounts/remounts)
   const [manualItemLinks, setManualItemLinks] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('inkora_manual_links') || '{}'); } catch { return {}; }
@@ -633,6 +634,7 @@ export default function ProductionTab({
   const [editingAddedDesignTaskId, setEditingAddedDesignTaskId] = useState(null);
   const [addedDesignSearch, setAddedDesignSearch] = useState('');
   const [savingAddedEditIds, setSavingAddedEditIds] = useState({});
+  const [editingDesignPickerPos, setEditingDesignPickerPos] = useState(null);
   const editingDesignPickerRef = useRef(null);
   useEffect(() => {
     if (!editingAddedDesignTaskId) return;
@@ -2228,7 +2230,7 @@ export default function ProductionTab({
                         const isEditableAdded = Boolean(task.added_via) && task.added_qty === task.required_qty;
                         const isEditingDesign = editingAddedDesignTaskId === task.id;
                         const designMatches = isEditingDesign && addedDesignSearch.trim()
-                          ? fuzzyMatchDesigns(addedDesignSearch, ctxDesigns, 8)
+                          ? fuzzyMatchDesigns(addedDesignSearch, ctxDesigns, 8, productOrderById)
                           : [];
                         return (
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8', background: task.added_via === 'produccion' ? '#f3f4f6' : undefined }}>
@@ -2238,7 +2240,12 @@ export default function ProductionTab({
                               <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
                               {isEditableAdded ? (
                                 <span
-                                  onClick={() => { setEditingAddedDesignTaskId(task.id); setAddedDesignSearch(''); }}
+                                  onClick={e => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setEditingDesignPickerPos({ top: rect.bottom + 4, left: rect.left });
+                                    setEditingAddedDesignTaskId(task.id);
+                                    setAddedDesignSearch('');
+                                  }}
                                   title="Click para cambiar el diseño"
                                   style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', borderBottom: '1px dashed #9aa3bc' }}
                                 >
@@ -2264,8 +2271,8 @@ export default function ProductionTab({
                                 </span>
                               )}
                             </div>
-                            {isEditingDesign && (
-                              <div ref={editingDesignPickerRef} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240 }}>
+                            {isEditingDesign && editingDesignPickerPos && typeof document !== 'undefined' && createPortal(
+                              <div ref={editingDesignPickerRef} style={{ position: 'fixed', top: editingDesignPickerPos.top, left: editingDesignPickerPos.left, zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240, maxHeight: 280, overflowY: 'auto' }}>
                                 <input
                                   autoFocus
                                   type="text"
@@ -2288,7 +2295,8 @@ export default function ProductionTab({
                                   </div>
                                 ))}
                                 <button type="button" onClick={() => setEditingAddedDesignTaskId(null)} style={{ marginTop: 6, border: 'none', background: 'none', color: '#9aa3bc', fontSize: 11, cursor: 'pointer', padding: 0 }}>Cancelar</button>
-                              </div>
+                              </div>,
+                              document.body
                             )}
                           </td>
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>
@@ -2484,7 +2492,7 @@ export default function ProductionTab({
 
               const enriched = manualItems.map(({ item, idx }) => {
                 const key = `${selectedOrder.id}:${idx}`;
-                const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5);
+                const matches = fuzzyMatchDesigns(item.text, ctxDesigns, 5, productOrderById);
                 const top = matches[0] || null;
                 const localLinked = manualItemLinks[key];
                 // Primary check: task was manually linked for this specific item (is_manual_link=true,
