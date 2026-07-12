@@ -6,6 +6,13 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-11 16:05 -03:00 - Claude Sonnet 5
+
+- Objetivo: El usuario reprodujo un bug real: agregó a mano desde Producción un diseño ("Argentina 1") que YA existía como fila en ese mismo pedido — `add_order_extra_design` tiene un `ON CONFLICT (order_id, design_key) DO UPDATE` que fusiona en vez de rechazar, asi que la fila original (required_qty=70) paso a 71 y quedo marcada como `added_via='produccion'` (la tarjeta "i" de auditoria, que en si esta bien pensada, paso a aparecer sobre una fila que en realidad no era una adicion real). El pedido no deberia poder tener el mismo diseño cargado 2 veces.
+- Cambios: en vez de tocar el RPC (el merge por ON CONFLICT se deja como red de seguridad ante una carrera entre dos usuarios agregando al mismo tiempo), se previene en la UI, igual que ya hace `CreateOrderModal.js`'s `DesignRow` para no repetir un diseño dentro del mismo pedido nuevo: `components/AddExtraDesignForm.js` ahora recibe un prop `usedDesignIds` (Set) y tacha/deshabilita ("ya agregado", opacidad reducida, cursor not-allowed) cualquier diseño de la lista de sugerencias que ya sea una fila del pedido — sea que esa fila venga del pedido original o de una adicion previa. `components/ProductionTab.js` y `app/admin/page.js` arman ese Set a partir de `selectedOrderTasks`/`orderDetail.items` respectivamente.
+- Verificacion: `CI=true npm run build` OK sin errores nuevos. Diff acotado a los 3 archivos.
+- Pendiente/Riesgos: No se corrigio el dato ya afectado en produccion (el pedido real donde el usuario reprodujo el bug quedo con Argentina 1 en 71 y `added_via='produccion'` incorrecto) — se le preguntó si queria que se revierta esa fila puntual, hace falta el codigo de pedido para hacerlo. No se pudo probar en un navegador real (mismo limite de siempre).
+
 ## 2026-07-11 15:10 -03:00 - Claude Sonnet 5
 
 - Objetivo: Serie de reportes de bugs y pedidos de UX sobre disenos agregados a un pedido (Produccion/Pedido), a partir de screenshots: sugerencias de busqueda que no aparecian al editar el nombre, orden de sugerencias incorrecto, un boton "=N" que a veces no reflejaba el cambio, y simplificar el flujo de agregar/quitar disenos.

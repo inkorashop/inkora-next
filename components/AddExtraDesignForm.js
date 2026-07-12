@@ -9,7 +9,7 @@ import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 // sobre el catalogo de disenos (mismo criterio que "Nuevo pedido"), mas un
 // stepper de cantidad. No decide el origen (pedido/produccion) ni llama a
 // Supabase: eso lo maneja quien lo use, via onSubmit.
-export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, error = '' }) {
+export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, error = '', usedDesignIds = null }) {
   const { designs, productOrderById } = useDesigns();
   const [query, setQuery] = useState('');
   const [qty, setQty] = useState(1);
@@ -35,7 +35,7 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
   // stepper, 1 por defecto) — no hace falta un boton "Agregar" aparte. Si
   // se agrego mal, se borra despues con el boton de quitar de la fila.
   function pick(design) {
-    if (busy) return;
+    if (busy || usedDesignIds?.has(String(design.id))) return;
     onSubmit({ design, qty: Number(qty) || 1 });
     setQuery('');
     setDropItems([]);
@@ -56,19 +56,26 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
           />
           {dropItems.length > 0 && (
             <div ref={dropRef} style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', zIndex: 50, maxHeight: 220, overflowY: 'auto' }}>
-              {dropItems.map(({ design, score }) => (
-                <div
-                  key={design.id}
-                  onMouseDown={e => { e.preventDefault(); pick(design); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f0f2f8' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <DesignThumb designId={design.id} name={design.name} size={22} />
-                  <span style={{ fontSize: 12.5, color: '#2d3352', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{design.name}</span>
-                  <span style={{ fontSize: 10, color: '#9aa3bc' }}>{design.products?.name || ''}</span>
-                </div>
-              ))}
+              {dropItems.map(({ design, score }) => {
+                const isDupe = usedDesignIds?.has(String(design.id));
+                return (
+                  <div
+                    key={design.id}
+                    onMouseDown={e => { e.preventDefault(); pick(design); }}
+                    title={isDupe ? 'Este diseño ya está en el pedido' : undefined}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: isDupe ? 'not-allowed' : 'pointer', opacity: isDupe ? 0.45 : 1, borderBottom: '1px solid #f0f2f8' }}
+                    onMouseEnter={e => e.currentTarget.style.background = isDupe ? 'transparent' : '#f1f5f9'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <DesignThumb designId={design.id} name={design.name} size={22} />
+                    <span style={{ fontSize: 12.5, color: '#2d3352', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDupe ? 'line-through' : 'none' }}>{design.name}</span>
+                    {isDupe
+                      ? <span style={{ fontSize: 9, color: '#9aa3bc', whiteSpace: 'nowrap' }}>ya agregado</span>
+                      : <span style={{ fontSize: 10, color: '#9aa3bc' }}>{design.products?.name || ''}</span>
+                    }
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -2503,6 +2503,7 @@ export default function ProductionTab({
                               error={addingExtraDesignError}
                               onCancel={() => setAddingExtraDesign(false)}
                               onSubmit={addExtraDesignToOrder}
+                              usedDesignIds={new Set(selectedOrderTasks.map(t => String(t.design_id || '')).filter(Boolean))}
                             />
                           ) : (
                             <button

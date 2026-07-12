@@ -10651,6 +10651,7 @@ useEffect(() => {
                           error={addingExtraDesignError}
                           onCancel={() => setAddingExtraDesign(false)}
                           onSubmit={addExtraDesignToOrder}
+                          usedDesignIds={new Set((Array.isArray(orderDetail?.items) ? orderDetail.items : []).map(item => String(item.design_id || item.designId || item.id || '')).filter(Boolean))}
                         />
                       ) : (
                         <button
