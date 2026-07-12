@@ -12,16 +12,15 @@ import { fuzzyMatchDesigns } from '@/lib/fuzzy-match';
 export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, error = '' }) {
   const { designs, productOrderById } = useDesigns();
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState(1);
   const [dropItems, setDropItems] = useState([]);
   const inputRef = useRef(null);
   const dropRef = useRef(null);
 
   useEffect(() => {
-    if (selected || !query.trim()) { setDropItems([]); return; }
+    if (!query.trim()) { setDropItems([]); return; }
     setDropItems(fuzzyMatchDesigns(query, designs, 8, productOrderById));
-  }, [query, selected, designs, productOrderById]);
+  }, [query, designs, productOrderById]);
 
   useEffect(() => {
     if (!dropItems.length) return;
@@ -32,19 +31,16 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
     return () => document.removeEventListener('mousedown', onOutside);
   }, [dropItems.length]);
 
+  // Elegir un diseño lo agrega ya mismo (con la cantidad puesta en el
+  // stepper, 1 por defecto) — no hace falta un boton "Agregar" aparte. Si
+  // se agrego mal, se borra despues con el boton de quitar de la fila.
   function pick(design) {
-    setSelected(design);
-    setQuery(design.name);
-    setDropItems([]);
-  }
-
-  function clearSelection() {
-    setSelected(null);
+    if (busy) return;
+    onSubmit({ design, qty: Number(qty) || 1 });
     setQuery('');
+    setDropItems([]);
     inputRef.current?.focus();
   }
-
-  const canSubmit = Boolean(selected) && Number(qty) > 0 && !busy;
 
   return (
     <div style={{ background: '#f8faff', border: '1.5px solid #dde1ef', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -53,8 +49,9 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
           <input
             ref={inputRef}
             value={query}
-            onChange={e => { setQuery(e.target.value); setSelected(null); }}
+            onChange={e => setQuery(e.target.value)}
             placeholder="Buscar diseño…"
+            disabled={busy}
             style={{ width: '100%', border: '1.5px solid #dde1ef', borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'Barlow, sans-serif', color: '#2d3352', boxSizing: 'border-box' }}
           />
           {dropItems.length > 0 && (
@@ -76,10 +73,6 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
           )}
         </div>
 
-        {selected && (
-          <button type="button" onClick={clearSelection} title="Elegir otro diseño" style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', color: '#9aa3bc', fontSize: 14, lineHeight: 1 }}>✕</button>
-        )}
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button type="button" onClick={() => setQty(q => Math.max(1, Number(q) - 1))} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 7, width: 26, height: 30, cursor: 'pointer', fontWeight: 700, color: '#1B2F5E' }}>−</button>
           <input
@@ -92,16 +85,9 @@ export default function AddExtraDesignForm({ onSubmit, onCancel, busy = false, e
           <button type="button" onClick={() => setQty(q => Number(q) + 1)} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 7, width: 26, height: 30, cursor: 'pointer', fontWeight: 700, color: '#1B2F5E' }}>+</button>
         </div>
 
-        <button
-          type="button"
-          disabled={!canSubmit}
-          onClick={() => canSubmit && onSubmit({ design: selected, qty: Number(qty) })}
-          style={{ border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 800, cursor: canSubmit ? 'pointer' : 'not-allowed', background: canSubmit ? '#18a36a' : '#dde1ef', color: 'white', opacity: canSubmit ? 1 : 0.7 }}
-        >
-          {busy ? 'Agregando…' : 'Agregar'}
-        </button>
+        {busy && <span style={{ fontSize: 12, fontWeight: 700, color: '#9aa3bc' }}>Agregando…</span>}
         <button type="button" onClick={onCancel} style={{ border: '1.5px solid #dde1ef', background: 'white', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#5a6380' }}>
-          Cancelar
+          Cerrar
         </button>
       </div>
       {error && <div style={{ fontSize: 11.5, color: '#b91c1c', fontWeight: 600 }}>{error}</div>}

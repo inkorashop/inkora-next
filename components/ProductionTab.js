@@ -382,12 +382,21 @@ function StockCell({ qtyProduced, onSave, onDelta, onChange, step = 1, requiredQ
     const snapped = step > 1 ? Math.ceil(baseQty / step) * step : baseQty;
     const nextQty = Math.max(0, snapped + delta);
     if (nextQty === baseQty) return;
-    editingRef.current = true;
     setVal(stockInputValue(nextQty));
     latestQtyRef.current = nextQty;
     onChangeRef.current?.(nextQty);
-    if (onDeltaRef.current) onDeltaRef.current(nextQty - baseQty, nextQty);
-    else scheduleSave(nextQty);
+    if (onDeltaRef.current) {
+      // onDelta (printed/produced/waste) aplica el cambio ya mismo, sin debounce
+      // propio: no hay nada que "proteger" del prop-sync de abajo, asi que no
+      // marcamos editingRef. Si quedara en true aca (como antes), un click de
+      // +/- dejaba esta celda ignorando para siempre cualquier actualizacion
+      // externa (el boton "=N", u otra PC via realtime) porque nada volvia a
+      // ponerlo en false para este camino.
+      onDeltaRef.current(nextQty - baseQty, nextQty);
+    } else {
+      editingRef.current = true;
+      scheduleSave(nextQty);
+    }
   };
 
   const handleFocus = (e) => {
@@ -1487,6 +1496,25 @@ export default function ProductionTab({
     await loadProductionTasks();
   }
 
+  // Quitar por completo una fila agregada desde Produccion (borra la tarea
+  // y el item correspondiente de orders.items). Solo se ofrece el boton
+  // para filas added_via==='produccion' (decision de producto: lo agregado
+  // desde Pedido no se puede quitar desde aca).
+  async function removeAddedDesign(task) {
+    if (!window.confirm(`¿Quitar "${task.design_name}" de este pedido?`)) return;
+    setSavingAddedEditIds(prev => ({ ...prev, [task.id]: true }));
+    const { error } = await supabase.rpc('remove_order_extra_design', {
+      p_order_id: task.order_id,
+      p_design_id: task.design_id,
+    });
+    setSavingAddedEditIds(prev => ({ ...prev, [task.id]: false }));
+    if (error) {
+      setErrorMessage(formatProductionError(error, 'No se pudo quitar el diseño.'));
+      return;
+    }
+    await loadProductionTasks();
+  }
+
   function ensureTaskSaveState(taskId) {
     if (!taskSaveStateRef.current[taskId]) taskSaveStateRef.current[taskId] = {};
     const state = taskSaveStateRef.current[taskId];
@@ -2261,6 +2289,17 @@ export default function ProductionTab({
                                     <div>por {task.added_by_name || task.added_by_email || '—'}</div>
                                   </>
                                 } />
+                              )}
+                              {task.added_via === 'produccion' && isEditableAdded && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeAddedDesign(task)}
+                                  disabled={Boolean(savingAddedEditIds[task.id])}
+                                  title="Quitar diseño agregado"
+                                  style={{ flexShrink: 0, border: 'none', background: 'none', color: '#b91c1c', fontSize: 13, fontWeight: 900, cursor: savingAddedEditIds[task.id] ? 'wait' : 'pointer', lineHeight: 1, padding: '0 2px', opacity: savingAddedEditIds[task.id] ? 0.5 : 0.75 }}
+                                >
+                                  ✕
+                                </button>
                               )}
                               {orderPdfStatus.state === 'ready' && (
                                 <span
