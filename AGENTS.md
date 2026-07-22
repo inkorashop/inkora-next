@@ -82,3 +82,13 @@ La entrada debe ser breve y util. Incluir:
 - `CONTEXT.md` contiene informacion estable del proyecto.
 - `AI_RUN_LOG.md` contiene la bitacora cronologica resumida.
 - `CLAUDE.md` apunta a `AGENTS.md` para que Claude Code encuentre el flujo completo facilmente.
+
+## Contexto global INKORA
+
+Antes de cambios estrategicos o cross-proyecto, revisar tambien el workspace compartido:
+
+- `C:\Users\compu\Desktop\Code\INKORA Workspace\README.md`
+- `C:\Users\compu\Desktop\Code\INKORA Workspace\PROJECTS.md`
+- `C:\Users\compu\Desktop\Code\INKORA Workspace\AGENTS.md`
+
+No reemplaza este protocolo local; lo complementa.
