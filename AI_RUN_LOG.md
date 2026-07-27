@@ -6,6 +6,15 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 14:06 -03:00 - ChatGPT Codex
+
+- Objetivo: Revisar el icono del proyecto hermano INKORA 3D MODELER y crear un icono nuevo unico para el Bridge, usado en la ventana en primer plano, la bandeja del sistema y el instalador.
+- Cambios: Se inspecciono `C:\Users\compu\Desktop\INKORA IA\INKORA 3D MODELER\electron\build\icon.ico` como referencia visual. Se reemplazaron `bridge/Inkora.PrintBridge/inkora.ico` y `bridge/Inkora.PrintBridge/inkora.png` por un icono de gota INKORA + impresora moderna. Se subio el Bridge a `1.6.10` en `Inkora.PrintBridge.csproj`, `bridge/build-release.ps1`, `components/ProductionTab.js` y `app/operarios/page.js`. Se agrego `bridge/Set-ExeIcon.ps1` y `build-release.ps1` ahora parchea el recurso del instalador IExpress para que `Inkora.PrintBridge.Setup.exe` use el mismo icono.
+- Verificacion: `git diff --check` OK, solo avisos CRLF normales. `powershell.exe -ExecutionPolicy Bypass -File bridge\build-release.ps1 -Version 1.6.10` OK y genero `Inkora.PrintBridge.Setup.exe` (68.8 MB) + `Inkora.PrintBridge.zip` (70.7 MB). Se verifico `Inkora.PrintBridge.exe` con `FileVersion 1.6.10.0` y `ProductVersion 1.6.10+07f070442c709bb325c7fdb2901a99b5b78a0029`. Se extrajo el icono asociado del ejecutable y del instalador final; ambos muestran la misma gota INKORA + impresora.
+- Publicacion/Deploy: Commit funcional `07f0704` pusheado a `main`. Release publicado: `https://github.com/inkorashop/inkora-next/releases/tag/bridge-v1.6.10`, con assets `Inkora.PrintBridge.Setup.exe` y `Inkora.PrintBridge.zip`. Deploy produccion READY: `dpl_6HANsLcWy2dnFWKmLX7vweqsMSTs`, URL `https://inkora-next-o8pp54x09-inkorashop-7809s-projects.vercel.app`, alias `https://www.inkora.com.ar`, `https://inkora.com.ar` y `https://inkora-next.vercel.app`. Logs recientes: sin logs/errores.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la ultima entrada relevante de `AI_RUN_LOG.md`, `git status --short`, el icono del 3D Modeler, los archivos del Bridge que cargan `inkora.ico`, y el flujo de deploy Vercel. Se mantuvieron fuera de git los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: El instalador sigue sin firma digital, por lo que Windows puede mostrar `Editor desconocido` hasta que exista un certificado de firma de codigo. En maquinas que ya tengan un Bridge viejo corriendo, el icono real no cambiara hasta instalar/actualizar a `1.6.10` y reiniciar el Bridge.
+
 ## 2026-07-27 11:45 -03:00 - ChatGPT Codex
 
 - Objetivo: En Produccion > Producir, seccion 3 de impresion rapida, mostrar junto al nombre del diseno el nombre del PDF vinculado.
