@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 17:37 -03:00 - ChatGPT Codex
+
+- Objetivo: Implementar que Produccion y Operarios reflejen en vivo los cambios hechos en Disenos (nombre, producto, miniatura, PDF vinculado/manual, etc.) porque deben mostrar la misma entidad real.
+- Cambios: `components/ProductionTab.js` ahora resuelve nombres, producto, miniaturas y PDF vinculado desde el diseno vivo por `design_id`, refresca el matching cuando cambian los datos del catalogo y evita duplicar stock/status al renombrar usando claves legacy como fallback. `app/operarios/page.js` carga/subscrbie los disenos vivos, usa esos datos para detalle, resumen, impresion rapida y PDF efectivo, y rematchea cuando cambia el catalogo. `components/DesignThumb.js` prioriza el `design.name` vivo para titulos/alt/lightbox cuando hay `designId`.
+- Verificacion: `npm.cmd run lint` OK con warnings preexistentes. `git diff --check` OK, solo avisos CRLF normales. `npm.cmd run build` local volvio a quedar en timeout a los 300s antes de mostrar errores. Deploy produccion READY: `dpl_G4CsQCS8Kc6hhSLfqeaiqnXnH81u`, URL `https://inkora-next-g8onnk59y-inkorashop-7809s-projects.vercel.app`, alias `https://www.inkora.com.ar`, `https://inkora.com.ar` y `https://inkora-next.vercel.app`. Logs recientes: sin logs/errores.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la ultima entrada relevante de `AI_RUN_LOG.md`, `git status --short`, `PDF_MANUAL_LINK_FEATURE.md`, `EXTRA_DESIGNS_FEATURE.md`, y las zonas de Produccion/Operarios que resuelven tareas, stock, impresion rapida, thumbnails y PDF manual. Se mantuvieron fuera de git los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: No se hizo prueba manual en navegador ni con impresora fisica. Los pedidos o filas historicas sin `design_id` siguen usando snapshot/fallback por nombre, porque no hay identidad canonica para resolverlos al diseno actual. Las filas antiguas de stock/status pueden seguir persistidas fisicamente bajo `design_name`, pero la UI ya busca por claves legacy para no crear duplicados al renombrar.
+
 ## 2026-07-27 16:31 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir el instalador manual del Bridge que fallaba con `Command.com /c ...\install.bat` y ajustar el icono porque la gota se veia deformada horizontalmente.
