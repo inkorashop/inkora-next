@@ -13,6 +13,7 @@ import {
   scanBridgePdfs,
   addBridgePdfRoot,
   printBridgeJob,
+  printBridgeDirect,
   getBridgePrintQueue,
   openBridgePrinterPreferences,
   openBridgePrintQueue,
@@ -128,6 +129,22 @@ function summarizeProducts(tasks) {
 
 function normalizeTask(task) {
   return { ...task, id: task.id || task.task_id, note: task.note ?? task.task_note ?? '', printed_qty: task.printed_qty ?? 0 };
+}
+
+function manualPdfMatchForDesign(design) {
+  if (!design?.manual_pdf_root_name || !design?.manual_pdf_relative_path) return null;
+  return {
+    id: design.id,
+    name: design.name,
+    found: true,
+    matchType: 'manual',
+    score: 100,
+    fileName: design.manual_pdf_file_name || design.manual_pdf_relative_path,
+    rootName: design.manual_pdf_root_name,
+    relativePath: design.manual_pdf_relative_path,
+    sizeBytes: 0,
+    lastWriteTime: null,
+  };
 }
 
 function QtyCell({ value, disabled, onSave, onDelta, onChange, step }) {
@@ -253,6 +270,7 @@ export default function OperariosPage() {
   const [printFeedback, setPrintFeedback] = useState({});
   const [hasScannedRef] = useState({ current: false });
   const [allPdfMatches, setAllPdfMatches] = useState({});
+  const [pdfDesignsById, setPdfDesignsById] = useState({});
   const [quickPrintSearch, setQuickPrintSearch] = useState('');
 
   // Derived bridge values
@@ -265,6 +283,29 @@ export default function OperariosPage() {
       : bridgeStatus.state === 'offline'
         ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
         : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+
+  function getTaskPdfKey(task) {
+    return String(task?.design_id || task?.design_key || task?.design_name || '').trim();
+  }
+
+  function getTaskPdfMatch(task) {
+    const designId = String(task?.design_id || '').trim();
+    if (designId && hasOwn(allPdfMatches, designId)) return allPdfMatches[designId];
+    const manualMatch = manualPdfMatchForDesign(designId ? pdfDesignsById[designId] : null);
+    if (manualMatch) return manualMatch;
+    const pdfKey = getTaskPdfKey(task);
+    return orderPdfMatches[pdfKey] || (designId ? orderPdfMatches[designId] : null) || null;
+  }
+
+  function getTaskPdfCandidate(task) {
+    const designId = String(task?.design_id || '').trim();
+    const design = designId ? pdfDesignsById[designId] : null;
+    return {
+      id: getTaskPdfKey(task),
+      name: design?.name || task?.design_name || '',
+      productName: design?.products?.name || task?.product_name || '',
+    };
+  }
 
   // Auth
   useEffect(() => {
@@ -524,8 +565,14 @@ export default function OperariosPage() {
     const token = bridgeToken.trim();
     if (!token) return;
     try {
-      // Fetch ALL designs from Supabase (same as admin does via getDesignPdfCandidates)
-      const { data: allDesigns } = await supabase.from('designs').select('id, name').limit(1500);
+      // Fetch ALL designs from Supabase (same source that Admin > Disenos uses)
+      const { data: allDesigns } = await supabase
+        .from('designs')
+        .select('id, name, manual_pdf_root_name, manual_pdf_relative_path, manual_pdf_file_name')
+        .limit(1500);
+      const designsById = {};
+      (allDesigns || []).forEach(design => { designsById[String(design.id)] = design; });
+      setPdfDesignsById(designsById);
       const candidates = (allDesigns || []).map(d => ({ id: String(d.id), name: d.name || '', productName: '' }));
       if (candidates.length === 0) return;
       saveStoredBridgeConfig({ url: bridgeUrl, token });
@@ -533,6 +580,10 @@ export default function OperariosPage() {
       const payload = await matchBridgeDesignPdfs(bridgeUrl, token, candidates);
       const nextMatches = {};
       (payload.matches || []).forEach(match => { nextMatches[match.id] = match; });
+      (allDesigns || []).forEach(design => {
+        const manual = manualPdfMatchForDesign(design);
+        if (manual) nextMatches[String(design.id)] = manual;
+      });
       setAllPdfMatches(prev => ({ ...prev, ...nextMatches }));
     } catch {}
   }
@@ -652,11 +703,7 @@ export default function OperariosPage() {
     if (!selectedOrder || !selectedOrder.tasks.length) return;
     const token = bridgeToken.trim();
     if (!token) return;
-    const candidates = selectedOrder.tasks.map(task => ({
-      id: String(task.design_id || task.design_key || task.design_name || ''),
-      name: task.design_name || '',
-      productName: task.product_name || '',
-    }));
+    const candidates = selectedOrder.tasks.map(getTaskPdfCandidate);
     setOrderPdfBusy(true);
     try {
       saveStoredBridgeConfig({ url: bridgeUrl, token });
@@ -679,8 +726,8 @@ export default function OperariosPage() {
   }
 
   async function printSingleTask(task, customSheets = null) {
-    const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
-    const pdfMatch = orderPdfMatches[pdfKey];
+    const pdfKey = getTaskPdfKey(task);
+    const pdfMatch = getTaskPdfMatch(task);
     if (!pdfMatch?.found) return;
     const token = bridgeToken.trim();
     if (!token) return;
@@ -691,15 +738,22 @@ export default function OperariosPage() {
     setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
     try {
       saveStoredBridgeConfig({ url: bridgeUrl, token });
-      const result = await printBridgeJob(bridgeUrl, token, {
-        designId: String(task.design_id || task.design_key || ''),
-        designName: task.design_name || '',
-        productName: task.product_name || '',
-        printerName: effectivePrinterName,
-        copies: sheets,
-        orderId: selectedOrder?.id || '',
-        orderCode: selectedOrder?.order_code || '',
-      });
+      const result = pdfMatch.rootName && pdfMatch.relativePath
+        ? await printBridgeDirect(bridgeUrl, token, {
+          rootName: pdfMatch.rootName,
+          relativePath: pdfMatch.relativePath,
+          printerName: effectivePrinterName,
+          copies: sheets,
+        })
+        : await printBridgeJob(bridgeUrl, token, {
+          designId: String(task.design_id || task.design_key || ''),
+          designName: task.design_name || '',
+          productName: task.product_name || '',
+          printerName: effectivePrinterName,
+          copies: sheets,
+          orderId: selectedOrder?.id || '',
+          orderCode: selectedOrder?.order_code || '',
+        });
       const status = result?.job?.status || 'done';
       setPrintFeedback(prev => ({ ...prev, [taskId]: status === 'done' ? 'Enviado' : status === 'error' ? (result?.job?.error || 'Error') : status }));
       setTimeout(() => setPrintFeedback(prev => ({ ...prev, [taskId]: '' })), 3000);
@@ -1077,7 +1131,7 @@ export default function OperariosPage() {
                       >
                         {orderPdfBusy ? 'Buscando PDFs...' : 'PDFs del pedido'}
                       </button>
-                      {orderPdfStatus.state === 'ready' && Object.values(orderPdfMatches).some(m => m.found) && (
+                      {orderPdfStatus.state === 'ready' && selectedOrder.tasks.some(task => getTaskPdfMatch(task)?.found) && (
                         <button
                           type="button"
                           onClick={async () => {
@@ -1142,8 +1196,8 @@ export default function OperariosPage() {
                   </thead>
                   <tbody>
                     {selectedOrder.tasks.map(task => {
-                      const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
-                      const pdfMatch = orderPdfMatches[pdfKey];
+                      const pdfKey = getTaskPdfKey(task);
+                      const pdfMatch = getTaskPdfMatch(task);
                       const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                       const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
                       const defaultSheets = Math.ceil(Math.max(1, remaining) / 2);
@@ -1313,7 +1367,7 @@ export default function OperariosPage() {
                           if (e.key === 'Enter') {
                             setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: true }));
                             try {
-                              await printBridgeJob(bridgeUrl, bridgeToken.trim(), { designId: pdf.id || '', designName: pdf.name || '', productName: '', printerName: effectivePrinterName, copies: qty, orderId: selectedOrder?.id || '', orderCode: selectedOrder?.order_code || '' });
+                              await printBridgeDirect(bridgeUrl, bridgeToken.trim(), { rootName: pdf.rootName, relativePath: pdf.relativePath, printerName: effectivePrinterName, copies: qty });
                             } catch {} finally { setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: false })); }
                           }
                         }}
@@ -1322,7 +1376,7 @@ export default function OperariosPage() {
                         onClick={async () => {
                           setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: true }));
                           try {
-                            await printBridgeJob(bridgeUrl, bridgeToken.trim(), { designId: pdf.id || '', designName: pdf.name || '', productName: '', printerName: effectivePrinterName, copies: qty, orderId: selectedOrder?.id || '', orderCode: selectedOrder?.order_code || '' });
+                            await printBridgeDirect(bridgeUrl, bridgeToken.trim(), { rootName: pdf.rootName, relativePath: pdf.relativePath, printerName: effectivePrinterName, copies: qty });
                           } catch {} finally { setPrintingTasks(prev => ({ ...prev, [`q_${key}`]: false })); }
                         }}
                         style={{ border: 'none', borderRadius: 6, padding: '4px 0', background: printing ? '#e8f7ef' : '#2D6BE4', color: printing ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: printing ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>

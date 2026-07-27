@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import DesignThumb from '@/components/DesignThumb';
 import InfoTooltip from '@/components/InfoTooltip';
@@ -84,7 +84,8 @@ const PRODUCTION_ORDER_DETAIL_MAX_WIDTH = 480;
 // donde estaban antes de hacerse arrastrables, más abajo en el <colgroup>.
 const PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS = {
   product: 95,
-  design: 280,
+  design: 220,
+  pdf: 150,
   toproduce: 72,
   printed: 145,
   diecut: 145,
@@ -94,6 +95,7 @@ const PRODUCTION_ORDER_DETAIL_DEFAULT_WIDTHS = {
 };
 const PRODUCTION_ORDER_DETAIL_COLUMN_LABELS = {
   product: 'Producto',
+  pdf: 'PDF vinculado',
   design: 'Diseño',
   toproduce: 'A producir',
   printed: 'Impreso',
@@ -102,7 +104,7 @@ const PRODUCTION_ORDER_DETAIL_COLUMN_LABELS = {
   notes: 'Observaciones',
   print: 'Imprimir',
 };
-const PRODUCTION_ORDER_DETAIL_COLUMN_ORDER = ['product', 'design', 'toproduce', 'print', 'printed', 'diecut', 'waste', 'notes'];
+const PRODUCTION_ORDER_DETAIL_COLUMN_ORDER = ['product', 'design', 'pdf', 'toproduce', 'print', 'printed', 'diecut', 'waste', 'notes'];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase();
@@ -585,6 +587,60 @@ export default function ProductionTab({
   };
 
   const { designs: ctxDesigns, productOrderById } = useDesigns();
+  const designsById = useMemo(() => {
+    const map = new Map();
+    (ctxDesigns || []).forEach(design => {
+      if (design?.id) map.set(String(design.id), design);
+    });
+    return map;
+  }, [ctxDesigns]);
+
+  function getTaskDesignId(task) {
+    return String(task?.design_id || '').trim();
+  }
+
+  function getTaskPdfKey(task) {
+    return String(task?.design_id || task?.design_key || task?.design_name || '').trim();
+  }
+
+  function getTaskCanonicalDesign(task) {
+    const designId = getTaskDesignId(task);
+    return designId ? designsById.get(designId) || null : null;
+  }
+
+  function getManualPdfMatchForDesign(design) {
+    if (!design?.manual_pdf_root_name || !design?.manual_pdf_relative_path) return null;
+    return {
+      id: design.id,
+      name: design.name,
+      found: true,
+      matchType: 'manual',
+      score: 100,
+      fileName: design.manual_pdf_file_name || design.manual_pdf_relative_path,
+      rootName: design.manual_pdf_root_name,
+      relativePath: design.manual_pdf_relative_path,
+      sizeBytes: 0,
+      lastWriteTime: null,
+    };
+  }
+
+  function getTaskPdfMatch(task) {
+    const designId = getTaskDesignId(task);
+    if (designId && hasOwn(designPdfMatches, designId)) return designPdfMatches[designId];
+    const manualMatch = getManualPdfMatchForDesign(getTaskCanonicalDesign(task));
+    if (manualMatch) return manualMatch;
+    const pdfKey = getTaskPdfKey(task);
+    return orderPdfMatches[pdfKey] || (designId ? orderPdfMatches[designId] : null) || null;
+  }
+
+  function getTaskPdfCandidate(task) {
+    const canonicalDesign = getTaskCanonicalDesign(task);
+    return {
+      id: getTaskPdfKey(task),
+      name: canonicalDesign?.name || task?.design_name || '',
+      productName: canonicalDesign?.products?.name || task?.product_name || '',
+    };
+  }
   // Persist linked items across tab switches (component unmounts/remounts)
   const [manualItemLinks, setManualItemLinks] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('inkora_manual_links') || '{}'); } catch { return {}; }
@@ -866,11 +922,7 @@ export default function ProductionTab({
       return;
     }
 
-    const candidates = selectedOrderTasks.map(task => ({
-      id: String(task.design_id || task.design_key || task.design_name || ''),
-      name: task.design_name || '',
-      productName: task.product_name || '',
-    }));
+    const candidates = selectedOrderTasks.map(getTaskPdfCandidate);
 
     setOrderPdfBusy(true);
     try {
@@ -1093,8 +1145,8 @@ export default function ProductionTab({
   }
 
   async function printSingleTask(task, customSheets = null) {
-    const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
-    const pdfMatch = orderPdfMatches[pdfKey];
+    const pdfKey = getTaskPdfKey(task);
+    const pdfMatch = getTaskPdfMatch(task);
     if (!pdfMatch?.found) return;
 
     const token = bridgeToken.trim();
@@ -1108,15 +1160,22 @@ export default function ProductionTab({
 
     try {
       saveStoredBridgeConfig({ url: bridgeUrl, token });
-      const result = await printBridgeJob(bridgeUrl, token, {
-        designId: String(task.design_id || task.design_key || ''),
-        designName: task.design_name || '',
-        productName: task.product_name || '',
-        printerName: effectivePrinterName,
-        copies: sheets,
-        orderId: selectedOrder?.id || '',
-        orderCode: selectedOrder?.order_code || '',
-      });
+      const result = pdfMatch.rootName && pdfMatch.relativePath
+        ? await printBridgeDirect(bridgeUrl, token, {
+          rootName: pdfMatch.rootName,
+          relativePath: pdfMatch.relativePath,
+          printerName: effectivePrinterName,
+          copies: sheets,
+        })
+        : await printBridgeJob(bridgeUrl, token, {
+          designId: String(task.design_id || task.design_key || ''),
+          designName: task.design_name || '',
+          productName: task.product_name || '',
+          printerName: effectivePrinterName,
+          copies: sheets,
+          orderId: selectedOrder?.id || '',
+          orderCode: selectedOrder?.order_code || '',
+        });
       const status = result?.job?.status || 'done';
       setPrintFeedback(prev => ({
         ...prev,
@@ -1725,7 +1784,7 @@ export default function ProductionTab({
       matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, productionTasks.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, productionTasks.length, ctxDesigns.length]);
 
   // Auto-escanear PDFs al conectar bridge (mantiene índice sincronizado con Diseños)
   useEffect(() => {
@@ -2294,7 +2353,7 @@ export default function ProductionTab({
                     <thead>
                       <tr>
                         {PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.map((key, i) => (
-                          <th key={key} style={{ position: 'relative', textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...(i === PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.length - 1 ? { position: 'sticky', right: 0, background: 'white', zIndex: 2, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>
+                          <th key={key} style={{ position: 'sticky', top: 0, textAlign: 'left', padding: '4px 5px', fontSize: 10, fontWeight: 800, color: '#5a6380', textTransform: 'uppercase', letterSpacing: 0.3, borderBottom: '2px solid #dde1ef', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: 'white', zIndex: i === PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.length - 1 ? 6 : 4, ...(i === PRODUCTION_ORDER_DETAIL_COLUMN_ORDER.length - 1 ? { right: 0, boxShadow: '-2px 0 5px rgba(0,0,0,0.07)' } : {}) }}>
                             {PRODUCTION_ORDER_DETAIL_COLUMN_LABELS[key]}
                             <span
                               onMouseDown={e => startColumnResize(e, key)}
@@ -2310,8 +2369,8 @@ export default function ProductionTab({
                       {selectedOrderTasks
                         .filter(task => !orderTaskSearch.trim() || (task.design_name || '').toLowerCase().includes(orderTaskSearch.trim().toLowerCase()))
                         .map(task => {
-                        const pdfKey = String(task.design_id || task.design_key || task.design_name || '');
-                        const pdfMatch = orderPdfMatches[pdfKey];
+                        const pdfKey = getTaskPdfKey(task);
+                        const pdfMatch = getTaskPdfMatch(task);
                         const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                         const isEditableAdded = Boolean(task.added_via) && task.added_qty === task.required_qty;
                         const isEditingDesign = editingAddedDesignTaskId === task.id;
@@ -2359,14 +2418,6 @@ export default function ProductionTab({
                                   ✕
                                 </button>
                               )}
-                              {orderPdfStatus.state === 'ready' && (
-                                <span
-                                  title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
-                                  style={{ flex: '0 1 auto', minWidth: 0, marginLeft: 'auto', border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                >
-                                  {pdfMatch?.found ? pdfMatch.fileName : '—'}
-                                </span>
-                              )}
                             </div>
                             {isEditingDesign && editingDesignPickerPos && typeof document !== 'undefined' && createPortal(
                               <div ref={editingDesignPickerRef} style={{ position: 'fixed', top: editingDesignPickerPos.top, left: editingDesignPickerPos.left, zIndex: 9999, background: 'white', border: '1.5px solid #dde1ef', borderRadius: 8, boxShadow: '0 8px 24px rgba(27,47,94,0.15)', padding: 6, width: 240, maxHeight: 280, overflowY: 'auto' }}>
@@ -2394,6 +2445,18 @@ export default function ProductionTab({
                                 <button type="button" onClick={() => setEditingAddedDesignTaskId(null)} style={{ marginTop: 6, border: 'none', background: 'none', color: '#9aa3bc', fontSize: 11, cursor: 'pointer', padding: 0 }}>Cancelar</button>
                               </div>,
                               document.body
+                            )}
+                          </td>
+                          <td style={{ padding: '4px 5px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                            {(orderPdfStatus.state === 'ready' || pdfMatch) ? (
+                              <span
+                                title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontro PDF local'}
+                                style={{ display: 'inline-block', maxWidth: '100%', border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}
+                              >
+                                {pdfMatch?.found ? pdfMatch.fileName : '-'}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#c4c9d9', fontSize: 10, fontWeight: 800 }}>-</span>
                             )}
                           </td>
                           <td style={{ padding: '4px 5px', fontWeight: 900, color: '#2d3352' }}>

@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 11:39 -03:00 - ChatGPT Codex
+
+- Objetivo: En Produccion > Producir, dejar fijos los encabezados de la tabla de detalle al hacer scroll, agregar el encabezado/celda `PDF vinculado`, y corregir que los PDFs de Produccion se desalinearan de los vinculados en Disenos (caso Misiones 1/Misiones 2).
+- Cambios: `components/ProductionTab.js` agrega columna real `PDF vinculado`, encabezados sticky verticales, resolucion efectiva de PDF por `design_id` usando primero `designPdfMatches`/vinculo manual de `designs` y recien despues el match puntual del pedido; la impresion por fila usa `/print-direct` si ya hay `rootName` + `relativePath`. `app/operarios/page.js` replica la resolucion por `design_id` y el uso de `/print-direct` para evitar que Operarios vuelva a matchear por nombre al imprimir. `PDF_MANUAL_LINK_FEATURE.md` quedo actualizado con este criterio.
+- Verificacion: `npm.cmd run lint` OK con warnings preexistentes. `git diff --check` OK, solo avisos CRLF normales. `npm.cmd run build` local volvio a quedar en timeout a los 300s sin mostrar errores, igual que en turnos anteriores.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la ultima entrada relevante de `AI_RUN_LOG.md`, `PDF_MANUAL_LINK_FEATURE.md`, `git status --short`, y se contrasto el cambio con el estado real del repo. Se mantuvieron fuera de git los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: No se pudo probar visualmente en navegador ni con impresora fisica desde este entorno. El deploy de produccion se realiza en este mismo turno despues del commit/push.
+
 ## 2026-07-27 11:17 -03:00 - ChatGPT Codex
 
 - Objetivo: Cambiar la distribucion del Bridge para que el usuario descargue un instalador `.exe` empaquetado en vez de un ZIP, manteniendo compatibilidad con la auto-actualizacion.
