@@ -17,7 +17,7 @@ export default function DesignThumb({ designId, imageUrl: imageUrlProp, name: na
 
   const rawImageUrl = imageUrlProp || getDesignDisplayImageUrl(design);
   const imageUrl = rawImageUrl ? normalizeAssetUrl(rawImageUrl) : '';
-  const name = nameProp || design?.name || '';
+  const name = design?.name || nameProp || '';
 
   if (!imageUrl) {
     return (

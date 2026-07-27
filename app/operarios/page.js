@@ -26,19 +26,26 @@ const LATEST_BRIDGE_VERSION = '1.6.11';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
 const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
-function DesignThumb({ designId, name, size = 24 }) {
-  const [src, setSrc] = useState(null);
+function DesignThumb({ designId, design: designProp, name, size = 24 }) {
+  const [fetchedDesign, setFetchedDesign] = useState(null);
   useEffect(() => {
-    if (!designId) return;
+    if (designProp || !designId) {
+      setFetchedDesign(null);
+      return;
+    }
+    let cancelled = false;
     supabase.from('designs').select('*').eq('id', designId).single()
       .then(({ data }) => {
-        if (!data) return;
-        const url = getDesignDisplayImageUrl(data);
-        if (url) setSrc(url);
+        if (!cancelled) setFetchedDesign(data || null);
       });
-  }, [designId]);
+    return () => { cancelled = true; };
+  }, [designId, designProp]);
+
+  const design = designProp || fetchedDesign;
+  const src = getDesignDisplayImageUrl(design);
+  const displayName = design?.name || name || '';
   if (!src) return <div style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, background: '#e8eaf4', border: '1px solid #dde1ef', display: 'inline-block' }} />;
-  return <SafeImage src={src} alt={name || ''} title={name || ''} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} compactFallback />;
+  return <SafeImage src={src} alt={displayName} title={displayName} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} compactFallback />;
 }
 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
@@ -116,15 +123,6 @@ function getProductionStatus(tasks) {
   const producedTotal = required.reduce((sum, row) => sum + toQty(row.produced_qty), 0);
   if (producedTotal <= 0) return 'pending';
   return required.every(row => toQty(row.produced_qty) >= toQty(row.required_qty)) ? 'done' : 'in_press';
-}
-
-function summarizeProducts(tasks) {
-  const byProduct = {};
-  (Array.isArray(tasks) ? tasks : []).forEach(task => {
-    const product = task.product_name || 'Sin producto';
-    byProduct[product] = (byProduct[product] || 0) + toQty(task.required_qty);
-  });
-  return Object.entries(byProduct).map(([product, qty]) => `${product} x${qty}`).join(', ') || '-';
 }
 
 function normalizeTask(task) {
@@ -270,7 +268,7 @@ export default function OperariosPage() {
   const [printFeedback, setPrintFeedback] = useState({});
   const [hasScannedRef] = useState({ current: false });
   const [allPdfMatches, setAllPdfMatches] = useState({});
-  const [pdfDesignsById, setPdfDesignsById] = useState({});
+  const [liveDesignsById, setLiveDesignsById] = useState({});
   const [quickPrintSearch, setQuickPrintSearch] = useState('');
 
   // Derived bridge values
@@ -281,29 +279,55 @@ export default function OperariosPage() {
     : bridgeStatus.state === 'token'
       ? { bg: '#fff7ed', border: '#fed7aa', color: '#c2410c', label: 'Token requerido' }
       : bridgeStatus.state === 'offline'
-        ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
-        : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+      ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
+      : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+  const liveDesignsSignature = useMemo(() => Object.values(liveDesignsById)
+    .map(design => [
+      design?.id || '',
+      design?.name || '',
+      design?.product_id || '',
+      design?.manual_pdf_root_name || '',
+      design?.manual_pdf_relative_path || '',
+      design?.manual_pdf_file_name || '',
+    ].join(':'))
+    .join('|'), [liveDesignsById]);
 
   function getTaskPdfKey(task) {
     return String(task?.design_id || task?.design_key || task?.design_name || '').trim();
   }
 
+  const getTaskLiveDesign = useCallback((task) => {
+    const designId = String(task?.design_id || '').trim();
+    return designId ? liveDesignsById[designId] || null : null;
+  }, [liveDesignsById]);
+
+  const getTaskDisplayDesignName = useCallback((task) => {
+    return getTaskLiveDesign(task)?.name || task?.design_name || 'Sin diseño';
+  }, [getTaskLiveDesign]);
+
+  const getTaskDisplayProductName = useCallback((task) => {
+    const design = getTaskLiveDesign(task);
+    return design?.products?.name
+      || design?.productName
+      || design?.product_name
+      || task?.product_name
+      || 'Sin producto';
+  }, [getTaskLiveDesign]);
+
   function getTaskPdfMatch(task) {
     const designId = String(task?.design_id || '').trim();
-    if (designId && hasOwn(allPdfMatches, designId)) return allPdfMatches[designId];
-    const manualMatch = manualPdfMatchForDesign(designId ? pdfDesignsById[designId] : null);
+    const manualMatch = manualPdfMatchForDesign(designId ? liveDesignsById[designId] : null);
     if (manualMatch) return manualMatch;
+    if (designId && hasOwn(allPdfMatches, designId)) return allPdfMatches[designId];
     const pdfKey = getTaskPdfKey(task);
     return orderPdfMatches[pdfKey] || (designId ? orderPdfMatches[designId] : null) || null;
   }
 
   function getTaskPdfCandidate(task) {
-    const designId = String(task?.design_id || '').trim();
-    const design = designId ? pdfDesignsById[designId] : null;
     return {
       id: getTaskPdfKey(task),
-      name: design?.name || task?.design_name || '',
-      productName: design?.products?.name || task?.product_name || '',
+      name: getTaskDisplayDesignName(task),
+      productName: getTaskDisplayProductName(task),
     };
   }
 
@@ -320,6 +344,18 @@ export default function OperariosPage() {
       setCheckingSession(false);
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  const loadLiveDesigns = useCallback(async () => {
+    const { data } = await supabase
+      .from('designs')
+      .select('*, products(name)')
+      .limit(1500);
+    const next = {};
+    (data || []).forEach(design => {
+      if (design?.id) next[String(design.id)] = design;
+    });
+    setLiveDesignsById(next);
   }, []);
 
   // Bridge init: localStorage → /token endpoint on local bridge → connect
@@ -403,8 +439,9 @@ export default function OperariosPage() {
 
   useEffect(() => {
     if (!session) return;
+    loadLiveDesigns();
     loadTasks();
-    const channel = supabase
+    const taskChannel = supabase
       .channel(`operator-production-${Math.random()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'production_order_tasks' }, payload => {
         if (payload.eventType !== 'UPDATE' || !payload.new?.id) {
@@ -419,15 +456,20 @@ export default function OperariosPage() {
         }));
       })
       .subscribe();
+    const designsChannel = supabase
+      .channel(`operator-designs-${Math.random()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'designs' }, () => loadLiveDesigns())
+      .subscribe();
     const liveTasksTimer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       loadTasks({ silent: true });
     }, LIVE_TASK_REFRESH_MS);
     return () => {
       window.clearInterval(liveTasksTimer);
-      supabase.removeChannel(channel);
+      supabase.removeChannel(taskChannel);
+      supabase.removeChannel(designsChannel);
     };
-  }, [session, loadTasks]);
+  }, [session, loadTasks, loadLiveDesigns]);
 
   // Auto-match ALL PDFs when bridge connects
   useEffect(() => {
@@ -437,7 +479,7 @@ export default function OperariosPage() {
       matchAllPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bridgeStatus.state, bridgeToken]);
+  }, [bridgeStatus.state, bridgeToken, liveDesignsSignature]);
 
   // Per-order match when selected order changes (updates badge/status in detail header)
   useEffect(() => {
@@ -455,6 +497,14 @@ export default function OperariosPage() {
     }, {});
     return Object.entries(grouped).map(([orderId, orderTasks]) => {
       const first = orderTasks[0] || {};
+      const sortedTasks = [...orderTasks].sort((a, b) =>
+        getTaskDisplayProductName(a).localeCompare(getTaskDisplayProductName(b), 'es') ||
+        getTaskDisplayDesignName(a).localeCompare(getTaskDisplayDesignName(b), 'es'));
+      const byProduct = {};
+      sortedTasks.forEach(task => {
+        const product = getTaskDisplayProductName(task);
+        byProduct[product] = (byProduct[product] || 0) + toQty(task.required_qty);
+      });
       return {
         id: orderId,
         order_code: first.order_code,
@@ -462,14 +512,12 @@ export default function OperariosPage() {
         customer_name: first.customer_name,
         seller_name: first.seller_name,
         notes: first.order_notes || '',
-        tasks: orderTasks.sort((a, b) =>
-          String(a.product_name || '').localeCompare(String(b.product_name || ''), 'es') ||
-          String(a.design_name || '').localeCompare(String(b.design_name || ''), 'es')),
+        tasks: sortedTasks,
         productionStatus: getProductionStatus(orderTasks),
-        itemsSummary: summarizeProducts(orderTasks),
+        itemsSummary: Object.entries(byProduct).map(([product, qty]) => `${product} x${qty}`).join(', ') || '-',
       };
     }).sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-  }, [tasks]);
+  }, [tasks, getTaskDisplayDesignName, getTaskDisplayProductName]);
 
   useEffect(() => {
     if (orderRows.length === 0) { setSelectedOrderId(null); return; }
@@ -568,11 +616,11 @@ export default function OperariosPage() {
       // Fetch ALL designs from Supabase (same source that Admin > Disenos uses)
       const { data: allDesigns } = await supabase
         .from('designs')
-        .select('id, name, manual_pdf_root_name, manual_pdf_relative_path, manual_pdf_file_name')
+        .select('*, products(name)')
         .limit(1500);
       const designsById = {};
       (allDesigns || []).forEach(design => { designsById[String(design.id)] = design; });
-      setPdfDesignsById(designsById);
+      setLiveDesignsById(designsById);
       const candidates = (allDesigns || []).map(d => ({ id: String(d.id), name: d.name || '', productName: '' }));
       if (candidates.length === 0) return;
       saveStoredBridgeConfig({ url: bridgeUrl, token });
@@ -734,6 +782,8 @@ export default function OperariosPage() {
     const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.produced_qty));
     const sheets = customSheets ?? Math.ceil(remaining / 2);
     const taskId = task.id || pdfKey;
+    const displayDesignName = getTaskDisplayDesignName(task);
+    const displayProductName = getTaskDisplayProductName(task);
     setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
     setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
     try {
@@ -747,8 +797,8 @@ export default function OperariosPage() {
         })
         : await printBridgeJob(bridgeUrl, token, {
           designId: String(task.design_id || task.design_key || ''),
-          designName: task.design_name || '',
-          productName: task.product_name || '',
+          designName: displayDesignName,
+          productName: displayProductName,
           printerName: effectivePrinterName,
           copies: sheets,
           orderId: selectedOrder?.id || '',
@@ -1198,6 +1248,9 @@ export default function OperariosPage() {
                     {selectedOrder.tasks.map(task => {
                       const pdfKey = getTaskPdfKey(task);
                       const pdfMatch = getTaskPdfMatch(task);
+                      const liveDesign = getTaskLiveDesign(task);
+                      const displayDesignName = getTaskDisplayDesignName(task);
+                      const displayProductName = getTaskDisplayProductName(task);
                       const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                       const remaining = Math.max(0, toQty(task.required_qty) - toQty(task.produced_qty));
                       const defaultSheets = Math.ceil(Math.max(1, remaining) / 2);
@@ -1209,11 +1262,11 @@ export default function OperariosPage() {
                       const printDisabled = !hasPdf || isPrinting || !bridgeConnected;
                       return (
                         <tr key={task.id} style={{ borderBottom: '1px solid #f0f2f8' }}>
-                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{displayProductName}</td>
                           <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
-                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name || 'Sin diseño'}</span>
+                              <DesignThumb designId={String(task.design_id || '')} design={liveDesign} name={displayDesignName} size={24} />
+                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayDesignName}</span>
                               {orderPdfStatus.state === 'ready' && (
                                 <span
                                   title={hasPdf ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
@@ -1310,7 +1363,13 @@ export default function OperariosPage() {
         {bridgeConnected && (() => {
           const uniqueMap = {};
           Object.values(allPdfMatches).forEach(m => {
-            if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
+            if (!m.found || !m.relativePath || uniqueMap[m.relativePath]) return;
+            const liveDesign = m.id ? liveDesignsById[String(m.id)] : null;
+            uniqueMap[m.relativePath] = {
+              ...m,
+              name: liveDesign?.name || m.name,
+              productName: liveDesign?.products?.name || liveDesign?.productName || liveDesign?.product_name || m.productName,
+            };
           });
           const allMatchedPdfs = Object.values(uniqueMap).sort((a, b) => {
             const numA = parseInt(a.fileName || '', 10);
@@ -1320,7 +1379,9 @@ export default function OperariosPage() {
           });
           const search = quickPrintSearch.toLowerCase();
           const matchedPdfs = allMatchedPdfs.length > 0 && search
-            ? allMatchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
+            ? allMatchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search)
+              || (p.name || '').toLowerCase().includes(search)
+              || (p.productName || '').toLowerCase().includes(search))
             : allMatchedPdfs;
           return (
             <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -1358,7 +1419,7 @@ export default function OperariosPage() {
                   const printing = printingTasks[`q_${key}`] ?? false;
                   return (
                     <div key={key} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
-                      <DesignThumb designId={String(pdf.id || '')} name={pdf.name} size={22} />
+                      <DesignThumb designId={String(pdf.id || '')} design={pdf.id ? liveDesignsById[String(pdf.id)] : null} name={pdf.name} size={22} />
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
                       <input type="number" min={1} max={99} value={qty}
                         onChange={e => setPrintQtyOverrides(prev => ({ ...prev, [`q_${key}`]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}

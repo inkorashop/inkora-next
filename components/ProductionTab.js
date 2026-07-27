@@ -239,16 +239,6 @@ function getProductionStatus(items) {
   return complete ? 'done' : 'in_press';
 }
 
-function summarizeOrderProducts(items) {
-  const grouped = {};
-  (Array.isArray(items) ? items : []).forEach(item => {
-    const product = item.productName || item.product_name || 'Sin producto';
-    grouped[product] = (grouped[product] || 0) + toQty(item.qty || item.required_qty);
-  });
-  const text = Object.entries(grouped).map(([product, qty]) => `${product} x${qty}`).join(', ');
-  return text || DASH;
-}
-
 function formatShortDate(iso) {
   if (!iso) return DASH;
   return new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -587,6 +577,16 @@ export default function ProductionTab({
   };
 
   const { designs: ctxDesigns, productOrderById } = useDesigns();
+  const designCatalogSignature = useMemo(() => (ctxDesigns || [])
+    .map(design => [
+      design?.id || '',
+      design?.name || '',
+      design?.product_id || '',
+      design?.manual_pdf_root_name || '',
+      design?.manual_pdf_relative_path || '',
+      design?.manual_pdf_file_name || '',
+    ].join(':'))
+    .join('|'), [ctxDesigns]);
   const designsById = useMemo(() => {
     const map = new Map();
     (ctxDesigns || []).forEach(design => {
@@ -608,6 +608,65 @@ export default function ProductionTab({
     return designId ? designsById.get(designId) || null : null;
   }
 
+  function getTaskDisplayDesignName(task) {
+    return getTaskCanonicalDesign(task)?.name || task?.design_name || 'Sin diseño';
+  }
+
+  function getTaskDisplayProductName(task) {
+    const design = getTaskCanonicalDesign(task);
+    return design?.products?.name
+      || design?.productName
+      || design?.product_name
+      || task?.product_name
+      || 'Sin producto';
+  }
+
+  function getTaskSearchText(task) {
+    return [
+      getTaskDisplayProductName(task),
+      getTaskDisplayDesignName(task),
+      task?.design_name,
+      task?.product_name,
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function getOrderItemLiveDesign(item) {
+    const designId = String(item?.design_id || item?.designId || item?.id || '').trim();
+    return designId ? designsById.get(designId) || null : null;
+  }
+
+  function getOrderItemDisplayDesignName(item) {
+    return getOrderItemLiveDesign(item)?.name || String(item?.name || '').trim() || 'Sin nombre';
+  }
+
+  function getOrderItemDisplayProductName(item) {
+    const design = getOrderItemLiveDesign(item);
+    return design?.products?.name
+      || design?.productName
+      || design?.product_name
+      || item?.productName
+      || item?.product_name
+      || 'Sin producto';
+  }
+
+  function summarizeOrderProductsLive(items) {
+    const grouped = {};
+    (Array.isArray(items) ? items : []).forEach(item => {
+      const product = getOrderItemDisplayProductName(item);
+      grouped[product] = (grouped[product] || 0) + toQty(item.qty || item.required_qty);
+    });
+    const text = Object.entries(grouped).map(([product, qty]) => `${product} x${qty}`).join(', ');
+    return text || DASH;
+  }
+
+  function getProductionRowKeys(row) {
+    return new Set([row?.designKey, normalizeName(row?.designName), ...(row?.legacyKeys || [])].filter(Boolean));
+  }
+
+  function productionRowMatchesName(row, name) {
+    return getProductionRowKeys(row).has(normalizeName(name));
+  }
+
   function getManualPdfMatchForDesign(design) {
     if (!design?.manual_pdf_root_name || !design?.manual_pdf_relative_path) return null;
     return {
@@ -626,19 +685,18 @@ export default function ProductionTab({
 
   function getTaskPdfMatch(task) {
     const designId = getTaskDesignId(task);
-    if (designId && hasOwn(designPdfMatches, designId)) return designPdfMatches[designId];
     const manualMatch = getManualPdfMatchForDesign(getTaskCanonicalDesign(task));
     if (manualMatch) return manualMatch;
+    if (designId && hasOwn(designPdfMatches, designId)) return designPdfMatches[designId];
     const pdfKey = getTaskPdfKey(task);
     return orderPdfMatches[pdfKey] || (designId ? orderPdfMatches[designId] : null) || null;
   }
 
   function getTaskPdfCandidate(task) {
-    const canonicalDesign = getTaskCanonicalDesign(task);
     return {
       id: getTaskPdfKey(task),
-      name: canonicalDesign?.name || task?.design_name || '',
-      productName: canonicalDesign?.products?.name || task?.product_name || '',
+      name: getTaskDisplayDesignName(task),
+      productName: getTaskDisplayProductName(task),
     };
   }
   // Persist linked items across tab switches (component unmounts/remounts)
@@ -1155,6 +1213,8 @@ export default function ProductionTab({
     const remaining = Math.max(1, toQty(task.required_qty) - toQty(task.printed_qty));
     const sheets = customSheets ?? Math.ceil(remaining / 2);
     const taskId = task.id || pdfKey;
+    const displayDesignName = getTaskDisplayDesignName(task);
+    const displayProductName = getTaskDisplayProductName(task);
     setPrintingTasks(prev => ({ ...prev, [taskId]: true }));
     setPrintFeedback(prev => ({ ...prev, [taskId]: '' }));
 
@@ -1169,8 +1229,8 @@ export default function ProductionTab({
         })
         : await printBridgeJob(bridgeUrl, token, {
           designId: String(task.design_id || task.design_key || ''),
-          designName: task.design_name || '',
-          productName: task.product_name || '',
+          designName: displayDesignName,
+          productName: displayProductName,
           printerName: effectivePrinterName,
           copies: sheets,
           orderId: selectedOrder?.id || '',
@@ -1183,7 +1243,7 @@ export default function ProductionTab({
       }));
       addPrintHistory({
         fecha: new Date().toISOString(),
-        diseno: task.design_name || '',
+        diseno: displayDesignName,
         copias: sheets,
         hojas: result?.job?.pagesPrinted ?? null,
         impresora: effectivePrinterName,
@@ -1194,7 +1254,7 @@ export default function ProductionTab({
       setPrintFeedback(prev => ({ ...prev, [taskId]: error?.message || 'Error' }));
       addPrintHistory({
         fecha: new Date().toISOString(),
-        diseno: task.design_name || '',
+        diseno: displayDesignName,
         copias: sheets,
         hojas: null,
         impresora: effectivePrinterName,
@@ -1414,12 +1474,31 @@ export default function ProductionTab({
   filteredOrders.forEach(order => {
     const items = Array.isArray(order.items) ? order.items : [];
     items.forEach(item => {
-      if (filterProduct !== 'all' && item.product_id !== filterProduct) return;
-      const key = normalizeName(item.name);
+      const liveDesign = getOrderItemLiveDesign(item);
+      const itemProductId = liveDesign?.product_id || item.product_id || '';
+      if (filterProduct !== 'all' && itemProductId !== filterProduct) return;
+      const designId = String(item.design_id || item.designId || item.id || '').trim();
+      const designName = getOrderItemDisplayDesignName(item);
+      const productName = getOrderItemDisplayProductName(item);
+      const key = designId || normalizeName(designName);
       if (!key) return;
       if (!designMap[key]) {
-        designMap[key] = { designKey: key, designName: String(item.name || '').trim(), productName: item.productName || DASH, demand: 0, orders: [] };
+        designMap[key] = {
+          designKey: key,
+          designId: designId || null,
+          designName,
+          productName: productName || DASH,
+          legacyKeys: new Set(),
+          demand: 0,
+          orders: [],
+        };
       }
+      designMap[key].designName = liveDesign?.name || designMap[key].designName;
+      designMap[key].productName = productName || designMap[key].productName;
+      [item.name, liveDesign?.name, designName].forEach(name => {
+        const legacyKey = normalizeName(name);
+        if (legacyKey) designMap[key].legacyKeys.add(legacyKey);
+      });
       designMap[key].demand += toQty(item.qty);
       if (!designMap[key].orders.find(o => o.id === order.id)) {
         designMap[key].orders.push(order);
@@ -1428,13 +1507,14 @@ export default function ProductionTab({
   });
 
   let rows = Object.values(designMap).map(row => {
-    const stockRow = stock.find(s => normalizeName(s.design_name) === row.designKey);
-    const statusRow = prodStatus.find(s => normalizeName(s.design_name) === row.designKey);
+    const rowKeys = getProductionRowKeys(row);
+    const stockRow = stock.find(s => rowKeys.has(normalizeName(s.design_name)));
+    const statusRow = prodStatus.find(s => rowKeys.has(normalizeName(s.design_name)));
     const qty_produced = Number(stockRow?.qty_produced) || 0;
     const falta = row.demand - qty_produced;
     const status = STATUS_CYCLE.includes(statusRow?.status) ? statusRow.status : 'pending';
     const note = statusRow?.note || '';
-    return { ...row, qty_produced, falta, status, note, stockId: stockRow?.id, statusId: statusRow?.id };
+    return { ...row, legacyKeys: [...rowKeys], qty_produced, falta, status, note, stockId: stockRow?.id, statusId: statusRow?.id };
   });
 
   // FIX: filtrar por diseño (texto) — era el bug donde escribir "diseño" escribía en "cliente"
@@ -1614,7 +1694,7 @@ export default function ProductionTab({
   // para filas added_via==='produccion' (decision de producto: lo agregado
   // desde Pedido no se puede quitar desde aca).
   async function removeAddedDesign(task) {
-    if (!window.confirm(`¿Quitar "${task.design_name}" de este pedido?`)) return;
+    if (!window.confirm(`¿Quitar "${getTaskDisplayDesignName(task)}" de este pedido?`)) return;
     setSavingAddedEditIds(prev => ({ ...prev, [task.id]: true }));
     const { error } = await supabase.rpc('remove_order_extra_design', {
       p_order_id: task.order_id,
@@ -1784,7 +1864,7 @@ export default function ProductionTab({
       matchSelectedOrderPdfs({ scan });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, productionTasks.length, ctxDesigns.length]);
+  }, [selectedProductionOrderId, bridgeStatus.state, orders.length, productionTasks.length, designCatalogSignature]);
 
   // Auto-escanear PDFs al conectar bridge (mantiene índice sincronizado con Diseños)
   useEffect(() => {
@@ -1841,7 +1921,7 @@ export default function ProductionTab({
 
   async function saveStockInline(row, newQty) {
     setErrorMessage('');
-    const existing = stock.find(s => normalizeName(s.design_name) === row.designKey);
+    const existing = stock.find(s => productionRowMatchesName(row, s.design_name));
     const delta = newQty - (Number(existing?.qty_produced) || 0);
     if (delta === 0) return;
     const previousStock = stock;
@@ -1858,9 +1938,9 @@ export default function ProductionTab({
       if (stockResult.data) {
         setStock(prev => {
           const byId = stockResult.data.id && prev.some(s => s.id === stockResult.data.id);
-          const byName = prev.some(s => normalizeName(s.design_name) === row.designKey);
+          const byName = prev.some(s => productionRowMatchesName(row, s.design_name));
           if (byId) return prev.map(s => s.id === stockResult.data.id ? stockResult.data : s);
-          if (byName) return prev.map(s => normalizeName(s.design_name) === row.designKey ? stockResult.data : s);
+          if (byName) return prev.map(s => productionRowMatchesName(row, s.design_name) ? stockResult.data : s);
           return [...prev, stockResult.data];
         });
       }
@@ -1960,8 +2040,9 @@ export default function ProductionTab({
   const allDesignNames = Object.values(
     (orders || []).reduce((map, order) => {
       (Array.isArray(order.items) ? order.items : []).forEach(item => {
-        const key = normalizeName(item.name);
-        if (key) map[key] = String(item.name).trim();
+        const name = getOrderItemDisplayDesignName(item);
+        const key = normalizeName(name);
+        if (key) map[key] = name;
       });
       return map;
     }, {})
@@ -2001,7 +2082,7 @@ export default function ProductionTab({
         customer_name: order.customer_name,
         seller_name: sellers.find(seller => seller.id === order.seller_id)?.name || 'Sin vendedor',
         notes: order.notes || '',
-        itemsSummary: summarizeOrderProducts(order.items),
+        itemsSummary: summarizeOrderProductsLive(order.items),
         items: itemRows,
         productionStatus: status,
         operator_id: operatorId,
@@ -2367,10 +2448,12 @@ export default function ProductionTab({
                     </thead>
                     <tbody>
                       {selectedOrderTasks
-                        .filter(task => !orderTaskSearch.trim() || (task.design_name || '').toLowerCase().includes(orderTaskSearch.trim().toLowerCase()))
+                        .filter(task => !orderTaskSearch.trim() || getTaskSearchText(task).includes(orderTaskSearch.trim().toLowerCase()))
                         .map(task => {
                         const pdfKey = getTaskPdfKey(task);
                         const pdfMatch = getTaskPdfMatch(task);
+                        const displayDesignName = getTaskDisplayDesignName(task);
+                        const displayProductName = getTaskDisplayProductName(task);
                         const printedEven = Math.ceil((task.required_qty || 0) / 2) * 2;
                         const isEditableAdded = Boolean(task.added_via) && task.added_qty === task.required_qty;
                         const isEditingDesign = editingAddedDesignTaskId === task.id;
@@ -2379,10 +2462,10 @@ export default function ProductionTab({
                           : [];
                         return (
                         <tr key={task.id || `${task.order_id}-${task.design_key}`} style={{ borderBottom: '1px solid #f0f2f8', background: task.added_via === 'produccion' ? '#f3f4f6' : undefined }}>
-                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{task.product_name || 'Sin producto'}</td>
+                          <td style={{ padding: '4px 5px', color: '#5a6380', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{displayProductName}</td>
                           <td style={{ padding: '4px 5px', fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', position: 'relative' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <DesignThumb designId={String(task.design_id || '')} name={task.design_name} size={24} />
+                              <DesignThumb designId={String(task.design_id || '')} name={displayDesignName} size={24} />
                               {isEditableAdded ? (
                                 <span
                                   onClick={e => {
@@ -2394,10 +2477,10 @@ export default function ProductionTab({
                                   title="Click para cambiar el diseño"
                                   style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', borderBottom: '1px dashed #9aa3bc' }}
                                 >
-                                  {task.design_name}
+                                  {displayDesignName}
                                 </span>
                               ) : (
-                                <span style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.design_name}</span>
+                                <span style={{ flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayDesignName}</span>
                               )}
                               {task.added_via === 'produccion' && (
                                 <InfoTooltip content={
@@ -2662,9 +2745,9 @@ export default function ProductionTab({
                 // Fallback: matched by design_id or design_name (covers older links / other scenarios).
                 const dbLinked = manualTask != null || tasks.some(t =>
                   (top?.design?.id && t.design_id === String(top.design.id)) ||
-                  (top?.design?.name && (t.design_name || '').toLowerCase() === top.design.name.toLowerCase())
+                  (top?.design?.name && getTaskDisplayDesignName(t).toLowerCase() === top.design.name.toLowerCase())
                 );
-                const linkedName = manualTask?.design_name || top?.design?.name || 'diseño';
+                const linkedName = manualTask ? getTaskDisplayDesignName(manualTask) : top?.design?.name || 'diseño';
                 return { item, idx, key, top, alreadyLinked: localLinked || (dbLinked ? { name: linkedName } : null) };
               });
 
@@ -2729,7 +2812,13 @@ export default function ProductionTab({
           {!isMobile && bridgeStatus.state === 'connected' && bridgeToken.trim() && (() => {
             const uniqueMap = {};
             Object.values(designPdfMatches || {}).forEach(m => {
-              if (m.found && m.relativePath && !uniqueMap[m.relativePath]) uniqueMap[m.relativePath] = m;
+              if (!m.found || !m.relativePath || uniqueMap[m.relativePath]) return;
+              const liveDesign = m.id ? designsById.get(String(m.id)) : null;
+              uniqueMap[m.relativePath] = {
+                ...m,
+                name: liveDesign?.name || m.name,
+                productName: liveDesign?.products?.name || liveDesign?.productName || liveDesign?.product_name || m.productName,
+              };
             });
             const matchedPdfs = Object.values(uniqueMap).sort((a, b) => {
               const nameA = a.fileName || a.name || '';
@@ -2741,7 +2830,9 @@ export default function ProductionTab({
             });
             const search = quickPrintSearch.toLowerCase();
             const visiblePdfs = matchedPdfs.length > 0 && search
-              ? matchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
+              ? matchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search)
+                || (p.name || '').toLowerCase().includes(search)
+                || (p.productName || '').toLowerCase().includes(search))
               : matchedPdfs;
             const manualFormat = quickManualFile?.extension ? quickManualFile.extension.replace(/^\./, '').toUpperCase() : '';
             return (
