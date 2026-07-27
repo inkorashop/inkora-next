@@ -6,6 +6,7 @@ import ModelViewer from '@/components/ModelViewer';
 import ProductionTab, { PRODUCTION_ORDER_DETAIL_WIDTHS_PREF_KEY } from '@/components/ProductionTab';
 import { DesignsProvider } from '@/contexts/DesignsContext';
 import DesignThumb from '@/components/DesignThumb';
+import SafeImage, { normalizeAssetUrl } from '@/components/SafeImage';
 import CreateOrderModal from '@/components/CreateOrderModal';
 import QuickPrintOverlay from '@/components/QuickPrintOverlay';
 import EmailsTab from '@/components/EmailsTab';
@@ -43,6 +44,7 @@ import {
   saveStoredBridgeConfig,
   getBridgeHealth,
   addBridgePdfRoot,
+  removeBridgePdfRoot,
   getBridgePdfRoots,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
@@ -281,6 +283,19 @@ function formatSizeKb(kb) {
 function formatPlainKb(kb) {
   const value = Number(kb) || 0;
   return value > 0 ? `${Math.round(value).toLocaleString('es-AR')} KB` : '? KB';
+}
+
+function positiveKb(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function getStoredDesignOriginalSizeKb(design, status = null) {
+  return positiveKb(status?.sourceSizeKb) || positiveKb(design?.optimized_image_source_size_kb);
+}
+
+function getStoredDesignOptimizedSizeKb(design, status = null) {
+  return positiveKb(status?.optimizedSizeKb) || positiveKb(design?.optimized_image_size_kb);
 }
 
 // Cuando un diseno tiene un vinculo manual de PDF (fijado a mano en Disenos),
@@ -921,12 +936,16 @@ useEffect(() => {
   const [optimizingDesignIds, setOptimizingDesignIds] = useState(new Set());
   const [optimizationStatus, setOptimizationStatus] = useState({});
   const [designPreviewImage, setDesignPreviewImage] = useState(null);
-  const [designImageSummary, setDesignImageSummary] = useState({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
-  const [designImageSummaryLoading, setDesignImageSummaryLoading] = useState(false);
   const designImageSizesById = React.useMemo(() => {
-    const items = Array.isArray(designImageSummary.items) ? designImageSummary.items : [];
-    return Object.fromEntries(items.map(item => [String(item.id), item]));
-  }, [designImageSummary.items]);
+    return Object.fromEntries((designs || []).map(design => {
+      const status = optimizationStatus[design.id];
+      return [String(design.id), {
+        id: design.id,
+        originalSizeKb: getStoredDesignOriginalSizeKb(design, status),
+        optimizedSizeKb: getStoredDesignOptimizedSizeKb(design, status),
+      }];
+    }));
+  }, [designs, optimizationStatus]);
   const autoLaunchTriedRef = useRef(false);
   const adminBridgeInitDoneRef = useRef(false);
   const [dragOverLocalityId, setDragOverLocalityId] = useState(null);
@@ -1069,10 +1088,9 @@ useEffect(() => {
     correctSubtab('tracking', trackingSubtab, setTrackingSubtab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, viewerRole, currentUser, settings[ADMIN_TAB_VISIBILITY_SETTING_KEY], settings[ADMIN_SUBTAB_ORDER_SETTING_KEY], tabOrder, activeTab, usersSubtab, productionSubtab, trackingSubtab]);
-  // Always covers the full filtered set (not just the current selection) so
-  // that selecting/deselecting rows never discards already-fetched size data
-  // and never re-triggers a slow storage listing just to narrow the scope.
-  const designImageFetchRows = React.useMemo(() => {
+  // The footer uses sizes already stored on each design, avoiding the old
+  // Storage folder listings that could exhaust Supabase connection slots.
+  const designFilteredRows = React.useMemo(() => {
     const pdfEnabledSet = new Set(parseDesignPdfEnabledIds(settings[DESIGN_PDF_LINK_ENABLED_KEY]));
     return designs.filter(d => {
       const cats = Array.isArray(d.categories) && d.categories.length > 0 ? d.categories : (d.category && d.category !== 'Sin categoría' ? [d.category] : []);
@@ -1087,24 +1105,20 @@ useEffect(() => {
   }, [designs, designFilterProduct, designSearch, designCatFilter, designPdfFilter, designPdfMatches, settings]);
   const designSummaryRows = selectedIds.size > 0
     ? designs.filter(d => selectedIds.has(d.id))
-    : designImageFetchRows;
+    : designFilteredRows;
   const designSummaryScopeLabel = selectedIds.size > 0
     ? 'Selección'
     : (designFilterProduct !== 'all' || designSearch || designCatFilter || designPdfFilter !== 'all') ? 'Filtro' : 'Total';
-  const designImageFetchKey = React.useMemo(() => designImageFetchRows.map(d => d.id).sort().join(','), [designImageFetchRows]);
   const designSummaryTotals = React.useMemo(() => {
-    if (selectedIds.size === 0) {
-      return { originalSizeKb: designImageSummary.originalSizeKb || 0, optimizedSizeKb: designImageSummary.optimizedSizeKb || 0 };
-    }
     let originalSizeKb = 0;
     let optimizedSizeKb = 0;
     designSummaryRows.forEach(d => {
       const sizes = designImageSizesById[String(d.id)] || {};
-      originalSizeKb += d.optimized_image_source_size_kb || sizes.originalSizeKb || 0;
-      optimizedSizeKb += d.optimized_image_size_kb || sizes.optimizedSizeKb || 0;
+      originalSizeKb += sizes.originalSizeKb || 0;
+      optimizedSizeKb += sizes.optimizedSizeKb || 0;
     });
     return { originalSizeKb, optimizedSizeKb };
-  }, [selectedIds, designSummaryRows, designImageSizesById, designImageSummary.originalSizeKb, designImageSummary.optimizedSizeKb]);
+  }, [designSummaryRows, designImageSizesById]);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const value = Math.max(10, Math.min(500, parseInt(String(optimizedThumbTargetKb), 10) || DEFAULT_OPTIMIZED_THUMB_KB));
@@ -1112,39 +1126,6 @@ useEffect(() => {
       localStorage.setItem(OPTIMIZED_THUMB_TARGET_STORAGE_KEY, String(value));
     } catch {}
   }, [optimizedThumbTargetKb]);
-  useEffect(() => {
-    if (screen !== 'panel' || activeTab !== 'designs') return;
-    let cancelled = false;
-    const ids = designImageFetchRows.map(d => d.id).filter(Boolean);
-    if (ids.length === 0) {
-      setDesignImageSummary({ count: 0, originalSizeKb: 0, optimizedSizeKb: 0, originalKnownCount: 0, optimizedKnownCount: 0 });
-      setDesignImageSummaryLoading(false);
-      return;
-    }
-    setDesignImageSummaryLoading(true);
-    const timer = setTimeout(async () => {
-      try {
-        const response = await fetch('/api/admin/design-image-summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ designIds: ids }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || 'No se pudo calcular el resumen');
-        if (!cancelled) setDesignImageSummary(payload);
-      } catch (error) {
-        if (!cancelled) {
-          setDesignImageSummary(prev => ({ ...prev, error: error?.message || 'Error' }));
-        }
-      } finally {
-        if (!cancelled) setDesignImageSummaryLoading(false);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [screen, activeTab, designImageFetchKey, designImageFetchRows]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
@@ -2453,11 +2434,15 @@ useEffect(() => {
       (payload.matches || []).forEach(match => {
         nextMatches[match.id] = match;
       });
+      const availableRootNames = new Set((payload.roots || rootsPayload?.roots || [])
+        .filter(root => root?.exists)
+        .map(root => root.name)
+        .filter(Boolean));
       // Un vinculo manual (fijado a mano en Disenos) siempre gana sobre lo
       // que haya encontrado el emparejamiento automatico por nombre.
       designs.forEach(d => {
         const manual = manualPdfMatchFor(d);
-        if (manual) nextMatches[d.id] = manual;
+        if (manual && availableRootNames.has(manual.rootName)) nextMatches[d.id] = manual;
       });
 
       setDesignPdfMatches(prev => ({ ...prev, ...nextMatches }));
@@ -2575,6 +2560,55 @@ useEffect(() => {
     } finally {
       setDesignPdfBusy(false);
     }
+  }
+
+  function removeDesignPdfRootFromAdmin(root) {
+    const rootPath = root?.path || '';
+    const rootName = root?.name || '';
+    if (!rootPath) return;
+    askConfirm(
+      `¿Quitar esta carpeta de vinculación PDF?\n\n${rootPath}\n\nNo se borra ningún archivo del disco; solo deja de usarse para vincular PDFs.`,
+      async () => {
+        const token = designPdfBridgeToken.trim();
+        const url = designPdfBridgeUrl.trim() || DEFAULT_BRIDGE_URL;
+        if (!token) {
+          setDesignPdfSummary({ state: 'token', message: 'Pegá el token del Bridge para quitar carpetas PDF.', found: 0, missing: 0, pdfCount: 0, roots: designPdfSummary.roots || [] });
+          return;
+        }
+
+        setDesignPdfBusy(true);
+        try {
+          saveStoredBridgeConfig({ url, token });
+          const payload = await removeBridgePdfRoot(url, token, rootPath);
+          const nextRoots = payload.roots || [];
+          setDesignPdfMatches(prev => {
+            const next = {};
+            Object.entries(prev || {}).forEach(([id, match]) => {
+              if (!rootName || match?.rootName !== rootName) next[id] = match;
+            });
+            return next;
+          });
+          setDesignPdfSummary({
+            state: 'ready',
+            message: `Carpeta quitada: ${rootPath}`,
+            found: 0,
+            missing: 0,
+            pdfCount: payload.pdfCount || 0,
+            roots: nextRoots,
+          });
+          await refreshDesignPdfLinks({ scan: true });
+        } catch (error) {
+          setDesignPdfSummary(prev => ({
+            ...prev,
+            state: error?.status === 401 ? 'token' : 'error',
+            message: error?.status === 404 ? 'Actualizá el Bridge para quitar carpetas PDF.' : formatBridgeError(error),
+          }));
+        } finally {
+          setDesignPdfBusy(false);
+        }
+      },
+      { title: '¿Quitar carpeta PDF?', confirmLabel: 'Quitar' }
+    );
   }
 
   async function launchBridgeAndRetry() {
@@ -3561,6 +3595,7 @@ useEffect(() => {
       try {
         let imageUrl = null;
         let modelUrl = null;
+        let sourceImageSizeKb = 0;
 
         // Capturar thumbnail del modelo si no hay imagen
         if (!entry.file && entry.capturedThumb) {
@@ -3571,11 +3606,13 @@ useEffect(() => {
           });
           const data = await res.json();
           if (data.url) imageUrl = data.url;
+          sourceImageSizeKb = Math.round(entry.capturedThumb.size / 1024);
         }
 
         // Subir imagen si existe
         if (entry.file) {
           if (entry.file.size > maxSizeKb * 1024) { alert(`"${entry.name}" supera ${maxSizeKb}kb.`); anyError = true; continue; }
+          sourceImageSizeKb = Math.round(entry.file.size / 1024);
           const base64 = await fileToBase64(entry.file);
           const res = await fetch('/api/upload-image', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3617,6 +3654,10 @@ useEffect(() => {
             const { data: inserted, error } = await supabase.from('designs').insert({ name: entry.name, category: entry.category, image_url: imageUrl, model_url: modelUrl, active: true, product_id: selectedProductId }).select('id').single();
             if (error) throw error;
             designId = inserted?.id ?? null;
+          }
+
+          if (sourceImageSizeKb > 0 && designId) {
+            setDesignOptimizationState(designId, { sourceSizeKb: sourceImageSizeKb });
           }
 
           // Solo imágenes reales (png/jpg) subidas para el diseño; no aplica a
@@ -6768,8 +6809,7 @@ useEffect(() => {
                             <div style={{display:'flex', alignItems:'center', gap:6}}>
                               {form.landing_image ? (
                                 <>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={form.landing_image} alt="" style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} />
+                                  <SafeImage src={form.landing_image} alt="" style={{width:32, height:32, objectFit:'cover', borderRadius:4, border:'1px solid #dde1ef', flexShrink:0}} compactFallback />
                                   <button
                                     onClick={() => { updateProductForm(p.id, 'landing_image', ''); saveProduct(p.id, {landing_image: null}); }}
                                     style={{background:'rgba(229,62,62,0.12)', border:'none', color:'#e53e3e', borderRadius:4, width:20, height:20, cursor:'pointer', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}
@@ -7265,8 +7305,20 @@ useEffect(() => {
                         {designPdfSummary.roots?.length > 0 && (
                           <div style={{display:'flex', flexWrap:'wrap', gap:5}}>
                             {designPdfSummary.roots.map(root => (
-                              <span key={root.path || root.name} title={root.path} style={{border:'1px solid #dde1ef', borderRadius:7, padding:'3px 7px', fontSize:10, fontWeight:800, color:root.exists ? '#15803d' : '#b91c1c', background:root.exists ? '#e8f7ef' : '#fff5f5', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                                {root.exists ? '' : 'No existe: '}{root.path || root.name}
+                              <span key={root.path || root.name} title={root.path} style={{border:'1px solid #dde1ef', borderRadius:7, padding:'2px 4px 2px 7px', fontSize:10, fontWeight:800, color:root.exists ? '#15803d' : '#b91c1c', background:root.exists ? '#e8f7ef' : '#fff5f5', maxWidth:'100%', display:'inline-flex', alignItems:'center', gap:5, minWidth:0}}>
+                                <span style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0}}>
+                                  {root.exists ? '' : 'No existe: '}{root.path || root.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeDesignPdfRootFromAdmin(root)}
+                                  disabled={designPdfBusy}
+                                  aria-label={`Quitar carpeta PDF ${root.path || root.name}`}
+                                  title="Quitar carpeta de vinculación"
+                                  style={{border:'none', background:root.exists ? 'rgba(21,128,61,0.12)' : 'rgba(185,28,28,0.12)', color:root.exists ? '#15803d' : '#b91c1c', borderRadius:5, width:17, height:17, display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:900, lineHeight:1, cursor:designPdfBusy ? 'wait' : 'pointer', padding:0, flexShrink:0}}
+                                >
+                                  ×
+                                </button>
                               </span>
                             ))}
                           </div>
@@ -7375,24 +7427,24 @@ useEffect(() => {
                 >
                   <div style={s.designInfo}>
                     {(() => {
-                      const thumbSrc = getDesignDisplayImageUrl(d);
-                      const originalSrc = getDesignOriginalImageUrl(d);
-                      // eslint-disable-next-line @next/next/no-img-element
+                      const thumbSrc = normalizeAssetUrl(getDesignDisplayImageUrl(d));
+                      const originalSrc = normalizeAssetUrl(getDesignOriginalImageUrl(d));
+                      const optimizedSrc = d.optimized_image_url ? normalizeAssetUrl(d.optimized_image_url) : '';
                       return thumbSrc ? (
                         <button
                           type="button"
                           onClick={e => {
                             e.stopPropagation();
                             const storedSizes = designImageSizesById[String(d.id)] || {};
-                            const originalSizeKb = d.optimized_image_source_size_kb || storedSizes.originalSizeKb || 0;
-                            const optimizedSizeKb = d.optimized_image_size_kb || storedSizes.optimizedSizeKb || 0;
-                            setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: d.optimized_image_url || '', view: 'original', zoom: 1.3, originalSizeKb, optimizedSizeKb });
+                            const originalSizeKb = storedSizes.originalSizeKb || 0;
+                            const optimizedSizeKb = storedSizes.optimizedSizeKb || 0;
+                            setDesignPreviewImage({ name: d.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: optimizedSrc, view: 'original', zoom: 1.3, originalSizeKb, optimizedSizeKb });
                           }}
                           onDragStart={e => e.stopPropagation()}
                           title={d.optimized_image_url ? 'Abrir miniatura optimizada' : 'Abrir imagen original'}
                           style={{border:'none', padding:0, background:'transparent', cursor:'pointer', position:'relative', flexShrink:0}}
                         >
-                          <img src={thumbSrc} alt={d.name} style={s.designThumb} />
+                          <SafeImage src={thumbSrc} alt={d.name} style={s.designThumb} compactFallback />
                           {d.optimized_image_url && (
                             <span style={{position:'absolute', right:-4, bottom:-4, border:'1px solid #b7ebcf', background:'#e8f7ef', color:'#15803d', borderRadius:5, padding:'1px 4px', fontSize:8, fontWeight:900, lineHeight:1}}>
                               OPT
@@ -7511,9 +7563,9 @@ useEffect(() => {
                         return <span style={{...pillStyle, fontWeight:700, color:'#9aa3bc', background: adminDarkMode ? 'rgba(255,255,255,0.06)' : '#f0f2f8'}}>Sin optimizar</span>;
                       }
                       const storedSizes = designImageSizesById[String(d.id)] || {};
-                      const originalKb = status?.sourceSizeKb || d.optimized_image_source_size_kb || storedSizes.originalSizeKb;
-                      const optimizedKb = status?.optimizedSizeKb || d.optimized_image_size_kb || storedSizes.optimizedSizeKb;
-                      const label = originalKb ? `${formatPlainKb(originalKb)}->${formatPlainKb(optimizedKb)}` : (designImageSummaryLoading ? 'Calculando...' : `->${formatPlainKb(optimizedKb)}`);
+                      const originalKb = storedSizes.originalSizeKb || 0;
+                      const optimizedKb = storedSizes.optimizedSizeKb || 0;
+                      const label = originalKb ? `${formatPlainKb(originalKb)}->${formatPlainKb(optimizedKb)}` : `->${formatPlainKb(optimizedKb)}`;
                       return (
                         <span
                           title={`Original ${formatPlainKb(originalKb)} / Optimizada ${formatPlainKb(optimizedKb)}`}
@@ -7582,17 +7634,14 @@ useEffect(() => {
                 <span style={{fontSize:11, fontWeight:900, color:'#5a6380', textTransform:'uppercase', letterSpacing:0}}>{designSummaryScopeLabel}</span>
                 {[
                   ['Recuento', designSummaryRows.length.toLocaleString('es-AR')],
-                  ['Originales', (selectedIds.size === 0 && designImageSummaryLoading) ? '...' : formatSizeKb(designSummaryTotals.originalSizeKb)],
-                  ['Optimizadas', (selectedIds.size === 0 && designImageSummaryLoading) ? '...' : formatSizeKb(designSummaryTotals.optimizedSizeKb)],
+                  ['Originales', formatSizeKb(designSummaryTotals.originalSizeKb)],
+                  ['Optimizadas', formatSizeKb(designSummaryTotals.optimizedSizeKb)],
                 ].map(([label, value]) => (
                   <span key={label} style={{display:'inline-flex', alignItems:'center', gap:5, border:'1px solid #dbe5ff', background:'#e8f7ef', color:'#15803d', borderRadius:7, padding:'4px 8px', fontSize:11, fontWeight:800}}>
                     <span style={{color:'#5a6380', fontWeight:700}}>{label}:</span>
                     <span>{value}</span>
                   </span>
                 ))}
-                {designImageSummary.error && !designImageSummaryLoading && (
-                  <span style={{fontSize:10, fontWeight:800, color:'#b91c1c'}}>{designImageSummary.error}</span>
-                )}
               </div>
             </div>
           </>
@@ -7973,9 +8022,10 @@ useEffect(() => {
               onNavigateToDesign={(design) => {
                 setActiveTab('designs');
                 setSelectedProductId(design.product_id);
-                const thumbSrc = getDesignDisplayImageUrl(design);
-                const originalSrc = getDesignOriginalImageUrl(design);
-                setDesignPreviewImage({ name: design.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: design.optimized_image_url || '', view: 'original', zoom: 1.3 });
+                const thumbSrc = normalizeAssetUrl(getDesignDisplayImageUrl(design));
+                const originalSrc = normalizeAssetUrl(getDesignOriginalImageUrl(design));
+                const optimizedSrc = design.optimized_image_url ? normalizeAssetUrl(design.optimized_image_url) : '';
+                setDesignPreviewImage({ name: design.name, originalUrl: originalSrc || thumbSrc, optimizedUrl: optimizedSrc, view: 'original', zoom: 1.3 });
               }}
             />
           </div>
@@ -10794,10 +10844,11 @@ useEffect(() => {
             {(() => {
               const hasOptimized = Boolean(designPreviewImage.optimizedUrl);
               const currentView = hasOptimized && designPreviewImage.view === 'optimized' ? 'optimized' : 'original';
-              const currentUrl = currentView === 'optimized' ? designPreviewImage.optimizedUrl : designPreviewImage.originalUrl;
+              const currentUrl = normalizeAssetUrl(currentView === 'optimized' ? designPreviewImage.optimizedUrl : designPreviewImage.originalUrl);
               const zoom = Number(designPreviewImage.zoom) || 1.3;
               return (
                 <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={currentUrl}
                     alt={designPreviewImage.name || ''}

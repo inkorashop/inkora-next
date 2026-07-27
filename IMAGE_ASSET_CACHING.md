@@ -1,6 +1,6 @@
 # Cache de imagenes del catalogo (proxy propio, sin depender de Supabase Pro)
 
-Estado: **implementado y en produccion** (agregado 2026-07-04, documentado 2026-07-09 tras una investigacion sobre Cached Egress de Supabase). Leer esto antes de tocar `app/api/asset/[...path]/route.js`, `components/SafeImage.js`, o de recomendar pasar a Supabase Pro para "arreglar" el cacheo de imagenes — ya esta resuelto del lado del codigo, no hace falta pagar el plan.
+Estado: **implementado y en produccion** (agregado 2026-07-04, documentado 2026-07-09 tras una investigacion sobre Cached Egress de Supabase, actualizado 2026-07-27 para cubrir huecos de Admin/Operarios/Chat). Leer esto antes de tocar `app/api/asset/[...path]/route.js`, `components/SafeImage.js`, o de recomendar pasar a Supabase Pro para "arreglar" el cacheo de imagenes — ya esta resuelto del lado del codigo, no hace falta pagar el plan.
 
 ## El problema que resuelve
 
@@ -29,7 +29,7 @@ Esto confirma que hay dos capas de cache funcionando, sin depender de Supabase P
 
 ## Cobertura confirmada
 
-Se revisó con grep exhaustivo: **todo punto de render de imagen de cara al cliente usa `SafeImage`** (grilla del catálogo, carrito, landing, fallback de modelos 3D, chat) — `app/catalogo/page.js`, `app/page.js`, `components/chat/ChatPanel.js`, `components/chat/ChatReferencePicker.js`, `components/Header.js`. Se confirmó también que el 100% de las URLs guardadas en `designs.image_url`/`optimized_image_url`/`model_url` matchean el patrón que `normalizeAssetUrl()` sabe reescribir (ningún host distinto, ninguna con query string que fragmentaría la cache).
+Se reviso con grep exhaustivo y pruebas de lectura de codigo: las imagenes de catalogo, carrito, landing publica, fallback de modelos 3D, referencias del chat, Admin, Operarios y preview/lightbox usan `SafeImage` o `normalizeAssetUrl()` antes de renderizar/fetchear assets de Supabase. Eso incluye `app/catalogo/page.js`, `app/page.js`, `components/chat/ChatPanel.js`, `components/chat/ChatReferencePicker.js`, `components/Header.js`, `components/DesignThumb.js`, `app/admin/page.js` y `app/operarios/page.js`. Se confirmo tambien que el 100% de las URLs guardadas en `designs.image_url`/`optimized_image_url`/`model_url` matchean el patron que `normalizeAssetUrl()` sabe reescribir.
 
 **Extendido (2026-07-10) a dos huecos que quedaban**, encontrados al preguntar puntualmente por ellos:
 
@@ -37,6 +37,13 @@ Se revisó con grep exhaustivo: **todo punto de render de imagen de cara al clie
 - **El modelo 3D en sí** (`.glb`/`.3mf`): ni `components/ModelViewer.js` ni el precargador `LazyModelViewer` (`app/catalogo/page.js`) pasaban la URL por el proxy — se bajaban directo de Supabase con `Cache-Control: no-cache`, siendo el archivo más pesado de todo el catálogo. Se normaliza en dos puntos independientes (no es redundante, son dos fetches distintos): dentro de `ModelViewer` mismo (asi cualquier llamador, incluidos los del panel de Admin, lo hereda gratis sin tocar cada call site) y en el `fetch()` de precarga de `LazyModelViewer` (que corre ANTES de que el modelo se muestre, mientras la card solo es visible en pantalla).
 
 `/api/asset/[...path]/route.js` no necesitó ningún cambio — ya reenvía cualquier `Content-Type` que diga Supabase (no está limitado a imágenes), así que sirve archivos `.glb`/`.3mf` sin modificaciones.
+
+**Extendido (2026-07-27) a los huecos restantes**, encontrados al revisar Admin/Operarios/Chat:
+
+- **Admin > Disenos** (`app/admin/page.js`): las miniaturas principales de la lista y la imagen grande del preview pasan por `normalizeAssetUrl()`. El preview de portada de productos usa `SafeImage`.
+- **Operarios** (`app/operarios/page.js`): las miniaturas de disenos traidas desde `designs` se normalizan antes de entrar al `<img>`.
+- **Chat** (`components/chat/ChatPanel.js`): el lightbox grande ahora usa `SafeImage`; las miniaturas del mensaje ya lo usaban.
+- **Resumen de tamanos en Admin > Disenos** (`app/admin/page.js`): dejo de llamar automaticamente a `/api/admin/design-image-summary`, que hacia listados masivos de Supabase Storage. Ahora suma los KB guardados en `designs.optimized_image_source_size_kb` y `designs.optimized_image_size_kb`, mas el estado local de la pagina cuando se sube o se acaba de optimizar una imagen.
 
 ## Cómo confirmarlo desde el navegador (DevTools)
 

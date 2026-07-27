@@ -88,6 +88,37 @@ public sealed class PdfCatalogService
         _logService.Info($"Carpeta PDF autorizada: {fullPath}");
     }
 
+    public bool RemoveRoot(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new InvalidOperationException("Ruta de carpeta requerida.");
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        var removed = false;
+        lock (_lock)
+        {
+            var nextRoots = _roots
+                .Where(root => !string.Equals(Path.GetFullPath(root), fullPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            removed = nextRoots.Count != _roots.Count;
+            if (removed)
+            {
+                _roots = nextRoots;
+                _pdfs = [];
+                SaveRoots();
+            }
+        }
+
+        if (removed)
+        {
+            _logService.Info($"Carpeta PDF removida: {fullPath}");
+        }
+
+        return removed;
+    }
+
     public IReadOnlyList<PdfFileInfo> Scan()
     {
         List<string> roots;

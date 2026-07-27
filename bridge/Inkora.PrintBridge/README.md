@@ -58,7 +58,11 @@ Endpoints iniciales:
 - `POST /driver/open-preferences?printer=...`: requiere token y abre preferencias del driver.
 - `GET /pdf-roots`: requiere token y lista carpetas autorizadas.
 - `POST /pdf-roots/add-dialog`: requiere token y abre el selector local de carpeta.
+- `POST /pdf-roots/remove`: requiere token y quita una carpeta autorizada por ruta exacta, sin borrar archivos del disco.
 - `POST /pdf-scan`: requiere token y escanea PDFs.
+- `POST /print-direct`: requiere token e imprime un PDF ya indexado dentro de una carpeta autorizada.
+- `POST /print-file/select-dialog`: requiere token y abre el selector local de un PDF puntual, sin agregarlo a las carpetas autorizadas.
+- `POST /print-file`: requiere token e imprime un PDF puntual por ruta absoluta, sin modificar la sincronizacion de PDFs.
 - `POST /design-pdfs/match`: requiere token y busca PDFs por diseño.
 
 El token se genera localmente y se puede copiar desde la ventana del Bridge.

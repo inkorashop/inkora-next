@@ -13,15 +13,16 @@ import {
   saveStoredBridgeConfig,
   getBridgeHealth,
   getBridgePrinters,
+  getBridgePdfRoots,
   readBridgeDevMode,
   openBridgePrinterPreferences,
   openBridgePrintQueue,
-  addBridgePdfRoot,
   scanBridgePdfs,
   matchBridgeDesignPdfs,
   printBridgeJob,
-
   printBridgeDirect,
+  selectBridgePrintFile,
+  printBridgeFile,
   getBridgePrintQueue,
   cancelBridgePrintJob,
   getDevModeProfiles,
@@ -43,7 +44,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-const LATEST_BRIDGE_VERSION = '1.6.6';
+const LATEST_BRIDGE_VERSION = '1.6.8';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
@@ -109,6 +110,13 @@ function normalizeName(value) {
 function toQty(value) {
   const qty = Number(value);
   return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toLocaleString('es-AR', { maximumFractionDigits: 1 })} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024).toLocaleString('es-AR')} KB`;
+  return `${Math.round(value).toLocaleString('es-AR')} B`;
 }
 
 function formatProductionError(error, fallback) {
@@ -600,7 +608,11 @@ export default function ProductionTab({
   const [bridgeStatus, setBridgeStatus] = useState({ state: 'idle', message: 'Sin verificar', health: null });
   const hasScannedOnBridgeConnectRef = useRef(false);
   const [quickPrintSearch, setQuickPrintSearch] = useState('');
-
+  const [quickManualFile, setQuickManualFile] = useState(null);
+  const [quickManualQty, setQuickManualQty] = useState(1);
+  const [quickManualSelecting, setQuickManualSelecting] = useState(false);
+  const [quickManualPrinting, setQuickManualPrinting] = useState(false);
+  const [quickManualError, setQuickManualError] = useState('');
   const [quickPrintQtyMap, setQuickPrintQtyMap] = useState({});
   const [quickPrintingMap, setQuickPrintingMap] = useState({});
   const [bridgePrinters, setBridgePrinters] = useState([]);
@@ -736,6 +748,10 @@ export default function ProductionTab({
         const printerPayload = await getBridgePrinters(url, token.trim());
         printers = Array.isArray(printerPayload?.printers) ? printerPayload.printers : [];
         setBridgePrinters(printers);
+        try {
+          const rootPayload = await getBridgePdfRoots(url, token.trim());
+          setOrderPdfStatus(prev => ({ ...prev, roots: rootPayload?.roots || prev.roots || [] }));
+        } catch {}
         const target = printers.find(printer => printer.isTargetL8050);
         const printerMessage = target ? `Bridge conectado: ${target.name}` : 'Bridge conectado. No detecto L8050 por nombre.';
         message = health?.sumatraPdf === false
@@ -881,29 +897,6 @@ export default function ProductionTab({
     }
   }
 
-  async function addPdfRootFromProduction() {
-    const token = bridgeToken.trim();
-    if (!token) {
-      setOrderPdfStatus({ state: 'token', message: 'Pegá el token Bridge para agregar carpetas PDF.', roots: orderPdfStatus.roots || [] });
-      return;
-    }
-
-    setBridgeBusy(true);
-    try {
-      saveStoredBridgeConfig({ url: bridgeUrl, token });
-      const payload = await addBridgePdfRoot(bridgeUrl, token);
-      setOrderPdfStatus({ state: 'ready', message: `Carpetas PDF autorizadas: ${(payload.roots || []).length}`, roots: payload.roots || [] });
-    } catch (error) {
-      setOrderPdfStatus({
-        state: error?.status === 401 ? 'token' : 'error',
-        message: error?.status === 401 ? 'Token Bridge incorrecto.' : `No se pudo abrir carpeta PDF: ${error.message || error}`,
-        roots: orderPdfStatus.roots || [],
-      });
-    } finally {
-      setBridgeBusy(false);
-    }
-  }
-
   async function handleBridgeUpdate() {
     if (bridgeUpdating || !bridgeToken.trim()) return;
     setBridgeUpdating(true);
@@ -1035,6 +1028,66 @@ export default function ProductionTab({
       });
     } finally {
       setQuickPrintingMap(prev => ({ ...prev, [key]: false }));
+    }
+  }
+
+  async function handleSelectManualPrintFile() {
+    const token = bridgeToken.trim();
+    if (!token || quickManualSelecting) return;
+    setQuickManualSelecting(true);
+    setQuickManualError('');
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      const payload = await selectBridgePrintFile(bridgeUrl, token);
+      if (payload?.cancelled) return;
+      if (payload?.file?.fullPath) {
+        setQuickManualFile(payload.file);
+        setQuickManualQty(1);
+      }
+    } catch (error) {
+      setQuickManualError(error?.status === 404
+        ? 'Actualizá el Bridge para seleccionar archivos puntuales.'
+        : (error?.message || 'No se pudo seleccionar el archivo.'));
+    } finally {
+      setQuickManualSelecting(false);
+    }
+  }
+
+  async function handleManualQuickPrint() {
+    const token = bridgeToken.trim();
+    if (!token || !quickManualFile?.fullPath || quickManualPrinting) return;
+    const copies = Math.max(1, Math.min(99, parseInt(String(quickManualQty), 10) || 1));
+    setQuickManualPrinting(true);
+    setQuickManualError('');
+    try {
+      saveStoredBridgeConfig({ url: bridgeUrl, token });
+      const result = await printBridgeFile(bridgeUrl, token, {
+        fullPath: quickManualFile.fullPath,
+        printerName: effectivePrinterName,
+        copies,
+      });
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: quickManualFile.fileName || quickManualFile.fullPath,
+        copias: copies,
+        hojas: result?.job?.pagesPrinted ?? null,
+        impresora: effectivePrinterName,
+        estado: result?.job?.status || 'done',
+      });
+    } catch (error) {
+      setQuickManualError(error?.status === 404
+        ? 'Actualizá el Bridge para imprimir archivos puntuales.'
+        : (error?.message || 'No se pudo imprimir el archivo.'));
+      addPrintHistory({
+        fecha: new Date().toISOString(),
+        diseno: quickManualFile.fileName || quickManualFile.fullPath,
+        copias,
+        hojas: null,
+        impresora: effectivePrinterName,
+        estado: 'error',
+      });
+    } finally {
+      setQuickManualPrinting(false);
     }
   }
 
@@ -1923,6 +1976,13 @@ export default function ProductionTab({
       : bridgeStatus.state === 'offline'
         ? { bg: '#fff5f5', border: '#fecaca', color: '#b91c1c', label: 'No detectado' }
         : { bg: '#f8faff', border: '#dde1ef', color: '#5a6380', label: 'Sin verificar' };
+  const pdfRootPaths = (orderPdfStatus.roots || []).map(root => root?.path).filter(Boolean);
+  const pdfRootLabel = pdfRootPaths.length === 0
+    ? 'no configurada'
+    : pdfRootPaths.length === 1
+      ? pdfRootPaths[0]
+      : `${pdfRootPaths[0]} +${pdfRootPaths.length - 1}`;
+  const pdfRootTitle = pdfRootPaths.length > 0 ? pdfRootPaths.join('\n') : 'La carpeta PDF se configura desde Admin > Diseños.';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 10, height: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', minHeight: 0 }}>
@@ -2002,15 +2062,12 @@ export default function ProductionTab({
                 <span style={{ fontSize: 11, color: '#c4c9d9' }}>Sin impresoras</span>
               )}
               {bridgeStatus.state === 'connected' && bridgeToken.trim() && (
-                <button
-                  type="button"
-                  onClick={addPdfRootFromProduction}
-                  disabled={bridgeBusy || orderPdfBusy}
-                  title="Agregar carpeta donde están los PDFs"
-                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: bridgeBusy ? 'not-allowed' : 'pointer', fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', flexShrink: 0 }}
+                <span
+                  title={pdfRootTitle}
+                  style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: pdfRootPaths.length > 0 ? '#1B2F5E' : '#9aa3bc', background: '#f8faff', flexShrink: 1, minWidth: 0, maxWidth: isMobile ? '100%' : 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'default' }}
                 >
-                  📁 Carpeta PDF
-                </button>
+                  Carpeta PDF: {pdfRootLabel}
+                </span>
               )}
             </div>
 
@@ -2622,12 +2679,66 @@ export default function ProductionTab({
             const visiblePdfs = matchedPdfs.length > 0 && search
               ? matchedPdfs.filter(p => (p.fileName || '').toLowerCase().includes(search) || (p.name || '').toLowerCase().includes(search))
               : matchedPdfs;
+            const manualFormat = quickManualFile?.extension ? quickManualFile.extension.replace(/^\./, '').toUpperCase() : '';
             return (
               <div style={{ background: 'white', borderRadius: 10, border: '1.5px solid #dde1ef', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '7px 10px', borderBottom: '1.5px solid #dde1ef', background: '#f7f8fc', flexShrink: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#1B2F5E', letterSpacing: 0.2, marginBottom: 4 }}>
                     Imprimir{matchedPdfs.length > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: '#9aa3bc', marginLeft: 6 }}>{matchedPdfs.length} PDFs</span> : ''}
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleSelectManualPrintFile}
+                    disabled={quickManualSelecting}
+                    style={{ width: '100%', border: '1.5px solid #2D6BE4', borderRadius: 7, padding: '5px 8px', background: quickManualSelecting ? '#eef4ff' : 'white', color: '#2D6BE4', fontSize: 11, fontWeight: 900, cursor: quickManualSelecting ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', marginBottom: 5 }}
+                  >
+                    {quickManualSelecting ? 'Seleccionando...' : 'Seleccionar archivo manual'}
+                  </button>
+                  {quickManualFile && (
+                    <div style={{ border: '1.5px solid #dbe5ff', borderRadius: 8, background: 'white', padding: 6, marginBottom: 5 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 34px 50px', gap: 4, alignItems: 'center' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div title={quickManualFile.fileName} style={{ fontSize: 11, fontWeight: 900, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {quickManualFile.fileName}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, minWidth: 0 }}>
+                            <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 900, color: '#15803d', background: '#e8f7ef', border: '1px solid #b7ebcf', borderRadius: 5, padding: '1px 4px' }}>
+                              {manualFormat || 'PDF'}
+                            </span>
+                            <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 800, color: '#9aa3bc' }}>
+                              {formatFileSize(quickManualFile.sizeBytes)}
+                            </span>
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={quickManualQty}
+                          onChange={e => setQuickManualQty(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => { if (e.key === 'Enter') handleManualQuickPrint(); }}
+                          style={{ width: '100%', textAlign: 'center', padding: '3px 1px', border: '1.5px solid #dde1ef', borderRadius: 5, fontSize: 11, fontWeight: 700, fontFamily: 'Barlow, sans-serif', minWidth: 0 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleManualQuickPrint}
+                          disabled={quickManualPrinting}
+                          style={{ border: 'none', borderRadius: 6, padding: '4px 0', background: quickManualPrinting ? '#e8f7ef' : '#2D6BE4', color: quickManualPrinting ? '#18a36a' : 'white', fontSize: 10, fontWeight: 900, cursor: quickManualPrinting ? 'wait' : 'pointer', fontFamily: 'Barlow, sans-serif', width: '100%' }}
+                        >
+                          {quickManualPrinting ? '...' : 'Imprimir'}
+                        </button>
+                      </div>
+                      <div title={quickManualFile.fullPath} style={{ marginTop: 5, fontSize: 9, lineHeight: 1.25, color: '#5a6380', fontWeight: 700, wordBreak: 'break-all' }}>
+                        Ruta: {quickManualFile.fullPath}
+                      </div>
+                    </div>
+                  )}
+                  {quickManualError && (
+                    <div style={{ color: '#b91c1c', background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 6px', fontSize: 10, fontWeight: 800, marginBottom: 5 }}>
+                      {quickManualError}
+                    </div>
+                  )}
                   <input
                     type="text"
                     placeholder="Buscar..."

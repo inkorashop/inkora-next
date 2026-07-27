@@ -72,6 +72,7 @@ public sealed class MainForm : Form
             _logService,
             _bridgeToken,
             AddPdfRootFromApiAsync,
+            SelectPrintFileFromApiAsync,
             PerformUpdateAsync,
             GetUpdatePhase);
 
@@ -483,6 +484,75 @@ public sealed class MainForm : Form
             catch (Exception exception)
             {
                 AppendDiagnostic($"ERROR agregando carpeta PDF desde admin web: {exception.Message}");
+                _logService.Error(exception.ToString());
+                completion.SetException(exception);
+            }
+            finally
+            {
+                if (!wasVisible) HideToTray();
+            }
+        }
+
+        if (IsHandleCreated)
+        {
+            BeginInvoke((Action)RunDialog);
+        }
+        else
+        {
+            RunDialog();
+        }
+
+        return completion.Task;
+    }
+
+    private Task<ManualPrintFileInfo?> SelectPrintFileFromApiAsync()
+    {
+        var completion = new TaskCompletionSource<ManualPrintFileInfo?>();
+
+        void RunDialog()
+        {
+            var wasVisible = Visible;
+            try
+            {
+                if (!wasVisible)
+                {
+                    ShowForm();
+                    Application.DoEvents();
+                }
+
+                using var dialog = new OpenFileDialog
+                {
+                    Title = "Seleccionar PDF puntual para imprimir",
+                    Filter = "Archivos PDF (*.pdf)|*.pdf",
+                    CheckFileExists = true,
+                    CheckPathExists = true,
+                    Multiselect = false,
+                    RestoreDirectory = true,
+                };
+
+                if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
+                {
+                    completion.SetResult(null);
+                    return;
+                }
+
+                var fullPath = Path.GetFullPath(dialog.FileName);
+                var info = new FileInfo(fullPath);
+                var file = new ManualPrintFileInfo
+                {
+                    FileName = info.Name,
+                    Extension = info.Extension,
+                    Directory = info.DirectoryName ?? "",
+                    FullPath = info.FullName,
+                    SizeBytes = info.Exists ? info.Length : 0,
+                    LastWriteTime = info.Exists ? info.LastWriteTime : DateTimeOffset.Now,
+                };
+                AppendDiagnostic($"Archivo manual seleccionado desde admin web: {file.FullPath}");
+                completion.SetResult(file);
+            }
+            catch (Exception exception)
+            {
+                AppendDiagnostic($"ERROR seleccionando archivo manual desde admin web: {exception.Message}");
                 _logService.Error(exception.ToString());
                 completion.SetException(exception);
             }

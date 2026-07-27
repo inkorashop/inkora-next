@@ -18,6 +18,16 @@ public sealed class PdfFileInfo
     public string NormalizedText { get; init; } = "";
 }
 
+public sealed class ManualPrintFileInfo
+{
+    public string FileName { get; init; } = "";
+    public string Extension { get; init; } = "";
+    public string Directory { get; init; } = "";
+    public string FullPath { get; init; } = "";
+    public long SizeBytes { get; init; }
+    public DateTimeOffset LastWriteTime { get; init; }
+}
+
 public sealed class DesignPdfCandidate
 {
     public string Id { get; init; } = "";

@@ -34,6 +34,7 @@ public sealed class LocalApiServer : IDisposable
     private readonly BridgeLogService _logService;
     private readonly string _pairingToken;
     private readonly Func<Task<IReadOnlyList<PdfRootInfo>>> _addPdfRootFromDialogAsync;
+    private readonly Func<Task<ManualPrintFileInfo?>> _selectPrintFileFromDialogAsync;
     private readonly Func<string, Task> _onUpdateApply;
     private readonly Func<string> _getUpdatePhase;
     private TcpListener? _listener;
@@ -49,6 +50,7 @@ public sealed class LocalApiServer : IDisposable
         BridgeLogService logService,
         string pairingToken,
         Func<Task<IReadOnlyList<PdfRootInfo>>> addPdfRootFromDialogAsync,
+        Func<Task<ManualPrintFileInfo?>> selectPrintFileFromDialogAsync,
         Func<string, Task> onUpdateApply,
         Func<string> getUpdatePhase,
         int port = 17389)
@@ -62,6 +64,7 @@ public sealed class LocalApiServer : IDisposable
         _logService = logService;
         _pairingToken = pairingToken;
         _addPdfRootFromDialogAsync = addPdfRootFromDialogAsync;
+        _selectPrintFileFromDialogAsync = selectPrintFileFromDialogAsync;
         _onUpdateApply = onUpdateApply;
         _getUpdatePhase = getUpdatePhase;
         Port = port;
@@ -388,6 +391,44 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/pdf-roots/remove":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var removeRequest = ParsePdfRootRemoveRequest(body);
+                    var removed = _pdfCatalogService.RemoveRoot(removeRequest.Path);
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        removed,
+                        roots = _pdfCatalogService.GetRoots(),
+                        pdfCount = _pdfCatalogService.GetCachedPdfs().Count,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception removeRootError)
+                {
+                    _logService.Error($"Error en /pdf-roots/remove: {removeRootError}");
+                    await WriteJsonAsync(stream, 400, "Bad Request", new
+                    {
+                        ok = false,
+                        error = removeRootError.Message,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                break;
+
             case "/pdf-scan":
                 if (method != "POST")
                 {
@@ -493,6 +534,97 @@ public sealed class LocalApiServer : IDisposable
                     {
                         ok = false,
                         error = directError.Message,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                break;
+
+            case "/print-file/select-dialog":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var selectedFile = await _selectPrintFileFromDialogAsync();
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        cancelled = selectedFile is null,
+                        file = selectedFile,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception selectFileError)
+                {
+                    _logService.Error($"Error en /print-file/select-dialog: {selectFileError}");
+                    await WriteJsonAsync(stream, 500, "Internal Server Error", new
+                    {
+                        ok = false,
+                        error = selectFileError.Message,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                break;
+
+            case "/print-file":
+                if (method != "POST")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa POST." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var fileRequest = ParseFilePrintRequest(body);
+                    var fileJob = _printJobService.PrintFile(
+                        fileRequest.FullPath,
+                        fileRequest.PrinterName,
+                        fileRequest.Copies);
+                    await WriteJsonAsync(stream, 200, "OK", new
+                    {
+                        ok = true,
+                        job = fileJob is null ? null : new
+                        {
+                            fileJob.Id,
+                            fileJob.DesignName,
+                            fileJob.PrinterName,
+                            fileJob.Copies,
+                            fileJob.PdfFileName,
+                            fileJob.PdfFullPath,
+                            fileJob.Status,
+                            fileJob.Error,
+                            fileJob.Warning,
+                            fileJob.PagesPrinted,
+                            fileJob.CreatedAt,
+                            fileJob.StartedAt,
+                            fileJob.CompletedAt
+                        },
+                        printMethod = _printJobService.PrintMethod,
+                        timestamp = DateTimeOffset.Now
+                    }, origin, cancellationToken);
+                }
+                catch (Exception filePrintError)
+                {
+                    _logService.Error($"Error en /print-file: {filePrintError}");
+                    await WriteJsonAsync(stream, 400, "Bad Request", new
+                    {
+                        ok = false,
+                        error = filePrintError.Message,
                         timestamp = DateTimeOffset.Now
                     }, origin, cancellationToken);
                 }
@@ -818,7 +950,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-roots/remove", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print-file/select-dialog", "/print-file", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             sumatraPdfPath = _printJobService.SumatraPdfPath ?? "",
@@ -937,6 +1069,18 @@ public sealed class LocalApiServer : IDisposable
     {
         if (string.IsNullOrWhiteSpace(body)) return new DirectPrintRequest();
         return JsonSerializer.Deserialize<DirectPrintRequest>(body, JsonOptions) ?? new DirectPrintRequest();
+    }
+
+    private static PdfRootRemoveRequest ParsePdfRootRemoveRequest(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return new PdfRootRemoveRequest();
+        return JsonSerializer.Deserialize<PdfRootRemoveRequest>(body, JsonOptions) ?? new PdfRootRemoveRequest();
+    }
+
+    private static FilePrintRequest ParseFilePrintRequest(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return new FilePrintRequest();
+        return JsonSerializer.Deserialize<FilePrintRequest>(body, JsonOptions) ?? new FilePrintRequest();
     }
 
     private static DesignMatchRequest ParseDesignMatchRequest(string body)
@@ -1081,6 +1225,18 @@ public sealed class LocalApiServer : IDisposable
     {
         public string RootName { get; init; } = "";
         public string RelativePath { get; init; } = "";
+        public string PrinterName { get; init; } = "";
+        public int Copies { get; init; } = 1;
+    }
+
+    private sealed class PdfRootRemoveRequest
+    {
+        public string Path { get; init; } = "";
+    }
+
+    private sealed class FilePrintRequest
+    {
+        public string FullPath { get; init; } = "";
         public string PrinterName { get; init; } = "";
         public int Copies { get; init; } = 1;
     }

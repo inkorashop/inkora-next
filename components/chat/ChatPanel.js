@@ -887,7 +887,7 @@ export default function ChatPanel({
 
       {lightboxImage && (
         <div onClick={() => setLightboxImage(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 440, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <img src={lightboxImage} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} />
+          <SafeImage src={lightboxImage} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} />
         </div>
       )}
     </div>

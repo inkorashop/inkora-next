@@ -330,6 +330,44 @@ public sealed class PrintJobService
         return Start(job.Id);
     }
 
+    public PrintJob? PrintFile(string fullPath, string printerName, int copies)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+            throw new InvalidOperationException("Ruta de archivo requerida.");
+
+        var actualPath = Path.GetFullPath(fullPath);
+        if (!string.Equals(Path.GetExtension(actualPath), ".pdf", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Solo se permite impresion manual de archivos PDF.");
+
+        if (!File.Exists(actualPath))
+            throw new FileNotFoundException($"PDF no encontrado: {actualPath}");
+
+        var actualPrinter = printerName;
+        if (string.IsNullOrWhiteSpace(actualPrinter))
+        {
+            var printers = _printerService.GetInstalledPrinters();
+            actualPrinter = (printers.FirstOrDefault(p => p.IsTargetL8050) ?? printers.FirstOrDefault(p => p.IsDefault))?.Name ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(actualPrinter))
+            throw new InvalidOperationException("No se especifico impresora y no se detecto L8050 ni default.");
+
+        var fileName = Path.GetFileName(actualPath);
+        var job = new PrintJob
+        {
+            DesignName = Path.GetFileNameWithoutExtension(fileName),
+            PrinterName = actualPrinter,
+            Copies = Math.Clamp(copies, 1, 999),
+            PdfFileName = fileName,
+            PdfFullPath = actualPath,
+            Status = "queued"
+        };
+
+        lock (_lock) { _jobs.Add(job); }
+        _logService.Info($"Archivo manual preparado: {job.Id} | {job.PdfFullPath} x{job.Copies} -> {actualPrinter}");
+        return Start(job.Id);
+    }
+
     private void PrintWithSumatra(PrintJob job)
     {
         // Copias tiene prioridad sobre presets del driver. Se aplica por Sumatra

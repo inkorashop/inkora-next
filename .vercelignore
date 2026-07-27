@@ -1,0 +1,7 @@
+# Local artifacts that should never be uploaded in Vercel deploy bundles.
+Inkora.PrintBridge.zip
+*.3mf
+
+# Desktop Bridge build outputs are published through GitHub Releases, not Vercel.
+bridge/Inkora.PrintBridge/bin/**
+bridge/Inkora.PrintBridge/obj/**

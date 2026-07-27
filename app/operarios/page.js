@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import SafeImage from '@/components/SafeImage';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -35,7 +36,7 @@ function DesignThumb({ designId, name, size = 24 }) {
       });
   }, [designId]);
   if (!src) return <div style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, background: '#e8eaf4', border: '1px solid #dde1ef', display: 'inline-block' }} />;
-  return <img src={src} alt={name || ''} title={name || ''} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} />;
+  return <SafeImage src={src} alt={name || ''} title={name || ''} style={{ width: size, height: size, borderRadius: 5, flexShrink: 0, objectFit: 'cover', border: '1px solid #dde1ef', display: 'inline-block', verticalAlign: 'middle' }} compactFallback />;
 }
 
 const LOGO = 'https://ylawwaoznxzxwetlkjel.supabase.co/storage/v1/object/public/assets/Logo%20nuevo.png';
