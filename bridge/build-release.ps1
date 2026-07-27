@@ -1,4 +1,4 @@
-param([string]$Version = "1.6.10")
+param([string]$Version = "1.6.11")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
@@ -143,10 +143,10 @@ FinishMessage=
 TargetName=$iexpressTarget
 FriendlyName=INKORA Print Bridge v$Version
 IconFile=$iconPath
-AppLaunched=install.bat
+AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1
 PostInstallCmd=<None>
-AdminQuietInstCmd=install.bat
-UserQuietInstCmd=install.bat
+AdminQuietInstCmd=powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1
+UserQuietInstCmd=powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1
 $($fileStrings -join "`r`n")
 
 [SourceFiles]
