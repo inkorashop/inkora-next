@@ -18,6 +18,12 @@ En esta etapa no imprime trabajos reales. Sirve para:
 - Windows.
 - .NET 8 SDK.
 
+Para instalacion normal de usuario final no hace falta el SDK: descargar
+`Inkora.PrintBridge.Setup.exe` desde la release del Bridge y ejecutarlo.
+El instalador copia el Bridge a `%LOCALAPPDATA%\Inkora\PrintBridge\app`,
+registra `inkora-bridge://`, configura inicio automatico y arranca la app.
+El ZIP de la release queda como paquete tecnico para auto-actualizacion.
+
 ## Ejecutar
 
 ```powershell

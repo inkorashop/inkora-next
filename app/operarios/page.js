@@ -21,8 +21,9 @@ import {
 } from '@/lib/print-bridge-client';
 import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
-const LATEST_BRIDGE_VERSION = '1.6.6';
-const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
+const LATEST_BRIDGE_VERSION = '1.6.9';
+const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
+const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 function DesignThumb({ designId, name, size = 24 }) {
   const [src, setSrc] = useState(null);
@@ -569,10 +570,10 @@ export default function OperariosPage() {
     try {
       pushLog('Solicitando actualización al Bridge...', 'active');
       try {
-        await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
+        await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_UPDATE_URL);
       } catch (err) {
         if (err.status === 404) {
-          setLastLog(`Bridge demasiado antiguo para auto-actualizar. Instalá v${LATEST_BRIDGE_VERSION} manualmente desde "↓ Instalar Bridge".`, 'error');
+          setLastLog(`Bridge demasiado antiguo para auto-actualizar. Instalá v${LATEST_BRIDGE_VERSION} manualmente desde "↓ Descargar instalador".`, 'error');
           setBridgeUpdating(false);
           return;
         }
@@ -994,7 +995,7 @@ export default function OperariosPage() {
             href={LATEST_BRIDGE_DOWNLOAD_URL}
             style={{ border: '1.5px solid #dde1ef', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, fontFamily: 'Barlow, sans-serif', color: '#5a6380', background: 'white', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
           >
-            ↓ Instalar Bridge
+            ↓ Descargar instalador
           </a>
         </div>
       </div>

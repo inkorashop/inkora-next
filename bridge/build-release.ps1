@@ -1,10 +1,11 @@
-param([string]$Version = "1.6.8")
+param([string]$Version = "1.6.9")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
 $stageDir = "$projDir\bin\stage"
 $outDir   = "$stageDir\Inkora PrintBridge"
 $zipPath  = "$projDir\bin\Inkora.PrintBridge.zip"
+$setupPath = "$projDir\bin\Inkora.PrintBridge.Setup.exe"
 
 Write-Host "==> Inkora Print Bridge v$Version"
 
@@ -62,13 +63,13 @@ Copy-Item (Join-Path $projDir "install.bat") (Join-Path $outDir "install.bat") -
 @"
 INKORA Print Bridge v$Version
 
-Instalacion recomendada:
+Instalacion desde ZIP tecnico:
 1. Extraer este ZIP completo.
 2. Ejecutar install.bat.
 3. El instalador copia el Bridge a %LOCALAPPDATA%\Inkora\PrintBridge\app.
 4. El Bridge incluye SumatraPDF.exe para imprimir multiples copias como un unico trabajo.
 
-No ejecutes el Bridge directamente desde Descargas si queres una instalacion estable.
+Para usuarios finales, usar Inkora.PrintBridge.Setup.exe.
 "@ | Set-Content -Path (Join-Path $outDir "LEEME-INSTALACION.txt") -Encoding ASCII
 
 # Show what ended up in the package
@@ -84,5 +85,84 @@ Compress-Archive -Path $outDir -DestinationPath $zipPath
 $sizeMB = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
 Write-Host ""
 Write-Host "==> Listo: $zipPath ($sizeMB MB)"
+
+# Create single-file installer for normal users. The ZIP remains available as
+# the internal auto-update payload because already-installed Bridges know how
+# to replace themselves from that format.
+if (Test-Path $setupPath) { Remove-Item $setupPath -Force }
+$iexpress = Join-Path $env:WINDIR "System32\iexpress.exe"
+if (Test-Path $iexpress) {
+    Write-Host "==> Creando instalador EXE..."
+    $iexpressWorkDir = Join-Path ([IO.Path]::GetTempPath()) "InkoraBridgeSetup_$($Version.Replace('.', '_'))"
+    $iexpressSourceDir = Join-Path $iexpressWorkDir "src"
+    $iexpressTarget = Join-Path $iexpressWorkDir "setup.exe"
+    if (Test-Path $iexpressWorkDir) { Remove-Item $iexpressWorkDir -Recurse -Force }
+    New-Item -ItemType Directory -Force $iexpressSourceDir | Out-Null
+    Copy-Item (Join-Path $outDir "*") $iexpressSourceDir -Recurse -Force
+
+    $sedPath = Join-Path $iexpressWorkDir "setup.sed"
+    $installerFiles = Get-ChildItem $iexpressSourceDir -File | Sort-Object Name
+    $fileStrings = @()
+    $fileEntries = @()
+    for ($i = 0; $i -lt $installerFiles.Count; $i++) {
+        $fileStrings += "FILE$i=$($installerFiles[$i].Name)"
+        $fileEntries += "%FILE$i%="
+    }
+    $sourceDir = $iexpressSourceDir.TrimEnd('\') + '\'
+    $sedContent = @"
+[Version]
+Class=IEXPRESS
+SEDVersion=3
+
+[Options]
+PackagePurpose=InstallApp
+ShowInstallProgramWindow=1
+HideExtractAnimation=1
+UseLongFileName=1
+InsideCompressed=0
+CAB_FixedSize=0
+CAB_ResvCodeSigning=0
+RebootMode=N
+InstallPrompt=%InstallPrompt%
+DisplayLicense=%DisplayLicense%
+FinishMessage=%FinishMessage%
+TargetName=%TargetName%
+FriendlyName=%FriendlyName%
+AppLaunched=%AppLaunched%
+PostInstallCmd=%PostInstallCmd%
+AdminQuietInstCmd=%AdminQuietInstCmd%
+UserQuietInstCmd=%UserQuietInstCmd%
+SourceFiles=SourceFiles
+
+[Strings]
+InstallPrompt=
+DisplayLicense=
+FinishMessage=
+TargetName=$iexpressTarget
+FriendlyName=INKORA Print Bridge v$Version
+AppLaunched=install.bat
+PostInstallCmd=<None>
+AdminQuietInstCmd=install.bat
+UserQuietInstCmd=install.bat
+$($fileStrings -join "`r`n")
+
+[SourceFiles]
+SourceFiles0=$sourceDir
+
+[SourceFiles0]
+$($fileEntries -join "`r`n")
+"@
+    Set-Content -Path $sedPath -Value $sedContent -Encoding ASCII
+    $iexpressProcess = Start-Process -FilePath $iexpress -ArgumentList @('/N', '/Q', $sedPath) -Wait -PassThru
+    if ($iexpressProcess.ExitCode -ne 0 -or -not (Test-Path $iexpressTarget)) {
+        throw "IExpress no pudo generar el instalador EXE."
+    }
+    Move-Item -Path $iexpressTarget -Destination $setupPath -Force
+    $setupSizeMB = [math]::Round((Get-Item $setupPath).Length / 1MB, 1)
+    Write-Host "==> Listo: $setupPath ($setupSizeMB MB)"
+} else {
+    Write-Warning "IExpress no encontrado; no se genero Inkora.PrintBridge.Setup.exe."
+}
+
 Write-Host "==> Para publicar en GitHub:"
-Write-Host "    gh release create bridge-v$Version $zipPath --title 'Bridge v$Version' --notes 'ZIP reorganizado: una carpeta con todo.'"
+Write-Host "    gh release create bridge-v$Version $setupPath $zipPath --title 'Bridge v$Version' --notes 'Instalador EXE para usuarios + ZIP tecnico para auto-update.'"

@@ -44,8 +44,9 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-const LATEST_BRIDGE_VERSION = '1.6.8';
-const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
+const LATEST_BRIDGE_VERSION = '1.6.9';
+const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
+const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
 const STATUS_CYCLE = ['pending', 'in_press', 'done'];
 const STATUS_LABEL = { pending: 'Pendiente', in_press: 'En proceso', done: 'Terminado' };
@@ -914,10 +915,10 @@ export default function ProductionTab({
     try {
       pushLog('Solicitando actualización al Bridge...', 'active');
       try {
-        await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_DOWNLOAD_URL);
+        await applyBridgeUpdate(bridgeUrl, bridgeToken.trim(), LATEST_BRIDGE_UPDATE_URL);
       } catch (err) {
         if (err.status === 404) {
-          setLastLog(`Bridge demasiado antiguo para auto-actualizar. Instalá v${LATEST_BRIDGE_VERSION} manualmente desde "Descargar".`, 'error');
+          setLastLog(`Bridge demasiado antiguo para auto-actualizar. Instalá v${LATEST_BRIDGE_VERSION} manualmente desde "Descargar instalador".`, 'error');
           setBridgeUpdating(false);
           return;
         }
@@ -2127,7 +2128,7 @@ export default function ProductionTab({
                 href={LATEST_BRIDGE_DOWNLOAD_URL}
                 style={{ border: '1.5px solid #2D6BE4', borderRadius: 8, padding: '7px 12px', background: '#f8faff', color: '#2D6BE4', fontSize: 12, fontWeight: 900, fontFamily: 'Barlow, sans-serif', whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}
               >
-                Descargar
+                Descargar instalador
               </a>
             </div>
           </div>
