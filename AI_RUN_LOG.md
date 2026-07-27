@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 11:45 -03:00 - ChatGPT Codex
+
+- Objetivo: En Produccion > Producir, seccion 3 de impresion rapida, mostrar junto al nombre del diseno el nombre del PDF vinculado.
+- Cambios: `components/ProductionTab.js` separa cada fila de impresion rapida en nombre de diseno + pastilla verde con el nombre del PDF vinculado, manteniendo truncado y tooltip para no romper el layout estrecho de la columna.
+- Verificacion: `npm.cmd run lint` OK con warnings preexistentes. `git diff --check` OK, solo aviso CRLF normal de Windows.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la ultima entrada relevante de `AI_RUN_LOG.md` y `git status --short`; el arbol solo tenia los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`, que no se tocaron.
+- Pendiente/Riesgos: No se probo visualmente en navegador desde este entorno. El deploy de produccion se realiza en este mismo turno despues del commit/push.
+
 ## 2026-07-27 11:39 -03:00 - ChatGPT Codex
 
 - Objetivo: En Produccion > Producir, dejar fijos los encabezados de la tabla de detalle al hacer scroll, agregar el encabezado/celda `PDF vinculado`, y corregir que los PDFs de Produccion se desalinearan de los vinculados en Disenos (caso Misiones 1/Misiones 2).

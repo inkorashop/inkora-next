@@ -2832,11 +2832,21 @@ export default function ProductionTab({
                     const key = pdf.relativePath;
                     const qty = quickPrintQtyMap[key] ?? 1;
                     const printing = quickPrintingMap[key] ?? false;
-                    const label = (pdf.fileName || pdf.name || '').replace(/\.pdf$/i, '');
+                    const designLabel = (pdf.name || pdf.fileName || 'Sin diseno').replace(/\.pdf$/i, '');
+                    const pdfLabel = (pdf.fileName || pdf.relativePath || '').replace(/\.pdf$/i, '');
                     return (
                       <div key={key} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
                         <DesignThumb designId={String(pdf.id || '')} name={pdf.name} size={22} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
+                        <div title={pdfLabel ? `${designLabel} - ${pdfLabel}` : designLabel} style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
+                          <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: 11, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {designLabel}
+                          </span>
+                          {pdfLabel && (
+                            <span style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '52%', border: '1px solid #b7ebcf', borderRadius: 999, padding: '1px 5px', background: '#e8f7ef', color: '#15803d', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {pdfLabel}
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="number" min={1} max={99} value={qty}
                           onChange={e => setQuickPrintQtyMap(prev => ({ ...prev, [key]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
