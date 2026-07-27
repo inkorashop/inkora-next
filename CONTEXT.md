@@ -45,11 +45,12 @@ Prompt corto recomendado para el usuario:
 - Vercel detecta los push a GitHub y despliega automáticamente.
 - Antes de pushear cambios importantes, ejecutar: CI=true npm run build
 - Flujo sugerido: git status, git add ., git commit -m "mensaje", git push
-- Regla operativa del proyecto: despues de terminar modificaciones de codigo, hacer deploy a produccion salvo que se indique explicitamente lo contrario.
+- Regla operativa del proyecto: despues de terminar una run/unidad de trabajo completa con cambios deployables, hacer un unico deploy final a produccion salvo que se indique explicitamente lo contrario. No hacer deploy despues de cada commit, micro-cambio o paso intermedio de una misma run. Si la run solo cambia documentacion/contexto, no hace falta deploy de app.
 - Deploy manual desde PowerShell:
   - npm.cmd run build
   - vercel.cmd deploy --prod --yes
 - Si el cambio incluye SQL, ejecutar primero o coordinar la ejecucion del script correspondiente en Supabase SQL Editor; el deploy de Vercel no aplica migraciones SQL.
+- Si el cambio genera un instalador, ZIP tecnico o release del Bridge, publicarlo una vez al cierre de la run, junto con el deploy final si aplica.
 
 ## Tablas principales Supabase
 - products

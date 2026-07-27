@@ -6,6 +6,14 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 18:14 -03:00 - ChatGPT Codex
+
+- Objetivo: Corregir la interpretacion de la regla "deploy siempre": debe ser un unico deploy al cierre de una run completa, no despues de cada paso, y dejarlo documentado. Responder tambien si conviene duplicar reglas globales en cada proyecto.
+- Cambios: `CONTEXT.md` aclara que el deploy manual de produccion se hace una sola vez al cierre de una run con cambios deployables, y que documentacion/contexto no requiere deploy de app. `AGENTS.md` corrige el path real del workspace global (`C:\Users\compu\Desktop\INKORA IA\INKORA Workspace`). En el workspace global, `AGENTS.md` agrega la regla compartida de publicacion/deploy al cierre de la run.
+- Verificacion: Se revisaron los diffs locales de `AGENTS.md` y `CONTEXT.md`, el diff puntual del `AGENTS.md` global, y `git status --short` en ambos repos. No se ejecuto build ni deploy porque solo se modifico documentacion/contexto.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, `AI_RUN_LOG.md`, `git status --short`, y los documentos base del workspace global (`README.md`, `PROJECTS.md`, `AGENTS.md`, `ROADMAP.md`, `TASKS.md`, `DECISIONS.md`, `BRAND.md`). Se detecto que el path global anterior apuntaba a una carpeta inexistente y que el workspace global tenia cambios previos ajenos (`DECISIONS.md`, `README.md`, `package*.json`, `scripts/`), que no se revirtieron ni se mezclaron.
+- Pendiente/Riesgos: El workspace global queda con cambios ajenos preexistentes sin tocar; si se quiere publicar el cambio global, commitear solo `AGENTS.md` de `INKORA Workspace`. Para proyectos futuros, conviene mantener la regla completa en el workspace global y en cada repo dejar solo un puntero mas un resumen operativo minimo.
+
 ## 2026-07-27 17:37 -03:00 - ChatGPT Codex
 
 - Objetivo: Implementar que Produccion y Operarios reflejen en vivo los cambios hechos en Disenos (nombre, producto, miniatura, PDF vinculado/manual, etc.) porque deben mostrar la misma entidad real.

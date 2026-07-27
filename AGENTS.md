@@ -87,8 +87,8 @@ La entrada debe ser breve y util. Incluir:
 
 Antes de cambios estrategicos o cross-proyecto, revisar tambien el workspace compartido:
 
-- `C:\Users\compu\Desktop\Code\INKORA Workspace\README.md`
-- `C:\Users\compu\Desktop\Code\INKORA Workspace\PROJECTS.md`
-- `C:\Users\compu\Desktop\Code\INKORA Workspace\AGENTS.md`
+- `C:\Users\compu\Desktop\INKORA IA\INKORA Workspace\README.md`
+- `C:\Users\compu\Desktop\INKORA IA\INKORA Workspace\PROJECTS.md`
+- `C:\Users\compu\Desktop\INKORA IA\INKORA Workspace\AGENTS.md`
 
 No reemplaza este protocolo local; lo complementa.
