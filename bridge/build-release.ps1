@@ -1,4 +1,4 @@
-param([string]$Version = "1.6.9")
+param([string]$Version = "1.6.10")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"
@@ -6,6 +6,7 @@ $stageDir = "$projDir\bin\stage"
 $outDir   = "$stageDir\Inkora PrintBridge"
 $zipPath  = "$projDir\bin\Inkora.PrintBridge.zip"
 $setupPath = "$projDir\bin\Inkora.PrintBridge.Setup.exe"
+$iconPath = "$projDir\inkora.ico"
 
 Write-Host "==> Inkora Print Bridge v$Version"
 
@@ -128,6 +129,7 @@ DisplayLicense=%DisplayLicense%
 FinishMessage=%FinishMessage%
 TargetName=%TargetName%
 FriendlyName=%FriendlyName%
+IconFile=%IconFile%
 AppLaunched=%AppLaunched%
 PostInstallCmd=%PostInstallCmd%
 AdminQuietInstCmd=%AdminQuietInstCmd%
@@ -140,6 +142,7 @@ DisplayLicense=
 FinishMessage=
 TargetName=$iexpressTarget
 FriendlyName=INKORA Print Bridge v$Version
+IconFile=$iconPath
 AppLaunched=install.bat
 PostInstallCmd=<None>
 AdminQuietInstCmd=install.bat
@@ -158,6 +161,8 @@ $($fileEntries -join "`r`n")
         throw "IExpress no pudo generar el instalador EXE."
     }
     Move-Item -Path $iexpressTarget -Destination $setupPath -Force
+    . (Join-Path $PSScriptRoot "Set-ExeIcon.ps1")
+    Set-ExeIcon -ExePath $setupPath -IconPath $iconPath -GroupId 3000
     $setupSizeMB = [math]::Round((Get-Item $setupPath).Length / 1MB, 1)
     Write-Host "==> Listo: $setupPath ($setupSizeMB MB)"
 } else {
