@@ -6,6 +6,23 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-07-27 11:17 -03:00 - ChatGPT Codex
+
+- Objetivo: Cambiar la distribucion del Bridge para que el usuario descargue un instalador `.exe` empaquetado en vez de un ZIP, manteniendo compatibilidad con la auto-actualizacion.
+- Cambios: `bridge/build-release.ps1` ahora genera `Inkora.PrintBridge.Setup.exe` con IExpress ademas de `Inkora.PrintBridge.zip`; el ZIP queda como payload tecnico de auto-update para Bridges ya instalados. Version del Bridge subida a 1.6.9. `components/ProductionTab.js` y `app/operarios/page.js` descargan manualmente `Inkora.PrintBridge.Setup.exe`, pero siguen enviando `Inkora.PrintBridge.zip` a `/update/apply`. `bridge/Inkora.PrintBridge/README.md` documenta el instalador nuevo.
+- Verificacion: `powershell.exe -ExecutionPolicy Bypass -File bridge/build-release.ps1 -Version 1.6.9` OK y genero `Inkora.PrintBridge.Setup.exe` (72.093.696 bytes) + `Inkora.PrintBridge.zip` (74.142.533 bytes). `7z l` confirmo que el Setup contiene `Inkora.PrintBridge.exe`, `install.bat`, `install.ps1`, `LEEME-INSTALACION.txt` y `SumatraPDF.exe`. `npm.cmd run lint` OK con warnings preexistentes. `dotnet build bridge/Inkora.PrintBridge/Inkora.PrintBridge.csproj` OK al relanzarlo elevado porque el sandbox bloqueo NuGet/temporales. `git diff --check` OK, solo avisos CRLF. `npm.cmd run build` local volvio a quedar en timeout a los 300s, pero el build remoto de Vercel completo OK.
+- Publicacion/Deploy: Commit funcional `5bdf48d` pusheado a `main`. Release publicado: `https://github.com/inkorashop/inkora-next/releases/tag/bridge-v1.6.9`, con assets `Inkora.PrintBridge.Setup.exe` y `Inkora.PrintBridge.zip`. Deploy produccion READY: `dpl_BPC1W9fTHRZaGF2amPWYfrmYftE7`, URL `https://inkora-next-1eljc9htu-inkorashop-7809s-projects.vercel.app`, alias `https://www.inkora.com.ar`, `https://inkora.com.ar` y `https://inkora-next.vercel.app`. Logs recientes: sin logs/errores.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la entrada anterior de `AI_RUN_LOG.md`, `git status --short`, scripts de instalacion/update del Bridge y el flujo de deploy Vercel. Se mantuvieron fuera de git los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: El instalador EXE no esta firmado digitalmente; Windows SmartScreen puede advertir que es una app no reconocida. Para auto-update se conserva el ZIP tecnico porque Bridges instalados antes de 1.6.9 esperan ZIP en `/update/apply`.
+
+## 2026-07-27 10:17 -03:00 - ChatGPT Codex
+
+- Objetivo: Publicar siempre el ZIP del Bridge y hacer deploy siempre; aplicar esa regla al estado actual del proyecto.
+- Cambios: Se agrego `.vercelignore` para que los deploys manuales de Vercel no suban artefactos locales ni salidas `bin/obj` del Bridge. Se commitearon y pushearon los cambios pendientes en `main` (`a6d6ac6` y luego `7653a67`). Se publico el release GitHub `bridge-v1.6.8` con `Inkora.PrintBridge.zip` y se hizo deploy manual a produccion en Vercel.
+- Verificacion: GitHub Release OK: `https://github.com/inkorashop/inkora-next/releases/tag/bridge-v1.6.8`, asset `Inkora.PrintBridge.zip` de 74.142.553 bytes. Primer deploy Vercel READY, pero subio cerca de 1GB porque `.vercelignore` inicial no incluia los ignores base; se corrigio y se redeployo. Deploy final READY: `dpl_2zwiCrEJuDLHxarjoEQcenco6Rz9`, URL `https://inkora-next-asl235gd8-inkorashop-7809s-projects.vercel.app`, alias `https://www.inkora.com.ar`, `https://inkora.com.ar` y `https://inkora-next.vercel.app`. Logs recientes: solo `GET /api/version` 200.
+- Auditoria: Se releyeron `AGENTS.md`, `CONTEXT.md`, la ultima entrada de `AI_RUN_LOG.md`, `git status --short`, remotos/branch, disponibilidad de `gh` y `vercel`, y el estado del release/deployment. Se mantuvieron fuera de git los untracked locales `Inkora.PrintBridge.zip` y `Messi 2.3mf`.
+- Pendiente/Riesgos: La regla operativa queda asumida para proximos turnos: si se genera un ZIP del Bridge, publicarlo como GitHub Release; si hay cambios deployables, hacer deploy a produccion salvo instruccion explicita en contra. No se hizo prueba manual en navegador ni con impresora fisica.
+
 ## 2026-07-27 10:05 -03:00 - ChatGPT Codex
 
 - Objetivo: En Admin > Disenos > Vincular PDFs, agregar una "x" en cada carpeta/ruta vinculada para poder quitarla, sin borrar archivos del disco.
