@@ -78,6 +78,7 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
   const canvasRefs = useRef([]);
   const renderTasksRef = useRef([]);
   const printFrameRef = useRef(null);
+  const scrollBodyRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -171,11 +172,21 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
     };
   }, []);
 
-  function handleWheel(e) {
-    if (!e.ctrlKey) return;
-    e.preventDefault();
-    setScale(prev => clampScale(prev + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
-  }
+  useEffect(() => {
+    const el = scrollBodyRef.current;
+    if (!el) return;
+    // React registra los listeners de "wheel" como pasivos (para no trabar
+    // el scroll normal), y ahi preventDefault() no hace nada: Ctrl+rueda
+    // terminaba zoomeando la pagina entera del navegador ademas de (o en vez
+    // de) el PDF. Un listener nativo no-pasivo si puede frenar ese zoom.
+    function handleWheel(e) {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setScale(prev => clampScale(prev + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   function handlePrint() {
     if (!blobUrl) return;
@@ -204,14 +215,15 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
       style={{
         position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(17,32,64,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        overflowY: 'auto',
       }}
     >
       <div
         style={{
-          width: '90vw', height: '90vh', maxWidth: 1100, background: 'white', borderRadius: 16,
+          width: '90vw', height: '90vh', maxWidth: 1100, minHeight: 0, background: 'white', borderRadius: 16,
           border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          fontFamily: 'Barlow, sans-serif',
+          fontFamily: 'Barlow, sans-serif', margin: 'auto', flexShrink: 0,
         }}
       >
         <div style={{
@@ -248,7 +260,7 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
           </div>
         </div>
 
-        <div onWheel={handleWheel} style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#eef1f8', padding: 20 }}>
+        <div ref={scrollBodyRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#eef1f8', padding: 20 }}>
           {status === 'loading' && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#5f6b89', fontSize: 13, fontWeight: 700 }}>
               Cargando PDF...
