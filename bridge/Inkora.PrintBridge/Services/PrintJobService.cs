@@ -382,7 +382,14 @@ public sealed class PrintJobService
 
         try
         {
-            var printSettings = $"{Math.Clamp(job.Copies, 1, 999)}x";
+            // noscale: el PDF siempre se imprime a su tamaño real. Sin esto,
+            // SumatraPDF usa "shrink" por default (ver PrinterDefaults en
+            // SumatraPDF-settings.txt) y achica la pagina entera para que
+            // entre en el area imprimible real de la impresora si esta no
+            // tiene "sin bordes" activado - imperceptible en la mayoria de
+            // los diseños, pero notorio en los que tienen la linea de
+            // variante de INKORA PDF Namer pegada al borde de la hoja.
+            var printSettings = $"{Math.Clamp(job.Copies, 1, 999)}x,noscale";
             var args = $"-print-to \"{job.PrinterName}\" -print-settings \"{printSettings}\" -silent \"{job.PdfFullPath}\"";
             var psi = new ProcessStartInfo
             {
