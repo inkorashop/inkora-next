@@ -27,6 +27,29 @@ public sealed class PdfCatalogService
 
     private string RootsFilePath => Path.Combine(_configService.ConfigRoot, "pdf-roots.json");
 
+    // Misma validacion que ya usaba PrintJobService.PrintDirect (root conocido,
+    // ruta resuelta sin escapar de la carpeta, archivo .pdf existente). Se
+    // centraliza aca para que /pdf-file (servir bytes) y /print-direct
+    // (imprimir) no puedan divergir en la validacion de seguridad.
+    public string ResolvePdfFullPath(string rootName, string relativePath)
+    {
+        var root = GetRoots().FirstOrDefault(r => string.Equals(r.Name, rootName, StringComparison.OrdinalIgnoreCase));
+        if (root is null || !root.Exists)
+            throw new InvalidOperationException($"Carpeta '{rootName}' no encontrada o no existe.");
+
+        var fullPath = Path.GetFullPath(Path.Combine(root.Path, relativePath));
+        if (!fullPath.StartsWith(root.Path, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Ruta de PDF fuera de carpeta autorizada.");
+
+        if (!string.Equals(Path.GetExtension(fullPath), ".pdf", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Solo se permiten archivos PDF.");
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"PDF no encontrado: {fullPath}");
+
+        return fullPath;
+    }
+
     public IReadOnlyList<PdfRootInfo> GetRoots()
     {
         lock (_lock)

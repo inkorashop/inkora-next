@@ -7,6 +7,7 @@ import AddExtraDesignForm from '@/components/AddExtraDesignForm';
 import { useDesigns } from '@/contexts/DesignsContext';
 import { fuzzyMatchDesigns, scoreColor, scoreBg } from '@/lib/fuzzy-match';
 import PrintQueueOverlay from '@/components/PrintQueueOverlay';
+import PdfFloatingViewer from '@/components/PdfFloatingViewer';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -44,7 +45,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-const LATEST_BRIDGE_VERSION = '1.6.11';
+const LATEST_BRIDGE_VERSION = '1.6.12';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
 const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
@@ -750,6 +751,7 @@ export default function ProductionTab({
   const [selectedProfileName, setSelectedProfileName] = useState('');
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileFeedback, setProfileFeedback] = useState('');
+  const [pdfViewerTarget, setPdfViewerTarget] = useState(null);
 
   // Datos
   const [stock, setStock] = useState([]);
@@ -2533,8 +2535,9 @@ export default function ProductionTab({
                           <td style={{ padding: '4px 5px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                             {(orderPdfStatus.state === 'ready' || pdfMatch) ? (
                               <span
-                                title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontro PDF local'}
-                                style={{ display: 'inline-block', maxWidth: '100%', border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}
+                                title={pdfMatch?.found ? `${pdfMatch.rootName}\\${pdfMatch.relativePath} — click para ver` : 'No se encontro PDF local'}
+                                onClick={pdfMatch?.found ? (e => { e.stopPropagation(); setPdfViewerTarget({ rootName: pdfMatch.rootName, relativePath: pdfMatch.relativePath, fileName: pdfMatch.fileName }); }) : undefined}
+                                style={{ display: 'inline-block', maxWidth: '100%', border: '1px solid', borderColor: pdfMatch?.found ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: pdfMatch?.found ? '#e8f7ef' : '#fff5f5', color: pdfMatch?.found ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle', cursor: pdfMatch?.found ? 'pointer' : 'default' }}
                               >
                                 {pdfMatch?.found ? pdfMatch.fileName : '-'}
                               </span>
@@ -2933,7 +2936,11 @@ export default function ProductionTab({
                             {designLabel}
                           </span>
                           {pdfLabel && (
-                            <span style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '52%', border: '1px solid #b7ebcf', borderRadius: 999, padding: '1px 5px', background: '#e8f7ef', color: '#15803d', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span
+                              onClick={e => { e.stopPropagation(); setPdfViewerTarget({ rootName: pdf.rootName, relativePath: pdf.relativePath, fileName: pdf.fileName }); }}
+                              title="Click para ver el PDF"
+                              style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '52%', border: '1px solid #b7ebcf', borderRadius: 999, padding: '1px 5px', background: '#e8f7ef', color: '#15803d', fontSize: 9, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                            >
                               {pdfLabel}
                             </span>
                           )}
@@ -3461,6 +3468,15 @@ export default function ProductionTab({
           bridgeToken={bridgeToken.trim()}
           printerName={effectivePrinterName}
           onClose={() => setPrintQueueOpen(false)}
+        />
+      )}
+
+      {pdfViewerTarget && (
+        <PdfFloatingViewer
+          rootName={pdfViewerTarget.rootName}
+          relativePath={pdfViewerTarget.relativePath}
+          fileName={pdfViewerTarget.fileName}
+          onClose={() => setPdfViewerTarget(null)}
         />
       )}
     </div>

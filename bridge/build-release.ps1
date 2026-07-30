@@ -1,4 +1,4 @@
-param([string]$Version = "1.6.11")
+param([string]$Version = "1.6.12")
 $ErrorActionPreference = "Stop"
 
 $projDir  = "$PSScriptRoot\Inkora.PrintBridge"

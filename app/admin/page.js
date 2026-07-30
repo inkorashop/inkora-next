@@ -13,6 +13,7 @@ import EmailsTab from '@/components/EmailsTab';
 import AdminDatabaseSheet from '@/components/AdminDatabaseSheet';
 import ChatPanel from '@/components/chat/ChatPanel';
 import PwaUpdateManager from '@/components/PwaUpdateManager';
+import PdfFloatingViewer from '@/components/PdfFloatingViewer';
 import ChatPushToggle from '@/components/ChatPushToggle';
 import InfoTooltip from '@/components/InfoTooltip';
 import AddExtraDesignForm from '@/components/AddExtraDesignForm';
@@ -981,6 +982,7 @@ useEffect(() => {
   const [editingInviteLinkId, setEditingInviteLinkId] = useState(null);
   const [inviteLinkEditDraft, setInviteLinkEditDraft] = useState({ kind: 'permanent', next_path: '/' });
   const [inviteLinksLoading, setInviteLinksLoading] = useState(false);
+  const [pdfViewerTarget, setPdfViewerTarget] = useState(null);
   const [inviteLinksMessage, setInviteLinksMessage] = useState('');
   const [copiedLinkIds, setCopiedLinkIds] = useState(new Set());
   const [regenLoadingIds, setRegenLoadingIds] = useState(new Set());
@@ -7577,7 +7579,8 @@ useEffect(() => {
                     })()}
                     {designPdfSummary.state === 'ready' && (
                       <span
-                        title={pdfLinkEnabled ? (pdfMatch?.found ? `${pdfMatch.matchType === 'manual' ? 'Vinculado a mano' : 'PDF vinculado'}: ${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local para este diseño') : undefined}
+                        title={pdfLinkEnabled ? (pdfMatch?.found ? `${pdfMatch.matchType === 'manual' ? 'Vinculado a mano' : 'PDF vinculado'}: ${pdfMatch.rootName}\\${pdfMatch.relativePath} — click para ver` : 'No se encontró PDF local para este diseño') : undefined}
+                        onClick={pdfLinkEnabled && pdfMatch?.found ? (e => { e.stopPropagation(); setPdfViewerTarget({ rootName: pdfMatch.rootName, relativePath: pdfMatch.relativePath, fileName: pdfMatch.fileName }); }) : undefined}
                         style={{
                           fontSize:10,
                           fontWeight: pdfLinkEnabled && !pdfMatch?.found ? 900 : 800,
@@ -7592,7 +7595,7 @@ useEffect(() => {
                           textOverflow:'ellipsis',
                           whiteSpace:'nowrap',
                           lineHeight:1.3,
-                          cursor:'default',
+                          cursor: pdfLinkEnabled && pdfMatch?.found ? 'pointer' : 'default',
                           flexShrink:0,
                           display:'inline-flex',
                           alignItems:'center',
@@ -8633,6 +8636,15 @@ useEffect(() => {
               });
             })()}
           </div>
+        )}
+
+        {pdfViewerTarget && (
+          <PdfFloatingViewer
+            rootName={pdfViewerTarget.rootName}
+            relativePath={pdfViewerTarget.relativePath}
+            fileName={pdfViewerTarget.fileName}
+            onClose={() => setPdfViewerTarget(null)}
+          />
         )}
 
         {inviteLinksModal && (

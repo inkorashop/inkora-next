@@ -484,6 +484,37 @@ public sealed class LocalApiServer : IDisposable
                 }, origin, cancellationToken);
                 break;
 
+            case "/pdf-file":
+                if (method != "GET")
+                {
+                    await WriteJsonAsync(stream, 405, "Method Not Allowed", new { ok = false, error = "Usa GET." }, origin, cancellationToken);
+                    return;
+                }
+
+                if (!IsAuthorized(headers))
+                {
+                    await WriteJsonAsync(stream, 401, "Unauthorized", new { ok = false, error = "Token Bridge requerido." }, origin, cancellationToken);
+                    return;
+                }
+
+                try
+                {
+                    var pdfRootName = GetQueryParam(target, "rootName");
+                    var pdfRelativePath = GetQueryParam(target, "relativePath");
+                    var pdfFullPath = _pdfCatalogService.ResolvePdfFullPath(pdfRootName, pdfRelativePath);
+                    await WriteFileAsync(stream, pdfFullPath, "application/pdf", origin, cancellationToken);
+                }
+                catch (FileNotFoundException notFoundError)
+                {
+                    await WriteJsonAsync(stream, 404, "Not Found", new { ok = false, error = notFoundError.Message }, origin, cancellationToken);
+                }
+                catch (Exception pdfFileError)
+                {
+                    _logService.Error($"Error en /pdf-file: {pdfFileError}");
+                    await WriteJsonAsync(stream, 400, "Bad Request", new { ok = false, error = pdfFileError.Message }, origin, cancellationToken);
+                }
+                break;
+
             case "/print-direct":
                 if (method != "POST")
                 {
@@ -950,7 +981,7 @@ public sealed class LocalApiServer : IDisposable
             url = Url,
             localOnly = true,
             tokenRequired = true,
-            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-roots/remove", "/pdf-scan", "/pdf-catalog", "/design-pdfs/match", "/print", "/print-direct", "/print-file/select-dialog", "/print-file", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
+            endpoints = new[] { "/health", "/printers", "/devmode", "/driver/open-preferences", "/pdf-roots", "/pdf-roots/add-dialog", "/pdf-roots/remove", "/pdf-scan", "/pdf-catalog", "/pdf-file", "/design-pdfs/match", "/print", "/print-direct", "/print-file/select-dialog", "/print-file", "/print/queue", "/print/cancel", "/devmode/profiles", "/devmode/profiles/save", "/devmode/profiles/apply", "/devmode/profiles/delete", "/update/status", "/update/apply" },
             printMethod = _printJobService.PrintMethod,
             sumatraPdf = _printJobService.SumatraPdfPath is not null,
             sumatraPdfPath = _printJobService.SumatraPdfPath ?? "",
@@ -1201,6 +1232,28 @@ public sealed class LocalApiServer : IDisposable
         var headerBytes = Encoding.ASCII.GetBytes(builder.ToString());
         await stream.WriteAsync(headerBytes, cancellationToken);
         await stream.WriteAsync(bodyBytes, cancellationToken);
+    }
+
+    private static async Task WriteFileAsync(
+        Stream stream,
+        string fullPath,
+        string contentType,
+        string? origin,
+        CancellationToken cancellationToken)
+    {
+        await using var fileStream = File.OpenRead(fullPath);
+        var fileName = Path.GetFileName(fullPath);
+        var builder = new StringBuilder();
+        builder.AppendLine("HTTP/1.1 200 OK");
+        AppendBaseHeaders(builder, origin);
+        builder.AppendLine($"Content-Type: {contentType}");
+        builder.AppendLine($"Content-Length: {fileStream.Length}");
+        builder.AppendLine($"Content-Disposition: inline; filename=\"{fileName.Replace("\"", "")}\"");
+        builder.AppendLine();
+
+        var headerBytes = Encoding.ASCII.GetBytes(builder.ToString());
+        await stream.WriteAsync(headerBytes, cancellationToken);
+        await fileStream.CopyToAsync(stream, cancellationToken);
     }
 
     private static void AppendBaseHeaders(StringBuilder builder, string? origin)

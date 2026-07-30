@@ -292,17 +292,7 @@ public sealed class PrintJobService
 
     public PrintJob? PrintDirect(string rootName, string relativePath, string printerName, int copies)
     {
-        var roots = _pdfCatalogService.GetRoots();
-        var root = roots.FirstOrDefault(r => string.Equals(r.Name, rootName, StringComparison.OrdinalIgnoreCase));
-        if (root is null || !root.Exists)
-            throw new InvalidOperationException($"Carpeta '{rootName}' no encontrada o no existe.");
-
-        var fullPath = Path.GetFullPath(Path.Combine(root.Path, relativePath));
-        if (!fullPath.StartsWith(root.Path, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Ruta de PDF fuera de carpeta autorizada.");
-
-        if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"PDF no encontrado: {fullPath}");
+        var fullPath = _pdfCatalogService.ResolvePdfFullPath(rootName, relativePath);
 
         var actualPrinter = printerName;
         if (string.IsNullOrWhiteSpace(actualPrinter))

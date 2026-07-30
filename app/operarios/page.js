@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import SafeImage from '@/components/SafeImage';
+import PdfFloatingViewer from '@/components/PdfFloatingViewer';
 import {
   DEFAULT_BRIDGE_URL,
   getStoredBridgeConfig,
@@ -22,7 +23,7 @@ import {
 } from '@/lib/print-bridge-client';
 import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
-const LATEST_BRIDGE_VERSION = '1.6.11';
+const LATEST_BRIDGE_VERSION = '1.6.12';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
 const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
@@ -263,6 +264,7 @@ export default function OperariosPage() {
   const [bridgeUpdating, setBridgeUpdating] = useState(false);
   const [updateLog, setUpdateLog] = useState([]);
   const [showUpdatePanel, setShowUpdatePanel] = useState(false);
+  const [pdfViewerTarget, setPdfViewerTarget] = useState(null);
   const [printingTasks, setPrintingTasks] = useState({});
   const [printQtyOverrides, setPrintQtyOverrides] = useState({});
   const [printFeedback, setPrintFeedback] = useState({});
@@ -1269,8 +1271,9 @@ export default function OperariosPage() {
                               <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayDesignName}</span>
                               {orderPdfStatus.state === 'ready' && (
                                 <span
-                                  title={hasPdf ? `${pdfMatch.rootName}\\${pdfMatch.relativePath}` : 'No se encontró PDF local'}
-                                  style={{ flexShrink: 0, border: '1px solid', borderColor: hasPdf ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: hasPdf ? '#e8f7ef' : '#fff5f5', color: hasPdf ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                  title={hasPdf ? `${pdfMatch.rootName}\\${pdfMatch.relativePath} — click para ver` : 'No se encontró PDF local'}
+                                  onClick={hasPdf ? (e => { e.stopPropagation(); setPdfViewerTarget({ rootName: pdfMatch.rootName, relativePath: pdfMatch.relativePath, fileName: pdfMatch.fileName }); }) : undefined}
+                                  style={{ flexShrink: 0, border: '1px solid', borderColor: hasPdf ? '#b7ebcf' : '#fecaca', borderRadius: 999, padding: '1px 6px', background: hasPdf ? '#e8f7ef' : '#fff5f5', color: hasPdf ? '#15803d' : '#b91c1c', fontSize: 9, fontWeight: 900, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: hasPdf ? 'pointer' : 'default' }}
                                 >
                                   {hasPdf ? pdfMatch.fileName : '—'}
                                 </span>
@@ -1420,7 +1423,13 @@ export default function OperariosPage() {
                   return (
                     <div key={key} style={{ display: 'grid', gridTemplateColumns: '26px 1fr 32px 50px', gap: 3, padding: '4px 7px', borderBottom: '1px solid #f0f2f8', alignItems: 'center' }}>
                       <DesignThumb designId={String(pdf.id || '')} design={pdf.id ? liveDesignsById[String(pdf.id)] : null} name={pdf.name} size={22} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={pdf.fileName}>{label}</span>
+                      <span
+                        onClick={() => setPdfViewerTarget({ rootName: pdf.rootName, relativePath: pdf.relativePath, fileName: pdf.fileName })}
+                        style={{ fontSize: 11, fontWeight: 700, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, cursor: 'pointer' }}
+                        title={`${pdf.fileName} — click para ver`}
+                      >
+                        {label}
+                      </span>
                       <input type="number" min={1} max={99} value={qty}
                         onChange={e => setPrintQtyOverrides(prev => ({ ...prev, [`q_${key}`]: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
                         onFocus={e => e.target.select()}
@@ -1458,6 +1467,15 @@ export default function OperariosPage() {
           );
         })()}
       </div>
+
+      {pdfViewerTarget && (
+        <PdfFloatingViewer
+          rootName={pdfViewerTarget.rootName}
+          relativePath={pdfViewerTarget.relativePath}
+          fileName={pdfViewerTarget.fileName}
+          onClose={() => setPdfViewerTarget(null)}
+        />
+      )}
     </main>
   );
 }
