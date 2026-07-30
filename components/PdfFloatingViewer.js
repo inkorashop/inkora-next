@@ -214,13 +214,13 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(17,32,64,0.55)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         overflowY: 'auto',
       }}
     >
       <div
         style={{
-          width: '90vw', height: '90vh', maxWidth: 1100, minHeight: 0, background: 'white', borderRadius: 16,
+          width: '80vw', height: '75vh', maxWidth: 1100, maxHeight: 760, minHeight: 0, background: 'white', borderRadius: 16,
           border: '1.5px solid #dde1ef', boxShadow: '0 8px 40px rgba(27,47,94,0.18)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
           fontFamily: 'Barlow, sans-serif', margin: 'auto', flexShrink: 0,
