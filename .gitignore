@@ -35,6 +35,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# worker de pdfjs-dist, se copia solo en cada npm install (scripts/copy-pdf-worker.js)
+/public/pdfjs/
+
 # android-app (Gradle/Android Studio build artifacts + firma)
 android-app/.gradle/
 android-app/.idea/

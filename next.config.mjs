@@ -12,6 +12,12 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '20mb',
     },
+    // pdfjs-dist es ESM puro (usa import.meta.url para resolver su worker) y
+    // solo se usa desde un componente cliente (PdfFloatingViewer), nunca en
+    // el server. Sin esto, el compilador de Next igual intenta analizar el
+    // paquete para el grafo de Server Components y falla con "import.meta
+    // cannot be used outside module code" al no poder emitir ESM ahi.
+    serverComponentsExternalPackages: ['pdfjs-dist'],
   },
 };
 
