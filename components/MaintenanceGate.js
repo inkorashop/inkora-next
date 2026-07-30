@@ -6,9 +6,10 @@ import { supabase } from '@/lib/supabase';
 import { FORCE_REFRESH_CHANNEL, FORCE_REFRESH_EVENT } from '@/lib/force-refresh';
 import ServiceUnavailable from './ServiceUnavailable';
 
-// Rutas de uso interno: nunca se bloquean ni muestran el aviso de
-// mantenimiento, para que el staff pueda seguir trabajando.
-const EXEMPT_PREFIXES = ['/admin', '/operarios', '/produccion'];
+// Rutas de uso interno (para que el staff pueda seguir trabajando) y las de
+// magic link de invitacion (para que un login por link nunca quede tapado
+// por el aviso de mantenimiento) nunca se bloquean.
+const EXEMPT_PREFIXES = ['/admin', '/operarios', '/produccion', '/i', '/invite'];
 
 const POLL_MS = 15000;
 const SESSION_VISITED_KEY = 'inkora_session_active';
