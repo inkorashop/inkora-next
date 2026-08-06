@@ -6,6 +6,15 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-08-06 16:32 -03:00 - Claude Code
+
+- Objetivo: Ajustar el texto del modal de confirmacion de "Borrar registro" (turno anterior) y responder si volver a registrarse con el mismo email despues de un borrado recupera los datos del usuario.
+- Cambios: `app/admin/page.js` linea ~8606, mensaje del modal: se unio el primer parrafo (antes partido en dos por un `\n\n`) y se cambio el cierre de "Si hace falta, se puede reactivar la cuenta mas adelante volviendo a invitarla con el mismo email" por "Se puede volver a hacer el registro en cualquier momento.", pedido explicito del usuario.
+- Verificacion: `npm.cmd run build` OK sin errores.
+- Publicacion/Deploy: Commit `5185fe8` pusheado a `main`. Deploy produccion READY: `dpl_BsmRbh5mjSN8wWYMPemePMnepKU1`, URL `https://inkora-next-5aeokhfmb-inkorashop-7809s-projects.vercel.app`, aliased a `https://www.inkora.com.ar`.
+- Auditoria: Se releyo `git status --short` antes de tocar nada; solo estaba `app/admin/page.js` de esta tarea mas los untracked ajenos de siempre. Se confirmo por lectura de `app/api/register/route.js:49-93` que re-registrarse con el mismo email de un perfil con `deleted_at` seteado reutiliza el mismo `id` de `auth.users`/`profiles` (no crea cuenta nueva), asi que pedidos, disenos y demas datos ligados a ese `id` vuelven a quedar visibles automaticamente. Si el perfil no esta borrado, el registro duplicado se sigue rechazando.
+- Pendiente/Riesgos: Ninguno nuevo. Mismo alcance y mismas limitaciones que la entrada anterior (no se probo en navegador contra Supabase real).
+
 ## 2026-08-06 16:25 -03:00 - Claude Code
 
 - Objetivo: En Admin > Usuarios, permitir que el admin cambie la contraseña de cuentas autoregistradas (email+contraseña propia), no solo las creadas por invitacion admin. Ademas, el boton "Eliminar" (soft-delete de acceso) no daba ninguna respuesta visible al hacer click; pedido de renombrarlo a "Borrar registro" y agregar confirmacion con explicacion de que no borra datos.
