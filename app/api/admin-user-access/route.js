@@ -78,10 +78,11 @@ export async function PATCH(req) {
       if (profile.deleted_at) {
         return NextResponse.json({ error: 'No se puede cambiar la contraseña de un registro eliminado.' }, { status: 400 });
       }
-      if (profile.registration_source !== 'admin_invite') {
-        return NextResponse.json({ error: 'Solo se puede cambiar desde admin la contraseña de usuarios creados por admin.' }, { status: 400 });
-      }
-      if (profile.password_changed_by_user === true) {
+      // Para cuentas creadas por invitación de admin, una vez que el usuario
+      // se apropia de su contraseña dejamos de poder pisarla sin avisarle.
+      // Las cuentas autoregistradas no tienen esa protección: el admin
+      // siempre puede resetear la contraseña (ej. usuario que la olvidó).
+      if (profile.registration_source === 'admin_invite' && profile.password_changed_by_user === true) {
         return NextResponse.json({ error: 'Este usuario ya cambió su contraseña.' }, { status: 400 });
       }
 

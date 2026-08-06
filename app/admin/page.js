@@ -5332,7 +5332,11 @@ useEffect(() => {
   }
 
   function canSetAdminPassword(user) {
-    return user?.registration_source === 'admin_invite' && user?.password_changed_by_user !== true && !user?.deleted_at;
+    if (!user?.id || user?.deleted_at) return false;
+    // Cuentas invitadas por admin: solo hasta que el usuario se apropie de
+    // su contraseña. Cuentas autoregistradas: siempre (reset por olvido, etc).
+    if (user?.registration_source === 'admin_invite') return user?.password_changed_by_user !== true;
+    return true;
   }
 
   function updateAdminPasswordDraft(userId, value) {
@@ -8385,12 +8389,29 @@ useEffect(() => {
                       </div>
                       {(() => {
                         const src = u.registration_source;
-                        if (u.password_changed_by_user && src !== 'admin_invite') return (
+                        // El usuario cambió su contraseña por su cuenta: ya no
+                        // tiene sentido mostrar la última que le seteó el admin.
+                        if (u.password_changed_by_user) return (
                           <div style={{display:'inline-flex', alignItems:'center', gap:6, background:'#ecfdf3', borderRadius:5, padding:'2px 8px', marginTop:3}}>
                             <span style={{fontSize:10, fontWeight:800, color:'#15803d'}}>Contraseña cambiada</span>
                             {u.password_changed_at && <span style={{fontSize:9, fontWeight:700, color:'#6b7280'}}>{formatAdminDateTime(u.password_changed_at)}</span>}
                           </div>
                         );
+                        // El admin le seteó una contraseña (invitado o autoregistrado)
+                        // y el usuario todavía no la cambió: mostrarla para poder copiarla.
+                        if (u.admin_set_password) {
+                          const isRevealed = revealedPasswords[u.id];
+                          return (
+                            <div
+                              style={{display:'inline-flex', alignItems:'center', gap:6, background:'#e8eef9', borderRadius:5, padding:'2px 8px', marginTop:3, cursor:'pointer', userSelect:'none'}}
+                              onClick={e => { e.stopPropagation(); setRevealedPasswords(prev => ({...prev, [u.id]: !prev[u.id]})); }}
+                            >
+                              <span style={{fontSize:10, fontWeight:600, color:'#1B2F5E'}}>Contraseña:</span>
+                              <span style={{fontSize:10, fontWeight:700, color:'#2D6BE4', fontFamily:'monospace'}}>{isRevealed ? u.admin_set_password : '••••••'}</span>
+                              <span style={{fontSize:9, color:'#5a6380'}}>{isRevealed ? '[ocultar]' : '[ver]'}</span>
+                            </div>
+                          );
+                        }
                         if (src === 'self_google') return (
                           <div style={{display:'inline-flex', alignItems:'center', gap:4, background:'#e8f0fe', borderRadius:5, padding:'2px 8px', marginTop:3}}>
                             <span style={{fontSize:10, fontWeight:700, color:'#4285F4'}}>Google</span>
@@ -8401,27 +8422,6 @@ useEffect(() => {
                             <span style={{fontSize:10, fontWeight:600, color:'#9aa3bc'}}>Registro propio</span>
                           </div>
                         );
-                        if (src === 'admin_invite') {
-                          if (u.password_changed_by_user) return (
-                            <div style={{display:'inline-flex', alignItems:'center', gap:6, background:'#ecfdf3', borderRadius:5, padding:'2px 8px', marginTop:3}}>
-                              <span style={{fontSize:10, fontWeight:800, color:'#15803d'}}>Contraseña cambiada</span>
-                              {u.password_changed_at && <span style={{fontSize:9, fontWeight:700, color:'#6b7280'}}>{formatAdminDateTime(u.password_changed_at)}</span>}
-                            </div>
-                          );
-                          if (u.admin_set_password) {
-                            const isRevealed = revealedPasswords[u.id];
-                            return (
-                              <div
-                                style={{display:'inline-flex', alignItems:'center', gap:6, background:'#e8eef9', borderRadius:5, padding:'2px 8px', marginTop:3, cursor:'pointer', userSelect:'none'}}
-                                onClick={e => { e.stopPropagation(); setRevealedPasswords(prev => ({...prev, [u.id]: !prev[u.id]})); }}
-                              >
-                                <span style={{fontSize:10, fontWeight:600, color:'#1B2F5E'}}>Contraseña:</span>
-                                <span style={{fontSize:10, fontWeight:700, color:'#2D6BE4', fontFamily:'monospace'}}>{isRevealed ? u.admin_set_password : '••••••'}</span>
-                                <span style={{fontSize:9, color:'#5a6380'}}>{isRevealed ? '[ocultar]' : '[ver]'}</span>
-                              </div>
-                            );
-                          }
-                        }
                         return null;
                       })()}
 
@@ -8550,7 +8550,10 @@ useEffect(() => {
                             <button
                               onClick={() => saveAdminCreatedPassword(u)}
                               disabled={savingAdminPasswordIds.has(u.id) || !adminPasswordDrafts[u.id]?.trim() || hasBulkUserSelection}
-                              title="Cambiar la contraseña mientras el usuario todavía no la cambió."
+                              title={u.registration_source === 'admin_invite'
+                                ? 'Cambiar la contraseña mientras el usuario todavía no la cambió.'
+                                : 'Establecer una contraseña nueva para este usuario (por ejemplo, si la olvidó).'
+                              }
                               style={{
                                 border:'1.5px solid #bbf7d0',
                                 borderRadius:6,
@@ -8597,21 +8600,42 @@ useEffect(() => {
                         )}
 
                         {isUserAccessDisableable(u) && !deletingUserIds.has(u.id) && !hasBulkUserSelection ? (
-                          <HoldButton
-                            label="Eliminar"
-                            holdingLabel="Eliminando..."
-                            doneLabel="✓ Eliminado"
-                            variant="danger"
-                            minWidth={108}
-                            onConfirm={() => disableUserAccess(u)}
-                          />
+                          <button
+                            type="button"
+                            onClick={() => askConfirm(
+                              `Esto borra el registro de acceso de "${u.name || u.email}": no va a poder volver a iniciar sesión con este email y va a quedar marcado como eliminado en el panel.\n\nNo se borran sus datos: pedidos, diseños, precios especiales, historial y configuración quedan intactos. Si hace falta, se puede reactivar la cuenta más adelante volviendo a invitarla con el mismo email.`,
+                              () => disableUserAccess(u),
+                              {
+                                title: '¿Borrar registro de acceso?',
+                                confirmLabel: 'Borrar registro',
+                                tone: 'danger',
+                              }
+                            )}
+                            title="Borra el acceso del usuario, no sus datos."
+                            style={{
+                              border:'none',
+                              borderRadius:10,
+                              padding:'8px 20px',
+                              fontSize:13,
+                              fontWeight:700,
+                              fontFamily:'Barlow, sans-serif',
+                              cursor:'pointer',
+                              color:'white',
+                              background:'linear-gradient(135deg, #e53e3e, #c53030)',
+                              boxShadow:'0 4px 12px rgba(229,62,62,0.4)',
+                              minWidth:108,
+                              whiteSpace:'nowrap',
+                            }}
+                          >
+                            Borrar registro
+                          </button>
                         ) : (
                           <button
                             type="button"
                             disabled
                             title={u.deleted_at
                               ? 'Este registro ya fue eliminado. Se conservan datos, historial y configuración.'
-                              : hasBulkUserSelection ? 'No disponible con selección múltiple.' : 'Eliminando acceso...'
+                              : hasBulkUserSelection ? 'No disponible con selección múltiple.' : 'Borrando registro...'
                             }
                             style={{
                               border:'1.5px solid #dde1ef',
@@ -8626,7 +8650,7 @@ useEffect(() => {
                               opacity:0.75,
                             }}
                           >
-                            {u.deleted_at ? 'Registro eliminado' : hasBulkUserSelection ? 'No disponible' : 'Eliminando...'}
+                            {u.deleted_at ? 'Registro eliminado' : hasBulkUserSelection ? 'No disponible' : 'Borrando...'}
                           </button>
                         )}
                       </div>
@@ -10812,9 +10836,9 @@ useEffect(() => {
           style={{position:'fixed', inset:0, background:'rgba(17,32,64,0.55)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:20}}
           onClick={e => { if (e.target === e.currentTarget) closeConfirm(); }}
         >
-          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:380, display:'flex', flexDirection:'column', gap:16}}>
+          <div style={{background:'white', borderRadius:16, border:'1.5px solid #dde1ef', boxShadow:'0 8px 40px rgba(27,47,94,0.18)', padding:'28px 28px 24px', width:'100%', maxWidth:420, display:'flex', flexDirection:'column', gap:16}}>
             <div style={{fontSize:16, fontWeight:700, color:'#1B2F5E'}}>{confirmModal.title}</div>
-            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5}}>{confirmModal.message}</div>
+            <div style={{fontSize:13, color:'#5a6380', lineHeight:1.5, whiteSpace:'pre-line'}}>{confirmModal.message}</div>
             <div style={{display:'flex', gap:10, justifyContent:'flex-end', marginTop:4}}>
               <button style={{background:'white', border:'1.5px solid #dde1ef', color:'#5a6380', borderRadius:10, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer'}} onClick={closeConfirm}>Cancelar</button>
               {confirmModal.requireHold ? (
