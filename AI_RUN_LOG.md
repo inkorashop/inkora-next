@@ -6,6 +6,15 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-08-06 16:25 -03:00 - Claude Code
+
+- Objetivo: En Admin > Usuarios, permitir que el admin cambie la contraseña de cuentas autoregistradas (email+contraseña propia), no solo las creadas por invitacion admin. Ademas, el boton "Eliminar" (soft-delete de acceso) no daba ninguna respuesta visible al hacer click; pedido de renombrarlo a "Borrar registro" y agregar confirmacion con explicacion de que no borra datos.
+- Cambios: `app/api/admin-user-access/route.js` en la accion `set_password` saca el bloqueo `registration_source !== 'admin_invite'`; solo mantiene el bloqueo de "ya cambio su contraseña" para cuentas `admin_invite`. `app/admin/page.js`: `canSetAdminPassword` replica esa misma regla; el bloque que muestra el chip de contraseña seteada por admin (ver/ocultar) ya no esta limitado a `admin_invite`, aplica a cualquier `admin_set_password` presente; el boton "Eliminar" (que usaba `HoldButton`, mantener presionado ~700ms) se reemplazo por un boton "Borrar registro" que abre el modal de confirmacion existente (`askConfirm`) con texto explicando que solo se borra el acceso (login), no los datos (pedidos, disenos, precios, historial quedan intactos) y que la cuenta se puede reactivar reinvitando el mismo email.
+- Verificacion: `npx next build` OK sin errores (dos veces, antes y despues del commit). `git diff --stat` confirmado acotado a los dos archivos tocados.
+- Publicacion/Deploy: Commit `b64c4e9` pusheado a `main`. Deploy produccion READY: `dpl_8y18LVHMPxULRgS8uFY7wkuSYsSp`, URL `https://inkora-next-r4bwsgok6-inkorashop-7809s-projects.vercel.app`, aliased a `https://www.inkora.com.ar`.
+- Auditoria: Se leyeron `AGENTS.md`, `CONTEXT.md`, el inicio de `AI_RUN_LOG.md` y `git status --short`. El arbol solo tenia los dos archivos de esta tarea modificados mas los untracked preexistentes `.inkora/`, `Inkora.PrintBridge.zip` y `Messi 2.3mf`, que no se tocaron.
+- Pendiente/Riesgos: No se probo manualmente en navegador contra Supabase real (no hay acceso interactivo desde este entorno); se valido por lectura de codigo y build. El trigger SQL `sql/admin_notifications.sql` que marca `password_changed_by_user = true` ya era generico (no dependia de `admin_invite`), por lo que no hizo falta tocar SQL. La UI de "Aviso contraseña" (forzar banner de cambio de clave al usuario) sigue limitada a cuentas `admin_invite`, no se extendio a autoregistradas porque no fue parte del pedido.
+
 ## 2026-07-27 18:14 -03:00 - ChatGPT Codex
 
 - Objetivo: Corregir la interpretacion de la regla "deploy siempre": debe ser un unico deploy al cierre de una run completa, no despues de cada paso, y dejarlo documentado. Responder tambien si conviene duplicar reglas globales en cada proyecto.
