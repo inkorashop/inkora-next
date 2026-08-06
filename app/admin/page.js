@@ -7462,6 +7462,7 @@ useEffect(() => {
                     <div>
                       <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
                         <input
+                          size={Math.max(8, (d.name || '').length + 1)}
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
@@ -7471,7 +7472,7 @@ useEffect(() => {
                             padding: '2px 6px',
                             fontFamily: 'Barlow, sans-serif',
                             background: 'transparent',
-                            flex: '0 1 140px',
+                            flexShrink: 0,
                             minWidth: 70,
                           }}
                           value={d.name}
@@ -13303,7 +13304,7 @@ const styles = {
   btnWarning: { background: '#fff8e1', color: '#7a5800', border: '1.5px solid #f6c200', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   editBtn: { background: '#e8eef9', color: '#2D6BE4', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
   iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center', borderRadius: 5 },
-  designRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eef0f6' },
+  designRow: { display: 'flex', flexWrap: 'wrap', rowGap: 4, justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #eef0f6' },
   designInfo: { display: 'flex', alignItems: 'center', gap: 10 },
   designThumb: { width: 36, height: 36, objectFit: 'contain', background: '#f0f2f8', borderRadius: 6, border: '1px solid #dde1ef' },
   designName: { fontSize: 13, fontWeight: 600, color: '#2d3352' },
