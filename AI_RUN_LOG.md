@@ -6,6 +6,15 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-08-06 16:47 -03:00 - Claude Code
+
+- Objetivo: En Admin > Disenos, los nombres largos (ej. "Seleccion Argentina") quedaban cortados dentro del input de nombre sin ninguna indicacion visual (no hay "..."), aunque a simple vista no se notaba. Pedido: que el nombre nunca se corte, mantenimiento la alineacion actual del resto de la fila (tag de producto, categorias, botones de accion a la derecha).
+- Cambios: `app/admin/page.js`. El input de nombre (dentro del render de la lista de disenos) tenia `flex: '0 1 140px'` (se achicaba con flex-shrink permitido); se reemplazo por `flexShrink: 0` mas el atributo HTML `size={Math.max(8, nombre.length + 1)}`, que ajusta el ancho del input al largo real del texto en todo momento, incluso mientras se edita. `styles.designRow` (usado tambien por el override de dark mode via spread) ahora tiene `flexWrap: 'wrap'` y `rowGap: 4`: si algun nombre es excepcionalmente largo y no entra junto a los botones de accion en una sola linea, esos botones bajan a una segunda linea en vez de comprimirse o quedar desalineados con las demas filas; en el caso normal (la gran mayoria de nombres) el layout se ve identico a como estaba.
+- Verificacion: `npm.cmd run build` OK sin errores.
+- Publicacion/Deploy: Commit `095ad17` pusheado a `main`. Deploy produccion READY: `dpl_DW5MynKnZNddMDgkvNdf8R5qDYLZ`, URL `https://inkora-next-jn3n3aliz-inkorashop-7809s-projects.vercel.app`, aliased a `https://www.inkora.com.ar`.
+- Auditoria: Se reviso `git status --short` antes de tocar nada; solo `app/admin/page.js` de esta tarea mas los untracked ajenos de siempre (`.inkora/`, `Inkora.PrintBridge.zip`, `Messi 2.3mf`), que no se tocaron.
+- Pendiente/Riesgos: No se probo visualmente en navegador contra datos reales de Supabase (sin acceso interactivo desde este entorno); se valido por lectura de codigo y build. El atributo `size` es una aproximacion basada en cantidad de caracteres (no en el ancho real de fuente proporcional Barlow), por lo que el input puede quedar levemente mas ancho de lo estrictamente necesario para nombres con muchas letras anchas (ej. mayusculas); no deberia volver a cortar texto en ningun caso porque `flexShrink:0` impide que se achique por debajo de ese calculo.
+
 ## 2026-08-06 16:32 -03:00 - Claude Code
 
 - Objetivo: Ajustar el texto del modal de confirmacion de "Borrar registro" (turno anterior) y responder si volver a registrarse con el mismo email despues de un borrado recupera los datos del usuario.
