@@ -27,7 +27,7 @@ function loadPdfjs() {
 }
 
 const MIN_SCALE = 0.4;
-const MAX_SCALE = 3;
+const MAX_SCALE = 6;
 const DEFAULT_SCALE = 1.25;
 const ZOOM_STEP = 0.15;
 
@@ -278,7 +278,7 @@ export default function PdfFloatingViewer({ rootName, relativePath, fileName, on
                 <canvas
                   key={i}
                   ref={el => { canvasRefs.current[i] = el; }}
-                  style={{ background: 'white', boxShadow: '0 2px 14px rgba(27,47,94,0.16)', maxWidth: '100%' }}
+                  style={{ background: 'white', boxShadow: '0 2px 14px rgba(27,47,94,0.16)' }}
                 />
               ))}
             </div>
