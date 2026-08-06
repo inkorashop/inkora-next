@@ -8603,7 +8603,7 @@ useEffect(() => {
                           <button
                             type="button"
                             onClick={() => askConfirm(
-                              `Esto borra el registro de acceso de "${u.name || u.email}": no va a poder volver a iniciar sesión con este email y va a quedar marcado como eliminado en el panel.\n\nNo se borran sus datos: pedidos, diseños, precios especiales, historial y configuración quedan intactos. Si hace falta, se puede reactivar la cuenta más adelante volviendo a invitarla con el mismo email.`,
+                              `Esto borra el registro de acceso de "${u.name || u.email}": no va a poder volver a iniciar sesión con este email y va a quedar marcado como eliminado en el panel. No se borran sus datos: pedidos, diseños, precios especiales, historial y configuración quedan intactos.\n\nSe puede volver a hacer el registro en cualquier momento.`,
                               () => disableUserAccess(u),
                               {
                                 title: '¿Borrar registro de acceso?',
