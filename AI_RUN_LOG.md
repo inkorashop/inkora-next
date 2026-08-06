@@ -6,6 +6,15 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-08-06 16:54 -03:00 - Claude Code
+
+- Objetivo: En el visor propio de PDF (`components/PdfFloatingViewer.js`, usado en Admin/Produccion/Operarios), el usuario reporto que el zoom quedaba visualmente trabado a partir de cierto punto (240%) aunque el numero del porcentaje seguia subiendo. Pedido: permitir mas zoom real.
+- Cambios: `components/PdfFloatingViewer.js`. El `<canvas>` de cada pagina tenia `maxWidth:'100%'`, que hacia que el navegador reescalara visualmente el canvas para que nunca superara el ancho del contenedor (el contenedor ya tiene `overflow:'auto'` pensado justo para scrollear cuando el PDF zoomeado no entra, pero el maxWidth lo anulaba). Se saco ese `maxWidth`. De paso se subio `MAX_SCALE` de 3 (300%) a 6 (600%), tope que antes no se podia aprovechar por este mismo bug.
+- Verificacion: `npm.cmd run build` OK sin errores.
+- Publicacion/Deploy: Commit `ca0235c` pusheado a `main`. Deploy produccion READY: `dpl_DK6u9ayEAhZpa94Shtkk64nyPp8g`, URL `https://inkora-next-2lj0s3y4l-inkorashop-7809s-projects.vercel.app`, aliased a `https://www.inkora.com.ar`.
+- Auditoria: Se reviso `git status --short` antes de tocar nada; solo `components/PdfFloatingViewer.js` de esta tarea mas los untracked ajenos de siempre (`.inkora/`, `Inkora.PrintBridge.zip`, `Messi 2.3mf`). Se confirmo que `ProductionTab.js`, `app/operarios/page.js` y `app/admin/page.js` importan el mismo componente compartido (no hay una copia duplicada del visor), asi que el fix aplica en los tres lugares.
+- Pendiente/Riesgos: No se probo visualmente en navegador. Con el `maxWidth` sacado, en zooms altos el PDF puede quedar centrado con el contenido excedente repartido a ambos lados (el div interno tiene `alignItems:'center'`), por lo que puede hacer falta scrollear tanto a la izquierda como a la derecha para ver los bordes; es el comportamiento esperable de un visor con scroll y no se considero necesario cambiarlo.
+
 ## 2026-08-06 16:47 -03:00 - Claude Code
 
 - Objetivo: En Admin > Disenos, los nombres largos (ej. "Seleccion Argentina") quedaban cortados dentro del input de nombre sin ninguna indicacion visual (no hay "..."), aunque a simple vista no se notaba. Pedido: que el nombre nunca se corte, mantenimiento la alineacion actual del resto de la fila (tag de producto, categorias, botones de accion a la derecha).
