@@ -51,6 +51,7 @@ Prompt corto recomendado para el usuario:
   - vercel.cmd deploy --prod --yes
 - Si el cambio incluye SQL, ejecutar primero o coordinar la ejecucion del script correspondiente en Supabase SQL Editor; el deploy de Vercel no aplica migraciones SQL.
 - Si el cambio genera un instalador, ZIP tecnico o release del Bridge, publicarlo una vez al cierre de la run, junto con el deploy final si aplica.
+- El usuario confirmo explicitamente (2026-08-07) que no pide confirmacion antes de este deploy/release final: el prueba los cambios despues de que quedan publicados, no antes. Para este proyecto, al cerrar una run con cambios deployables, hacer commit + push + (si aplica) bump de version + release del Bridge sin pausar a pedir permiso para ese paso puntual. Esto no aplica a acciones fuera de este flujo de rutina (force-push, borrar datos, tocar Supabase/ERP productivo, etc.), que siguen requiriendo confirmacion.
 
 ## Tablas principales Supabase
 - products
