@@ -20,6 +20,26 @@ public sealed class PrintJobService
     private readonly List<string> _sumatraProbePaths = [];
     private bool _selfHealAttempted;
 
+    // Un trabajo por impresora a la vez mientras se modifica el DEVMODE compartido
+    // (ver PrintWithSumatra). Sin esto, dos impresiones concurrentes a la misma
+    // impresora pueden pisarse el DEVMODE y una termina imprimiendo con la
+    // resolucion/config equivocada.
+    private readonly Dictionary<string, SemaphoreSlim> _printerLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _printerLocksGate = new();
+
+    private SemaphoreSlim GetPrinterLock(string printerName)
+    {
+        lock (_printerLocksGate)
+        {
+            if (!_printerLocks.TryGetValue(printerName, out var printerLock))
+            {
+                printerLock = new SemaphoreSlim(1, 1);
+                _printerLocks[printerName] = printerLock;
+            }
+            return printerLock;
+        }
+    }
+
     public string? SumatraPdfPath { get; private set; }
     public IReadOnlyList<string> SumatraProbePaths => _sumatraProbePaths;
     public string PrintMethod => SumatraPdfPath is not null ? "SumatraPDF" : "shell-printto-single-copy";
@@ -360,85 +380,116 @@ public sealed class PrintJobService
 
     private void PrintWithSumatra(PrintJob job)
     {
-        // Copias tiene prioridad sobre presets del driver. Se aplica por Sumatra
-        // y tambien en DEVMODE para drivers que leen la cantidad desde ahi.
-        byte[]? origDevMode = null;
-        var devModeModified = false;
-        try
+        // El DEVMODE default de la impresora es un recurso compartido a nivel Windows
+        // (no por trabajo). Mientras esta modificado para forzar dmCopies, ningun otro
+        // trabajo de esta misma impresora puede tocarlo o se pisan entre si y alguno
+        // termina imprimiendo con una resolucion/config que no es la suya. Por eso se
+        // toma un turno por impresora antes de tocar el DEVMODE, y se libera apenas se
+        // restaura (no hace falta mantenerlo mientras se espera la confirmacion del
+        // spooler mas abajo).
+        var printerLock = GetPrinterLock(job.PrinterName);
+        printerLock.Wait();
+        var printerLockReleased = false;
+        void ReleasePrinterLockOnce()
         {
-            origDevMode = _devModeService.ReadDefaultDevModeBytes(job.PrinterName);
-            var modified = SetDevModeCopies(origDevMode, job.Copies);
-            _devModeService.ApplyDevModeBytes(job.PrinterName, modified);
-            devModeModified = true;
-            _logService.Info($"DEVMODE dmCopies={job.Copies} aplicado para {job.PrinterName}");
+            if (printerLockReleased) return;
+            printerLockReleased = true;
+            printerLock.Release();
         }
-        catch (Exception ex)
-        {
-            _logService.Info($"No se pudo modificar DEVMODE: {ex.Message}.");
-        }
-
-        // Snapshot de jobs ANTES de enviar a SumatraPDF para detectar el nuevo job
-        var preJobIds = GetSpoolerJobIds(job.PrinterName);
 
         try
         {
-            // noscale: el PDF siempre se imprime a su tamaño real. Sin esto,
-            // SumatraPDF usa "shrink" por default (ver PrinterDefaults en
-            // SumatraPDF-settings.txt) y achica la pagina entera para que
-            // entre en el area imprimible real de la impresora si esta no
-            // tiene "sin bordes" activado - imperceptible en la mayoria de
-            // los diseños, pero notorio en los que tienen la linea de
-            // variante de INKORA PDF Namer pegada al borde de la hoja.
-            var printSettings = $"{Math.Clamp(job.Copies, 1, 999)}x,noscale";
-            var args = $"-print-to \"{job.PrinterName}\" -print-settings \"{printSettings}\" -silent \"{job.PdfFullPath}\"";
-            var psi = new ProcessStartInfo
+            // Copias tiene prioridad sobre presets del driver. Se aplica por Sumatra
+            // y tambien en DEVMODE para drivers que leen la cantidad desde ahi.
+            byte[]? origDevMode = null;
+            var devModeModified = false;
+            try
             {
-                FileName = SumatraPdfPath!,
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            using var process = Process.Start(psi);
-            process?.WaitForExit(60000);
-
-            if (process is not null && !process.HasExited)
+                origDevMode = _devModeService.ReadDefaultDevModeBytes(job.PrinterName);
+                var modified = SetDevModeCopies(origDevMode, job.Copies);
+                _devModeService.ApplyDevModeBytes(job.PrinterName, modified);
+                devModeModified = true;
+                _logService.Info($"DEVMODE dmCopies={job.Copies} aplicado para {job.PrinterName}");
+            }
+            catch (Exception ex)
             {
-                _logService.Error($"SumatraPDF timeout para {job.Id}. Matando proceso.");
-                process.Kill();
-                throw new TimeoutException("SumatraPDF no termino en 60 segundos.");
+                _logService.Info($"No se pudo modificar DEVMODE: {ex.Message}.");
             }
 
-            if (process?.ExitCode != 0)
+            // Snapshot de jobs ANTES de enviar a SumatraPDF para detectar el nuevo job
+            var preJobIds = GetSpoolerJobIds(job.PrinterName);
+
+            try
             {
-                _logService.Error($"SumatraPDF salio con codigo {process?.ExitCode} para {job.Id}.");
+                // noscale: el PDF siempre se imprime a su tamaño real. Sin esto,
+                // SumatraPDF usa "shrink" por default (ver PrinterDefaults en
+                // SumatraPDF-settings.txt) y achica la pagina entera para que
+                // entre en el area imprimible real de la impresora si esta no
+                // tiene "sin bordes" activado - imperceptible en la mayoria de
+                // los diseños, pero notorio en los que tienen la linea de
+                // variante de INKORA PDF Namer pegada al borde de la hoja.
+                var printSettings = $"{Math.Clamp(job.Copies, 1, 999)}x,noscale";
+                var args = $"-print-to \"{job.PrinterName}\" -print-settings \"{printSettings}\" -silent \"{job.PdfFullPath}\"";
+                var psi = new ProcessStartInfo
+                {
+                    FileName = SumatraPdfPath!,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+
+                using var process = Process.Start(psi);
+                process?.WaitForExit(60000);
+
+                if (process is not null && !process.HasExited)
+                {
+                    _logService.Error($"SumatraPDF timeout para {job.Id}. Matando proceso.");
+                    process.Kill();
+                    throw new TimeoutException("SumatraPDF no termino en 60 segundos.");
+                }
+
+                if (process?.ExitCode != 0)
+                {
+                    _logService.Error($"SumatraPDF salio con codigo {process?.ExitCode} para {job.Id}.");
+                }
+            }
+            finally
+            {
+                if (devModeModified && origDevMode is not null)
+                {
+                    try { _devModeService.ApplyDevModeBytes(job.PrinterName, origDevMode); }
+                    catch (Exception ex) { _logService.Info($"No se pudo restaurar DEVMODE: {ex.Message}"); }
+                }
+
+                // DEVMODE ya restaurado: liberar el turno de esta impresora aca, antes de
+                // esperar la confirmacion del spooler, para no retener al proximo trabajo
+                // mas de lo necesario.
+                ReleasePrinterLockOnce();
+
+                // Monitorear el job en el spooler para obtener hojas efectivamente impresas
+                try
+                {
+                    var postJobIds = GetSpoolerJobIds(job.PrinterName);
+                    var newJobId = postJobIds.Except(preJobIds).FirstOrDefault();
+                    if (newJobId > 0)
+                    {
+                        var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job.PrinterName, newJobId, 35_000);
+                        job.PagesPrinted = (int)pages;
+                        _logService.Info($"Spooler job {newJobId}: {pages} hojas, estado={spoolStatus}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logService.Info($"Spooler monitor: {ex.Message}");
+                }
             }
         }
         finally
         {
-            if (devModeModified && origDevMode is not null)
-            {
-                try { _devModeService.ApplyDevModeBytes(job.PrinterName, origDevMode); }
-                catch (Exception ex) { _logService.Info($"No se pudo restaurar DEVMODE: {ex.Message}"); }
-            }
-
-            // Monitorear el job en el spooler para obtener hojas efectivamente impresas
-            try
-            {
-                var postJobIds = GetSpoolerJobIds(job.PrinterName);
-                var newJobId = postJobIds.Except(preJobIds).FirstOrDefault();
-                if (newJobId > 0)
-                {
-                    var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job.PrinterName, newJobId, 35_000);
-                    job.PagesPrinted = (int)pages;
-                    _logService.Info($"Spooler job {newJobId}: {pages} hojas, estado={spoolStatus}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logService.Info($"Spooler monitor: {ex.Message}");
-            }
+            // Salvaguarda: si algo revento antes de llegar al release de arriba, igual
+            // liberar el turno para no dejar la impresora bloqueada.
+            ReleasePrinterLockOnce();
         }
     }
 
