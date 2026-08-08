@@ -23,7 +23,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
       try {
         const data = await getBridgePrintQueue(bridgeUrl, bridgeToken);
         if (!alive) return;
-        const list = data?.queue ?? data?.jobs ?? (Array.isArray(data) ? data : []);
+        const list = data?.queue?.jobs ?? data?.jobs ?? (Array.isArray(data) ? data : []);
         setJobs(Array.isArray(list) ? list : []);
         setLoading(false);
         setError('');
