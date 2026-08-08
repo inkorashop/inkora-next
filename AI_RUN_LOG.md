@@ -6,6 +6,16 @@ Si una IA abre primero esta bitacora, debe volver a `AGENTS.md`, seguir el proto
 
 Agregar cada nueva entrada arriba de todo, debajo de esta introduccion.
 
+## 2026-08-08 (hora no provista) -03:00 - Claude Code
+
+- Objetivo: El usuario reporto que la cola de impresion dentro de la web (overlay "Cola de impresion" en Produccion, no la cola nativa de Windows/Epson) siempre aparecia vacia despues de mandar a imprimir.
+- Diagnostico: El Bridge (`bridge/Inkora.PrintBridge/Services/LocalApiServer.cs` + `PrintJobService.GetQueue()`) responde `GET /print/queue` con `{ ok, queue: { total, queued, printing, done, error, ..., jobs: [...] }, timestamp }`, donde `queue` es un objeto contenedor y el array real de trabajos esta anidado en `queue.jobs`. El frontend (`components/PrintQueueOverlay.js:26`) tomaba `data?.queue` directo como si fuera el array; al ser siempre un objeto, `Array.isArray()` daba `false` y `setJobs([])` quedaba vacio sin importar cuantos trabajos hubiera. Era un fix a medias del commit `fffe8cc` (1 jul), que habia movido de `data.jobs` a `data.queue` pero nunca bajo el nivel extra hasta `.jobs`.
+- Cambios: `components/PrintQueueOverlay.js:26` — `data?.queue ?? data?.jobs ?? ...` pasa a `data?.queue?.jobs ?? data?.jobs ?? ...`.
+- Verificacion: `CI=true npm run build` OK (unico diagnostico nuevo es un warning preexistente de import no usado `DesignThumb` en el mismo archivo, no relacionado con el cambio).
+- Publicacion/Deploy: Commit `286dfd7` pusheado a `main`. Deploy produccion READY: `dpl_3popEm4mtgja8VxMjzwXSStPDwN5`, URL `https://inkora-next-12a1efqg5-inkorashop-7809s-projects.vercel.app`, aliased a `https://www.inkora.com.ar`.
+- Auditoria: Se reviso `AGENTS.md`, `CONTEXT.md` y la entrada anterior de `AI_RUN_LOG.md` (fix de condicion de carrera DEVMODE, Bridge 1.6.14) antes de tocar nada; sin relacion con este bug. `git status --short` solo mostraba los untracked de siempre (`.inkora/`, `Inkora.PrintBridge.zip` raiz, `Messi 2.3mf`), no tocados.
+- Pendiente/Riesgos: No se probo en el navegador con una impresion real en curso (se diagnostico via lectura de codigo + historial de git, con alta confianza por el commit `fffe8cc` que confirma el patron del bug). `PrintJobService.GetQueue()` devuelve tambien jobs `done`/`error`, no solo `queued`/`printing`; si el usuario espera ver solo trabajos pendientes, puede convenir filtrar por status en el frontend en un proximo turno.
+
 ## 2026-08-07 (hora no provista) -03:00 - Claude Code
 
 - Objetivo: El usuario reporto un caso raro: al mandar a imprimir dos diseños de un pedido (Argentina 3 x5 y Argentina 1) casi juntos desde Produccion, la tanda de Argentina 3 salio con baja resolucion (cancelada a mano); reimprimir despues 1 hoja mas de Argentina 3, sola, con el mismo PDF sin editar, salio bien. Pidio primero solo diagnostico, despues solucion, y al final que se implemente y se despliegue/publique todo sin pedir confirmacion extra (el prueba despues del deploy, no antes).
