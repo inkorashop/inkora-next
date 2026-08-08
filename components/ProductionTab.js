@@ -45,7 +45,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-const LATEST_BRIDGE_VERSION = '1.6.15';
+const LATEST_BRIDGE_VERSION = '1.6.16';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
 const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 
@@ -953,16 +953,16 @@ export default function ProductionTab({
   }
 
   async function openBridgePreferences() {
-    const printer = bridgePrinters.find(item => item.isTargetL8050) || bridgePrinters.find(item => item.isDefault) || bridgePrinters[0];
-    if (!printer) {
+    const printerName = effectivePrinterName;
+    if (!printerName) {
       setBridgeStatus(prev => ({ ...prev, state: 'token', message: 'Primero detecta impresoras del Bridge.' }));
       return;
     }
 
     setBridgeBusy(true);
     try {
-      await openBridgePrinterPreferences(bridgeUrl, bridgeToken.trim(), printer.name);
-      setBridgeStatus(prev => ({ ...prev, state: 'connected', message: `Preferencias abiertas: ${printer.name}` }));
+      await openBridgePrinterPreferences(bridgeUrl, bridgeToken.trim(), printerName);
+      setBridgeStatus(prev => ({ ...prev, state: 'connected', message: `Preferencias abiertas: ${printerName}` }));
     } catch (error) {
       setBridgeStatus(prev => ({ ...prev, state: 'offline', message: `No se pudieron abrir preferencias: ${error.message || error}` }));
     } finally {

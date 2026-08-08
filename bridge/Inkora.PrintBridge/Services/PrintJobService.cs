@@ -291,9 +291,15 @@ public sealed class PrintJobService
                 PrintWithShellVerb(job);
             }
 
-            job.Status = "done";
-            job.CompletedAt = DateTimeOffset.Now;
-            _logService.Info($"Trabajo completado: {job.Id} | {job.DesignName} x{job.Copies} via {PrintMethod}");
+            // PrintWithSumatra puede haber marcado el job como "cancelled" (pedido
+            // de cancelacion detectado antes o durante el envio al spooler); no
+            // pisarlo con "done" en ese caso.
+            if (job.Status != "cancelled")
+            {
+                job.Status = "done";
+                job.CompletedAt = DateTimeOffset.Now;
+                _logService.Info($"Trabajo completado: {job.Id} | {job.DesignName} x{job.Copies} via {PrintMethod}");
+            }
         }
         catch (Exception ex)
         {
@@ -401,6 +407,18 @@ public sealed class PrintJobService
             printerLock.Release();
         }
 
+        // Si se pidio cancelar mientras este trabajo esperaba su turno en la
+        // impresora (otro trabajo de la misma impresora todavia tenia el DEVMODE
+        // tomado), no llegar a mandarlo a SumatraPDF.
+        if (job.CancelRequested)
+        {
+            ReleasePrinterLockOnce();
+            job.Status = "cancelled";
+            job.CompletedAt = DateTimeOffset.Now;
+            _logService.Info($"Trabajo {job.Id} cancelado antes de enviarse a la impresora.");
+            return;
+        }
+
         try
         {
             // Copias tiene prioridad sobre presets del driver. Se aplica por Sumatra
@@ -478,8 +496,12 @@ public sealed class PrintJobService
                     var newJobId = postJobIds.Except(preJobIds).FirstOrDefault();
                     if (newJobId > 0)
                     {
+                        // Se guarda apenas se detecta: de aca en mas, un POST /print/cancel
+                        // concurrente ya puede apuntarle al job real del spooler de Windows.
+                        job.SpoolerJobId = newJobId;
                         var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job, job.PrinterName, newJobId, 35_000);
                         job.PagesPrinted = (int)pages;
+                        if (spoolStatus == "cancelled") job.Status = "cancelled";
                         _logService.Info($"Spooler job {newJobId}: {pages} hojas, estado={spoolStatus}");
                     }
                 }
@@ -660,16 +682,63 @@ public sealed class PrintJobService
         }
     }
 
+    // A diferencia del resto del ciclo de vida (Prepare -> Start corre todo
+    // sincronico dentro del mismo POST /print), Cancel() se invoca desde OTRO
+    // request HTTP concurrente mientras ese POST /print original puede seguir
+    // en curso (imprimiendo o esperando el spooler). Por eso "queued" casi
+    // nunca alcanza a verse desde afuera: para poder cancelar de verdad un
+    // trabajo que ya esta "printing" hay que actuar sobre el job real del
+    // spooler de Windows (o, si todavia no llego ahi porque esta esperando su
+    // turno en la impresora, marcar CancelRequested para que PrintWithSumatra
+    // lo aborte antes de mandarlo a imprimir).
     public bool Cancel(string jobId)
     {
+        PrintJob? job;
         lock (_lock)
         {
-            var job = _jobs.FirstOrDefault(j => j.Id == jobId);
-            if (job is null || job.Status != "queued") return false;
-            job.Status = "cancelled";
-            job.CompletedAt = DateTimeOffset.Now;
-            _logService.Info($"Trabajo cancelado: {jobId}");
+            job = _jobs.FirstOrDefault(j => j.Id == jobId);
+        }
+        if (job is null) return false;
+
+        if (job.Status == "queued")
+        {
+            lock (_lock)
+            {
+                if (job.Status != "queued") return false;
+                job.Status = "cancelled";
+                job.CompletedAt = DateTimeOffset.Now;
+            }
+            _logService.Info($"Trabajo cancelado (en cola): {jobId}");
             return true;
         }
+
+        if (job.Status == "printing")
+        {
+            job.CancelRequested = true;
+
+            if (job.SpoolerJobId > 0 && !string.IsNullOrWhiteSpace(job.PrinterName))
+            {
+                var cancelledInSpooler = CancelSpoolerJob(job.PrinterName, job.SpoolerJobId);
+                _logService.Info($"Cancelacion en spooler para {jobId} (job {job.SpoolerJobId}): {(cancelledInSpooler ? "OK" : "no se pudo")}");
+                return cancelledInSpooler;
+            }
+
+            // Todavia no se mando al spooler (esperando su turno en la impresora):
+            // CancelRequested hace que PrintWithSumatra lo aborte apenas le toque.
+            _logService.Info($"Cancelacion pedida para {jobId}, esperando turno de impresora.");
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool CancelSpoolerJob(string printerName, uint spoolerJobId)
+    {
+        if (!WinSpoolApi.OpenPrinter(printerName, out var hPrinter, IntPtr.Zero)) return false;
+        try
+        {
+            return WinSpoolApi.SetJob(hPrinter, spoolerJobId, 0, IntPtr.Zero, WinSpoolApi.JOB_CONTROL_DELETE);
+        }
+        finally { WinSpoolApi.ClosePrinter(hPrinter); }
     }
 }

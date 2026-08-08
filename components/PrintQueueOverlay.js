@@ -15,6 +15,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [cancelingAll, setCancelingAll] = useState(false);
   const [pdfViewerTarget, setPdfViewerTarget] = useState(null);
+  const [cancelErrors, setCancelErrors] = useState({});
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -54,11 +55,20 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
 
   async function cancelJob(jobId) {
     setCancelingIds(prev => new Set([...prev, jobId]));
+    setCancelErrors(prev => { const n = { ...prev }; delete n[jobId]; return n; });
     try {
-      await cancelBridgePrintJob(bridgeUrl, bridgeToken, jobId);
-      setJobs(prev => prev.filter(j => String(j.id) !== String(jobId)));
-      setSelectedIds(prev => { const n = new Set(prev); n.delete(jobId); return n; });
-    } catch {}
+      const result = await cancelBridgePrintJob(bridgeUrl, bridgeToken, jobId);
+      if (result?.cancelled) {
+        setJobs(prev => prev.filter(j => String(j.id) !== String(jobId)));
+        setSelectedIds(prev => { const n = new Set(prev); n.delete(jobId); return n; });
+      } else {
+        setCancelErrors(prev => ({ ...prev, [jobId]: 'No se pudo cancelar (¿ya terminó?)' }));
+        setTimeout(() => setCancelErrors(prev => { const n = { ...prev }; delete n[jobId]; return n; }), 4000);
+      }
+    } catch (e) {
+      setCancelErrors(prev => ({ ...prev, [jobId]: e.message || 'Error al cancelar' }));
+      setTimeout(() => setCancelErrors(prev => { const n = { ...prev }; delete n[jobId]; return n; }), 4000);
+    }
     finally {
       setCancelingIds(prev => { const n = new Set(prev); n.delete(jobId); return n; });
     }
@@ -145,6 +155,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
             const id = job.id ?? idx;
             const isPrinting = job.status === 'printing' || job.position === 0 || idx === 0;
             const isCanceling = cancelingIds.has(id);
+            const cancelError = cancelErrors[id];
             const isSelected = selectedIds.has(id);
             const docName = job.designName || job.document || job.name || job.pdfFileName || job.fileName || `Trabajo #${id}`;
             const cleanName = String(docName).replace(/\.pdf$/i, '');
@@ -205,9 +216,10 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
                   <button
                     onClick={e => { e.stopPropagation(); cancelJob(id); }}
                     disabled={isCanceling}
-                    style={{ border: '1.5px solid #fecaca', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: isCanceling ? 'wait' : 'pointer', color: '#b91c1c', background: '#fff5f5', fontFamily: 'Barlow, sans-serif', opacity: isCanceling ? 0.6 : 1 }}
+                    title={cancelError || undefined}
+                    style={{ border: '1.5px solid #fecaca', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 900, cursor: isCanceling ? 'wait' : 'pointer', color: '#b91c1c', background: cancelError ? '#fecaca' : '#fff5f5', fontFamily: 'Barlow, sans-serif', opacity: isCanceling ? 0.6 : 1 }}
                   >
-                    {isCanceling ? '...' : 'Cancelar'}
+                    {isCanceling ? '...' : cancelError ? 'No se pudo' : 'Cancelar'}
                   </button>
                 </div>
               </div>

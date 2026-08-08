@@ -29,6 +29,8 @@ public sealed class PrintJob
     public string Warning { get; set; } = "";
     public int? PagesPrinted { get; set; }
     public int? TotalPages { get; set; }
+    public uint SpoolerJobId { get; set; }
+    public bool CancelRequested { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.Now;
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }

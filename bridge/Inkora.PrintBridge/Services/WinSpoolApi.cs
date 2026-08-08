@@ -74,6 +74,19 @@ internal static class WinSpoolApi
         out int pcbNeeded,
         out int pcReturned);
 
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Auto)]
+    internal static extern bool SetJob(
+        IntPtr hPrinter,
+        uint JobId,
+        int Level,
+        IntPtr pJob,
+        int Command);
+
+    // JOB_CONTROL_DELETE cancela el trabajo tanto si esta spooleando como si ya
+    // esta imprimiendo (a diferencia de JOB_CONTROL_CANCEL, que en algunos
+    // drivers solo aplica al que esta activamente imprimiendo).
+    internal const int JOB_CONTROL_DELETE = 5;
+
     internal const uint JOB_STATUS_ERROR    = 0x00000002;
     internal const uint JOB_STATUS_SPOOLING = 0x00000008;
     internal const uint JOB_STATUS_PRINTING = 0x00000010;
