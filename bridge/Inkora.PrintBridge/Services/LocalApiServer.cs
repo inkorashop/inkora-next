@@ -314,29 +314,7 @@ public sealed class LocalApiServer : IDisposable
                 var queuePrinter = GetQueryValue(target, "printer");
                 try
                 {
-                    var queueArgs = string.IsNullOrWhiteSpace(queuePrinter)
-                        ? "shell:PrintersFolder"
-                        : $"shell:PrintersFolder";
-                    // Open the specific printer queue window via rundll32
-                    if (!string.IsNullOrWhiteSpace(queuePrinter))
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = "rundll32.exe",
-                            Arguments = $"printui.dll,PrintUIEntry /o /n \"{queuePrinter}\"",
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                        });
-                    }
-                    else
-                    {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = "explorer.exe",
-                            Arguments = "shell:PrintersFolder",
-                            UseShellExecute = true,
-                        });
-                    }
+                    _driverPreferencesService.OpenPrinterQueue(queuePrinter);
                     _logService.Info($"Cola de impresion abierta para: {queuePrinter}");
                     await WriteJsonAsync(stream, 200, "OK", new { ok = true, printer = queuePrinter, timestamp = DateTimeOffset.Now }, origin, cancellationToken);
                 }
