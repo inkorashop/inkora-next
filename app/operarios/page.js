@@ -23,7 +23,7 @@ import {
 } from '@/lib/print-bridge-client';
 import { getDesignDisplayImageUrl } from '@/lib/design-image-url';
 
-const LATEST_BRIDGE_VERSION = '1.6.14';
+const LATEST_BRIDGE_VERSION = '1.6.15';
 const LATEST_BRIDGE_DOWNLOAD_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.Setup.exe`;
 const LATEST_BRIDGE_UPDATE_URL = `https://github.com/inkorashop/inkora-next/releases/download/bridge-v${LATEST_BRIDGE_VERSION}/Inkora.PrintBridge.zip`;
 

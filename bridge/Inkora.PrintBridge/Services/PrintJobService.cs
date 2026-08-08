@@ -238,6 +238,8 @@ public sealed class PrintJobService
             Copies = copies,
             PdfFileName = match.FileName,
             PdfFullPath = fullPath,
+            RootName = match.RootName,
+            RelativePath = match.RelativePath,
             OrderId = request.OrderId,
             OrderCode = request.OrderCode,
             Status = "queued"
@@ -332,6 +334,8 @@ public sealed class PrintJobService
             Copies = Math.Clamp(copies, 1, 999),
             PdfFileName = fileName,
             PdfFullPath = fullPath,
+            RootName = rootName,
+            RelativePath = relativePath,
             Status = "queued"
         };
 
@@ -474,7 +478,7 @@ public sealed class PrintJobService
                     var newJobId = postJobIds.Except(preJobIds).FirstOrDefault();
                     if (newJobId > 0)
                     {
-                        var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job.PrinterName, newJobId, 35_000);
+                        var (pages, spoolStatus) = WaitForSpoolerJobCompletion(job, job.PrinterName, newJobId, 35_000);
                         job.PagesPrinted = (int)pages;
                         _logService.Info($"Spooler job {newJobId}: {pages} hojas, estado={spoolStatus}");
                     }
@@ -521,7 +525,11 @@ public sealed class PrintJobService
         return ids;
     }
 
-    private (uint pages, string status) WaitForSpoolerJobCompletion(string printerName, uint jobId, int timeoutMs)
+    // Ademas de devolver el resultado final, va actualizando job.PagesPrinted/TotalPages
+    // en cada vuelta del polling: como el job vive como referencia compartida en _jobs,
+    // esto permite que un GET /print/queue concurrente (mientras este mismo POST /print
+    // sigue en curso) vea el progreso real en vivo, no solo el valor al terminar.
+    private (uint pages, string status) WaitForSpoolerJobCompletion(PrintJob job, string printerName, uint jobId, int timeoutMs)
     {
         var deadline = Environment.TickCount64 + timeoutMs;
         while (Environment.TickCount64 < deadline)
@@ -546,6 +554,10 @@ public sealed class PrintJobService
                         if (j.JobId == jobId) { found = j; break; }
                     }
                     if (found is null) return (0, "completed"); // desapareció = terminó
+
+                    if (found.Value.TotalPages > 0) job.TotalPages = (int)found.Value.TotalPages;
+                    job.PagesPrinted = (int)found.Value.PagesPrinted;
+
                     var s = found.Value.Status;
                     if ((s & (WinSpoolApi.JOB_STATUS_PRINTED | WinSpoolApi.JOB_STATUS_COMPLETE)) != 0)
                         return (found.Value.PagesPrinted, "printed");
@@ -631,11 +643,15 @@ public sealed class PrintJobService
                     j.PrinterName,
                     j.Copies,
                     j.PdfFileName,
+                    j.RootName,
+                    j.RelativePath,
                     j.OrderId,
                     j.OrderCode,
                     j.Status,
                     j.Error,
                     j.Warning,
+                    j.PagesPrinted,
+                    j.TotalPages,
                     j.CreatedAt,
                     j.StartedAt,
                     j.CompletedAt

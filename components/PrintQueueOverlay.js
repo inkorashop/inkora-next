@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import DesignThumb from '@/components/DesignThumb';
+import PdfFloatingViewer from '@/components/PdfFloatingViewer';
 import {
   getBridgePrintQueue,
   cancelBridgePrintJob,
@@ -14,6 +14,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
   const [cancelingIds, setCancelingIds] = useState(new Set());
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [cancelingAll, setCancelingAll] = useState(false);
+  const [pdfViewerTarget, setPdfViewerTarget] = useState(null);
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -39,14 +40,17 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
     return () => { alive = false; clearInterval(intervalRef.current); };
   }, [bridgeUrl, bridgeToken]);
 
-  // Escape closes overlay
+  // Escape cierra el visor de PDF si esta abierto; si no, cierra el overlay entero.
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      if (pdfViewerTarget) setPdfViewerTarget(null);
+      else onClose();
     }
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, [onClose, pdfViewerTarget]);
 
   async function cancelJob(jobId) {
     setCancelingIds(prev => new Set([...prev, jobId]));
@@ -89,7 +93,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, zIndex: 9600, background: 'rgba(27,47,94,0.28)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 16 }}
     >
-      <div style={{ background: 'white', borderRadius: 13, border: '1.5px solid #dde1ef', boxShadow: '0 12px 40px rgba(27,47,94,0.2)', width: '100%', maxWidth: 520, maxHeight: '78vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: 13, border: '1.5px solid #dde1ef', boxShadow: '0 12px 40px rgba(27,47,94,0.2)', width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: '1.5px solid #f0f2f8', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -108,7 +112,7 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
 
         {/* Column headers */}
         {!loading && !error && jobs.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px', gap: 8, padding: '6px 16px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8', flexShrink: 0, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr 108px 66px', gap: 8, padding: '5px 14px', background: '#f7f8fc', borderBottom: '1px solid #f0f2f8', flexShrink: 0, alignItems: 'center' }}>
             <input
               type="checkbox"
               checked={selectedIds.size === jobs.length && jobs.length > 0}
@@ -142,16 +146,19 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
             const isPrinting = job.status === 'printing' || job.position === 0 || idx === 0;
             const isCanceling = cancelingIds.has(id);
             const isSelected = selectedIds.has(id);
-            const docName = job.document || job.name || job.fileName || `Trabajo #${id}`;
+            const docName = job.designName || job.document || job.name || job.pdfFileName || job.fileName || `Trabajo #${id}`;
             const cleanName = String(docName).replace(/\.pdf$/i, '');
+            const canView = Boolean(job.rootName && job.relativePath);
+            const pagesPrinted = typeof job.pagesPrinted === 'number' ? job.pagesPrinted : null;
+            const totalPages = typeof job.totalPages === 'number' && job.totalPages > 0 ? job.totalPages : null;
 
             return (
               <div
                 key={id}
                 onClick={() => toggleSelect(id)}
                 style={{
-                  display: 'grid', gridTemplateColumns: '28px 1fr 80px 80px', gap: 8,
-                  padding: '9px 16px', borderBottom: '1px solid #f0f2f8',
+                  display: 'grid', gridTemplateColumns: '22px 1fr 108px 66px', gap: 8,
+                  padding: '6px 14px', borderBottom: '1px solid #f0f2f8',
                   background: isSelected ? '#eff4ff' : isPrinting ? '#fefce8' : 'white',
                   alignItems: 'center', cursor: 'pointer',
                   transition: 'background 0.1s',
@@ -164,19 +171,29 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
                   onClick={e => e.stopPropagation()}
                   style={{ cursor: 'pointer' }}
                 />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    title={docName}>{cleanName}</div>
-                  <div style={{ fontSize: 10, color: '#9aa3bc', marginTop: 1 }}>
-                    {job.copies ? `${job.copies} cop.` : ''}
-                    {job.copies && job.size ? ' · ' : ''}
-                    {job.size ? job.size : ''}
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                  <span
+                    onClick={canView ? (e => { e.stopPropagation(); setPdfViewerTarget({ rootName: job.rootName, relativePath: job.relativePath, fileName: job.pdfFileName || docName }); }) : undefined}
+                    title={canView ? `${job.rootName}\\${job.relativePath} — click para ver` : docName}
+                    style={{
+                      fontSize: 12, fontWeight: 800, color: '#1B2F5E', overflow: 'hidden', textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap', minWidth: 0,
+                      cursor: canView ? 'pointer' : 'default',
+                      textDecoration: canView ? 'underline' : 'none', textDecorationColor: '#c7d2e8',
+                    }}
+                  >{cleanName}</span>
+                  {(job.copies || job.size) && (
+                    <span style={{ fontSize: 10, color: '#9aa3bc', flexShrink: 0, fontWeight: 600 }}>
+                      {job.copies ? `${job.copies}c` : ''}
+                      {job.copies && job.size ? ' · ' : ''}
+                      {job.size ? job.size : ''}
+                    </span>
+                  )}
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   {isPrinting ? (
-                    <span style={{ fontSize: 10, fontWeight: 900, color: '#d97706', background: '#fef9c3', borderRadius: 5, padding: '2px 6px' }}>
-                      Imprimiendo
+                    <span style={{ fontSize: 10, fontWeight: 900, color: '#d97706', background: '#fef9c3', borderRadius: 5, padding: '2px 6px', whiteSpace: 'nowrap' }}>
+                      Imprimiendo{pagesPrinted != null && totalPages != null ? ` ${pagesPrinted}/${totalPages}` : ''}
                     </span>
                   ) : (
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#5a6380', background: '#f3f5fb', borderRadius: 5, padding: '2px 6px' }}>
@@ -220,6 +237,15 @@ export default function PrintQueueOverlay({ bridgeUrl, bridgeToken, printerName,
           )}
         </div>
       </div>
+
+      {pdfViewerTarget && (
+        <PdfFloatingViewer
+          rootName={pdfViewerTarget.rootName}
+          relativePath={pdfViewerTarget.relativePath}
+          fileName={pdfViewerTarget.fileName}
+          onClose={() => setPdfViewerTarget(null)}
+        />
+      )}
     </div>
   );
 }

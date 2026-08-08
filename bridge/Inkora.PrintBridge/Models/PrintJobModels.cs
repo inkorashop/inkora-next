@@ -20,12 +20,15 @@ public sealed class PrintJob
     public int Copies { get; set; } = 1;
     public string PdfFileName { get; set; } = "";
     public string PdfFullPath { get; set; } = "";
+    public string RootName { get; set; } = "";
+    public string RelativePath { get; set; } = "";
     public string OrderId { get; set; } = "";
     public string OrderCode { get; set; } = "";
     public string Status { get; set; } = "queued";
     public string Error { get; set; } = "";
     public string Warning { get; set; } = "";
     public int? PagesPrinted { get; set; }
+    public int? TotalPages { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.Now;
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
